@@ -1,0 +1,11 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:NenFocus.ViewModels"
+             x:DataType="vm:SettingsPageViewModel"
+             x:Class="NenFocus.Views.SettingsPageView"
+             Background="#F5F5F7">
+	<StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10">
+		<TextBlock Text="Settings" FontSize="24" FontWeight="SemiBold" Foreground="#1A1A2E" HorizontalAlignment="Center"/>
+		<TextBlock Text="Coming soon" FontSize="13" Foreground="#AAAABC" HorizontalAlignment="Center"/>
+	</StackPanel>
+</UserControl>

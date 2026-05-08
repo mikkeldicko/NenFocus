@@ -1,0 +1,404 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:NenFocus.ViewModels"
+             x:DataType="vm:BlockProfilePageViewModel"
+             x:Class="NenFocus.Views.BlockProfilePageView"
+             Background="#F5F5F7">
+
+	<UserControl.Styles>
+
+		<Style Selector="Border.profile-card">
+			<Setter Property="Background" Value="#FFFFFF"/>
+			<Setter Property="Transitions">
+				<Transitions>
+					<BrushTransition Property="Background" Duration="0:0:0.12"/>
+				</Transitions>
+			</Setter>
+		</Style>
+		<Style Selector="Border.profile-card:pointerover">
+			<Setter Property="Background" Value="#FAFAFA"/>
+		</Style>
+		<Style Selector="Border.profile-card StackPanel.card-actions">
+			<Setter Property="Opacity" Value="0"/>
+			<Setter Property="Transitions">
+				<Transitions>
+					<DoubleTransition Property="Opacity" Duration="0:0:0.12"/>
+				</Transitions>
+			</Setter>
+		</Style>
+		<Style Selector="Border.profile-card:pointerover StackPanel.card-actions">
+			<Setter Property="Opacity" Value="1"/>
+		</Style>
+		<Style Selector="Button.icon-btn">
+			<Setter Property="Background" Value="Transparent"/>
+			<Setter Property="BorderThickness" Value="0"/>
+			<Setter Property="Padding" Value="8,5"/>
+			<Setter Property="CornerRadius" Value="6"/>
+			<Setter Property="Cursor" Value="Hand"/>
+		</Style>
+		<Style Selector="Button.icon-btn /template/ ContentPresenter">
+			<Setter Property="Transitions">
+				<Transitions>
+					<BrushTransition Property="Background" Duration="0:0:0.1"/>
+				</Transitions>
+			</Setter>
+		</Style>
+		<Style Selector="Button.icon-btn:pointerover /template/ ContentPresenter">
+			<Setter Property="Background" Value="#F0F0F8"/>
+		</Style>
+		<Style Selector="Button.icon-btn.danger:pointerover /template/ ContentPresenter">
+			<Setter Property="Background" Value="#FFF0F0"/>
+		</Style>
+		<Style Selector="Button.primary">
+			<Setter Property="Background" Value="#1A1A2E"/>
+			<Setter Property="Foreground" Value="#FFFFFF"/>
+			<Setter Property="BorderThickness" Value="0"/>
+			<Setter Property="CornerRadius" Value="8"/>
+			<Setter Property="Padding" Value="20,10"/>
+			<Setter Property="Cursor" Value="Hand"/>
+			<Setter Property="FontSize" Value="13"/>
+			<Setter Property="FontWeight" Value="Medium"/>
+		</Style>
+		<Style Selector="Button.primary:pointerover /template/ ContentPresenter">
+			<Setter Property="Background" Value="#2A2A4E"/>
+		</Style>
+		<Style Selector="Button.secondary">
+			<Setter Property="Background" Value="Transparent"/>
+			<Setter Property="Foreground" Value="#888899"/>
+			<Setter Property="BorderThickness" Value="1"/>
+			<Setter Property="BorderBrush" Value="#E0E0EE"/>
+			<Setter Property="CornerRadius" Value="8"/>
+			<Setter Property="Padding" Value="20,10"/>
+			<Setter Property="Cursor" Value="Hand"/>
+			<Setter Property="FontSize" Value="13"/>
+		</Style>
+		<Style Selector="Button.danger-btn">
+			<Setter Property="Background" Value="#C0392B"/>
+			<Setter Property="Foreground" Value="#FFFFFF"/>
+			<Setter Property="BorderThickness" Value="0"/>
+			<Setter Property="CornerRadius" Value="8"/>
+			<Setter Property="Padding" Value="20,10"/>
+			<Setter Property="Cursor" Value="Hand"/>
+			<Setter Property="FontSize" Value="13"/>
+			<Setter Property="FontWeight" Value="Medium"/>
+		</Style>
+		<Style Selector="Button.danger-btn:pointerover /template/ ContentPresenter">
+			<Setter Property="Background" Value="#A93226"/>
+		</Style>
+		<Style Selector="Button.policy-btn">
+			<Setter Property="Background" Value="Transparent"/>
+			<Setter Property="Foreground" Value="#888899"/>
+			<Setter Property="BorderThickness" Value="1"/>
+			<Setter Property="BorderBrush" Value="#E0E0EE"/>
+			<Setter Property="CornerRadius" Value="7"/>
+			<Setter Property="Padding" Value="14,7"/>
+			<Setter Property="Cursor" Value="Hand"/>
+			<Setter Property="FontSize" Value="12"/>
+		</Style>
+		<Style Selector="Button.policy-btn.active">
+			<Setter Property="Background" Value="#1A1A2E"/>
+			<Setter Property="Foreground" Value="#FFFFFF"/>
+			<Setter Property="BorderBrush" Value="#1A1A2E"/>
+		</Style>
+		<Style Selector="Button.tab-btn">
+			<Setter Property="Background" Value="Transparent"/>
+			<Setter Property="Foreground" Value="#AAAABC"/>
+			<Setter Property="BorderThickness" Value="0,0,0,2"/>
+			<Setter Property="BorderBrush" Value="Transparent"/>
+			<Setter Property="CornerRadius" Value="0"/>
+			<Setter Property="Padding" Value="4,8"/>
+			<Setter Property="Cursor" Value="Hand"/>
+			<Setter Property="FontSize" Value="13"/>
+			<Setter Property="FontWeight" Value="Medium"/>
+		</Style>
+		<Style Selector="Button.tab-btn.active">
+			<Setter Property="Foreground" Value="#1A1A2E"/>
+			<Setter Property="BorderBrush" Value="#B8922A"/>
+		</Style>
+		<Style Selector="Button.tab-btn /template/ ContentPresenter">
+			<Setter Property="Background" Value="Transparent"/>
+		</Style>
+		<Style Selector="TextBox.form-field">
+			<Setter Property="Background" Value="#F8F8FC"/>
+			<Setter Property="BorderBrush" Value="#E0E0EE"/>
+			<Setter Property="BorderThickness" Value="1"/>
+			<Setter Property="CornerRadius" Value="8"/>
+			<Setter Property="Padding" Value="12,10"/>
+			<Setter Property="FontSize" Value="14"/>
+		</Style>
+		<Style Selector="TextBox.form-field:focus /template/ Border#PART_BorderElement">
+			<Setter Property="BorderBrush" Value="#B8922A"/>
+		</Style>
+		<Style Selector="ListBox.item-list">
+			<Setter Property="Background" Value="#FFFFFF"/>
+			<Setter Property="BorderBrush" Value="#E0E0EE"/>
+			<Setter Property="BorderThickness" Value="1"/>
+			<Setter Property="CornerRadius" Value="8"/>
+			<Setter Property="Padding" Value="4"/>
+			<Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled"/>
+		</Style>
+		<Style Selector="ListBox.item-list ListBoxItem">
+			<Setter Property="Padding" Value="10,8"/>
+			<Setter Property="CornerRadius" Value="6"/>
+			<Setter Property="Margin" Value="0,1"/>
+			<Setter Property="FontSize" Value="13"/>
+			<Setter Property="FontFamily" Value="Consolas,Courier New,monospace"/>
+			<Setter Property="Foreground" Value="#333344"/>
+			<Setter Property="Cursor" Value="Hand"/>
+		</Style>
+		<Style Selector="ListBox.item-list ListBoxItem:selected /template/ ContentPresenter">
+			<Setter Property="Background" Value="#EEF0FF"/>
+		</Style>
+		<Style Selector="ListBox.item-list ListBoxItem:pointerover /template/ ContentPresenter">
+			<Setter Property="Background" Value="#F5F5FB"/>
+		</Style>
+
+	</UserControl.Styles>
+
+	<Panel>
+
+		<!-- MAIN CONTENT -->
+		<ScrollViewer>
+			<StackPanel Margin="52,44,52,44" MaxWidth="760" Spacing="32">
+
+				<Grid ColumnDefinitions="*,Auto">
+					<StackPanel Grid.Column="0" Spacing="4">
+						<TextBlock Text="BLOCK PROFILES" FontSize="9" FontWeight="Medium"
+                                   Foreground="#AAAABC" LetterSpacing="4"/>
+						<TextBlock Text="Manage your blocking profiles" FontSize="24"
+                                   FontWeight="SemiBold" Foreground="#1A1A2E"/>
+					</StackPanel>
+					<Button Grid.Column="1" Classes="primary" VerticalAlignment="Center"
+                            Command="{Binding NewProfileCommand}">
+						<StackPanel Orientation="Horizontal" Spacing="8">
+							<TextBlock Text="+" FontSize="16" VerticalAlignment="Center"/>
+							<TextBlock Text="New Profile" VerticalAlignment="Center"/>
+						</StackPanel>
+					</Button>
+				</Grid>
+
+				<TextBlock IsVisible="{Binding IsLoading}" Text="Loading…"
+                           FontSize="14" Foreground="#AAAABC" HorizontalAlignment="Center"/>
+
+				<Border IsVisible="{Binding HasNoProfiles}"
+                        Background="#FFFFFF" CornerRadius="14"
+                        BorderBrush="#E8E8F0" BorderThickness="1" Padding="52,48">
+					<StackPanel Spacing="12" HorizontalAlignment="Center">
+						<TextBlock Text="◻" FontSize="36" Foreground="#DDDDEE"
+                                   HorizontalAlignment="Center"/>
+						<TextBlock Text="No block profiles yet"
+                                   FontSize="16" FontWeight="Medium" Foreground="#888899"
+                                   HorizontalAlignment="Center"/>
+						<TextBlock Text="Create a profile to define which apps and sites get blocked during your sessions."
+                                   FontSize="13" Foreground="#BBBBCC"
+                                   TextAlignment="Center" TextWrapping="Wrap" MaxWidth="320"/>
+					</StackPanel>
+				</Border>
+
+				<ItemsControl ItemsSource="{Binding Profiles}"
+                              IsVisible="{Binding !HasNoProfiles}">
+					<ItemsControl.ItemsPanel>
+						<ItemsPanelTemplate>
+							<StackPanel Spacing="12"/>
+						</ItemsPanelTemplate>
+					</ItemsControl.ItemsPanel>
+					<ItemsControl.ItemTemplate>
+						<DataTemplate DataType="vm:BlockProfileCardViewModel">
+							<Border Classes="profile-card" CornerRadius="14"
+                                    BorderBrush="#E8E8F0" BorderThickness="1" Padding="24,20">
+
+								<Grid ColumnDefinitions="*,Auto">
+									<StackPanel Grid.Column="0" Spacing="8">
+										<TextBlock Text="{Binding Name}"
+                                                   FontSize="16" FontWeight="SemiBold" Foreground="#1A1A2E"/>
+										<TextBlock Text="{Binding CountText}"
+                                                   FontSize="12" Foreground="#AAAABC"/>
+										<ItemsControl ItemsSource="{Binding Tags}">
+											<ItemsControl.ItemsPanel>
+												<ItemsPanelTemplate>
+													<WrapPanel Orientation="Horizontal"/>
+												</ItemsPanelTemplate>
+											</ItemsControl.ItemsPanel>
+											<ItemsControl.ItemTemplate>
+												<DataTemplate>
+													<Border Background="#F0F0F8" CornerRadius="4"
+                                                            Padding="8,3" Margin="0,0,6,4">
+														<TextBlock Text="{Binding}"
+                                                                   FontSize="11" Foreground="#888899"/>
+													</Border>
+												</DataTemplate>
+											</ItemsControl.ItemTemplate>
+										</ItemsControl>
+									</StackPanel>
+									<StackPanel Grid.Column="1" Classes="card-actions"
+                                                Orientation="Horizontal" Spacing="2"
+                                                VerticalAlignment="Center">
+										<Button Classes="icon-btn" ToolTip.Tip="Duplicate"
+                                                Command="{Binding $parent[UserControl].((vm:BlockProfilePageViewModel)DataContext).DuplicateProfileCommand}"
+                                                CommandParameter="{Binding}">
+											<TextBlock Text="⧉" FontSize="14" Foreground="#888899"/>
+										</Button>
+										<Button Classes="icon-btn" ToolTip.Tip="Edit"
+                                                Command="{Binding $parent[UserControl].((vm:BlockProfilePageViewModel)DataContext).EditProfileCommand}"
+                                                CommandParameter="{Binding}">
+											<TextBlock Text="✎" FontSize="14" Foreground="#888899"/>
+										</Button>
+										<Button Classes="icon-btn danger" ToolTip.Tip="Delete"
+                                                Command="{Binding $parent[UserControl].((vm:BlockProfilePageViewModel)DataContext).RequestDeleteProfileCommand}"
+                                                CommandParameter="{Binding}">
+											<TextBlock Text="✕" FontSize="14" Foreground="#C0392B"/>
+										</Button>
+									</StackPanel>
+								</Grid>
+							</Border>
+						</DataTemplate>
+					</ItemsControl.ItemTemplate>
+				</ItemsControl>
+
+			</StackPanel>
+		</ScrollViewer>
+
+		<!-- CREATE / EDIT MODAL -->
+		<Border IsVisible="{Binding IsFormVisible}" Background="#88000000">
+			<Border Background="#FFFFFF" CornerRadius="16"
+                    Width="540"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                    BoxShadow="0 12 48 0 #44000000">
+				<StackPanel>
+
+					<!-- Header -->
+					<Grid ColumnDefinitions="*,Auto" Margin="32,28,32,0">
+						<TextBlock Grid.Column="0" Text="{Binding FormTitle}"
+                                   FontSize="20" FontWeight="SemiBold" Foreground="#1A1A2E"
+                                   VerticalAlignment="Center"/>
+						<Button Grid.Column="1" Classes="icon-btn"
+                                Command="{Binding CloseFormCommand}">
+							<TextBlock Text="✕" FontSize="14" Foreground="#888899"/>
+						</Button>
+					</Grid>
+
+					<Border Height="1" Background="#F0F0F8" Margin="0,16,0,0"/>
+
+					<!-- Name -->
+					<StackPanel Margin="32,20,32,0" Spacing="8">
+						<TextBlock Text="NAME" FontSize="9" FontWeight="Medium"
+                                   Foreground="#AAAABC" LetterSpacing="4"/>
+						<TextBox Classes="form-field" Text="{Binding FormName}"
+                                 Watermark="e.g. Deep Work, No Social Media…"/>
+					</StackPanel>
+
+					<!-- Tab bar -->
+					<Border Height="1" Background="#F0F0F8" Margin="0,20,0,0"/>
+					<StackPanel Orientation="Horizontal" Spacing="24" Margin="32,0">
+						<Button Classes="tab-btn" Classes.active="{Binding IsWebsiteTab}"
+                                Command="{Binding ShowWebsiteTabCommand}">Websites</Button>
+						<Button Classes="tab-btn" Classes.active="{Binding IsAppTab}"
+                                Command="{Binding ShowAppTabCommand}">Apps</Button>
+					</StackPanel>
+					<Border Height="1" Background="#F0F0F8"/>
+
+					<!-- Websites tab -->
+					<StackPanel IsVisible="{Binding IsWebsiteTab}"
+								Margin="32,16,32,0" Spacing="12">
+						<StackPanel Orientation="Horizontal" Spacing="8" Height="36">
+							<Button Classes="policy-btn" Classes.active="{Binding !IsAllowlist}"
+									Command="{Binding SetBlocklistCommand}">Blocklist</Button>
+							<Button Classes="policy-btn" Classes.active="{Binding IsAllowlist}"
+									Command="{Binding SetAllowlistCommand}">Allowlist</Button>
+						</StackPanel>
+						<TextBlock Text="{Binding WebsitePolicyHint}"
+								   FontSize="11" Foreground="#BBBBCC" TextWrapping="Wrap"/>
+						<Grid ColumnDefinitions="*,Auto">
+							<TextBox Grid.Column="0" Classes="form-field"
+									 Text="{Binding NewSiteText}"
+									 Watermark="e.g. reddit.com, twitter.com…"
+									 Margin="0,0,8,0"/>
+							<Button Grid.Column="1" Classes="secondary"
+									Command="{Binding AddSiteCommand}"
+									Padding="16,10">Add</Button>
+						</Grid>
+						<ListBox Classes="item-list"
+								 ItemsSource="{Binding FormSites}"
+								 SelectedItem="{Binding SelectedSite}"
+								 Height="180">
+							<ListBox.KeyBindings>
+								<KeyBinding Gesture="Delete" Command="{Binding RemoveSelectedSiteCommand}"/>
+								<KeyBinding Gesture="Back"   Command="{Binding RemoveSelectedSiteCommand}"/>
+							</ListBox.KeyBindings>
+						</ListBox>
+						<Button Classes="secondary" HorizontalAlignment="Right"
+								IsEnabled="{Binding SelectedSite, Converter={x:Static ObjectConverters.IsNotNull}}"
+								Command="{Binding RemoveSelectedSiteCommand}"
+								Padding="14,7" FontSize="12">Remove selected</Button>
+					</StackPanel>
+
+					<!-- Apps tab -->
+					<StackPanel IsVisible="{Binding IsAppTab}"
+								Margin="32,16,32,0" Spacing="12">
+						<Button Classes="policy-btn" Height="36"
+								HorizontalAlignment="Left"
+								Click="BrowseForApp_Click">
+							<StackPanel Orientation="Horizontal" Spacing="8">
+								<TextBlock Text="📂" FontSize="12" VerticalAlignment="Center"/>
+								<TextBlock Text="Browse for app…" VerticalAlignment="Center"/>
+							</StackPanel>
+						</Button>
+						<TextBlock Text="Process name without .exe  (e.g. chrome, spotify, discord)"
+								   FontSize="11" Foreground="#BBBBCC"/>
+						<ListBox Classes="item-list"
+								 ItemsSource="{Binding FormApps}"
+								 SelectedItem="{Binding SelectedApp}"
+								 Height="180">
+							<ListBox.KeyBindings>
+								<KeyBinding Gesture="Delete" Command="{Binding RemoveSelectedAppCommand}"/>
+								<KeyBinding Gesture="Back"   Command="{Binding RemoveSelectedAppCommand}"/>
+							</ListBox.KeyBindings>
+						</ListBox>
+						<Button Classes="secondary" HorizontalAlignment="Right"
+								IsEnabled="{Binding SelectedApp, Converter={x:Static ObjectConverters.IsNotNull}}"
+								Command="{Binding RemoveSelectedAppCommand}"
+								Padding="14,7" FontSize="12">Remove selected</Button>
+					</StackPanel>
+
+					<!-- Error -->
+					<Border IsVisible="{Binding FormError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                            Background="#FFF5F5" CornerRadius="8" Padding="14,10"
+                            Margin="32,12,32,0">
+						<TextBlock Text="{Binding FormError}" FontSize="13"
+                                   Foreground="#C0392B" TextWrapping="Wrap"/>
+					</Border>
+
+					<!-- Footer -->
+					<Border Height="1" Background="#F0F0F8" Margin="0,20,0,0"/>
+					<StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
+                                Spacing="12" Margin="32,16,32,24">
+						<Button Classes="secondary" Command="{Binding CloseFormCommand}">Cancel</Button>
+						<Button Classes="primary" Command="{Binding SaveCommand}"
+                                Content="{Binding SaveButtonLabel}"/>
+					</StackPanel>
+
+				</StackPanel>
+			</Border>
+		</Border>
+
+		<!-- DELETE CONFIRMATION MODAL -->
+		<Border IsVisible="{Binding IsConfirmDeleteVisible}" Background="#88000000">
+			<Border Background="#FFFFFF" CornerRadius="14"
+                    Width="400" Padding="32,28"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                    BoxShadow="0 12 48 0 #44000000">
+				<StackPanel Spacing="20">
+					<TextBlock Text="Delete Profile"
+                               FontSize="18" FontWeight="SemiBold" Foreground="#1A1A2E"/>
+					<TextBlock Text="{Binding ConfirmDeleteMessage}"
+                               FontSize="14" Foreground="#888899" TextWrapping="Wrap"/>
+					<StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="12">
+						<Button Classes="secondary" Command="{Binding CancelDeleteCommand}">Cancel</Button>
+						<Button Classes="danger-btn" Command="{Binding ConfirmDeleteCommand}">Delete</Button>
+					</StackPanel>
+				</StackPanel>
+			</Border>
+		</Border>
+
+	</Panel>
+</UserControl>

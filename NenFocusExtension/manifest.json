@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "NenFocus Enforcer",
+  "version": "1.0",
+  "description": "Seamlessly blocks sites and reports attempts to NenFocus.",
+  "permissions": [ "webNavigation", "tabs" ],
+  "host_permissions": [
+    "<all_urls>",
+    "http://localhost:5005/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [ "blocked.html" ],
+      "matches": [ "<all_urls>" ]
+    }
+  ]
+}

@@ -1,0 +1,68 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:NenFocus.ViewModels"
+             x:DataType="vm:RitualShellViewModel"
+             x:Class="NenFocus.Views.RitualShellView"
+             Background="#FAFAF8">
+
+    <UserControl.Styles>
+        <Style Selector="Button.back-btn">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Padding" Value="4"/>
+        </Style>
+        <Style Selector="Button.back-btn /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="Button.back-btn:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+    </UserControl.Styles>
+
+    <Grid RowDefinitions="56,*">
+
+        <!-- ── Top bar ──────────────────────────────────────────────── -->
+        <Grid Grid.Row="0"
+              ColumnDefinitions="120,*,120"
+              Margin="28,0">
+
+            <!-- Back -->
+            <Button Grid.Column="0"
+                    Classes="back-btn"
+                    VerticalAlignment="Center"
+                    Command="{Binding GoBackCommand}">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBlock Text="←" FontSize="15" Foreground="#AAAABC" VerticalAlignment="Center"/>
+                    <TextBlock Text="Back" FontSize="13" Foreground="#AAAABC" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+
+            <!-- Step dots -->
+            <StackPanel Grid.Column="1"
+                        Orientation="Horizontal"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Spacing="10">
+                <Ellipse Width="7" Height="7"
+                         Fill="{Binding IsDot0Active, Converter={x:Static vm:BoolToDotFillConverter.Instance}}"/>
+                <Ellipse Width="7" Height="7"
+                         Fill="{Binding IsDot1Active, Converter={x:Static vm:BoolToDotFillConverter.Instance}}"/>
+                <Ellipse Width="7" Height="7"
+                         Fill="{Binding IsDot2Active, Converter={x:Static vm:BoolToDotFillConverter.Instance}}"/>
+                <Ellipse Width="7" Height="7"
+                         Fill="{Binding IsDot3Active, Converter={x:Static vm:BoolToDotFillConverter.Instance}}"/>
+            </StackPanel>
+
+        </Grid>
+
+        <!-- ── Step content with crossfade ──────────────────────────── -->
+        <TransitioningContentControl Grid.Row="1"
+                                      Content="{Binding CurrentStep}">
+            <TransitioningContentControl.PageTransition>
+                <CrossFade Duration="0:0:0.45"/>
+            </TransitioningContentControl.PageTransition>
+        </TransitioningContentControl>
+
+    </Grid>
+</UserControl>

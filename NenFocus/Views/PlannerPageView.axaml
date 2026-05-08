@@ -1,0 +1,376 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:NenFocus.ViewModels"
+             xmlns:dto="using:NenFocus.Application.DTOs"
+             xmlns:conv="using:NenFocus.ViewModels"
+             x:DataType="vm:PlannerPageViewModel"
+             x:Class="NenFocus.Views.PlannerPageView"
+             Background="#F5F5F7">
+
+  <UserControl.Styles>
+    <!-- Day-header cell -->
+    <Style Selector="Border.dayHeader">
+      <Setter Property="Background" Value="#FFFFFF"/>
+      <Setter Property="BorderBrush" Value="#E6E6EE"/>
+      <Setter Property="BorderThickness" Value="0,0,1,1"/>
+      <Setter Property="Padding" Value="0,10"/>
+    </Style>
+    <Style Selector="Border.dayHeader.today">
+      <Setter Property="Background" Value="#FFF8E5"/>
+    </Style>
+
+    <!-- Hour-label cell -->
+    <Style Selector="Border.hourLabel">
+      <Setter Property="Height" Value="56"/>
+      <Setter Property="BorderBrush" Value="#E6E6EE"/>
+      <Setter Property="BorderThickness" Value="0,0,1,1"/>
+      <Setter Property="Padding" Value="8,0"/>
+    </Style>
+
+    <!-- Hour-row cell (clickable empty slot) -->
+    <Style Selector="Button.hourCell">
+      <Setter Property="Background" Value="#FFFFFF"/>
+      <Setter Property="BorderBrush" Value="#EEEEF2"/>
+      <Setter Property="BorderThickness" Value="0,0,1,1"/>
+      <Setter Property="Height" Value="56"/>
+      <Setter Property="Padding" Value="0"/>
+      <Setter Property="HorizontalAlignment" Value="Stretch"/>
+      <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+      <Setter Property="VerticalContentAlignment" Value="Stretch"/>
+      <Setter Property="Cursor" Value="Hand"/>
+    </Style>
+    <Style Selector="Button.hourCell:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#F0F0F8"/>
+    </Style>
+
+    <!-- Block tile -->
+    <Style Selector="Button.blockTile">
+      <Setter Property="Padding" Value="8,6"/>
+      <Setter Property="HorizontalAlignment" Value="Stretch"/>
+      <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+      <Setter Property="VerticalContentAlignment" Value="Top"/>
+      <Setter Property="Cursor" Value="Hand"/>
+    </Style>
+    <Style Selector="Button.focusTile">
+      <Setter Property="Background" Value="#B8922A"/>
+      <Setter Property="Foreground" Value="White"/>
+    </Style>
+    <Style Selector="Button.passiveTile">
+      <Setter Property="Background" Value="#E8E8F0"/>
+      <Setter Property="Foreground" Value="#1A1A2E"/>
+    </Style>
+    <Style Selector="Button.blockTile:pointerover /template/ ContentPresenter">
+      <Setter Property="Opacity" Value="0.85"/>
+    </Style>
+
+    <!-- Header buttons -->
+    <Style Selector="Button.navButton">
+      <Setter Property="Background" Value="#FFFFFF"/>
+      <Setter Property="BorderBrush" Value="#DDDDE8"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="6"/>
+      <Setter Property="Padding" Value="10,6"/>
+      <Setter Property="Foreground" Value="#1A1A2E"/>
+      <Setter Property="Cursor" Value="Hand"/>
+    </Style>
+    <Style Selector="Button.navButton:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#F0F0F8"/>
+    </Style>
+
+    <Style Selector="Button.todayButton">
+      <Setter Property="Background" Value="#1A1A2E"/>
+      <Setter Property="Foreground" Value="White"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="CornerRadius" Value="6"/>
+      <Setter Property="Padding" Value="14,6"/>
+      <Setter Property="Cursor" Value="Hand"/>
+    </Style>
+
+    <!-- Modal styles -->
+    <Style Selector="TextBox.formInput">
+      <Setter Property="Background" Value="#F8F8FB"/>
+      <Setter Property="BorderBrush" Value="#DDDDE8"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="6"/>
+      <Setter Property="Padding" Value="10,8"/>
+    </Style>
+
+    <Style Selector="Button.primary">
+      <Setter Property="Background" Value="#1A1A2E"/>
+      <Setter Property="Foreground" Value="White"/>
+      <Setter Property="CornerRadius" Value="6"/>
+      <Setter Property="Padding" Value="16,8"/>
+      <Setter Property="Cursor" Value="Hand"/>
+    </Style>
+    <Style Selector="Button.secondary">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="Foreground" Value="#1A1A2E"/>
+      <Setter Property="BorderBrush" Value="#DDDDE8"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="6"/>
+      <Setter Property="Padding" Value="14,8"/>
+      <Setter Property="Cursor" Value="Hand"/>
+    </Style>
+    <Style Selector="Button.danger">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="Foreground" Value="#C03A2B"/>
+      <Setter Property="BorderBrush" Value="#E8C0BA"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="6"/>
+      <Setter Property="Padding" Value="14,8"/>
+      <Setter Property="Cursor" Value="Hand"/>
+    </Style>
+
+    <!-- Type toggle pills -->
+    <Style Selector="Button.typePill">
+      <Setter Property="Background" Value="#F0F0F8"/>
+      <Setter Property="Foreground" Value="#1A1A2E"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="CornerRadius" Value="6"/>
+      <Setter Property="Padding" Value="14,8"/>
+      <Setter Property="Cursor" Value="Hand"/>
+    </Style>
+    <Style Selector="Button.typePill.active">
+      <Setter Property="Background" Value="#B8922A"/>
+      <Setter Property="Foreground" Value="White"/>
+    </Style>
+  </UserControl.Styles>
+
+  <Grid>
+    <!-- ── Main page content ───────────────────────────────────────── -->
+    <Grid RowDefinitions="Auto,*" Margin="24">
+
+      <!-- Header row: title + week nav -->
+      <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,16">
+        <StackPanel Grid.Column="0" Spacing="2">
+          <TextBlock Text="Planner" FontSize="22" FontWeight="SemiBold" Foreground="#1A1A2E"/>
+          <TextBlock Text="{Binding WeekRangeText}" FontSize="13" Foreground="#7A7A8C"/>
+        </StackPanel>
+
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+          <Button Classes="navButton" Content="‹" Command="{Binding PreviousWeekCommand}"/>
+          <Button Classes="todayButton" Content="Today" Command="{Binding GoToTodayCommand}"/>
+          <Button Classes="navButton" Content="›" Command="{Binding NextWeekCommand}"/>
+        </StackPanel>
+      </Grid>
+
+      <!-- Calendar -->
+      <Border Grid.Row="1"
+              Background="#FFFFFF"
+              BorderBrush="#E6E6EE"
+              BorderThickness="1"
+              CornerRadius="10"
+              ClipToBounds="True">
+        <Grid RowDefinitions="Auto,*">
+
+          <!-- Day-header row: empty corner + 7 day cells -->
+          <Grid Grid.Row="0" ColumnDefinitions="64,*,*,*,*,*,*,*">
+            <Border Grid.Column="0" Classes="dayHeader"/>
+            <ItemsControl Grid.Column="1" Grid.ColumnSpan="7"
+                          ItemsSource="{Binding DayHeaders}">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <UniformGrid Rows="1"/>
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="vm:WeekDayHeaderViewModel">
+                  <Border Classes="dayHeader"
+                          Classes.today="{Binding IsToday}">
+                    <StackPanel HorizontalAlignment="Center" Spacing="2">
+                      <TextBlock Text="{Binding DayName}"
+                                 FontSize="11" FontWeight="Medium"
+                                 Foreground="#7A7A8C"
+                                 HorizontalAlignment="Center"/>
+                      <TextBlock Text="{Binding DayNumber}"
+                                 FontSize="18" FontWeight="SemiBold"
+                                 Foreground="#1A1A2E"
+                                 HorizontalAlignment="Center"/>
+                    </StackPanel>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </Grid>
+
+          <!-- Scrollable grid body -->
+          <ScrollViewer Grid.Row="1"
+                        Name="GridScroller"
+                        HorizontalScrollBarVisibility="Disabled"
+                        VerticalScrollBarVisibility="Auto">
+            <Grid ColumnDefinitions="64,*,*,*,*,*,*,*">
+
+              <!-- Hour labels column -->
+              <ItemsControl Grid.Column="0" ItemsSource="{Binding HourLabels}">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <StackPanel/>
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate DataType="vm:HourLabelViewModel">
+                    <Border Classes="hourLabel">
+                      <TextBlock Text="{Binding Label}"
+                                 FontSize="11"
+                                 Foreground="#9A9AAC"
+                                 VerticalAlignment="Top"/>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+
+              <!-- 7 day columns: each is a Grid stacking hour cells + a tile overlay -->
+              <Grid Grid.Column="1" Name="DayCol0"/>
+              <Grid Grid.Column="2" Name="DayCol1"/>
+              <Grid Grid.Column="3" Name="DayCol2"/>
+              <Grid Grid.Column="4" Name="DayCol3"/>
+              <Grid Grid.Column="5" Name="DayCol4"/>
+              <Grid Grid.Column="6" Name="DayCol5"/>
+              <Grid Grid.Column="7" Name="DayCol6"/>
+
+            </Grid>
+          </ScrollViewer>
+
+        </Grid>
+      </Border>
+    </Grid>
+
+    <!-- ── Loading veil ──────────────────────────────────────────── -->
+    <Border Background="#80FFFFFF"
+            IsVisible="{Binding IsLoading}"
+            IsHitTestVisible="{Binding IsLoading}">
+      <TextBlock Text="Loading…"
+                 FontSize="14"
+                 Foreground="#7A7A8C"
+                 HorizontalAlignment="Center"
+                 VerticalAlignment="Center"/>
+    </Border>
+
+    <!-- ── Modal: create / edit block ────────────────────────────── -->
+    <Border Background="#80000000"
+            IsVisible="{Binding IsFormVisible}"
+            IsHitTestVisible="{Binding IsFormVisible}">
+      <Border Background="White"
+              CornerRadius="12"
+              Padding="24"
+              Width="480"
+              MaxHeight="640"
+              HorizontalAlignment="Center"
+              VerticalAlignment="Center">
+		  <Grid RowDefinitions="Auto,*,Auto">
+          <!-- Header -->
+          <StackPanel Grid.Row="0" Spacing="4">
+            <TextBlock Text="{Binding FormTitle}"
+                       FontSize="18" FontWeight="SemiBold"
+                       Foreground="#1A1A2E"/>
+            <TextBlock Text="Schedule a block of focused or passive time."
+                       FontSize="12" Foreground="#7A7A8C"/>
+          </StackPanel>
+
+          <!-- Body -->
+          <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel Spacing="14">
+
+              <!-- Type pills -->
+              <StackPanel Spacing="4">
+                <TextBlock Text="Type" FontSize="12" Foreground="#7A7A8C"/>
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <Button Classes="typePill"
+                          Classes.active="{Binding IsFocusBlock}"
+                          Content="Focus"
+                          Command="{Binding SetFocusBlockCommand}"
+                          IsEnabled="{Binding !IsEditing}"/>
+                  <Button Classes="typePill"
+                          Classes.active="{Binding !IsFocusBlock}"
+                          Content="Passive"
+                          Command="{Binding SetPassiveBlockCommand}"
+                          IsEnabled="{Binding !IsEditing}"/>
+                </StackPanel>
+                <TextBlock FontSize="11" Foreground="#9A9AAC"
+                           IsVisible="{Binding !IsEditing}"/>
+                <TextBlock FontSize="11" Foreground="#9A9AAC"
+                           Text="Block type can't be changed. Delete and recreate to change type."
+                           IsVisible="{Binding IsEditing}"/>
+              </StackPanel>
+
+              <!-- Date -->
+              <StackPanel Spacing="4">
+                <TextBlock Text="Date" FontSize="12" Foreground="#7A7A8C"/>
+                <DatePicker SelectedDate="{Binding FormDate}"/>
+              </StackPanel>
+
+              <!-- Times -->
+              <Grid ColumnDefinitions="*,12,*">
+                <StackPanel Grid.Column="0" Spacing="4">
+                  <TextBlock Text="Start" FontSize="12" Foreground="#7A7A8C"/>
+                  <ComboBox ItemsSource="{Binding HourOptions}"
+                            SelectedItem="{Binding FormStartHour}"
+                            HorizontalAlignment="Stretch">
+                    <ComboBox.ItemTemplate>
+                      <DataTemplate>
+                        <TextBlock Text="{Binding StringFormat={}{0:00}:00}"/>
+                      </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                  </ComboBox>
+                </StackPanel>
+                <StackPanel Grid.Column="2" Spacing="4">
+                  <TextBlock Text="End" FontSize="12" Foreground="#7A7A8C"/>
+                  <ComboBox ItemsSource="{Binding HourOptions}"
+                            SelectedItem="{Binding FormEndHour}"
+                            HorizontalAlignment="Stretch">
+                    <ComboBox.ItemTemplate>
+                      <DataTemplate>
+                        <TextBlock Text="{Binding StringFormat={}{0:00}:00}"/>
+                      </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                  </ComboBox>
+                </StackPanel>
+              </Grid>
+
+              <!-- Profile -->
+              <StackPanel Spacing="4">
+                <TextBlock Text="Block Profile" FontSize="12" Foreground="#7A7A8C"/>
+                <ComboBox ItemsSource="{Binding AvailableProfiles}"
+                          SelectedItem="{Binding SelectedProfile}"
+                          HorizontalAlignment="Stretch">
+                  <ComboBox.ItemTemplate>
+                    <DataTemplate DataType="dto:BlockProfileDto">
+                      <TextBlock Text="{Binding Name}"/>
+                    </DataTemplate>
+                  </ComboBox.ItemTemplate>
+                </ComboBox>
+                <TextBlock Text="No block profiles yet — create one in Block Profiles first."
+                           FontSize="11" Foreground="#C03A2B"
+                           IsVisible="{Binding AvailableProfiles.Count, Converter={x:Static conv:CountToBoolConverter.IsZero}}"/>
+              </StackPanel>
+
+              <!-- Error -->
+              <TextBlock Text="{Binding FormError}"
+                         IsVisible="{Binding FormError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                         FontSize="12" Foreground="#C03A2B"
+                         TextWrapping="Wrap"/>
+            </StackPanel>
+          </ScrollViewer>
+
+          <!-- Footer -->
+			  <Grid Grid.Row="2" ColumnDefinitions="Auto,*,Auto,Auto">
+				  <Button Grid.Column="0"
+                    Classes="danger"
+                    Content="Delete"
+                    Command="{Binding DeleteCommand}"
+                    IsVisible="{Binding CanDeleteFromForm}"/>
+            <Button Grid.Column="2"
+                    Classes="secondary"
+                    Content="Cancel"
+                    Command="{Binding CloseFormCommand}"/>
+            <Button Grid.Column="3"
+                    Classes="primary"
+                    Content="{Binding SaveButtonLabel}"
+                    Command="{Binding SaveCommand}"/>
+          </Grid>
+
+        </Grid>
+      </Border>
+    </Border>
+  </Grid>
+</UserControl>

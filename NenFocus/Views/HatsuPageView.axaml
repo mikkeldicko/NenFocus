@@ -1,0 +1,240 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:NenFocus.ViewModels"
+             x:DataType="vm:HatsuPageViewModel"
+             x:Class="NenFocus.Views.HatsuPageView"
+             Background="Transparent">
+
+	<UserControl.Styles>
+		<Style Selector="Button.chip">
+			<Setter Property="Background" Value="#FFFFFF"/>
+			<Setter Property="BorderBrush" Value="#DDDDE8"/>
+			<Setter Property="BorderThickness" Value="1"/>
+			<Setter Property="CornerRadius" Value="20"/>
+			<Setter Property="Padding" Value="14,6"/>
+			<Setter Property="FontSize" Value="13"/>
+			<Setter Property="Foreground" Value="#888899"/>
+			<Setter Property="Cursor" Value="Hand"/>
+			<Setter Property="Margin" Value="0,0,6,6"/>
+		</Style>
+		<Style Selector="Button.chip /template/ ContentPresenter">
+			<Setter Property="Background" Value="#FFFFFF"/>
+		</Style>
+		<Style Selector="Button.chip.active /template/ ContentPresenter">
+			<Setter Property="Background" Value="#FDF6E8"/>
+		</Style>
+		<Style Selector="Button.chip.active">
+			<Setter Property="BorderBrush" Value="#B8922A"/>
+			<Setter Property="Foreground" Value="#B8922A"/>
+		</Style>
+	</UserControl.Styles>
+
+	<ScrollViewer HorizontalScrollBarVisibility="Disabled">
+		<Grid HorizontalAlignment="Center" Width="500" Margin="0,0,0,40">
+			<StackPanel Spacing="0">
+
+				<!-- Kanji + Header -->
+				<TextBlock Text="発"
+                           FontSize="72"
+                           FontWeight="Thin"
+                           Foreground="#DDDDE8"
+                           HorizontalAlignment="Center"
+                           Margin="0,0,0,20"/>
+				<TextBlock Text="Hatsu"
+                           FontSize="32"
+                           FontWeight="Light"
+                           Foreground="#1A1A2E"
+                           HorizontalAlignment="Center"
+                           LetterSpacing="6"/>
+				<TextBlock Text="Put it into action."
+                           FontSize="13"
+                           FontStyle="Italic"
+                           Foreground="#AAAABC"
+                           HorizontalAlignment="Center"
+                           Margin="0,12,0,44"/>
+
+				<!-- Hours -->
+				<StackPanel Spacing="10" Margin="0,0,0,24">
+					<TextBlock Text="HOURS"
+                               FontSize="9"
+                               FontWeight="Medium"
+                               Foreground="#AAAABC"
+                               LetterSpacing="3"/>
+					<WrapPanel Orientation="Horizontal">
+						<Button Classes="chip" Content="0 h"
+														Classes.active="{Binding SelectedHours, Converter={x:Static vm:IntEqualConverter.Instance}, ConverterParameter=0}"
+														Command="{Binding SelectHoursCommand}" CommandParameter="0"/>
+						<Button Classes="chip" Content="1 h"
+                                Classes.active="{Binding SelectedHours, Converter={x:Static vm:IntEqualConverter.Instance}, ConverterParameter=1}"
+                                Command="{Binding SelectHoursCommand}" CommandParameter="1"/>
+						<Button Classes="chip" Content="2 h"
+                                Classes.active="{Binding SelectedHours, Converter={x:Static vm:IntEqualConverter.Instance}, ConverterParameter=2}"
+                                Command="{Binding SelectHoursCommand}" CommandParameter="2"/>
+						<Button Classes="chip" Content="3 h"
+                                Classes.active="{Binding SelectedHours, Converter={x:Static vm:IntEqualConverter.Instance}, ConverterParameter=3}"
+                                Command="{Binding SelectHoursCommand}" CommandParameter="3"/>
+						<Button Classes="chip" Content="4 h"
+                                Classes.active="{Binding SelectedHours, Converter={x:Static vm:IntEqualConverter.Instance}, ConverterParameter=4}"
+                                Command="{Binding SelectHoursCommand}" CommandParameter="4"/>
+						<Button Classes="chip" Content="5 h"
+                                Classes.active="{Binding SelectedHours, Converter={x:Static vm:IntEqualConverter.Instance}, ConverterParameter=5}"
+                                Command="{Binding SelectHoursCommand}" CommandParameter="5"/>
+						<Button Classes="chip" Content="6 h"
+                                Classes.active="{Binding SelectedHours, Converter={x:Static vm:IntEqualConverter.Instance}, ConverterParameter=6}"
+                                Command="{Binding SelectHoursCommand}" CommandParameter="6"/>
+						<Button Classes="chip" Content="7 h"
+                                Classes.active="{Binding SelectedHours, Converter={x:Static vm:IntEqualConverter.Instance}, ConverterParameter=7}"
+                                Command="{Binding SelectHoursCommand}" CommandParameter="7"/>
+						<Button Classes="chip" Content="8 h"
+                                Classes.active="{Binding SelectedHours, Converter={x:Static vm:IntEqualConverter.Instance}, ConverterParameter=8}"
+                                Command="{Binding SelectHoursCommand}" CommandParameter="8"/>
+					</WrapPanel>
+				</StackPanel>
+
+				<!-- Minutes -->
+				<StackPanel Spacing="10" Margin="0,0,0,12">
+					<TextBlock Text="MINUTES"
+                               FontSize="9"
+                               FontWeight="Medium"
+                               Foreground="#AAAABC"
+                               LetterSpacing="3"/>
+					<WrapPanel Orientation="Horizontal">
+						<Button Classes="chip" Content="0 min"
+                                Classes.active="{Binding SelectedMinutes, Converter={x:Static vm:IntEqualConverter.Instance}, ConverterParameter=0}"
+                                Command="{Binding SelectMinutesCommand}" CommandParameter="0"/>
+						<Button Classes="chip" Content="5 min"
+                                Classes.active="{Binding SelectedMinutes, Converter={x:Static vm:IntEqualConverter.Instance}, ConverterParameter=5}"
+                                Command="{Binding SelectMinutesCommand}" CommandParameter="5"/>
+						<Button Classes="chip" Content="10 min"
+                                Classes.active="{Binding SelectedMinutes, Converter={x:Static vm:IntEqualConverter.Instance}, ConverterParameter=10}"
+                                Command="{Binding SelectMinutesCommand}" CommandParameter="10"/>
+						<Button Classes="chip" Content="15 min"
+                                Classes.active="{Binding SelectedMinutes, Converter={x:Static vm:IntEqualConverter.Instance}, ConverterParameter=15}"
+                                Command="{Binding SelectMinutesCommand}" CommandParameter="15"/>
+						<Button Classes="chip" Content="20 min"
+                                Classes.active="{Binding SelectedMinutes, Converter={x:Static vm:IntEqualConverter.Instance}, ConverterParameter=20}"
+                                Command="{Binding SelectMinutesCommand}" CommandParameter="20"/>
+						<Button Classes="chip" Content="30 min"
+                                Classes.active="{Binding SelectedMinutes, Converter={x:Static vm:IntEqualConverter.Instance}, ConverterParameter=30}"
+                                Command="{Binding SelectMinutesCommand}" CommandParameter="30"/>
+						<Button Classes="chip" Content="45 min"
+                                Classes.active="{Binding SelectedMinutes, Converter={x:Static vm:IntEqualConverter.Instance}, ConverterParameter=45}"
+                                Command="{Binding SelectMinutesCommand}" CommandParameter="45"/>
+					</WrapPanel>
+				</StackPanel>
+
+				<!-- Zero error -->
+				<TextBlock IsVisible="{Binding ShowZeroError}"
+                           Text="Please select a duration greater than zero."
+                           FontSize="12"
+                           Foreground="#C0392B"
+                           Margin="0,0,0,16"/>
+
+				<!-- Divider -->
+				<Border Height="1" Background="#E4E4EE" Margin="0,12,0,28"/>
+
+				<!-- Break reminders -->
+				<StackPanel Spacing="20" Margin="0,0,0,40">
+					<Grid ColumnDefinitions="*,Auto">
+						<StackPanel Grid.Column="0" Spacing="4">
+							<TextBlock Text="BREAK REMINDERS"
+                                       FontSize="9"
+                                       FontWeight="Medium"
+                                       Foreground="#AAAABC"
+                                       LetterSpacing="3"/>
+							<TextBlock Text="Encourage movement without lifting the block."
+                                       FontSize="12"
+                                       Foreground="#BBBBCC"
+                                       TextWrapping="Wrap"/>
+						</StackPanel>
+						<ToggleSwitch Grid.Column="1"
+                                      IsChecked="{Binding BreakEnabled}"
+                                      VerticalAlignment="Center"/>
+					</Grid>
+
+					<StackPanel IsVisible="{Binding BreakEnabled}" Spacing="20">
+
+						<!-- Interval chips -->
+						<StackPanel Spacing="8">
+							<TextBlock Text="Remind me every"
+                                       FontSize="12"
+                                       Foreground="#888899"/>
+							<WrapPanel Orientation="Horizontal">
+								<Button Classes="chip"
+                                        Classes.active="{Binding SelectedInterval, Converter={x:Static vm:StringEqualConverter.Instance}, ConverterParameter=25}"
+                                        Command="{Binding SelectIntervalCommand}" CommandParameter="25">25 min</Button>
+								<Button Classes="chip"
+                                        Classes.active="{Binding SelectedInterval, Converter={x:Static vm:StringEqualConverter.Instance}, ConverterParameter=45}"
+                                        Command="{Binding SelectIntervalCommand}" CommandParameter="45">45 min</Button>
+								<Button Classes="chip"
+                                        Classes.active="{Binding SelectedInterval, Converter={x:Static vm:StringEqualConverter.Instance}, ConverterParameter=60}"
+                                        Command="{Binding SelectIntervalCommand}" CommandParameter="60">60 min</Button>
+								<Button Classes="chip"
+                                        Classes.active="{Binding SelectedInterval, Converter={x:Static vm:StringEqualConverter.Instance}, ConverterParameter=Other}"
+                                        Command="{Binding SelectIntervalCommand}" CommandParameter="Other">Other</Button>
+							</WrapPanel>
+							<TextBox IsVisible="{Binding IsCustomInterval}"
+                                     Text="{Binding CustomIntervalInput}"
+                                     Watermark="Minutes"
+                                     FontSize="13" Padding="10,8"
+                                     Background="#FFFFFF" BorderBrush="#DDDDE8"
+                                     BorderThickness="1" CornerRadius="8"
+                                     Width="120" HorizontalAlignment="Left"/>
+						</StackPanel>
+
+						<!-- Break length chips -->
+						<StackPanel Spacing="8">
+							<TextBlock Text="Break duration"
+                                       FontSize="12"
+                                       Foreground="#888899"/>
+							<WrapPanel Orientation="Horizontal">
+								<Button Classes="chip"
+                                        Classes.active="{Binding SelectedBreakLength, Converter={x:Static vm:StringEqualConverter.Instance}, ConverterParameter=5}"
+                                        Command="{Binding SelectBreakLengthCommand}" CommandParameter="5">5 min</Button>
+								<Button Classes="chip"
+                                        Classes.active="{Binding SelectedBreakLength, Converter={x:Static vm:StringEqualConverter.Instance}, ConverterParameter=10}"
+                                        Command="{Binding SelectBreakLengthCommand}" CommandParameter="10">10 min</Button>
+								<Button Classes="chip"
+                                        Classes.active="{Binding SelectedBreakLength, Converter={x:Static vm:StringEqualConverter.Instance}, ConverterParameter=15}"
+                                        Command="{Binding SelectBreakLengthCommand}" CommandParameter="15">15 min</Button>
+								<Button Classes="chip"
+                                        Classes.active="{Binding SelectedBreakLength, Converter={x:Static vm:StringEqualConverter.Instance}, ConverterParameter=Other}"
+                                        Command="{Binding SelectBreakLengthCommand}" CommandParameter="Other">Other</Button>
+							</WrapPanel>
+							<TextBox IsVisible="{Binding IsCustomBreakLength}"
+                                     Text="{Binding CustomBreakLengthInput}"
+                                     Watermark="Minutes"
+                                     FontSize="13" Padding="10,8"
+                                     Background="#FFFFFF" BorderBrush="#DDDDE8"
+                                     BorderThickness="1" CornerRadius="8"
+                                     Width="120" HorizontalAlignment="Left"/>
+						</StackPanel>
+
+					</StackPanel>
+				</StackPanel>
+
+				<!-- Error message -->
+				<TextBlock IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                           Text="{Binding ErrorMessage}"
+                           FontSize="13" Foreground="#C0392B"
+                           HorizontalAlignment="Center"
+                           Margin="0,0,0,16"/>
+
+				<!-- Start Session -->
+				<Button HorizontalAlignment="Center"
+                        Command="{Binding StartSessionCommand}"
+                        IsEnabled="{Binding CanStart}"
+                        Background="#1A1A2E"
+                        BorderThickness="0"
+                        CornerRadius="10"
+                        Padding="52,14"
+                        Cursor="Hand">
+					<TextBlock Text="START SESSION"
+                               FontSize="13" FontWeight="Medium"
+                               Foreground="White" LetterSpacing="3"/>
+				</Button>
+
+			</StackPanel>
+		</Grid>
+	</ScrollViewer>
+</UserControl>

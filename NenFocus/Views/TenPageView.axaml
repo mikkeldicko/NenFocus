@@ -1,0 +1,55 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:NenFocus.ViewModels"
+             x:DataType="vm:TenPageViewModel"
+             x:Class="NenFocus.Views.TenPageView"
+             Background="Transparent">
+
+    <Grid HorizontalAlignment="Center" VerticalAlignment="Center" Width="460">
+        <StackPanel Spacing="0" HorizontalAlignment="Center">
+
+            <!-- Kanji -->
+            <TextBlock Text="点"
+                       FontSize="72"
+                       FontWeight="Thin"
+                       Foreground="#DDDDE8"
+                       HorizontalAlignment="Center"
+                       Margin="0,0,0,28"/>
+
+            <!-- Step name -->
+            <TextBlock Text="Ten"
+                       FontSize="32"
+                       FontWeight="Light"
+                       Foreground="#1A1A2E"
+                       HorizontalAlignment="Center"
+                       LetterSpacing="6"/>
+
+            <!-- Subtitle -->
+            <TextBlock Text="Focus the mind, reflect upon the self, and determine the goal."
+                       FontSize="13"
+                       FontStyle="Italic"
+                       Foreground="#AAAABC"
+                       HorizontalAlignment="Center"
+                       TextAlignment="Center"
+                       TextWrapping="Wrap"
+                       Margin="0,14,0,52"/>
+
+            <!-- Continue button — visible after countdown -->
+			<Button Command="{Binding ContinueCommand}"
+        HorizontalAlignment="Center"
+        Background="Transparent"
+        BorderBrush="#B8922A"
+        BorderThickness="1"
+        CornerRadius="8"
+        Padding="40,12"
+        Cursor="Hand">
+				<TextBlock Text="Continue"
+						   FontSize="13"
+						   FontWeight="Medium"
+						   Foreground="#B8922A"
+						   LetterSpacing="2"/>
+			</Button>
+
+        </StackPanel>
+    </Grid>
+</UserControl>

@@ -1,0 +1,4 @@
+//"C:\Users\mikke\AppData\Roaming\NenFocus"
+
+//Make a new migration
+//dotnet ef migrations add InitialCreate--project NenFocus.Infrastructure --startup-project NenFocus
