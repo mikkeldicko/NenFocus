@@ -160,6 +160,9 @@ namespace NenFocus.Infrastructure.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("Goal");
 
+                    b.Property<int?>("Rating")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Reflection")
                         .HasMaxLength(2000)
                         .HasColumnType("TEXT");

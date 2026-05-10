@@ -39,15 +39,14 @@ public sealed class ScheduledEnforcementService : BackgroundService
                     var computeHandler = scope.ServiceProvider.GetRequiredService<IQueryHandler<ComputeActivePolicySliceQuery, PolicySliceDto>>();
                     var now = DateTime.UtcNow;
 
-                    // Make sure this stays so you get your notifications!
                     await CheckForUpcomingBlocksAsync(scope, now, stoppingToken);
 
                     var policy = await computeHandler.HandleAsync(new ComputeActivePolicySliceQuery { At = now }, stoppingToken);
 
                     if (policy is not null && !policy.IsEmpty)
                     {
-                        System.Diagnostics.Debug.WriteLine($"[NenFocus] Applying block: {string.Join(", ", policy.BlockedSites)}");
-
+                        // Cleaned up: Just apply the policy. 
+                        // WindowsEnforcementService handles the internal _isEnforcing checks.
                         await _enforcement.ApplyPolicyAsync(policy, stoppingToken);
 
                         if (_sessionState.ActiveSession == null)
@@ -57,10 +56,9 @@ public sealed class ScheduledEnforcementService : BackgroundService
                     }
                     else
                     {
-                        if (policy == null) System.Diagnostics.Debug.WriteLine("[NenFocus] Policy is NULL");
-                        else if (policy.IsEmpty) System.Diagnostics.Debug.WriteLine("[NenFocus] Policy is EMPTY");
-
                         _sessionState.SetRitualRequired(false);
+
+                        // Only remove if there's no active session (manual session)
                         if (_sessionState.ActiveSession == null)
                         {
                             await _enforcement.RemoveEnforcementAsync(stoppingToken);
@@ -76,7 +74,6 @@ public sealed class ScheduledEnforcementService : BackgroundService
             await Task.Delay(_interval, stoppingToken);
         }
     }
-
     private async Task CheckForUpcomingBlocksAsync(IServiceScope scope, DateTime now, CancellationToken ct)
     {
         var blockRepo = scope.ServiceProvider.GetRequiredService<IPlannedBlockRepository>();

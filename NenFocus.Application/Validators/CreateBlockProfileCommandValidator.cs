@@ -1,11 +1,11 @@
 using FluentValidation;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.UseCases.BlockProfiles.CreateBlockProfile;
+using NenFocus.Domain.Constants;
 
 namespace NenFocus.Application.Validators;
 
-public sealed class CreateBlockProfileCommandValidator
-    : AbstractValidator<CreateBlockProfileCommand>
+public sealed class CreateBlockProfileCommandValidator : AbstractValidator<CreateBlockProfileCommand>
 {
     public CreateBlockProfileCommandValidator(IBlockProfileRepository profiles)
     {
@@ -24,7 +24,9 @@ public sealed class CreateBlockProfileCommandValidator
 
         RuleForEach(x => x.BlockedApps)
             .NotEmpty()
-            .WithMessage("App name cannot be empty.");
+            .WithMessage("App name cannot be empty.")
+            .Must(app => !SystemSafetyConstants.UnkillableProcesses.Contains(Normalize(app)))
+            .WithMessage(app => $"'{app}' is a critical system process and cannot be blocked.");
 
         RuleForEach(x => x.Websites)
             .NotEmpty()
@@ -33,5 +35,28 @@ public sealed class CreateBlockProfileCommandValidator
         RuleForEach(x => x.Tags)
             .MaximumLength(30)
             .WithMessage("Tags cannot exceed 30 characters each.");
+    }
+
+    private string Normalize(string input)
+    {
+        if (string.IsNullOrWhiteSpace(input)) return string.Empty;
+
+        try
+        {
+            // This handles "C:\Windows\explorer.exe" -> "explorer.exe"
+            // and also just "explorer" -> "explorer"
+            string fileName = System.IO.Path.GetFileName(input);
+
+            if (fileName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+            {
+                fileName = fileName[..^4];
+            }
+
+            return fileName.Trim();
+        }
+        catch
+        {
+            return input.Trim();
+        }
     }
 }

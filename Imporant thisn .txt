@@ -2,3 +2,16 @@
 
 //Make a new migration
 //dotnet ef migrations add InitialCreate--project NenFocus.Infrastructure --startup-project NenFocus
+
+# 1. Kill any lingering build processes
+Stop-Process -Name "MSBuild" -ErrorAction SilentlyContinue
+Stop-Process -Name "VBCSCompiler" -ErrorAction SilentlyContinue
+
+# 2. Hard delete all obj and bin folders
+Get-ChildItem -Recurse -Include bin,obj | Remove-Item -Recurse -Force
+
+# 3. Force a restore specifying the platform
+dotnet restore --force
+
+# 4. Try the build again
+dotnet build

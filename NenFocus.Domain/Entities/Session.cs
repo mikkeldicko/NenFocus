@@ -1,5 +1,6 @@
 using NenFocus.Domain.Enums;
 using NenFocus.Domain.ValueObjects;
+using System;
 
 namespace NenFocus.Domain.Entities;
 
@@ -22,17 +23,20 @@ public class Session : BaseEntity
 
     /// <summary>
     /// Optional post-session reflection text entered by the user.
-    /// Set after the session completes via the post-session screen.
     /// </summary>
     public string? Reflection { get; private set; }
 
     /// <summary>
-    /// JSON-serialized dictionary of blocked app attempts.
-    /// Stored as a string column in the DB for simplicity.
+    /// User rating of the session (e.g., 1-5).
+    /// </summary>
+    public int? Rating { get; private set; }
+
+    /// <summary>
+    /// JSON-serialized dictionary of blocked app and website attempts.
     /// </summary>
     public string? BlockedAttemptsSerialized { get; private set; }
 
-    private Session() { } // required for EF Core
+    private Session() { } // Required for EF Core
 
     public static Session Create(
         SessionGoal goal,
@@ -91,6 +95,20 @@ public class Session : BaseEntity
         BreakStartedAt = null;
     }
 
+    public void SetReflection(string? reflection, int rating)
+    {
+        if (Status != SessionStatus.Completed)
+            throw new InvalidOperationException("Reflection can only be set on a completed session.");
+
+        Reflection = string.IsNullOrWhiteSpace(reflection) ? null : reflection.Trim();
+        Rating = rating;
+    }
+
+    public void SetBlockedAttempts(string? serializedAttempts)
+    {
+        BlockedAttemptsSerialized = serializedAttempts;
+    }
+
     public TimeSpan? GetElapsedTime()
     {
         if (StartedAt is null) return null;
@@ -105,18 +123,10 @@ public class Session : BaseEntity
         return remaining < TimeSpan.Zero ? TimeSpan.Zero : remaining;
     }
 
-    /// <summary>Sets the post-session reflection. Can only be set on completed sessions.</summary>
-    public void SetReflection(string? reflection)
+    public void SyncState(int breaksTaken, DateTime? breakStartedAt)
     {
-        if (Status != SessionStatus.Completed)
-            throw new InvalidOperationException("Reflection can only be set on a completed session.");
-
-        Reflection = string.IsNullOrWhiteSpace(reflection) ? null : reflection.Trim();
-    }
-
-    /// <summary>Stores the serialized blocked attempt data on session completion.</summary>
-    public void SetBlockedAttempts(string? serializedAttempts)
-    {
-        BlockedAttemptsSerialized = serializedAttempts;
+        // This allows us to restore the state from a DTO or external source
+        BreaksTaken = breaksTaken;
+        BreakStartedAt = breakStartedAt;
     }
 }

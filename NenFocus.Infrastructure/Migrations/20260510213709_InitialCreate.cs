@@ -79,6 +79,7 @@ namespace NenFocus.Infrastructure.Migrations
                     BreaksTaken = table.Column<int>(type: "INTEGER", nullable: false, defaultValue: 0),
                     BreakStartedAt = table.Column<DateTime>(type: "TEXT", nullable: true),
                     Reflection = table.Column<string>(type: "TEXT", maxLength: 2000, nullable: true),
+                    Rating = table.Column<int>(type: "INTEGER", nullable: true),
                     BlockedAttempts = table.Column<string>(type: "TEXT", nullable: true),
                     CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false)
                 },

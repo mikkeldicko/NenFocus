@@ -4,6 +4,7 @@ using Avalonia.Data.Core.Plugins;
 using Avalonia.Markup.Xaml;
 using Microsoft.Extensions.DependencyInjection;
 using NenFocus.Application.Interfaces;
+using NenFocus.Infrastructure.Services;
 using NenFocus.ViewModels;
 using NenFocus.Views;
 using System.Linq;
@@ -25,20 +26,27 @@ public partial class App : Avalonia.Application
 
             desktop.ShutdownRequested += async (_, _) =>
             {
-                var enforcement = Program.AppHost!.Services.GetRequiredService<IEnforcementService>();
-                var sessionState = Program.AppHost!.Services.GetRequiredService<ISessionStateService>();
+                using (var scope = Program.AppHost!.Services.CreateScope())
+                {
+                    var enforcement = scope.ServiceProvider.GetRequiredService<IEnforcementService>();
+                    var sessionState = scope.ServiceProvider.GetRequiredService<ISessionStateService>();
+                    var sessionRepository = scope.ServiceProvider.GetRequiredService<ISessionRepository>();
 
-                if (sessionState.ActiveSession is { } session)
-                {
-                    // Save session end time so it can be restored on next launch
-                    var endTime = session.StartedAt.AddMinutes(session.DurationMinutes);
-                    Program.Persistence?.Save(session, endTime);
-                }
-                else
-                {
-                    // No active session — clean up enforcement and clear any stale file
-                    Program.Persistence?.Clear();
-                    await enforcement.RemoveEnforcementAsync();
+                    if (sessionState.ActiveSession is { } sessionDto)
+                    {
+                        var session = await sessionRepository.GetByIdAsync(sessionDto.Id);
+                        if (session != null)
+                        {
+                            // Use the new Sync method to update the entity safely
+                            session.SyncState(sessionDto.BreaksTaken, sessionDto.BreakStartedAt);
+
+                            await sessionRepository.SaveAsync(session);
+                        }
+                    }
+                    else
+                    {
+                        await enforcement.RemoveEnforcementAsync();
+                    }
                 }
             };
 

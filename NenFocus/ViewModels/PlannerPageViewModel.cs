@@ -21,7 +21,7 @@ public partial class PlannerPageViewModel : ViewModelBase
     // ── Layout constants ──────────────────────────────────────────────────
     public const double HourRowHeight = 56.0;
     public const int FirstHour = 0;
-    public const int LastHour = 24; // exclusive
+    public const int LastHour = 24;
     public const int TotalHours = LastHour - FirstHour;
     public double GridContentHeight => HourRowHeight * TotalHours;
 
@@ -29,11 +29,11 @@ public partial class PlannerPageViewModel : ViewModelBase
     private readonly IQueryHandler<GetPlannedBlocksForDayQuery, IReadOnlyList<PlannedBlockDto>> _getBlocksForDay;
     private readonly ICommandHandler<CreatePlannedBlockCommand, CreatePlannedBlockResult> _createBlock;
     private readonly ICommandHandler<UpdatePlannedBlockCommand, UpdatePlannedBlockResult> _updateBlock;
-    private readonly ICommandHandler<DeletePlannedBlockCommand> _deleteBlock;
 
-    /// <summary>Cache of loaded blocks for the visible week, keyed by id.</summary>
+    // UPDATED: Now matches the Handler signature with Result
+    private readonly ICommandHandler<DeletePlannedBlockCommand, DeletePlannedBlockResult> _deleteBlock;
+
     private readonly Dictionary<Guid, PlannedBlockDto> _blocksInWeek = new();
-
     private Guid? _editingBlockId;
 
     // ── Week state ────────────────────────────────────────────────────────
@@ -73,6 +73,7 @@ public partial class PlannerPageViewModel : ViewModelBase
 
     public string SaveButtonLabel => IsEditing ? "Save Changes" : "Create Block";
     public bool CanDeleteFromForm => IsEditing;
+
     partial void OnIsEditingChanged(bool value)
     {
         OnPropertyChanged(nameof(SaveButtonLabel));
@@ -85,7 +86,8 @@ public partial class PlannerPageViewModel : ViewModelBase
         IQueryHandler<GetPlannedBlocksForDayQuery, IReadOnlyList<PlannedBlockDto>> getBlocksForDay,
         ICommandHandler<CreatePlannedBlockCommand, CreatePlannedBlockResult> createBlock,
         ICommandHandler<UpdatePlannedBlockCommand, UpdatePlannedBlockResult> updateBlock,
-        ICommandHandler<DeletePlannedBlockCommand> deleteBlock)
+        // UPDATED: Added DeletePlannedBlockResult to the generic type
+        ICommandHandler<DeletePlannedBlockCommand, DeletePlannedBlockResult> deleteBlock)
     {
         _getProfiles = getProfiles;
         _getBlocksForDay = getBlocksForDay;
@@ -150,7 +152,6 @@ public partial class PlannerPageViewModel : ViewModelBase
 
     private static DateTime StartOfWeek(DateTime date)
     {
-        // Monday-based week.
         int diff = ((int)date.DayOfWeek + 6) % 7;
         return date.Date.AddDays(-diff);
     }
@@ -190,10 +191,6 @@ public partial class PlannerPageViewModel : ViewModelBase
         IsLoading = false;
     }
 
-    /// <summary>
-    /// Compute a tile's vertical layout for the visible hour range.
-    /// Returns null if the block falls entirely outside the visible band.
-    /// </summary>
     private PlannedBlockTileViewModel? BuildTile(PlannedBlockDto dto, int columnIndex)
     {
         var dayStart = WeekStart.AddDays(columnIndex);
@@ -273,7 +270,6 @@ public partial class PlannerPageViewModel : ViewModelBase
         SelectedProfile = null;
     }
 
-    // ── Block type toggle ─────────────────────────────────────────────────
     [RelayCommand] private void SetFocusBlock() => IsFocusBlock = true;
     [RelayCommand] private void SetPassiveBlock() => IsFocusBlock = false;
 
@@ -300,7 +296,6 @@ public partial class PlannerPageViewModel : ViewModelBase
         var end = dayDate.AddHours(FormEndHour);
         var blockType = IsFocusBlock ? BlockType.Focus : BlockType.Passive;
 
-        // Client-side overlap guard for Focus blocks (mirrors server validator).
         if (blockType == BlockType.Focus && HasOverlappingFocusBlock(start, end, _editingBlockId))
         {
             FormError = "This Focus block overlaps with an existing Focus block.";
@@ -309,8 +304,6 @@ public partial class PlannerPageViewModel : ViewModelBase
 
         if (IsEditing && _editingBlockId.HasValue)
         {
-            // Note: UpdatePlannedBlockCommand intentionally has no BlockType field —
-            // the entity preserves its original type. To change type, delete and recreate.
             var result = await _updateBlock.HandleAsync(new UpdatePlannedBlockCommand
             {
                 BlockId = _editingBlockId.Value,
@@ -352,12 +345,22 @@ public partial class PlannerPageViewModel : ViewModelBase
     private async Task DeleteAsync()
     {
         if (!_editingBlockId.HasValue) return;
-        await _deleteBlock.HandleAsync(new DeletePlannedBlockCommand
+
+        // UPDATED: Command call now handles the Result correctly
+        var result = await _deleteBlock.HandleAsync(new DeletePlannedBlockCommand
         {
             BlockId = _editingBlockId.Value
         });
-        await LoadWeekAsync();
-        CloseForm();
+
+        if (result.Success)
+        {
+            await LoadWeekAsync();
+            CloseForm();
+        }
+        else
+        {
+            FormError = result.ErrorMessage;
+        }
     }
 
     [RelayCommand]
@@ -369,7 +372,4 @@ public partial class PlannerPageViewModel : ViewModelBase
     }
 }
 
-/// <summary>
-/// Carries (column, hour) from a clicked grid cell into the page VM's create command.
-/// </summary>
 public readonly record struct GridSlotPosition(int ColumnIndex, int Hour);

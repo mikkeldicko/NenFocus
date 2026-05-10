@@ -33,6 +33,7 @@ public static class DependencyInjection
         services.AddScoped<IBlockProfileRepository, BlockProfileRepository>();
         services.AddScoped<IPlannedBlockRepository, PlannedBlockRepository>();
 
+
         // ── Notifications ──────────────────────────────────────────────────
         services.AddSingleton<INotificationService, WindowsNotificationService>();
 

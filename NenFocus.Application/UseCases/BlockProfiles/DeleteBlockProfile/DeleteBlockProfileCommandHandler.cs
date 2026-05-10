@@ -1,15 +1,8 @@
-using NenFocus.Application.Interfaces;
+﻿using NenFocus.Application.Interfaces;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace NenFocus.Application.UseCases.BlockProfiles.DeleteBlockProfile;
-
-// ── Command ────────────────────────────────────────────────────────────────
-
-public sealed record DeleteBlockProfileCommand
-{
-    public Guid ProfileId { get; init; }
-}
-
-// ── Handler ────────────────────────────────────────────────────────────────
 
 public sealed class DeleteBlockProfileCommandHandler
     : ICommandHandler<DeleteBlockProfileCommand>

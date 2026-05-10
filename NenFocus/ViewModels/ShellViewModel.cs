@@ -63,7 +63,7 @@ public partial class ShellViewModel : ViewModelBase
        IQueryHandler<GetPlannedBlocksForDayQuery, IReadOnlyList<PlannedBlockDto>> getBlocksForDay,
        ICommandHandler<CreatePlannedBlockCommand, CreatePlannedBlockResult> createPlannedBlock,
        ICommandHandler<UpdatePlannedBlockCommand, UpdatePlannedBlockResult> updatePlannedBlock,
-       ICommandHandler<DeletePlannedBlockCommand> deletePlannedBlock)
+       ICommandHandler<DeletePlannedBlockCommand, DeletePlannedBlockResult> deletePlannedBlock)
     {
         _profilesQuery = profilesQuery;
         _startSession = startSession;

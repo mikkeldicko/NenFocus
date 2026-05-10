@@ -4,24 +4,6 @@ using NenFocus.Domain.Enums;
 
 namespace NenFocus.Application.UseCases.Planner.CreatePlannedBlock;
 
-public sealed record CreatePlannedBlockCommand
-{
-    public Guid ProfileId { get; init; }
-    public BlockType BlockType { get; init; }
-    public DateTime Start { get; init; }
-    public DateTime End { get; init; }
-}
-
-public sealed record CreatePlannedBlockResult
-{
-    public bool Success { get; init; }
-    public Guid? BlockId { get; init; }
-    public string? ErrorMessage { get; init; }
-
-    public static CreatePlannedBlockResult Ok(Guid id) => new() { Success = true, BlockId = id };
-    public static CreatePlannedBlockResult Fail(string message) => new() { Success = false, ErrorMessage = message };
-}
-
 public sealed class CreatePlannedBlockCommandHandler : ICommandHandler<CreatePlannedBlockCommand, CreatePlannedBlockResult>
 {
     private readonly IPlannedBlockRepository _blocks;
@@ -35,7 +17,6 @@ public sealed class CreatePlannedBlockCommandHandler : ICommandHandler<CreatePla
 
     public async Task<CreatePlannedBlockResult> HandleAsync(CreatePlannedBlockCommand command, CancellationToken cancellationToken = default)
     {
-        // Force UTC so the background service sees it immediately
         var startTime = command.Start.ToUniversalTime();
         var endTime = command.End.ToUniversalTime();
 

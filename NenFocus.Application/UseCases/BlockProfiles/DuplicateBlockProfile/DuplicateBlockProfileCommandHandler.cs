@@ -1,24 +1,9 @@
-using NenFocus.Application.Interfaces;
+﻿using NenFocus.Application.Interfaces;
+using System;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace NenFocus.Application.UseCases.BlockProfiles.DuplicateBlockProfile;
-
-public sealed record DuplicateBlockProfileCommand
-{
-    public Guid SourceProfileId { get; init; }
-    public string? NewName { get; init; }
-}
-
-public sealed record DuplicateBlockProfileResult
-{
-    public bool Success { get; init; }
-    public Guid? NewProfileId { get; init; }
-    public string? ErrorMessage { get; init; }
-
-    public static DuplicateBlockProfileResult Ok(Guid id) =>
-        new() { Success = true, NewProfileId = id };
-    public static DuplicateBlockProfileResult Fail(string message) =>
-        new() { Success = false, ErrorMessage = message };
-}
 
 public sealed class DuplicateBlockProfileCommandHandler
     : ICommandHandler<DuplicateBlockProfileCommand, DuplicateBlockProfileResult>

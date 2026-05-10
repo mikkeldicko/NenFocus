@@ -11,7 +11,7 @@ using NenFocus.Infrastructure.Persistence;
 namespace NenFocus.Infrastructure.Migrations
 {
     [DbContext(typeof(NenFocusDbContext))]
-    [Migration("20260508213524_InitialCreate")]
+    [Migration("20260510213709_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -162,6 +162,9 @@ namespace NenFocus.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT")
                         .HasColumnName("Goal");
+
+                    b.Property<int?>("Rating")
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("Reflection")
                         .HasMaxLength(2000)

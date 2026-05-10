@@ -1,9 +1,12 @@
 using Microsoft.Win32;
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
+using NenFocus.Domain.Constants;
 using NenFocus.Domain.Enums;
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
 
@@ -29,6 +32,9 @@ public sealed class WindowsEnforcementService : IEnforcementService, IDisposable
     // Server fields
     private HttpListener? _httpListener;
     private CancellationTokenSource? _serverCts;
+
+    private readonly ConcurrentDictionary<string, bool> _trustedSignatureCache = new();
+    private readonly int _currentPid = Environment.ProcessId;
 
     public WindowsEnforcementService(INotificationService notifications, IBlockedAttemptTracker attemptTracker)
     {
@@ -196,20 +202,77 @@ public sealed class WindowsEnforcementService : IEnforcementService, IDisposable
         var processes = Process.GetProcesses();
         foreach (var p in processes)
         {
-            if (_blockedProcessNames.Contains(p.ProcessName))
+            try
             {
-                try
+                // TIER 0: Self-Protection
+                if (p.Id == _currentPid) continue;
+
+                string pName = p.ProcessName;
+
+                // TIER 1: Immutable Allowlist
+                if (SystemSafetyConstants.UnkillableProcesses.Contains(pName)) continue;
+
+                // TIER 2: Process Name Check (Is it even in the user's block list?)
+                if (!_blockedProcessNames.Contains(pName)) continue;
+
+                // TIER 3: Path & Signature Protection (The Shield)
+                string? filePath = GetProcessPath(p);
+                if (string.IsNullOrEmpty(filePath)) continue; // Skip if we can't see the path
+
+                if (IsSystemProtected(filePath))
                 {
-                    p.Kill(true);
-                    if (_currentPolicy?.ActiveSessionId != null)
-                    {
-                        _ = _attemptTracker.RecordAppBlockedAsync(_currentPolicy.ActiveSessionId.Value, p.ProcessName);
-                    }
+                    Debug.WriteLine($"[NenFocus] Shielded protected process: {pName}");
+                    continue;
                 }
-                catch { }
+
+                // If we passed all safety tiers, kill the tree
+                if (_currentPolicy?.ActiveSessionId != null)
+                {
+                    _ = _attemptTracker.RecordAppBlockedAsync(_currentPolicy.ActiveSessionId.Value, pName);
+                }
+
+                p.Kill(entireProcessTree: true);
             }
-            p.Dispose();
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[NenFocus] Safety skip for {p.ProcessName}: {ex.Message}");
+            }
+            finally { p.Dispose(); }
         }
+    }
+
+    private bool IsSystemProtected(string filePath)
+    {
+        // 1. Path check (unchanged)
+        if (filePath.Contains(@"C:\Windows\System32", StringComparison.OrdinalIgnoreCase) ||
+            filePath.Contains(@"C:\Windows\SysWOW64", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        // 2. Digital Signature Check (Updated for .NET 9)
+        return _trustedSignatureCache.GetOrAdd(filePath, path =>
+        {
+            try
+            {
+                // Use X509CertificateLoader instead of CreateFromSignedFile
+                using var cert = X509CertificateLoader.LoadCertificateFromFile(path);
+                string subject = cert.Subject;
+
+                return subject.Contains(SystemSafetyConstants.MicrosoftPublisher) ||
+                       subject.Contains(SystemSafetyConstants.NenFocusPublisher);
+            }
+            catch
+            {
+                return false;
+            }
+        });
+    }
+
+    private string? GetProcessPath(Process p)
+    {
+        try { return p.MainModule?.FileName; }
+        catch { return null; }
     }
 
     // --- Hosts & Registry Logic ---
