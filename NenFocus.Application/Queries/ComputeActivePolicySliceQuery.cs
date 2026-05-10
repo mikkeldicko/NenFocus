@@ -3,7 +3,6 @@ using NenFocus.Application.Interfaces;
 using NenFocus.Domain.Aggregates;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
-using System.Linq;
 
 namespace NenFocus.Application.Queries.ComputeActivePolicySlice;
 
@@ -33,82 +32,76 @@ public sealed class ComputeActivePolicySliceQueryHandler
         ComputeActivePolicySliceQuery query,
         CancellationToken cancellationToken = default)
     {
-        // 1. Get active planned blocks
+        // 1. Get active planned blocks and impromptu sessions
         var activeBlocks = (await _blocks.GetForRangeAsync(
-          query.At.AddSeconds(-1),
-          query.At.AddSeconds(1),
-          cancellationToken)).ToList();
+            query.At.AddSeconds(-1),
+            query.At.AddSeconds(1),
+            cancellationToken)).ToList();
 
-        // 2. Get active impromptu sessions
         var activeSessions = await _sessions.GetActiveSessionsAsync(cancellationToken);
 
-        // If nothing is happening, return empty
         if (activeBlocks.Count == 0 && activeSessions.Count == 0)
             return new PolicySliceDto();
 
-        // 3. Gather all Profile IDs from BOTH sources
-        var profileIdsFromBlocks = activeBlocks.Select(b => b.BlockProfileId);
-        var profileIdsFromSessions = activeSessions.Select(s => s.BlockProfileId);
-
-        var allProfileIds = profileIdsFromBlocks
-            .Concat(profileIdsFromSessions)
+        // 2. Load the actual Profile entities
+        var allProfileIds = activeBlocks.Select(b => b.BlockProfileId)
+            .Concat(activeSessions.Select(s => s.BlockProfileId))
             .Where(id => id != Guid.Empty)
             .Distinct()
-            .ToList(); // Materialize to list to avoid Concat errors
+            .ToList();
 
-        // 4. Load the profiles (using Entities namespace)
-        var profiles = new Dictionary<Guid, BlockProfile>();
+        var activeProfiles = new List<BlockProfile>();
         foreach (var id in allProfileIds)
         {
-            var profile = await _profiles.GetByIdAsync(id, cancellationToken);
-            if (profile is BlockProfile bp) // Type check/cast to be safe
-                profiles[id] = bp;
+            if (await _profiles.GetByIdAsync(id, cancellationToken) is BlockProfile bp)
+                activeProfiles.Add(bp);
         }
 
-        var activeProfiles = profiles.Values.ToList();
-
-        // 5. Apps: union across all active profiles
+        // 3. Apps: Always a Union
         var blockedApps = activeProfiles
             .SelectMany(p => p.BlockedApps.Select(a => a.ProcessName))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        // 6. Websites: check if any allowlist is active
-        var allowlistProfiles = activeProfiles
-            .Where(p => p.WebsitePolicy == WebsitePolicy.Allowlist)
-            .ToList();
+        // 4. Decide the Effective Website Policy
+        var effectivePolicy = activeProfiles.Any(p => p.WebsitePolicy == WebsitePolicy.Allowlist)
+            ? WebsitePolicy.Allowlist
+            : WebsitePolicy.Blocklist;
 
-        bool isAllowlistMode = allowlistProfiles.Count > 0;
         HashSet<string> allowedSites = [];
         HashSet<string> blockedSites = [];
 
-        if (isAllowlistMode)
+        // 5. Use the Enum to decide how to build the lists
+        switch (effectivePolicy)
         {
-            var allAllowlists = allowlistProfiles
-                .Select(p => p.Websites.Select(s => s.Url).ToHashSet(StringComparer.OrdinalIgnoreCase))
-                .ToList();
+            case WebsitePolicy.Allowlist:
+                var allowlistProfiles = activeProfiles.Where(p => p.WebsitePolicy == WebsitePolicy.Allowlist).ToList();
 
-            allowedSites = allAllowlists.First();
-            foreach (var list in allAllowlists.Skip(1))
-                allowedSites.IntersectWith(list);
+                var firstList = allowlistProfiles[0].Websites.Select(s => s.Url).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                foreach (var profile in allowlistProfiles.Skip(1))
+                {
+                    firstList.IntersectWith(profile.Websites.Select(s => s.Url));
+                }
+                allowedSites = firstList;
 
-            blockedSites = activeProfiles
-                .Where(p => p.WebsitePolicy == WebsitePolicy.Blocklist)
-                .SelectMany(p => p.Websites.Select(s => s.Url))
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        }
-        else
-        {
-            blockedSites = activeProfiles
-                .SelectMany(p => p.Websites.Select(s => s.Url))
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                blockedSites = activeProfiles
+                    .Where(p => p.WebsitePolicy == WebsitePolicy.Blocklist)
+                    .SelectMany(p => p.Websites.Select(s => s.Url))
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                break;
+
+            case WebsitePolicy.Blocklist:
+                blockedSites = activeProfiles
+                    .SelectMany(p => p.Websites.Select(s => s.Url))
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                break;
         }
 
         return new PolicySliceDto
         {
-            ActiveSessionId = activeSessions.FirstOrDefault()?.Id, // Add this line
+            ActiveSessionId = activeSessions.FirstOrDefault()?.Id,
             SliceStart = query.At,
             SliceEnd = activeBlocks.Any() ? activeBlocks.Max(b => b.End) : query.At.AddMinutes(1),
-            WebsiteAllowlistMode = isAllowlistMode,
+            WebsitePolicyMode = effectivePolicy,
             AllowedSites = allowedSites,
             BlockedSites = blockedSites,
             BlockedApps = blockedApps

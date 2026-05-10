@@ -100,7 +100,6 @@ public sealed class StartSessionCommandHandler
 
         await _sessions.SaveAsync(session, cancellationToken);
 
-        // Notify the UI layer that a session is now active.
         _sessionState.SetActive(new SessionDto
         {
             Id = session.Id,
@@ -121,27 +120,30 @@ public sealed class StartSessionCommandHandler
         StartSessionCommand command,
         DomainSession session)
     {
-        var profileApps = profile?.BlockedApps.Select(a => a.ProcessName)
-                          ?? Enumerable.Empty<string>();
+        // 1. Apps Union
+        var profileApps = profile?.BlockedApps.Select(a => a.ProcessName) ?? Enumerable.Empty<string>();
         var blockedApps = profileApps
             .Union(command.TemporaryBlockedApps, StringComparer.OrdinalIgnoreCase)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        var isAllowlist = profile?.WebsitePolicy == WebsitePolicy.Allowlist;
+        // 2. Determine Mode
+        var mode = profile?.WebsitePolicy ?? WebsitePolicy.Blocklist;
 
         HashSet<string> allowedSites = [];
         HashSet<string> blockedSites = [];
 
-        if (isAllowlist)
+        if (mode == WebsitePolicy.Allowlist)
         {
             allowedSites = profile!.Websites
                 .Select(s => s.Url)
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            // In Allowlist mode, any temporary blocked sites are just extra insurance 
+            // but the system blocks everything NOT in allowedSites anyway.
         }
         else
         {
-            var profileSites = profile?.Websites.Select(s => s.Url)
-                               ?? Enumerable.Empty<string>();
+            var profileSites = profile?.Websites.Select(s => s.Url) ?? Enumerable.Empty<string>();
             blockedSites = profileSites
                 .Union(command.TemporaryBlockedSites, StringComparer.OrdinalIgnoreCase)
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -149,9 +151,10 @@ public sealed class StartSessionCommandHandler
 
         return new PolicySliceDto
         {
+            ActiveSessionId = session.Id,
             SliceStart = session.StartedAt!.Value,
             SliceEnd = session.StartedAt!.Value.AddMinutes(command.DurationMinutes),
-            WebsiteAllowlistMode = isAllowlist,
+            WebsitePolicyMode = mode,
             AllowedSites = allowedSites,
             BlockedSites = blockedSites,
             BlockedApps = blockedApps

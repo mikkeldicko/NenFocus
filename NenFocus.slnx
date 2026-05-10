@@ -3,8 +3,8 @@
     <File Path="Imporant thisn .txt" />
   </Folder>
   <Folder Name="/NenFocusExtension/">
-    <File Path="blocked.html" />
     <File Path="NenFocusExtension/background.js" />
+    <File Path="NenFocusExtension/blocked.html" />
     <File Path="NenFocusExtension/manifest.json" />
   </Folder>
   <Project Path="NenFocus.Application/NenFocus.Application.csproj" />

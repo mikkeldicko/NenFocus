@@ -1,6 +1,7 @@
 using Microsoft.Win32;
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
+using NenFocus.Domain.Enums;
 using System.Diagnostics;
 using System.Net;
 using System.Text;
@@ -14,7 +15,7 @@ public sealed class WindowsEnforcementService : IEnforcementService, IDisposable
     private const string BlockMarkerStart = "# NEN_FOCUS_START";
     private const string BlockMarkerEnd = "# NEN_FOCUS_END";
 
-    private static readonly string[] BlockAddresses = { "0.0.0.0", "::1" };
+    private static readonly string[] BlockAddresses = { "0.0.0.0", "::" }; // Changed to :: for better IPv6 blocking
 
     private const int ProcessPollIntervalMs = 2000;
     private readonly SemaphoreSlim _lock = new(1, 1);
@@ -59,7 +60,7 @@ public sealed class WindowsEnforcementService : IEnforcementService, IDisposable
             // 1. Update Hosts File (The backup hard-block)
             await ApplyHostsRulesAsync(policy, ct);
 
-            // 2. Update App Blocking State (e.g. Steam, Discord)
+            // 2. Update App Blocking State
             _blockedProcessNames = new HashSet<string>(
                 policy.BlockedApps.Select(NormalizeProcessName),
                 StringComparer.OrdinalIgnoreCase);
@@ -137,27 +138,42 @@ public sealed class WindowsEnforcementService : IEnforcementService, IDisposable
 
         try
         {
-            if (request.Url?.AbsolutePath == "/check")
+            var path = request.Url?.AbsolutePath;
+
+            if (path == "/check")
             {
                 var domain = request.QueryString["domain"]?.ToLower();
-                bool isBlocked = _isEnforcing && (_currentPolicy?.BlockedSites
-                    .Any(s => NormalizeDomain(s) == domain) ?? false);
+                bool isBlocked = false;
+
+                if (_isEnforcing && _currentPolicy != null && !string.IsNullOrEmpty(domain))
+                {
+                    var normalizedInput = NormalizeDomain(domain);
+
+                    if (_currentPolicy.WebsitePolicyMode == WebsitePolicy.Allowlist)
+                    {
+                        bool isAllowed = _currentPolicy.AllowedSites.Any(s => NormalizeDomain(s) == normalizedInput);
+                        isBlocked = !isAllowed;
+                    }
+                    else
+                    {
+                        isBlocked = _currentPolicy.BlockedSites.Any(s => NormalizeDomain(s) == normalizedInput);
+                    }
+                }
 
                 var json = JsonSerializer.Serialize(new { blocked = isBlocked });
                 byte[] buffer = Encoding.UTF8.GetBytes(json);
-
                 response.ContentType = "application/json";
                 response.ContentLength64 = buffer.Length;
                 await response.OutputStream.WriteAsync(buffer);
             }
-            else if (request.Url?.AbsolutePath == "/report")
+            else if (path == "/report")
             {
                 var domain = request.QueryString["domain"];
                 if (!string.IsNullOrEmpty(domain) && _currentPolicy?.ActiveSessionId != null)
                 {
-                    // Use the Async version and pass the ID
                     await _attemptTracker.RecordWebBlockedAsync(_currentPolicy.ActiveSessionId.Value, domain);
                 }
+                response.StatusCode = (int)HttpStatusCode.OK;
             }
         }
         catch
@@ -166,11 +182,11 @@ public sealed class WindowsEnforcementService : IEnforcementService, IDisposable
         }
         finally
         {
-            response.Close();
+            try { response.Close(); } catch { }
         }
     }
 
-    // --- App Blocking Logic (Keep this for non-browser apps) ---
+    // --- App Blocking Logic ---
 
     private void OnProcessKillTimerElapsed(object? sender, System.Timers.ElapsedEventArgs e)
         => KillBlockedProcessesImmediate();
@@ -185,7 +201,6 @@ public sealed class WindowsEnforcementService : IEnforcementService, IDisposable
                 try
                 {
                     p.Kill(true);
-                    // We fire and forget the task here since this is inside a synchronous timer event
                     if (_currentPolicy?.ActiveSessionId != null)
                     {
                         _ = _attemptTracker.RecordAppBlockedAsync(_currentPolicy.ActiveSessionId.Value, p.ProcessName);
@@ -275,7 +290,10 @@ public sealed class WindowsEnforcementService : IEnforcementService, IDisposable
         if (string.IsNullOrWhiteSpace(site)) return string.Empty;
         var s = site.Trim().ToLowerInvariant();
         if (s.Contains("://")) s = s.Split("://")[1];
-        s = s.Split('/')[0];
+
+        // Split by path, query, and port to get clean domain
+        s = s.Split('/')[0].Split('?')[0].Split(':')[0];
+
         if (s.StartsWith("www.")) s = s[4..];
         return s;
     }
