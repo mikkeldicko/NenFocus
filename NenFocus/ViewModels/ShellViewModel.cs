@@ -18,6 +18,9 @@ using NenFocus.Application.UseCases.Sessions.StartSession;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
 
 namespace NenFocus.ViewModels;
 
@@ -31,20 +34,11 @@ public partial class ShellViewModel : ViewModelBase
     private readonly ICommandHandler<SaveReflectionCommand, SaveReflectionResult> _saveReflection;
     private readonly ISessionStateService _sessionState;
 
-    [ObservableProperty]
-    private ViewModelBase _currentPage = null!;
-
-    [ObservableProperty]
-    private bool _isRitualActive;
-
-    [ObservableProperty]
-    private RitualShellViewModel? _ritualViewModel;
-
-    [ObservableProperty]
-    private bool _isPostSessionActive;
-
-    [ObservableProperty]
-    private PostSessionViewModel? _postSessionViewModel;
+    [ObservableProperty] private ViewModelBase _currentPage = null!;
+    [ObservableProperty] private bool _isRitualActive;
+    [ObservableProperty] private RitualShellViewModel? _ritualViewModel;
+    [ObservableProperty] private bool _isPostSessionActive;
+    [ObservableProperty] private PostSessionViewModel? _postSessionViewModel;
 
     public ObservableCollection<NavItemViewModel> NavItems { get; } = new();
 
@@ -73,25 +67,54 @@ public partial class ShellViewModel : ViewModelBase
         _saveReflection = saveReflection;
         _sessionState = sessionState;
 
+        // --- REQUIREMENT 3: Automatic Pop-up Listener ---
+        _sessionState.RitualRequirementChanged += (s, required) =>
+        {
+            if (required && !IsRitualActive)
+            {
+                // Dispatch to UI thread to handle visual changes
+                Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    StartRitual();
+                    BringToForeground();
+                });
+            }
+        };
+
         void Select(NavItemViewModel selected)
         {
-            foreach (var item in NavItems)
-                item.IsSelected = false;
+            foreach (var item in NavItems) item.IsSelected = false;
             selected.IsSelected = true;
             CurrentPage = selected.PageViewModel;
         }
 
-        NavItems.Add(new NavItemViewModel("Main", "⊹",
-            new MainPageViewModel(StartRitual, ShowPostSession, _sessionState, _endSession, _startBreak, _resumeFromBreak), Select));
-        NavItems.Add(new NavItemViewModel("Block Profiles", "◻", new BlockProfilePageViewModel(
-            profilesQuery, createProfile, updateProfile, deleteProfile, duplicateProfile), Select));
-        NavItems.Add(new NavItemViewModel("Planner", "◫", new PlannerPageViewModel(
-            profilesQuery, getBlocksForDay, createPlannedBlock, updatePlannedBlock, deletePlannedBlock), Select));
+        NavItems.Add(new NavItemViewModel("Main", "⊹", new MainPageViewModel(StartRitual, ShowPostSession, _sessionState, _endSession, _startBreak, _resumeFromBreak), Select));
+        NavItems.Add(new NavItemViewModel("Block Profiles", "◻", new BlockProfilePageViewModel(profilesQuery, createProfile, updateProfile, deleteProfile, duplicateProfile), Select));
+        NavItems.Add(new NavItemViewModel("Planner", "◫", new PlannerPageViewModel(profilesQuery, getBlocksForDay, createPlannedBlock, updatePlannedBlock, deletePlannedBlock), Select));
         NavItems.Add(new NavItemViewModel("Insights", "◈", new InsightsPageViewModel(), Select));
         NavItems.Add(new NavItemViewModel("Settings", "◎", new SettingsPageViewModel(), Select));
 
         NavItems[0].IsSelected = true;
         CurrentPage = NavItems[0].PageViewModel;
+    }
+
+    private void BringToForeground()
+    {
+        // Use 'global::Avalonia' to tell the compiler NOT to look in 'NenFocus.Application'
+        if (global::Avalonia.Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+        {
+            var window = desktop.MainWindow;
+            if (window != null)
+            {
+                window.Show();
+                window.WindowState = WindowState.Normal;
+                window.Activate();
+
+                // Briefly toggle Topmost to "steal" focus from other background apps
+                window.Topmost = true;
+                window.Topmost = false;
+            }
+        }
     }
 
     private void StartRitual()

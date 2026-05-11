@@ -50,11 +50,6 @@ public static class DependencyInjection
         // ── Scheduled enforcement background service ───────────────────────
         services.AddHostedService<ScheduledEnforcementService>();
 
-
-
-        
-
-
         return services;
     }
 }

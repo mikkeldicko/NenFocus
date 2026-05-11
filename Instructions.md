@@ -187,8 +187,8 @@ Use these terms consistently across code, comments, and UI:
 ├─📁 Events
 │  └─📄 InProcessDomainEventPublisher.cs
 ├─📁 Migrations
-│  ├─📄 20260508213524_InitialCreate.cs
-│  ├─📄 20260508213524_InitialCreate.Designer.cs
+│  ├─📄 20260510213709_InitialCreate.cs
+│  ├─📄 20260510213709_InitialCreate.Designer.cs
 │  └─📄 NenFocusDbContextModelSnapshot.cs
 ├─📁 Notifications
 │  └─📄 WindowsNotificationService.cs
@@ -360,7 +360,7 @@ Given multiple active blocks at time `t`:
 
 - **Platform**: Windows only (`net9.0-windows`). The enforcement and notification services use Windows APIs. Do not attempt to make these cross-platform without explicit instruction.
 - **Admin required**: The app manifest sets `level="requireAdministrator"`. This is mandatory for hosts file writes, registry key edits, and killing high-privilege process trees.
-- **Database**: SQLite via EF Core. Run `dotnet ef migrations add <Name> --project NenFocus.Infrastructure --startup-project NenFocus` to add migrations. `HostExtensions.EnsureDatabase()` runs them on startup automatically. SQLite cannot do `ORDER BY` or `>` comparisons on `DateTimeOffset` in SQL — fetch to memory first, then filter/sort in C#.
+- **Database**: SQLite via EF Core. Run `dotnet ef migrations add <Name> --project NenFocus.Infrastructure --startup-project NenFocus` to add migrations. HostExtensions.EnsureDatabase() calls context.Database.Migrate() on startup to ensure the schema is up to date without bypassing the migration history.. SQLite cannot do `ORDER BY` or `>` comparisons on `DateTimeOffset` in SQL — fetch to memory first, then filter/sort in C#.
 - **Tags storage**: `BlockProfile.Tags` is stored as a serialized string in the DB. `GetByTagsAsync` filters in-memory. This is a known workaround.
 - **FocusBlock update**: There is no `FocusBlock.Update()` method — `UpdatePlannedBlockCommand` uses delete + recreate as a workaround.
 - **Hosts file markers**: must be exactly `# NEN_FOCUS_START` and `# NEN_FOCUS_END` (case-sensitive, underscores). Any deviation causes duplicate entries on next write.

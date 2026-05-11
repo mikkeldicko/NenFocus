@@ -361,3 +361,10 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# NenFocus specific ignores
+BuildHost-net472/
+BuildHost-netcore/
+migration_temp.db
+*.db-shm
+*.db-wal

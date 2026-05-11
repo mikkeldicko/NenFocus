@@ -76,23 +76,24 @@ public sealed class ComputeActivePolicySliceQueryHandler
             case WebsitePolicy.Allowlist:
                 var allowlistProfiles = activeProfiles.Where(p => p.WebsitePolicy == WebsitePolicy.Allowlist).ToList();
 
+                // Intersection of all allowlists
                 var firstList = allowlistProfiles[0].Websites.Select(s => s.Url).ToHashSet(StringComparer.OrdinalIgnoreCase);
                 foreach (var profile in allowlistProfiles.Skip(1))
                 {
                     firstList.IntersectWith(profile.Websites.Select(s => s.Url));
                 }
-                allowedSites = firstList;
 
-                blockedSites = activeProfiles
+                // Get Union of all blocklists
+                var unionOfBlocklists = activeProfiles
                     .Where(p => p.WebsitePolicy == WebsitePolicy.Blocklist)
                     .SelectMany(p => p.Websites.Select(s => s.Url))
                     .ToHashSet(StringComparer.OrdinalIgnoreCase);
-                break;
 
-            case WebsitePolicy.Blocklist:
-                blockedSites = activeProfiles
-                    .SelectMany(p => p.Websites.Select(s => s.Url))
-                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                // CRITICAL: Remove any blocked sites from the allowed list
+                firstList.ExceptWith(unionOfBlocklists);
+
+                allowedSites = firstList;
+                blockedSites = unionOfBlocklists; // Still track these for reporting
                 break;
         }
 

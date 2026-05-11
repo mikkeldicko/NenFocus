@@ -1,10 +1,11 @@
-using System;
-using System.Collections.Specialized;
-using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
 using NenFocus.ViewModels;
+using System;
+using System.Collections.Generic;
+using System.Collections.Specialized;
+using System.Linq;
 
 namespace NenFocus.Views;
 
@@ -22,20 +23,24 @@ public partial class PlannerPageView : UserControl
 
     private void OnAttachedToVisualTree(object? sender, Avalonia.VisualTreeAttachmentEventArgs e)
     {
-        _dayColumns = new[]
+        // Use a more robust way to find the controls
+        var colList = new List<Grid>();
+        for (int i = 0; i < 7; i++)
         {
-            this.FindControl<Grid>("DayCol0")!,
-            this.FindControl<Grid>("DayCol1")!,
-            this.FindControl<Grid>("DayCol2")!,
-            this.FindControl<Grid>("DayCol3")!,
-            this.FindControl<Grid>("DayCol4")!,
-            this.FindControl<Grid>("DayCol5")!,
-            this.FindControl<Grid>("DayCol6")!,
-        };
-        BuildHourCells();
-        if (_vm is not null)
+            var grid = this.FindControl<Grid>($"DayCol{i}");
+            if (grid != null) colList.Add(grid);
+        }
+
+        _dayColumns = colList.ToArray();
+
+        // CRITICAL: Check if we actually found all 7 columns before building
+        if (_dayColumns.Length == 7)
         {
-            RebuildTiles();
+            BuildHourCells();
+            if (_vm is not null)
+            {
+                RebuildTiles();
+            }
         }
     }
 
@@ -64,16 +69,14 @@ public partial class PlannerPageView : UserControl
     /// </summary>
     private void BuildHourCells()
     {
-        if (_vm is null) return;
+        if (_vm is null || _dayColumns.Length < 7) return;
 
         for (int col = 0; col < 7; col++)
         {
             var dayGrid = _dayColumns[col];
-            dayGrid.Children.Clear();
-            dayGrid.RowDefinitions.Clear();
+            if (dayGrid == null) continue; // Skip if null to avoid crash on Line 72
 
-            // Single-row grid; hour cells are stacked via a child StackPanel so we can later
-            // overlay tiles in another child. Using Canvas for tile overlay keeps absolute positioning simple.
+            dayGrid.Children.Clear();
             var stack = new StackPanel();
             for (int hour = PlannerPageViewModel.FirstHour; hour < PlannerPageViewModel.LastHour; hour++)
             {

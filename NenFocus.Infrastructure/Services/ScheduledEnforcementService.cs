@@ -39,29 +39,31 @@ public sealed class ScheduledEnforcementService : BackgroundService
                     var computeHandler = scope.ServiceProvider.GetRequiredService<IQueryHandler<ComputeActivePolicySliceQuery, PolicySliceDto>>();
                     var now = DateTime.UtcNow;
 
+                    // 1. Existing warning logic
                     await CheckForUpcomingBlocksAsync(scope, now, stoppingToken);
 
+                    // 2. Compute policy (includes active scheduled blocks)
                     var policy = await computeHandler.HandleAsync(new ComputeActivePolicySliceQuery { At = now }, stoppingToken);
 
                     if (policy is not null && !policy.IsEmpty)
                     {
-                        // Cleaned up: Just apply the policy. 
-                        // WindowsEnforcementService handles the internal _isEnforcing checks.
                         await _enforcement.ApplyPolicyAsync(policy, stoppingToken);
 
+                        // 3. TRIGGER UI: If enforcement is active but no session exists, it's a Planned Block start
                         if (_sessionState.ActiveSession == null)
                         {
+                            // Signal that the ritual is required for a planned block
                             _sessionState.SetRitualRequired(true);
                         }
-                    }
-                    else
-                    {
-                        _sessionState.SetRitualRequired(false);
-
-                        // Only remove if there's no active session (manual session)
-                        if (_sessionState.ActiveSession == null)
+                        else
                         {
-                            await _enforcement.RemoveEnforcementAsync(stoppingToken);
+                            _sessionState.SetRitualRequired(false);
+
+                            // Only remove if there's no active session (manual session)
+                            if (_sessionState.ActiveSession == null)
+                            {
+                                await _enforcement.RemoveEnforcementAsync(stoppingToken);
+                            }
                         }
                     }
                 }
