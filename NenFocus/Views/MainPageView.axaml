@@ -5,6 +5,10 @@
              x:Class="NenFocus.Views.MainPageView"
              Background="#F5F5F7">
 
+	<UserControl.Resources>
+		<vm:TimeSpanToStringConverter x:Key="TimeSpanConverter"/>
+	</UserControl.Resources>
+
 	<UserControl.Styles>
 
 		<!-- Use Nen button -->
@@ -157,7 +161,7 @@
 					</StackPanel>
 
 					<!-- Countdown timer (session) -->
-					<TextBlock Text="{Binding SessionTimeDisplay}"
+					<TextBlock Text="{Binding SessionTimeRemaining, Converter={StaticResource TimeSpanConverter}}"
                                FontSize="52"
                                FontWeight="Thin"
                                FontFamily="Consolas,Courier New,monospace"
@@ -172,7 +176,7 @@
                                 HorizontalAlignment="Center">
 
 						<!-- Break countdown large -->
-						<TextBlock Text="{Binding BreakTimeDisplay}"
+						<TextBlock Text="{Binding BreakTimeRemaining, Converter={StaticResource TimeSpanConverter}, ConverterParameter=mm\:ss}"
                                    FontSize="52"
                                    FontWeight="Thin"
                                    FontFamily="Consolas,Courier New,monospace"
@@ -191,7 +195,7 @@
                                      Width="260"/>
 
 						<!-- Session time underneath (smaller, muted) -->
-						<TextBlock Text="{Binding SessionTimeDisplay, StringFormat='Session: {0}'}"
+						<TextBlock Text="{Binding SessionTimeRemaining, Converter={StaticResource TimeSpanConverter}, StringFormat='Session: {0}'}"
                                    FontSize="12"
                                    Foreground="#AAAABC"
                                    HorizontalAlignment="Center"

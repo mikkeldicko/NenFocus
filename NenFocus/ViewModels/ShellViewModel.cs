@@ -33,6 +33,7 @@ public partial class ShellViewModel : ViewModelBase
     private readonly ICommandHandler<ResumeFromBreakCommand, ResumeFromBreakResult> _resumeFromBreak;
     private readonly ICommandHandler<SaveReflectionCommand, SaveReflectionResult> _saveReflection;
     private readonly ISessionStateService _sessionState;
+    private readonly IActiveSessionMonitor _monitor;
 
     [ObservableProperty] private ViewModelBase _currentPage = null!;
     [ObservableProperty] private bool _isRitualActive;
@@ -50,6 +51,7 @@ public partial class ShellViewModel : ViewModelBase
        ICommandHandler<ResumeFromBreakCommand, ResumeFromBreakResult> resumeFromBreak,
        ICommandHandler<SaveReflectionCommand, SaveReflectionResult> saveReflection,
        ISessionStateService sessionState,
+       IActiveSessionMonitor monitor,
        ICommandHandler<CreateBlockProfileCommand, CreateBlockProfileResult> createProfile,
        ICommandHandler<UpdateBlockProfileCommand, UpdateBlockProfileResult> updateProfile,
        ICommandHandler<DeleteBlockProfileCommand> deleteProfile,
@@ -66,6 +68,7 @@ public partial class ShellViewModel : ViewModelBase
         _resumeFromBreak = resumeFromBreak;
         _saveReflection = saveReflection;
         _sessionState = sessionState;
+        _monitor = monitor;
 
         // --- REQUIREMENT 3: Automatic Pop-up Listener ---
         _sessionState.RitualRequirementChanged += (s, required) =>
@@ -88,7 +91,7 @@ public partial class ShellViewModel : ViewModelBase
             CurrentPage = selected.PageViewModel;
         }
 
-        NavItems.Add(new NavItemViewModel("Main", "⊹", new MainPageViewModel(StartRitual, ShowPostSession, _sessionState, _endSession, _startBreak, _resumeFromBreak), Select));
+        NavItems.Add(new NavItemViewModel("Main", "⊹", new MainPageViewModel(StartRitual, ShowPostSession, _sessionState, _monitor, _endSession, _startBreak, _resumeFromBreak), Select));
         NavItems.Add(new NavItemViewModel("Block Profiles", "◻", new BlockProfilePageViewModel(profilesQuery, createProfile, updateProfile, deleteProfile, duplicateProfile), Select));
         NavItems.Add(new NavItemViewModel("Planner", "◫", new PlannerPageViewModel(profilesQuery, getBlocksForDay, createPlannedBlock, updatePlannedBlock, deletePlannedBlock), Select));
         NavItems.Add(new NavItemViewModel("Insights", "◈", new InsightsPageViewModel(), Select));

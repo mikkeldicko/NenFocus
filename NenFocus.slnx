@@ -10,5 +10,6 @@
   <Project Path="NenFocus.Application/NenFocus.Application.csproj" />
   <Project Path="NenFocus.Domain/NenFocus.Domain.csproj" />
   <Project Path="NenFocus.Infrastructure/NenFocus.Infrastructure.csproj" />
+  <Project Path="NenFocus.Tests/NenFocus.Tests.csproj" />
   <Project Path="NenFocus/NenFocus.csproj" />
 </Solution>

@@ -67,17 +67,23 @@ public sealed class SessionStateService : ISessionStateService
         RitualRequirementChanged?.Invoke(this, false);
     }
 
-    // Helper updated to accept the profile name as a parameter
-    private SessionDto MapToDto(Session s, string profileName) => new SessionDto
+    private static SessionDto MapToDto(Session s, string profileName) => new SessionDto
     {
         Id = s.Id,
         Goal = s.Goal?.Value ?? string.Empty,
-        ProfileName = profileName, // NO LONGER HARDCODED!
-
+        ProfileName = profileName,
         DurationMinutes = (int)s.Duration.Value.TotalMinutes,
         Status = s.Status.ToString(),
         StartedAt = s.StartedAt ?? DateTime.UtcNow,
         BreaksTaken = s.BreaksTaken,
-        BreakStartedAt = s.BreakStartedAt
+        BreakStartedAt = s.BreakStartedAt,
+        BreakSettings = s.BreakSettings is not null
+            ? new BreakSettingsDto
+            {
+                Enabled = true,
+                IntervalMinutes = s.BreakSettings.IntervalMinutes,
+                BreakDurationMinutes = s.BreakSettings.BreakLengthMinutes
+            }
+            : null
     };
 }

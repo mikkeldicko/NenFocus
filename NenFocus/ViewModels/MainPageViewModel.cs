@@ -1,6 +1,5 @@
 using System;
 using System.Collections.ObjectModel;
-using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -18,19 +17,13 @@ public partial class MainPageViewModel : ViewModelBase
     private readonly Action _onStartRitual;
     private readonly Action<PostSessionDto> _onShowPostSession;
     private readonly ISessionStateService _sessionState;
+    private readonly IActiveSessionMonitor _monitor;
     private readonly ICommandHandler<EndSessionCommand, EndSessionResult> _endSession;
     private readonly ICommandHandler<StartBreakCommand, StartBreakResult> _startBreak;
     private readonly ICommandHandler<ResumeFromBreakCommand, ResumeFromBreakResult> _resumeFromBreak;
-    private DispatcherTimer? _timer;
-    private DateTime _sessionEnd;
-    private double _sessionDurationSeconds;
     private Guid _activeSessionId;
 
-    private DateTime? _breakStartedAt;
-    private int _breakDurationMinutes;
-    private double _effectiveBreakSeconds;
-
-    // ── Session state ──────────────────────────────────────────────────────
+    // ── Session display ────────────────────────────────────────────────────
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(StartRitualCommand))]
@@ -38,7 +31,7 @@ public partial class MainPageViewModel : ViewModelBase
     private bool _hasActiveSession;
 
     [ObservableProperty]
-    private string _sessionTimeDisplay = "00:00:00";
+    private TimeSpan _sessionTimeRemaining;
 
     [ObservableProperty]
     private double _sessionProgress;
@@ -49,14 +42,14 @@ public partial class MainPageViewModel : ViewModelBase
     [ObservableProperty]
     private string _activeProfileName = string.Empty;
 
-    // ── Break state ─────────────────────────────────────────────────────────
+    // ── Break display ──────────────────────────────────────────────────────
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanTakeBreak))]
     private bool _isOnBreak;
 
     [ObservableProperty]
-    private string _breakTimeDisplay = "00:00";
+    private TimeSpan _breakTimeRemaining;
 
     [ObservableProperty]
     private double _breakProgress;
@@ -91,6 +84,7 @@ public partial class MainPageViewModel : ViewModelBase
         Action onStartRitual,
         Action<PostSessionDto> onShowPostSession,
         ISessionStateService sessionState,
+        IActiveSessionMonitor monitor,
         ICommandHandler<EndSessionCommand, EndSessionResult> endSession,
         ICommandHandler<StartBreakCommand, StartBreakResult> startBreak,
         ICommandHandler<ResumeFromBreakCommand, ResumeFromBreakResult> resumeFromBreak)
@@ -98,38 +92,27 @@ public partial class MainPageViewModel : ViewModelBase
         _onStartRitual = onStartRitual;
         _onShowPostSession = onShowPostSession;
         _sessionState = sessionState;
+        _monitor = monitor;
         _endSession = endSession;
         _startBreak = startBreak;
         _resumeFromBreak = resumeFromBreak;
 
-        _sessionState.RitualRequirementChanged += (s, required) =>
-        {
+        _sessionState.RitualRequirementChanged += (_, required) =>
             Dispatcher.UIThread.Post(() => IsRitualBannerVisible = required);
-        };
 
         _sessionState.SessionChanged += OnSessionChanged;
 
-        // Start initialization
+        _monitor.Tick += OnMonitorTick;
+        _monitor.SessionAutoEnded += OnSessionAutoEnded;
+
         _ = InitializeAsync();
     }
 
     private async Task InitializeAsync()
     {
         await _sessionState.InitializeAsync();
-        // 1. Check if the state service already knows about a session
         if (_sessionState.ActiveSession is not null)
-        {
             ApplySession(_sessionState.ActiveSession);
-        }
-        else
-        {
-            // 2. Fallback: Check the database directly via the state service 
-            // (Assumes SessionStateService has a way to refresh from DB)
-            if (_sessionState.ActiveSession is not null)
-            {
-                ApplySession(_sessionState.ActiveSession);
-            }
-        }
     }
 
     private void OnSessionChanged(object? sender, SessionDto? session)
@@ -143,116 +126,55 @@ public partial class MainPageViewModel : ViewModelBase
         });
     }
 
+    private void OnMonitorTick(object? sender, EventArgs e)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            SessionTimeRemaining = _monitor.SessionTimeRemaining;
+            SessionProgress = _monitor.SessionProgress;
+            BreakTimeRemaining = _monitor.BreakTimeRemaining;
+            BreakProgress = _monitor.BreakProgress;
+        });
+    }
+
+    private void OnSessionAutoEnded(object? sender, PostSessionDto postSession)
+    {
+        Dispatcher.UIThread.Post(() => _onShowPostSession(postSession));
+    }
+
     private void ApplySession(SessionDto session)
     {
         _activeSessionId = session.Id;
         SessionGoal = session.Goal;
         ActiveProfileName = session.ProfileName;
-
-        // Calculate the end time based on when it actually started
-        _sessionEnd = session.StartedAt.AddMinutes(session.DurationMinutes);
-        _sessionDurationSeconds = session.DurationMinutes * 60.0;
-
         HasActiveSession = true;
-
-        HasBreakSettings = session.BreakSettings is not null && session.BreakSettings.Enabled;
-        _breakDurationMinutes = session.BreakSettings?.BreakDurationMinutes ?? 5;
+        HasBreakSettings = session.BreakSettings?.Enabled == true;
         BreaksTaken = session.BreaksTaken;
-
-        if (session.Status == "OnBreak" && session.BreakStartedAt.HasValue)
-        {
-            _breakStartedAt = session.BreakStartedAt.Value;
-            var sessionRemainingAtBreakStart = (_sessionEnd - _breakStartedAt.Value).TotalSeconds;
-            _effectiveBreakSeconds = Math.Min(_breakDurationMinutes * 60.0, Math.Max(0, sessionRemainingAtBreakStart));
-            IsOnBreak = true;
-        }
-        else
-        {
-            _breakStartedAt = null;
-            _effectiveBreakSeconds = 0;
-            IsOnBreak = false;
-        }
-
-        StartTimer();
+        IsOnBreak = session.Status == "OnBreak";
     }
 
     private void ClearSession()
     {
-        StopTimer();
         HasActiveSession = false;
         IsOnBreak = false;
         HasBreakSettings = false;
-        SessionTimeDisplay = "00:00:00";
-        BreakTimeDisplay = "00:00";
+        SessionTimeRemaining = TimeSpan.Zero;
+        BreakTimeRemaining = TimeSpan.Zero;
         SessionProgress = 0;
         BreakProgress = 0;
         BreaksTaken = 0;
         SessionGoal = string.Empty;
         ActiveProfileName = string.Empty;
-        _breakStartedAt = null;
     }
 
-    private void StartTimer()
-    {
-        StopTimer();
-        _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
-        _timer.Tick += OnTimerTick;
-        _timer.Start();
-        UpdateTimerDisplay();
-    }
-
-    private void StopTimer()
-    {
-        _timer?.Stop();
-        _timer = null;
-    }
-
-    private void OnTimerTick(object? sender, EventArgs e) => UpdateTimerDisplay();
-
-    private void UpdateTimerDisplay()
-    {
-        var remaining = _sessionEnd - DateTime.UtcNow;
-
-        // Auto-end session if time is up
-        if (remaining <= TimeSpan.Zero)
-        {
-            StopTimer();
-            _ = EndSessionAndShowSummary();
-            return;
-        }
-
-        SessionTimeDisplay = remaining.ToString(@"hh\:mm\:ss");
-        SessionProgress = Math.Clamp(1.0 - (remaining.TotalSeconds / _sessionDurationSeconds), 0, 1);
-
-        if (IsOnBreak && _breakStartedAt.HasValue)
-        {
-            var breakEnd = _breakStartedAt.Value.AddSeconds(_effectiveBreakSeconds);
-            var breakRemaining = breakEnd - DateTime.UtcNow;
-
-            if (breakRemaining <= TimeSpan.Zero)
-            {
-                _ = ResumeFromBreakAsync();
-                return;
-            }
-
-            BreakTimeDisplay = breakRemaining.ToString(@"mm\:ss");
-            BreakProgress = Math.Clamp(1.0 - (breakRemaining.TotalSeconds / _effectiveBreakSeconds), 0, 1);
-        }
-    }
+    // ── Commands ───────────────────────────────────────────────────────────
 
     [RelayCommand]
     private async Task EndSession()
     {
-        await EndSessionAndShowSummary();
-    }
-
-    private async Task EndSessionAndShowSummary()
-    {
         var result = await _endSession.HandleAsync(new EndSessionCommand { SessionId = _activeSessionId });
         if (result.Success && result.PostSession is not null)
-        {
             _onShowPostSession(result.PostSession);
-        }
     }
 
     [RelayCommand(CanExecute = nameof(CanStartRitual))]
@@ -271,9 +193,7 @@ public partial class MainPageViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private async Task ResumeFromBreak() => await ResumeFromBreakAsync();
-
-    private async Task ResumeFromBreakAsync()
+    private async Task ResumeFromBreak()
     {
         await _resumeFromBreak.HandleAsync(new ResumeFromBreakCommand { SessionId = _activeSessionId });
     }

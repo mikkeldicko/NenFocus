@@ -9,11 +9,16 @@ public sealed class StartBreakCommandHandler : ICommandHandler<StartBreakCommand
 {
     private readonly ISessionRepository _sessions;
     private readonly IEnforcementService _enforcement;
+    private readonly ISessionStateService _sessionState;
 
-    public StartBreakCommandHandler(ISessionRepository sessions, IEnforcementService enforcement)
+    public StartBreakCommandHandler(
+        ISessionRepository sessions,
+        IEnforcementService enforcement,
+        ISessionStateService sessionState)
     {
         _sessions = sessions;
         _enforcement = enforcement;
+        _sessionState = sessionState;
     }
 
     public async Task<StartBreakResult> HandleAsync(StartBreakCommand command, CancellationToken ct = default)
@@ -25,10 +30,19 @@ public sealed class StartBreakCommandHandler : ICommandHandler<StartBreakCommand
             return new StartBreakResult(false, "Can only start a break from an active session.");
 
         session.StartBreak();
-
-        // Pause enforcement during break
         await _enforcement.RemoveEnforcementAsync(ct);
         await _sessions.SaveAsync(session, ct);
+
+        var current = _sessionState.ActiveSession;
+        if (current is not null)
+        {
+            _sessionState.SetActive(current with
+            {
+                Status = "OnBreak",
+                BreakStartedAt = session.BreakStartedAt,
+                BreaksTaken = session.BreaksTaken
+            });
+        }
 
         return new StartBreakResult(true);
     }

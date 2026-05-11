@@ -44,6 +44,9 @@ public static class DependencyInjection
         // ── Session state (UI noticeboard) ─────────────────────────────────
         services.AddSingleton<ISessionStateService, SessionStateService>();
 
+        // ── Session countdown monitor ──────────────────────────────────────
+        services.AddSingleton<IActiveSessionMonitor, ActiveSessionMonitor>();
+
         // ── Domain event publisher ─────────────────────────────────────────
         services.AddSingleton<IDomainEventPublisher, InProcessDomainEventPublisher>();
 

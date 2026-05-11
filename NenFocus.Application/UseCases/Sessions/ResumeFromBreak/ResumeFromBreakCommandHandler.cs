@@ -9,16 +9,16 @@ public sealed class ResumeFromBreakCommandHandler : ICommandHandler<ResumeFromBr
 {
     private readonly ISessionRepository _sessions;
     private readonly IEnforcementService _enforcement;
-    private readonly IBlockProfileRepository _profiles;
+    private readonly ISessionStateService _sessionState;
 
     public ResumeFromBreakCommandHandler(
         ISessionRepository sessions,
         IEnforcementService enforcement,
-        IBlockProfileRepository profiles)
+        ISessionStateService sessionState)
     {
         _sessions = sessions;
         _enforcement = enforcement;
-        _profiles = profiles;
+        _sessionState = sessionState;
     }
 
     public async Task<ResumeFromBreakResult> HandleAsync(ResumeFromBreakCommand command, CancellationToken ct = default)
@@ -29,10 +29,19 @@ public sealed class ResumeFromBreakCommandHandler : ICommandHandler<ResumeFromBr
         if (session.Status != SessionStatus.OnBreak)
             return new ResumeFromBreakResult(false, "Session is not on a break.");
 
-        // FIX: Match the domain method name exactly
         session.ResumeFromBreak();
-
         await _sessions.SaveAsync(session, ct);
+
+        var current = _sessionState.ActiveSession;
+        if (current is not null)
+        {
+            _sessionState.SetActive(current with
+            {
+                Status = "Active",
+                BreakStartedAt = null
+            });
+        }
+
         return new ResumeFromBreakResult(true);
     }
 }
