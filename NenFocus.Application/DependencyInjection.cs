@@ -27,18 +27,28 @@ public static class DependencyInjection
 
     private static void RegisterHandlers(IServiceCollection services, Assembly assembly)
     {
-        // Find all non-abstract classes that implement ICommandHandler or IQueryHandler
-        var handlerTypes = assembly.GetTypes()
-            .Where(t => t is { IsClass: true, IsAbstract: false })
-            .SelectMany(t => t.GetInterfaces(), (implementation, @interface) => new { implementation, @interface })
-            .Where(x => x.@interface.IsGenericType &&
-                        (x.@interface.GetGenericTypeDefinition() == typeof(ICommandHandler<,>) ||
-                         x.@interface.GetGenericTypeDefinition() == typeof(IQueryHandler<,>)));
+        var implementations = assembly.GetTypes()
+            .Where(t => t is { IsClass: true, IsAbstract: false });
 
-        foreach (var handler in handlerTypes)
+        foreach (var type in implementations)
         {
-            // Register as Transient so a new handler is created for each request
-            services.AddTransient(handler.@interface, handler.implementation);
+            // 1. Register Command/Query Handlers (Generics)
+            var interfaces = type.GetInterfaces().Where(i => i.IsGenericType);
+            foreach (var @interface in interfaces)
+            {
+                var def = @interface.GetGenericTypeDefinition();
+                if (def == typeof(ICommandHandler<,>) || def == typeof(IQueryHandler<,>))
+                {
+                    services.AddTransient(@interface, type);
+                }
+            }
+
+            // 2. Register Event Handlers (Concrete classes)
+            // This fixes the "No service for type SessionStartedEventHandler" error
+            if (type.Name.EndsWith("EventHandler"))
+            {
+                services.AddTransient(type);
+            }
         }
     }
 }

@@ -227,9 +227,59 @@ public sealed class WindowsEnforcementService : IEnforcementService, IDisposable
         return string.Join(Environment.NewLine, result).TrimEnd() + Environment.NewLine;
     }
 
-    private void StartLocalServer() { /* ... HttpListener implementation from your previous code ... */ }
-    private async Task HandleRequestAsync(HttpListenerContext context) { /* ... implementation from your previous code ... */ }
+    private void StartLocalServer()
+    {
+        _httpListener = new HttpListener();
+        _httpListener.Prefixes.Add("http://localhost:5005/");
+        _httpListener.Start();
 
+        _serverCts = new CancellationTokenSource();
+
+        // Start the listening loop in a background task
+        Task.Run(async () =>
+        {
+            while (!_serverCts.IsCancellationRequested)
+            {
+                try
+                {
+                    var context = await _httpListener.GetContextAsync();
+                    _ = HandleRequestAsync(context); // This makes the method NOT greyed out
+                }
+                catch { /* Handle listener shutdown */ }
+            }
+        }, _serverCts.Token);
+    }
+    private async Task HandleRequestAsync(HttpListenerContext context)
+    {
+        // 1. ADD THIS: Mandatory CORS header for the extension to read the response
+        context.Response.AppendHeader("Access-Control-Allow-Origin", "*");
+        context.Response.AppendHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+
+        // Handle preflight OPTIONS requests (sometimes sent by browsers)
+        if (context.Request.HttpMethod == "OPTIONS")
+        {
+            context.Response.StatusCode = (int)HttpStatusCode.OK;
+            context.Response.Close();
+            return;
+        }
+
+        var url = context.Request.Url;
+        if (url?.AbsolutePath == "/check")
+        {
+            var domain = context.Request.QueryString["domain"];
+            var isBlocked = _currentPolicy?.BlockedSites.Any(s =>
+                NormalizeDomain(s).Equals(domain, StringComparison.OrdinalIgnoreCase)) ?? false;
+
+            var json = JsonSerializer.Serialize(new { blocked = isBlocked });
+            var buffer = Encoding.UTF8.GetBytes(json);
+
+            context.Response.ContentType = "application/json";
+            context.Response.ContentLength64 = buffer.Length;
+            await context.Response.OutputStream.WriteAsync(buffer);
+        }
+
+        context.Response.Close();
+    }
     public void Dispose()
     {
         _serverCts?.Cancel();

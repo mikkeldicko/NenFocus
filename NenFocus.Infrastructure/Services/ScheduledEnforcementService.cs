@@ -42,7 +42,7 @@ public sealed class ScheduledEnforcementService : BackgroundService
                 var computeHandler = scope.ServiceProvider
                     .GetRequiredService<IQueryHandler<ComputeActivePolicySliceQuery, ActivePolicySlice>>();
 
-                var now = DateTime.UtcNow;
+                var now = DateTime.Now; // Not UtcNow
 
                 await CheckForUpcomingBlocksAsync(scope, now, stoppingToken);
 
