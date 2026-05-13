@@ -1,37 +1,28 @@
 ﻿using FluentValidation;
+using NenFocus.Application.Interfaces;
 using NenFocus.Domain.Constants;
-using System;
-using System.IO;
+using NenFocus.Domain.Utils;
 
 namespace NenFocus.Application.UseCases.BlockProfiles.CreateBlockProfile;
 
 public sealed class CreateBlockProfileValidator : AbstractValidator<CreateBlockProfileCommand>
 {
-    public CreateBlockProfileValidator()
+    public CreateBlockProfileValidator(IBlockProfileRepository profiles)
     {
         RuleFor(x => x.Name)
             .NotEmpty().WithMessage("Profile name is required.")
-            .MaximumLength(60).WithMessage("Profile name cannot exceed 60 characters.");
+            .WithMessage("A profile with this name already exists.");
+
+
+        RuleFor(x => x)
+            .Must(x => x.BlockedApps.Count > 0 || x.Websites.Count > 0)
+            .WithMessage("A profile must have at least one blocked app or website.");
 
         RuleForEach(x => x.BlockedApps)
-            .NotEmpty()
-            .Must(app => !SystemSafetyConstants.UnkillableProcesses.Contains(Normalize(app)))
+            .Must(app => !SystemSafetyConstants.UnkillableProcesses.Contains(ProcessUtils.NormalizeProcessName(app)))
             .WithMessage(app => $"'{app}' is a critical system process and cannot be blocked.");
-    }
 
-    private string Normalize(string input)
-    {
-        if (string.IsNullOrWhiteSpace(input)) return string.Empty;
-        try
-        {
-            string fileName = Path.GetFileName(input);
-            if (fileName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
-                fileName = fileName[..^4];
-            return fileName.Trim();
-        }
-        catch
-        {
-            return input.Trim();
-        }
+        RuleForEach(x => x.Tags)
+            .MaximumLength(30).WithMessage("Tags cannot exceed 30 characters.");
     }
 }

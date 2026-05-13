@@ -8,19 +8,15 @@ namespace NenFocus.Application.UseCases.Sessions.ResumeFromBreak;
 public sealed class ResumeFromBreakCommandHandler : ICommandHandler<ResumeFromBreakCommand, ResumeFromBreakResult>
 {
     private readonly ISessionRepository _sessions;
-    private readonly IEnforcementService _enforcement;
     private readonly ISessionStateService _sessionState;
 
     public ResumeFromBreakCommandHandler(
-        ISessionRepository sessions,
-        IEnforcementService enforcement,
-        ISessionStateService sessionState)
+           ISessionRepository sessions,
+           ISessionStateService sessionState)
     {
         _sessions = sessions;
-        _enforcement = enforcement;
         _sessionState = sessionState;
     }
-
     public async Task<ResumeFromBreakResult> HandleAsync(ResumeFromBreakCommand command, CancellationToken ct = default)
     {
         var session = await _sessions.GetByIdAsync(command.SessionId, ct);
@@ -37,7 +33,7 @@ public sealed class ResumeFromBreakCommandHandler : ICommandHandler<ResumeFromBr
         {
             _sessionState.SetActive(current with
             {
-                Status = "Active",
+                Status = SessionStatus.Active,
                 BreakStartedAt = null
             });
         }

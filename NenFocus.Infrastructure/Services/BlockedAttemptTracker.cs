@@ -17,19 +17,19 @@ public sealed class BlockedAttemptTracker : IBlockedAttemptTracker
 
     public async Task RecordAppBlockedAsync(Guid sessionId, string processName)
     {
-        await SaveAttemptInternal(new BlockedAttempt(sessionId, processName, BlockedAttemptType.App));
+        await SaveAttemptInternal(BlockedAttempt.Record(Guid.NewGuid(), sessionId, processName, BlockedAttemptType.App, DateTime.UtcNow));
     }
 
     public async Task RecordWebBlockedAsync(Guid sessionId, string domain)
     {
-        await SaveAttemptInternal(new BlockedAttempt(sessionId, domain, BlockedAttemptType.Website));
+        await SaveAttemptInternal(BlockedAttempt.Record(Guid.NewGuid(), sessionId, domain, BlockedAttemptType.Website, DateTime.UtcNow));
     }
 
     private async Task SaveAttemptInternal(BlockedAttempt attempt)
     {
         using var context = await _dbFactory.CreateDbContextAsync();
 
-        var threshold = DateTimeOffset.Now.AddSeconds(-2);
+        var threshold = DateTime.UtcNow.AddSeconds(-2);
 
         // 1. Fetch only the items for this session and resource from the DB.
         // We leave the time comparison out of the 'await' to avoid the SQLite error.
@@ -39,7 +39,7 @@ public sealed class BlockedAttemptTracker : IBlockedAttemptTracker
             .ToListAsync();
 
         // 2. Perform the time check in C# memory
-        bool alreadyLoggedRecently = recentAttempts.Any(a => a.Timestamp > threshold);
+        bool alreadyLoggedRecently = recentAttempts.Any(a => a.OccurredAt > threshold);
 
         if (!alreadyLoggedRecently)
         {
@@ -59,7 +59,7 @@ public sealed class BlockedAttemptTracker : IBlockedAttemptTracker
 
         // 2. Sort the list in memory using C# logic
         return attempts
-            .OrderByDescending(a => a.Timestamp)
+            .OrderByDescending(a => a.OccurredAt)
             .ToList();
     }
 }

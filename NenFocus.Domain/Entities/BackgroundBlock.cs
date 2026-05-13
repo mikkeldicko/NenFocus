@@ -1,26 +1,26 @@
-using NenFocus.Domain.Enums;
-
 namespace NenFocus.Domain.Entities;
 
-public sealed class PassiveBlock : PlannedBlock
+public sealed class BackgroundBlock : PlannedBlock
 {
-    private PassiveBlock() { }
+    private BackgroundBlock() { }
 
-    public static PassiveBlock Create(
+    public static BackgroundBlock Create(
+        Guid id,
         Guid blockProfileId,
         DateTime start,
-        DateTime end)
+        DateTime end,
+        string? title = null)
     {
         if (end <= start)
             throw new ArgumentException("End time must be after start time.");
 
-        return new PassiveBlock
+        return new BackgroundBlock
         {
+            Id = id,
             BlockProfileId = blockProfileId,
-            Type = BlockType.Passive,
             Start = start,
             End = end,
-            IsPlanned = true
+            Title = title
         };
     }
 }

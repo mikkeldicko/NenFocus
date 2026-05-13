@@ -176,7 +176,7 @@
                                 HorizontalAlignment="Center">
 
 						<!-- Break countdown large -->
-						<TextBlock Text="{Binding BreakTimeRemaining, Converter={StaticResource TimeSpanConverter}, ConverterParameter=mm\:ss}"
+						<TextBlock Text="{Binding BreakTimeRemaining, Converter={StaticResource TimeSpanConverter}, ConverterParameter=mm\\:ss}"
                                    FontSize="52"
                                    FontWeight="Thin"
                                    FontFamily="Consolas,Courier New,monospace"

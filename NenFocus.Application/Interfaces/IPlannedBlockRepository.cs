@@ -1,12 +1,7 @@
 using NenFocus.Domain.Entities;
-using NenFocus.Domain.Enums;
 
 namespace NenFocus.Application.Interfaces;
 
-/// <summary>
-/// Repository contract for PlannedBlock persistence.
-/// Implemented by NenFocus.Infrastructure.
-/// </summary>
 public interface IPlannedBlockRepository
 {
     /// <summary>
@@ -18,7 +13,6 @@ public interface IPlannedBlockRepository
 
     /// <summary>
     /// Returns all planned blocks within a date range.
-    /// Used by the Planner calendar view.
     /// </summary>
     Task<IReadOnlyList<PlannedBlock>> GetForRangeAsync(
         DateTime from,
@@ -27,33 +21,49 @@ public interface IPlannedBlockRepository
 
     /// <summary>
     /// Returns any planned blocks that overlap with the given time window.
-    /// Used by CreatePlannedBlockCommandValidator to enforce Focus+Focus overlap rule.
-    /// Pass blockType to check only for Focus-on-Focus conflicts.
+    /// If ritualOnly is true, only RitualBlocks are checked — used to
+    /// enforce the Ritual+Ritual overlap rule at planning time.
     /// </summary>
     Task<IReadOnlyList<PlannedBlock>> GetOverlappingAsync(
         DateTime start,
         DateTime end,
-        BlockType? blockType = null,
+        bool ritualOnly = false,
         Guid? excludeId = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Returns a single planned block by Id, or null if not found.
     /// </summary>
-    Task<PlannedBlock?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
+    Task<PlannedBlock?> GetByIdAsync(
+        Guid id,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Persists a new planned block.
     /// </summary>
-    Task AddAsync(PlannedBlock block, CancellationToken cancellationToken = default);
+    Task AddAsync(
+        PlannedBlock block,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Persists changes to an existing planned block.
     /// </summary>
-    Task UpdateAsync(PlannedBlock block, CancellationToken cancellationToken = default);
+    Task UpdateAsync(
+        PlannedBlock block,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Saves a planned block — add or update.
+    /// Used by StartSessionCommandHandler to stamp RitualCompletedAt.
+    /// </summary>
+    Task SaveAsync(
+        PlannedBlock block,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Removes a planned block by Id.
     /// </summary>
-    Task DeleteAsync(Guid id, CancellationToken cancellationToken = default);
+    Task DeleteAsync(
+        Guid id,
+        CancellationToken cancellationToken = default);
 }

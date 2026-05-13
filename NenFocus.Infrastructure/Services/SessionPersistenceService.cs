@@ -1,7 +1,9 @@
 using System;
 using System.IO;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using NenFocus.Application.DTOs;
+using NenFocus.Domain.Enums;
 
 namespace NenFocus.Infrastructure.Services;
 
@@ -13,6 +15,11 @@ public sealed class SessionPersistenceService
 {
     private readonly string _filePath;
 
+    private static readonly JsonSerializerOptions _jsonOptions = new()
+    {
+        Converters = { new JsonStringEnumConverter() }
+    };
+
     private sealed record PersistedSession
     {
         public Guid Id { get; init; }
@@ -21,7 +28,7 @@ public sealed class SessionPersistenceService
         public DateTime StartedAt { get; init; }
         public DateTime EndTime { get; init; }
         public int DurationMinutes { get; init; }
-        public string Status { get; init; } = "Active";
+        public SessionStatus Status { get; init; } = SessionStatus.Active;
         public DateTime? BreakStartedAt { get; init; }
         public int BreaksTaken { get; init; }
         public BreakSettingsDto? BreakSettings { get; init; }
@@ -49,7 +56,7 @@ public sealed class SessionPersistenceService
             BreakSettings = session.BreakSettings
         };
 
-        File.WriteAllText(_filePath, JsonSerializer.Serialize(data));
+        File.WriteAllText(_filePath, JsonSerializer.Serialize(data, _jsonOptions));
     }
 
     /// <summary>
@@ -64,7 +71,7 @@ public sealed class SessionPersistenceService
         try
         {
             var json = File.ReadAllText(_filePath);
-            var data = JsonSerializer.Deserialize<PersistedSession>(json);
+            var data = JsonSerializer.Deserialize<PersistedSession>(json, _jsonOptions);
 
             if (data is null || data.EndTime <= DateTime.UtcNow)
             {
@@ -76,13 +83,13 @@ public sealed class SessionPersistenceService
             var status = data.Status;
             DateTime? breakStartedAt = data.BreakStartedAt;
 
-            if (status == "OnBreak" && breakStartedAt.HasValue && data.BreakSettings is not null)
+            if (status == SessionStatus.OnBreak && breakStartedAt.HasValue && data.BreakSettings is not null)
             {
                 var breakEnd = breakStartedAt.Value.AddMinutes(data.BreakSettings.BreakDurationMinutes);
                 if (DateTime.UtcNow >= breakEnd)
                 {
                     // Break expired while app was closed — resume automatically
-                    status = "Active";
+                    status = SessionStatus.Active;
                     breakStartedAt = null;
                 }
             }

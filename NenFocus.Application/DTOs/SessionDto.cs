@@ -1,17 +1,16 @@
+using NenFocus.Domain.Enums;
+
 namespace NenFocus.Application.DTOs;
 
-/// <summary>
-/// Represents an active or completed session.
-/// Returned by GetActiveSessionQuery and GetSessionHistoryQuery.
-/// </summary>
 public sealed record SessionDto
 {
     public Guid Id { get; init; }
     public string Goal { get; init; } = string.Empty;
-    public string ProfileId { get; init; } = string.Empty;
     public string ProfileName { get; init; } = string.Empty;
     public int DurationMinutes { get; init; }
-    public string Status { get; init; } = string.Empty; // "Active", "OnBreak", "Completed"
+    public SessionStatus Status { get; init; }
+    public SessionOrigin Origin { get; init; }
+    public Guid? OriginatingBlockId { get; init; }
     public DateTime StartedAt { get; init; }
     public DateTime? EndedAt { get; init; }
     public BreakSettingsDto? BreakSettings { get; init; }

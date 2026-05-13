@@ -1,12 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿namespace NenFocus.Domain.Enums;
 
-namespace NenFocus.Domain.Enums;
 public enum BlockType
 {
-    Focus,
-    Passive
+    Ritual,
+    Background
 }

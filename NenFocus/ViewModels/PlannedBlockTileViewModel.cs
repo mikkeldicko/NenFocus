@@ -31,8 +31,8 @@ public partial class PlannedBlockTileViewModel : ViewModelBase
     public string TimeRangeText =>
         $"{Start:HH:mm} – {End:HH:mm}";
 
-    public bool IsFocus => BlockType == BlockType.Focus;
-    public bool IsPassive => BlockType == BlockType.Passive;
+    public bool IsFocus => BlockType == BlockType.Ritual;
+    public bool IsPassive => BlockType == BlockType.Background;
 
     public PlannedBlockTileViewModel(
         PlannedBlockDto dto,

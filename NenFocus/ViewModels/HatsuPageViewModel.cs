@@ -148,8 +148,7 @@ public partial class HatsuPageViewModel : ViewModelBase
             DurationMinutes = TotalMinutes,
             BreakSettings = breakSettings,
             TemporaryBlockedApps = data.SessionOnlyApps,
-            TemporaryBlockedSites = data.SessionOnlyWebsites,
-            IsPlanned = false
+            TemporaryBlockedSites = data.SessionOnlyWebsites
         };
 
         IsStarting = true;

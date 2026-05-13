@@ -2,6 +2,7 @@ using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Domain.Entities;
 
+
 namespace NenFocus.Infrastructure.Services;
 
 public sealed class SessionStateService : ISessionStateService
@@ -73,7 +74,7 @@ public sealed class SessionStateService : ISessionStateService
         Goal = s.Goal?.Value ?? string.Empty,
         ProfileName = profileName,
         DurationMinutes = (int)s.Duration.Value.TotalMinutes,
-        Status = s.Status.ToString(),
+        Status = s.Status,
         StartedAt = s.StartedAt ?? DateTime.UtcNow,
         BreaksTaken = s.BreaksTaken,
         BreakStartedAt = s.BreakStartedAt,

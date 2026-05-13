@@ -259,16 +259,11 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         var top = (startMinutes / 60.0) * HourRowHeight;
         var height = Math.Max(HourRowHeight * 0.5, (durationMinutes / 60.0) * HourRowHeight);
 
-        var blockType = ParseBlockType(dto.BlockType);
-
         // Create a new DTO with local times so the Tile VM shows correct labels
         var localDto = dto with { Start = localStart, End = localEnd };
 
-        return new PlannedBlockTileViewModel(localDto, blockType, columnIndex, top, height);
+        return new PlannedBlockTileViewModel(localDto, dto.BlockType, columnIndex, top, height);
     }
-
-    private static BlockType ParseBlockType(string raw) =>
-        Enum.TryParse<BlockType>(raw, ignoreCase: true, out var bt) ? bt : BlockType.Focus;
 
     [RelayCommand]
     private async Task NewBlockAtAsync(GridSlotPosition slot)
@@ -305,7 +300,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
         FormStartTime = dto.Start.ToString("HH:mm");
         FormEndTime = dto.End.ToString("HH:mm");
-        IsFocusBlock = ParseBlockType(dto.BlockType) == BlockType.Focus;
+        IsFocusBlock = dto.BlockType == BlockType.Ritual;
         SelectedProfile = AvailableProfiles.FirstOrDefault(p => p.Id == dto.ProfileId)
                           ?? AvailableProfiles.FirstOrDefault();
         IsFormVisible = true;
@@ -349,9 +344,9 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         var startUtc = localStart.ToUniversalTime();
         var endUtc = localEnd.ToUniversalTime();
 
-        var blockType = IsFocusBlock ? BlockType.Focus : BlockType.Passive;
+        var blockType = IsFocusBlock ? BlockType.Ritual : BlockType.Background;
 
-        if (blockType == BlockType.Focus && HasOverlappingFocusBlock(startUtc, endUtc, _editingBlockId))
+        if (blockType == BlockType.Ritual && HasOverlappingFocusBlock(startUtc, endUtc, _editingBlockId))
         {
             FormError = "This Focus block overlaps with an existing Focus block.";
             return;
@@ -387,7 +382,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     {
         foreach (var b in _blocksInWeek.Values)
         {
-            if (ParseBlockType(b.BlockType) != BlockType.Focus) continue;
+            if (b.BlockType != BlockType.Ritual) continue;
             if (excludeId.HasValue && b.Id == excludeId.Value) continue;
             if (start < b.End && b.Start < end) return true;
         }

@@ -19,8 +19,7 @@ namespace NenFocus.Infrastructure.Migrations
                     SessionId = table.Column<Guid>(type: "TEXT", nullable: false),
                     ResourceName = table.Column<string>(type: "TEXT", maxLength: 500, nullable: false),
                     AttemptType = table.Column<string>(type: "TEXT", nullable: false),
-                    Timestamp = table.Column<DateTimeOffset>(type: "TEXT", nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false)
+                    OccurredAt = table.Column<DateTime>(type: "TEXT", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -35,8 +34,7 @@ namespace NenFocus.Infrastructure.Migrations
                     Name = table.Column<string>(type: "TEXT", maxLength: 60, nullable: false),
                     WebsitePolicy = table.Column<string>(type: "TEXT", nullable: false),
                     IsActive = table.Column<bool>(type: "INTEGER", nullable: false, defaultValue: true),
-                    Tags = table.Column<string>(type: "TEXT", nullable: true, defaultValue: ""),
-                    CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false)
+                    Tags = table.Column<string>(type: "TEXT", nullable: true, defaultValue: "")
                 },
                 constraints: table =>
                 {
@@ -51,12 +49,9 @@ namespace NenFocus.Infrastructure.Migrations
                     BlockProfileId = table.Column<Guid>(type: "TEXT", nullable: false),
                     Start = table.Column<DateTime>(type: "TEXT", nullable: false),
                     End = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    Title = table.Column<string>(type: "TEXT", nullable: true),
-                    Type = table.Column<string>(type: "TEXT", nullable: false),
-                    IsPlanned = table.Column<bool>(type: "INTEGER", nullable: false, defaultValue: false),
+                    Title = table.Column<string>(type: "TEXT", maxLength: 100, nullable: true),
                     BlockKind = table.Column<string>(type: "TEXT", maxLength: 13, nullable: false),
-                    SessionId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false)
+                    RitualCompletedAt = table.Column<DateTime>(type: "TEXT", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -71,17 +66,20 @@ namespace NenFocus.Infrastructure.Migrations
                     Goal = table.Column<string>(type: "TEXT", nullable: false),
                     DurationMinutes = table.Column<long>(type: "INTEGER", nullable: false),
                     Status = table.Column<string>(type: "TEXT", nullable: false),
+                    Origin = table.Column<string>(type: "TEXT", nullable: false),
                     BlockProfileId = table.Column<Guid>(type: "TEXT", nullable: false),
+                    OriginatingBlockId = table.Column<Guid>(type: "TEXT", nullable: true),
                     StartedAt = table.Column<DateTime>(type: "TEXT", nullable: true),
                     EndedAt = table.Column<DateTime>(type: "TEXT", nullable: true),
                     BreakIntervalMinutes = table.Column<int>(type: "INTEGER", nullable: true),
                     BreakLengthMinutes = table.Column<int>(type: "INTEGER", nullable: true),
                     BreaksTaken = table.Column<int>(type: "INTEGER", nullable: false, defaultValue: 0),
                     BreakStartedAt = table.Column<DateTime>(type: "TEXT", nullable: true),
+                    TemporaryBlockedApps = table.Column<string>(type: "TEXT", nullable: false, defaultValueSql: "'[]'"),
+                    TemporaryBlockedSites = table.Column<string>(type: "TEXT", nullable: false, defaultValueSql: "'[]'"),
                     Reflection = table.Column<string>(type: "TEXT", maxLength: 2000, nullable: true),
                     Rating = table.Column<int>(type: "INTEGER", nullable: true),
-                    BlockedAttempts = table.Column<string>(type: "TEXT", nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false)
+                    BlockedAttempts = table.Column<string>(type: "TEXT", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -125,14 +123,14 @@ namespace NenFocus.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateIndex(
+                name: "IX_BlockedAttempts_OccurredAt",
+                table: "BlockedAttempts",
+                column: "OccurredAt");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_BlockedAttempts_SessionId",
                 table: "BlockedAttempts",
                 column: "SessionId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_BlockedAttempts_Timestamp",
-                table: "BlockedAttempts",
-                column: "Timestamp");
         }
 
         /// <inheritdoc />

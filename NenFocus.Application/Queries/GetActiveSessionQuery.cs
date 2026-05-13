@@ -33,10 +33,9 @@ public sealed class GetActiveSessionQueryHandler
         {
             Id = session.Id,
             Goal = session.Goal.Value,
-            ProfileId = session.BlockProfileId.ToString(),
             ProfileName = profile?.Name ?? "Unknown",
             DurationMinutes = (int)session.Duration.Value.TotalMinutes,
-            Status = session.Status.ToString(),
+            Status = session.Status,
             StartedAt = session.StartedAt ?? DateTime.UtcNow,
             EndedAt = session.EndedAt,
             BreakSettings = session.BreakSettings is null ? null : new BreakSettingsDto

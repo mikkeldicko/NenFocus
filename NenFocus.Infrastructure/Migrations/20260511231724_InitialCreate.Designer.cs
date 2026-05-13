@@ -11,7 +11,7 @@ using NenFocus.Infrastructure.Persistence;
 namespace NenFocus.Infrastructure.Migrations
 {
     [DbContext(typeof(NenFocusDbContext))]
-    [Migration("20260510213709_InitialCreate")]
+    [Migration("20260511231724_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -23,9 +23,6 @@ namespace NenFocus.Infrastructure.Migrations
             modelBuilder.Entity("NenFocus.Domain.Aggregates.BlockProfile", b =>
                 {
                     b.Property<Guid>("Id")
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime>("CreatedAt")
                         .HasColumnType("TEXT");
 
                     b.Property<bool>("IsActive")
@@ -62,7 +59,7 @@ namespace NenFocus.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<DateTime>("CreatedAt")
+                    b.Property<DateTime>("OccurredAt")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("ResourceName")
@@ -73,14 +70,11 @@ namespace NenFocus.Infrastructure.Migrations
                     b.Property<Guid>("SessionId")
                         .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset>("Timestamp")
-                        .HasColumnType("TEXT");
-
                     b.HasKey("Id");
 
-                    b.HasIndex("SessionId");
+                    b.HasIndex("OccurredAt");
 
-                    b.HasIndex("Timestamp");
+                    b.HasIndex("SessionId");
 
                     b.ToTable("BlockedAttempts", (string)null);
                 });
@@ -98,25 +92,14 @@ namespace NenFocus.Infrastructure.Migrations
                     b.Property<Guid>("BlockProfileId")
                         .HasColumnType("TEXT");
 
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT");
-
                     b.Property<DateTime>("End")
                         .HasColumnType("TEXT");
-
-                    b.Property<bool>("IsPlanned")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER")
-                        .HasDefaultValue(false);
 
                     b.Property<DateTime>("Start")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Title")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Type")
-                        .IsRequired()
+                        .HasMaxLength(100)
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
@@ -148,9 +131,6 @@ namespace NenFocus.Infrastructure.Migrations
                         .HasColumnType("INTEGER")
                         .HasDefaultValue(0);
 
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT");
-
                     b.Property<long>("Duration")
                         .HasColumnType("INTEGER")
                         .HasColumnName("DurationMinutes");
@@ -162,6 +142,13 @@ namespace NenFocus.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT")
                         .HasColumnName("Goal");
+
+                    b.Property<string>("Origin")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("OriginatingBlockId")
+                        .HasColumnType("TEXT");
 
                     b.Property<int?>("Rating")
                         .HasColumnType("INTEGER");
@@ -177,26 +164,38 @@ namespace NenFocus.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("TemporaryBlockedApps")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValueSql("'[]'");
+
+                    b.Property<string>("TemporaryBlockedSites")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValueSql("'[]'");
+
                     b.HasKey("Id");
 
                     b.ToTable("Sessions", (string)null);
                 });
 
-            modelBuilder.Entity("NenFocus.Domain.Entities.FocusBlock", b =>
+            modelBuilder.Entity("NenFocus.Domain.Entities.BackgroundBlock", b =>
                 {
                     b.HasBaseType("NenFocus.Domain.Entities.PlannedBlock");
 
-                    b.Property<Guid>("SessionId")
-                        .HasColumnType("TEXT");
-
-                    b.HasDiscriminator().HasValue("Focus");
+                    b.HasDiscriminator().HasValue("Background");
                 });
 
-            modelBuilder.Entity("NenFocus.Domain.Entities.PassiveBlock", b =>
+            modelBuilder.Entity("NenFocus.Domain.Entities.RitualBlock", b =>
                 {
                     b.HasBaseType("NenFocus.Domain.Entities.PlannedBlock");
 
-                    b.HasDiscriminator().HasValue("Passive");
+                    b.Property<DateTime?>("RitualCompletedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasDiscriminator().HasValue("Ritual");
                 });
 
             modelBuilder.Entity("NenFocus.Domain.Aggregates.BlockProfile", b =>

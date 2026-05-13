@@ -1,6 +1,4 @@
 ﻿using NenFocus.Application.DTOs;
-using System;
-using System.Collections.Generic;
 
 namespace NenFocus.Application.UseCases.Sessions.StartSession;
 
@@ -12,5 +10,10 @@ public sealed record StartSessionCommand
     public BreakSettingsDto? BreakSettings { get; init; }
     public IReadOnlyList<string> TemporaryBlockedApps { get; init; } = [];
     public IReadOnlyList<string> TemporaryBlockedSites { get; init; } = [];
-    public bool IsPlanned { get; init; }
+
+    /// <summary>
+    /// Set by the Hatsu page when a RitualBlock triggered the Ritual.
+    /// Null for Impromptu sessions.
+    /// </summary>
+    public Guid? OriginatingBlockId { get; init; }
 }

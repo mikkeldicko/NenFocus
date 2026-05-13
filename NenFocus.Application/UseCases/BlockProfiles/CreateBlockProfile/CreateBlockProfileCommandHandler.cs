@@ -13,13 +13,16 @@ public sealed class CreateBlockProfileCommandHandler
 {
     private readonly IBlockProfileRepository _profiles;
     private readonly IValidator<CreateBlockProfileCommand> _validator;
+    private readonly IDomainEventPublisher _publisher;
 
     public CreateBlockProfileCommandHandler(
         IBlockProfileRepository profiles,
-        IValidator<CreateBlockProfileCommand> validator)
+        IValidator<CreateBlockProfileCommand> validator,
+        IDomainEventPublisher publisher)
     {
         _profiles = profiles;
         _validator = validator;
+        _publisher = publisher;
     }
 
     public async Task<CreateBlockProfileResult> HandleAsync(
@@ -38,7 +41,7 @@ public sealed class CreateBlockProfileCommandHandler
             return CreateBlockProfileResult.Fail($"A profile named '{command.Name}' already exists.");
 
         // 3. Create Domain Aggregate (using your factory method)
-        var profile = BlockProfile.Create(command.Name, command.WebsitePolicy, command.Tags.ToList());
+        var profile = BlockProfile.Create(Guid.NewGuid(), command.Name, command.WebsitePolicy, command.Tags.ToList());
 
         foreach (var appName in command.BlockedApps)
             profile.AddBlockedApp(new BlockedApp(appName));
@@ -46,8 +49,10 @@ public sealed class CreateBlockProfileCommandHandler
         foreach (var url in command.Websites)
             profile.AddWebsite(new BlockedSite(url));
 
-        // 4. Persistence
         await _profiles.AddAsync(profile, cancellationToken);
+
+        await _publisher.PublishAllAsync(profile.DomainEvents, cancellationToken);
+        profile.ClearDomainEvents();
 
         return CreateBlockProfileResult.Ok(profile.Id);
     }

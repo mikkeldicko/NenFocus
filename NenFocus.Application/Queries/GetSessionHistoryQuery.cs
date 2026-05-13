@@ -42,7 +42,7 @@ public sealed class GetSessionHistoryQueryHandler
 
         return sessions.Select(s =>
         {
-            var elapsed = s.GetElapsedTime();
+            var elapsed = s.GetElapsedTime(s.EndedAt ?? DateTime.UtcNow);
             return new SessionSummaryDto
             {
                 Id = s.Id,
@@ -52,7 +52,7 @@ public sealed class GetSessionHistoryQueryHandler
                 PlannedDurationMinutes = (int)s.Duration.Value.TotalMinutes,
                 ActualDurationMinutes = elapsed.HasValue
                     ? (int)elapsed.Value.TotalMinutes : 0,
-                StartedAt = s.StartedAt ?? s.CreatedAt,
+                StartedAt = s.StartedAt.GetValueOrDefault(),
                 EndedAt = s.EndedAt,
                 Completed = s.Status == Domain.Enums.SessionStatus.Completed,
                 BreaksTaken = s.BreaksTaken

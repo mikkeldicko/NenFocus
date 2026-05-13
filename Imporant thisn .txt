@@ -1,7 +1,7 @@
-//"C:\Users\mikke\AppData\Roaming\NenFocus"
+C:\Users\mikke\AppData\Roaming\NenFocus
 
-//Make a new migration
-//dotnet ef migrations add InitialCreate--project NenFocus.Infrastructure --startup-project NenFocus
+Make a new migration
+dotnet ef migrations add InitialCreate--project NenFocus.Infrastructure --startup-project NenFocus
 
 # 1. Kill any lingering build processes
 Stop-Process -Name "MSBuild" -ErrorAction SilentlyContinue

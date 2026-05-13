@@ -1,6 +1,3 @@
-using System;
-using System.Collections.ObjectModel;
-using System.Threading.Tasks;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -9,6 +6,11 @@ using NenFocus.Application.Interfaces;
 using NenFocus.Application.UseCases.Sessions.EndSession;
 using NenFocus.Application.UseCases.Sessions.ResumeFromBreak;
 using NenFocus.Application.UseCases.Sessions.StartBreak;
+using NenFocus.Domain.Enums;
+using System;
+using System.Collections.ObjectModel;
+using System.Threading.Tasks;
+
 
 namespace NenFocus.ViewModels;
 
@@ -150,7 +152,7 @@ public partial class MainPageViewModel : ViewModelBase
         HasActiveSession = true;
         HasBreakSettings = session.BreakSettings?.Enabled == true;
         BreaksTaken = session.BreaksTaken;
-        IsOnBreak = session.Status == "OnBreak";
+        IsOnBreak = session.Status == SessionStatus.OnBreak;
     }
 
     private void ClearSession()

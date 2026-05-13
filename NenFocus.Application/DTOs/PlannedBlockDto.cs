@@ -1,7 +1,9 @@
+using NenFocus.Domain.Enums;
+
 namespace NenFocus.Application.DTOs;
 
 /// <summary>
-/// Represents a scheduled focus or passive block on the Planner calendar.
+/// Represents a scheduled Ritual or Background Block on the Planner calendar.
 /// Returned by GetPlannedBlocksForDayQuery and GetForRangeQuery.
 /// </summary>
 public sealed record PlannedBlockDto
@@ -10,8 +12,7 @@ public sealed record PlannedBlockDto
     public Guid ProfileId { get; init; }
     public string ProfileName { get; init; } = string.Empty;
 
-    /// <summary>"Focus" or "Passive"</summary>
-    public string BlockType { get; init; } = string.Empty;
+    public BlockType BlockType { get; init; }
 
     public DateTime Start { get; init; }
     public DateTime End { get; init; }

@@ -2,26 +2,45 @@
 
 namespace NenFocus.Domain.Entities;
 
-public class BlockedAttempt : BaseEntity
+public class BlockedAttempt
 {
-    // The ID of the session during which this happened
+    public Guid Id { get; private set; }
     public Guid SessionId { get; private set; }
 
-    // The name of the process (e.g., "chrome.exe") or domain (e.g., "facebook.com")
+    /// <summary>
+    /// The name of the process (e.g. "chrome") or domain (e.g. "facebook.com")
+    /// that was blocked.
+    /// </summary>
     public string ResourceName { get; private set; } = string.Empty;
 
     public BlockedAttemptType AttemptType { get; private set; }
 
-    public DateTimeOffset Timestamp { get; private set; }
+    /// <summary>
+    /// UTC timestamp of when the attempt occurred.
+    /// Passed in by the caller — domain never touches the clock.
+    /// </summary>
+    public DateTime OccurredAt { get; private set; }
 
-    // Parameterless constructor for EF Core
-    private BlockedAttempt() { }
+    private BlockedAttempt() { } // EF Core
 
-    public BlockedAttempt(Guid sessionId, string resourceName, BlockedAttemptType type)
+    public static BlockedAttempt Record(
+        Guid id,
+        Guid sessionId,
+        string resourceName,
+        BlockedAttemptType attemptType,
+        DateTime occurredAt)
     {
-        SessionId = sessionId;
-        ResourceName = resourceName;
-        AttemptType = type;
-        Timestamp = DateTimeOffset.Now;
+        if (string.IsNullOrWhiteSpace(resourceName))
+            throw new ArgumentException(
+                "Resource name cannot be empty.", nameof(resourceName));
+
+        return new BlockedAttempt
+        {
+            Id = id,
+            SessionId = sessionId,
+            ResourceName = resourceName.Trim(),
+            AttemptType = attemptType,
+            OccurredAt = occurredAt
+        };
     }
 }

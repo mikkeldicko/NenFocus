@@ -8,7 +8,7 @@ public interface INotificationService
 {
     /// <summary>
     /// Sends an immediate system notification.
-    /// Used for passive block start, session end, and break prompts.
+    /// Used for Background Block start, session end, and break prompts.
     /// </summary>
     Task NotifyAsync(
         string title,

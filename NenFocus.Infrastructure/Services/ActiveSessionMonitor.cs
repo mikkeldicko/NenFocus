@@ -3,6 +3,7 @@ using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.UseCases.Sessions.EndSession;
 using NenFocus.Application.UseCases.Sessions.ResumeFromBreak;
+using NenFocus.Domain.Enums;
 using System.Timers;
 
 namespace NenFocus.Infrastructure.Services;
@@ -50,7 +51,7 @@ public sealed class ActiveSessionMonitor : IActiveSessionMonitor, IDisposable
         _sessionEnd = session.StartedAt.AddMinutes(session.DurationMinutes);
         _sessionDurationSeconds = session.DurationMinutes * 60.0;
 
-        if (session.Status == "OnBreak" && session.BreakStartedAt.HasValue)
+        if (session.Status == SessionStatus.OnBreak && session.BreakStartedAt.HasValue)
         {
             _breakStartedAt = session.BreakStartedAt.Value;
             var sessionRemainingAtBreakStart = (_sessionEnd - _breakStartedAt.Value).TotalSeconds;

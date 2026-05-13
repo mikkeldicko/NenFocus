@@ -1,6 +1,5 @@
 using NenFocus.Application.Interfaces;
 using NenFocus.Domain.Entities;
-using NenFocus.Domain.Enums;
 
 namespace NenFocus.Application.UseCases.Planner.UpdatePlannedBlock;
 
@@ -28,24 +27,24 @@ public sealed class UpdatePlannedBlockCommandHandler : ICommandHandler<UpdatePla
         if (profile is null)
             return UpdatePlannedBlockResult.Fail($"Profile '{command.ProfileId}' not found.");
 
-        if (existing.Type == BlockType.Focus)
+        if (existing is RitualBlock)
         {
             var overlapping = await _blocks.GetOverlappingAsync(
                 startTime,
                 endTime,
-                BlockType.Focus,
+                ritualOnly: true,
                 excludeId: command.BlockId,
                 cancellationToken: cancellationToken);
 
             if (overlapping.Count > 0)
-                return UpdatePlannedBlockResult.Fail("A Focus block already exists in this time window.");
+                return UpdatePlannedBlockResult.Fail("A Ritual block already exists in this time window.");
         }
 
         await _blocks.DeleteAsync(command.BlockId, cancellationToken);
 
-        PlannedBlock updated = existing.Type == BlockType.Focus
-            ? FocusBlock.Create(Guid.Empty, command.ProfileId, existing.Type, startTime, endTime, true)
-            : PassiveBlock.Create(command.ProfileId, startTime, endTime);
+        PlannedBlock updated = existing is RitualBlock
+            ? RitualBlock.Create(Guid.NewGuid(), command.ProfileId, startTime, endTime, existing.Title)
+            : BackgroundBlock.Create(Guid.NewGuid(), command.ProfileId, startTime, endTime, existing.Title);
 
         await _blocks.AddAsync(updated, cancellationToken);
 
