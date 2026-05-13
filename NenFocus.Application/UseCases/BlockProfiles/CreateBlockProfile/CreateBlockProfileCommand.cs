@@ -1,9 +1,10 @@
 ﻿using NenFocus.Domain.Enums;
 using System.Collections.Generic;
+using NenFocus.Application.Interfaces;
 
 namespace NenFocus.Application.UseCases.BlockProfiles.CreateBlockProfile;
 
-public sealed record CreateBlockProfileCommand
+public sealed record CreateBlockProfileCommand : ICommand<CreateBlockProfileResult>
 {
     public string Name { get; init; } = string.Empty;
     public IReadOnlyList<string> Tags { get; init; } = [];

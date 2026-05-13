@@ -1,6 +1,8 @@
+using NenFocus.Application.Interfaces;
+
 namespace NenFocus.Application.UseCases.Planner.UpdatePlannedBlock;
 
-public sealed record UpdatePlannedBlockCommand
+public sealed record UpdatePlannedBlockCommand : ICommand<UpdatePlannedBlockResult>
 {
     public Guid BlockId { get; init; }
     public Guid ProfileId { get; init; }

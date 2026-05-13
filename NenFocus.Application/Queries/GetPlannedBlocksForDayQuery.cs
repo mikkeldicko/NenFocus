@@ -4,7 +4,7 @@ using NenFocus.Domain.Entities;
 
 namespace NenFocus.Application.Queries.GetPlannedBlocksForDay;
 
-public sealed record GetPlannedBlocksForDayQuery
+public sealed record GetPlannedBlocksForDayQuery : IQuery<IReadOnlyList<PlannedBlockDto>>
 {
     public DateOnly Date { get; init; }
 }

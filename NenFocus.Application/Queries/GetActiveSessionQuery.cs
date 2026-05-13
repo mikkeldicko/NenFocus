@@ -4,7 +4,7 @@ using NenFocus.Domain.Enums;
 
 namespace NenFocus.Application.Queries.GetActiveSession;
 
-public sealed record GetActiveSessionQuery;
+public sealed record GetActiveSessionQuery : IQuery<SessionDto?>;
 
 public sealed class GetActiveSessionQueryHandler
     : IQueryHandler<GetActiveSessionQuery, SessionDto?>

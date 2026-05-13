@@ -1,6 +1,8 @@
-﻿namespace NenFocus.Application.UseCases.Sessions.ResumeFromBreak;
+﻿using NenFocus.Application.Interfaces;
 
-public sealed record ResumeFromBreakCommand
+namespace NenFocus.Application.UseCases.Sessions.ResumeFromBreak;
+
+public sealed record ResumeFromBreakCommand : ICommand<ResumeFromBreakResult>
 {
     public Guid SessionId { get; init; }
 }

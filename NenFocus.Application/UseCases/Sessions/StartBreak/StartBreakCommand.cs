@@ -1,6 +1,8 @@
-﻿namespace NenFocus.Application.UseCases.Sessions.StartBreak;
+﻿using NenFocus.Application.Interfaces;
 
-public sealed record StartBreakCommand
+namespace NenFocus.Application.UseCases.Sessions.StartBreak;
+
+public sealed record StartBreakCommand : ICommand<StartBreakResult>
 {
     public Guid SessionId { get; init; }
     // Add this if your UI is trying to set it:

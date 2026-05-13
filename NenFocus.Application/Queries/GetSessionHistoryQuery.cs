@@ -3,7 +3,7 @@ using NenFocus.Application.Interfaces;
 
 namespace NenFocus.Application.Queries.GetSessionHistory;
 
-public sealed record GetSessionHistoryQuery
+public sealed record GetSessionHistoryQuery : IQuery<IReadOnlyList<SessionSummaryDto>>
 {
     public DateOnly From { get; init; }
     public DateOnly To { get; init; }

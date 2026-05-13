@@ -1,12 +1,10 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿namespace NenFocus.Application.UseCases.BlockProfiles.DeleteBlockProfile;
 
-namespace NenFocus.Application.UseCases.BlockProfiles.DeleteBlockProfile
+public sealed record DeleteBlockProfileResult
 {
-    internal class DeleteBlockProfileResult
-    {
-    }
+    public bool Success { get; init; }
+    public string? ErrorMessage { get; init; }
+
+    public static DeleteBlockProfileResult Ok() => new() { Success = true };
+    public static DeleteBlockProfileResult Fail(string error) => new() { Success = false, ErrorMessage = error };
 }

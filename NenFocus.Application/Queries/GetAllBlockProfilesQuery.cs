@@ -3,7 +3,7 @@ using NenFocus.Application.Interfaces;
 
 namespace NenFocus.Application.Queries.GetAllBlockProfiles;
 
-public sealed record GetAllBlockProfilesQuery
+public sealed record GetAllBlockProfilesQuery : IQuery<IReadOnlyList<BlockProfileDto>>
 {
     /// <summary>Optional tag filter. Returns all profiles if null.</summary>
     public string? Tag { get; init; }

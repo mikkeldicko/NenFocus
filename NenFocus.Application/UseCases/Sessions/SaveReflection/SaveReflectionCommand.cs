@@ -1,6 +1,8 @@
-﻿namespace NenFocus.Application.UseCases.Sessions.SaveReflection;
+﻿using NenFocus.Application.Interfaces;
 
-public sealed record SaveReflectionCommand
+namespace NenFocus.Application.UseCases.Sessions.SaveReflection;
+
+public sealed record SaveReflectionCommand : ICommand<SaveReflectionResult>
 {
     public Guid SessionId { get; init; }
     public string Reflection { get; init; } = string.Empty;

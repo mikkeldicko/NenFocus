@@ -48,7 +48,7 @@ public partial class BlockProfilePageViewModel : ViewModelBase
     private readonly IQueryHandler<GetAllBlockProfilesQuery, IReadOnlyList<BlockProfileDto>> _getProfiles;
     private readonly ICommandHandler<CreateBlockProfileCommand, CreateBlockProfileResult> _createProfile;
     private readonly ICommandHandler<UpdateBlockProfileCommand, UpdateBlockProfileResult> _updateProfile;
-    private readonly ICommandHandler<DeleteBlockProfileCommand> _deleteProfile;
+    private readonly ICommandHandler<DeleteBlockProfileCommand, DeleteBlockProfileResult> _deleteProfile;
     private readonly ICommandHandler<DuplicateBlockProfileCommand, DuplicateBlockProfileResult> _duplicateProfile;
 
     private Guid? _editingProfileId;
@@ -111,7 +111,7 @@ public partial class BlockProfilePageViewModel : ViewModelBase
         IQueryHandler<GetAllBlockProfilesQuery, IReadOnlyList<BlockProfileDto>> getProfiles,
         ICommandHandler<CreateBlockProfileCommand, CreateBlockProfileResult> createProfile,
         ICommandHandler<UpdateBlockProfileCommand, UpdateBlockProfileResult> updateProfile,
-        ICommandHandler<DeleteBlockProfileCommand> deleteProfile,
+        ICommandHandler<DeleteBlockProfileCommand, DeleteBlockProfileResult> deleteProfile,
         ICommandHandler<DuplicateBlockProfileCommand, DuplicateBlockProfileResult> duplicateProfile)
     {
         _getProfiles = getProfiles;
