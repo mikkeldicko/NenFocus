@@ -2,9 +2,6 @@
 using NenFocus.Application.Interfaces;
 using NenFocus.Domain.Aggregates;
 using NenFocus.Domain.ValueObjects;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace NenFocus.Application.UseCases.BlockProfiles.CreateBlockProfile;
 
@@ -13,16 +10,13 @@ public sealed class CreateBlockProfileCommandHandler
 {
     private readonly IBlockProfileRepository _profiles;
     private readonly IValidator<CreateBlockProfileCommand> _validator;
-    private readonly IDomainEventPublisher _publisher;
 
     public CreateBlockProfileCommandHandler(
         IBlockProfileRepository profiles,
-        IValidator<CreateBlockProfileCommand> validator,
-        IDomainEventPublisher publisher)
+        IValidator<CreateBlockProfileCommand> validator)
     {
         _profiles = profiles;
         _validator = validator;
-        _publisher = publisher;
     }
 
     public async Task<CreateBlockProfileResult> HandleAsync(
@@ -50,9 +44,6 @@ public sealed class CreateBlockProfileCommandHandler
             profile.AddWebsite(new BlockedSite(url));
 
         await _profiles.AddAsync(profile, cancellationToken);
-
-        await _publisher.PublishAllAsync(profile.DomainEvents, cancellationToken);
-        profile.ClearDomainEvents();
 
         return CreateBlockProfileResult.Ok(profile.Id);
     }

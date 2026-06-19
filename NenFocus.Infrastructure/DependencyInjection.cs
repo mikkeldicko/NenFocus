@@ -7,6 +7,7 @@ using NenFocus.Infrastructure.Notifications;
 using NenFocus.Infrastructure.Persistence;
 using NenFocus.Infrastructure.Persistence.Repositories;
 using NenFocus.Infrastructure.Services;
+using System.Reflection;
 
 namespace NenFocus.Infrastructure;
 
@@ -18,6 +19,7 @@ public static class DependencyInjection
     {
         // ── Application layer ──────────────────────────────────────────────
         services.AddApplication();
+        RegisterDecoratedCommandHandlers(services);
 
         // ── Database ───────────────────────────────────────────────────────
         // 1. Register the Factory (This satisfies BlockedAttemptTracker)
@@ -50,9 +52,42 @@ public static class DependencyInjection
         // ── Domain event publisher ─────────────────────────────────────────
         services.AddSingleton<IDomainEventPublisher, InProcessDomainEventPublisher>();
 
+        // ── Unit of Work ───────────────────────────────────────────────────
+        services.AddScoped<IUnitOfWork, EfCoreUnitOfWork>();
+
         // ── Scheduled enforcement background service ───────────────────────
         services.AddHostedService<ScheduledEnforcementService>();
 
         return services;
+    }
+
+    private static void RegisterDecoratedCommandHandlers(IServiceCollection services)
+    {
+        var appAssembly = Assembly.GetAssembly(typeof(NenFocus.Application.DependencyInjection))!;
+        var commandHandlerInterface = typeof(ICommandHandler<,>);
+        var decoratorType = typeof(TransactionalCommandHandler<,>);
+
+        var handlers = appAssembly.GetTypes()
+            .Where(t => t is { IsClass: true, IsAbstract: false })
+            .SelectMany(t => t.GetInterfaces()
+                .Where(i => i.IsGenericType &&
+                            i.GetGenericTypeDefinition() == commandHandlerInterface)
+                .Select(i => (ConcreteType: t, Interface: i)))
+            .ToList();
+
+        foreach (var (concreteType, @interface) in handlers)
+        {
+            services.AddTransient(concreteType);
+
+            var typeArgs = @interface.GetGenericArguments();
+            var closedDecorator = decoratorType.MakeGenericType(typeArgs);
+
+            services.AddTransient(@interface, sp =>
+            {
+                var inner = sp.GetRequiredService(concreteType);
+                var uow = sp.GetRequiredService<IUnitOfWork>();
+                return Activator.CreateInstance(closedDecorator, inner, uow)!;
+            });
+        }
     }
 }

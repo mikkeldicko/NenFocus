@@ -1,10 +1,11 @@
 ﻿using NenFocus.Domain.Enums;
 using NenFocus.Domain.Events;
+using NenFocus.Domain.Interfaces;
 using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Domain.Aggregates;
 
-public class BlockProfile
+public class BlockProfile : IHasDomainEvents
 {
     private readonly List<BlockedApp> _blockedApps = [];
     private readonly List<BlockedSite> _websites = [];

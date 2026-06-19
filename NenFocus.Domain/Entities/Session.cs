@@ -1,10 +1,11 @@
 using NenFocus.Domain.Enums;
 using NenFocus.Domain.Events;
+using NenFocus.Domain.Interfaces;
 using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Domain.Entities;
 
-public class Session
+public class Session : IHasDomainEvents
 {
     private readonly List<DomainEvent> _domainEvents = [];
 

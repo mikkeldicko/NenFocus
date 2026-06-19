@@ -71,15 +71,14 @@ public sealed class PlannedBlockRepository : IPlannedBlockRepository
         CancellationToken cancellationToken = default)
     {
         await _context.PlannedBlocks.AddAsync(block, cancellationToken);
-        await _context.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task UpdateAsync(
+    public Task UpdateAsync(
         PlannedBlock block,
         CancellationToken cancellationToken = default)
     {
         _context.PlannedBlocks.Update(block);
-        await _context.SaveChangesAsync(cancellationToken);
+        return Task.CompletedTask;
     }
 
     public async Task SaveAsync(
@@ -93,8 +92,6 @@ public sealed class PlannedBlockRepository : IPlannedBlockRepository
             await _context.PlannedBlocks.AddAsync(block, cancellationToken);
         else
             _context.PlannedBlocks.Update(block);
-
-        await _context.SaveChangesAsync(cancellationToken);
     }
 
     public async Task DeleteAsync(
@@ -107,6 +104,5 @@ public sealed class PlannedBlockRepository : IPlannedBlockRepository
         if (block is null) return;
 
         _context.PlannedBlocks.Remove(block);
-        await _context.SaveChangesAsync(cancellationToken);
     }
 }

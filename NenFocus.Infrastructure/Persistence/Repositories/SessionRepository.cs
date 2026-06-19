@@ -65,8 +65,6 @@ public sealed class SessionRepository : ISessionRepository
             _context.Sessions.Update(session);
         else
             await _context.Sessions.AddAsync(session, cancellationToken);
-
-        await _context.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyList<Session>> GetActiveSessionsAsync(CancellationToken ct = default)

@@ -32,23 +32,18 @@ public static class DependencyInjection
 
         foreach (var type in implementations)
         {
-            // 1. Register Command/Query Handlers (Generics)
             var interfaces = type.GetInterfaces().Where(i => i.IsGenericType);
             foreach (var @interface in interfaces)
             {
                 var def = @interface.GetGenericTypeDefinition();
-                if (def == typeof(ICommandHandler<,>) || def == typeof(IQueryHandler<,>))
-                {
+                // Query handlers registered here; command handlers are wrapped by
+                // TransactionalCommandHandler in Infrastructure DI.
+                if (def == typeof(IQueryHandler<,>))
                     services.AddTransient(@interface, type);
-                }
             }
 
-            // 2. Register Event Handlers (Concrete classes)
-            // This fixes the "No service for type SessionStartedEventHandler" error
             if (type.Name.EndsWith("EventHandler"))
-            {
                 services.AddTransient(type);
-            }
         }
     }
 }

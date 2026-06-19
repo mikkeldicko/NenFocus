@@ -52,7 +52,6 @@ public sealed class BlockProfileRepository : IBlockProfileRepository
         CancellationToken cancellationToken = default)
     {
         await _context.BlockProfiles.AddAsync(profile, cancellationToken);
-        await _context.SaveChangesAsync(cancellationToken);
     }
 
     public async Task UpdateAsync(
@@ -60,7 +59,6 @@ public sealed class BlockProfileRepository : IBlockProfileRepository
         CancellationToken cancellationToken = default)
     {
         _context.BlockProfiles.Update(profile);
-        await _context.SaveChangesAsync(cancellationToken);
     }
 
     public async Task DeleteAsync(
@@ -73,7 +71,6 @@ public sealed class BlockProfileRepository : IBlockProfileRepository
         if (profile is null) return;
 
         _context.BlockProfiles.Remove(profile);
-        await _context.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<bool> ExistsWithNameAsync(

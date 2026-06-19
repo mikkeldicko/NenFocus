@@ -11,20 +11,17 @@ public sealed class EndSessionCommandHandler
     private readonly IBlockProfileRepository _profiles;
     private readonly ISessionStateService _sessionState;
     private readonly IBlockedAttemptTracker _attemptTracker;
-    private readonly IDomainEventPublisher _publisher;
 
     public EndSessionCommandHandler(
         ISessionRepository sessions,
         IBlockProfileRepository profiles,
         ISessionStateService sessionState,
-        IBlockedAttemptTracker attemptTracker,
-        IDomainEventPublisher publisher)
+        IBlockedAttemptTracker attemptTracker)
     {
         _sessions = sessions;
         _profiles = profiles;
         _sessionState = sessionState;
         _attemptTracker = attemptTracker;
-        _publisher = publisher;
     }
 
     public async Task<EndSessionResult> HandleAsync(
@@ -54,8 +51,6 @@ public sealed class EndSessionCommandHandler
         session.Complete(DateTime.UtcNow);
 
         await _sessions.SaveAsync(session, ct);
-        await _publisher.PublishAllAsync(session.DomainEvents, ct);
-        session.ClearDomainEvents();
 
         var profileName = string.Empty;
         if (session.BlockProfileId != Guid.Empty)

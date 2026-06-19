@@ -13,20 +13,17 @@ public sealed class StartSessionCommandHandler
     private readonly IPlannedBlockRepository _plannedBlocks;
     private readonly ISessionStateService _sessionState;
     private readonly IBlockProfileRepository _profiles;
-    private readonly IDomainEventPublisher _publisher;
 
     public StartSessionCommandHandler(
         ISessionRepository sessions,
         IPlannedBlockRepository plannedBlocks,
         ISessionStateService sessionState,
-        IBlockProfileRepository profiles,
-        IDomainEventPublisher publisher)
+        IBlockProfileRepository profiles)
     {
         _sessions = sessions;
         _plannedBlocks = plannedBlocks;
         _sessionState = sessionState;
         _profiles = profiles;
-        _publisher = publisher;
     }
 
     public async Task<StartSessionResult> HandleAsync(
@@ -91,9 +88,6 @@ public sealed class StartSessionCommandHandler
         }
 
         await _sessions.SaveAsync(session, ct);
-
-        await _publisher.PublishAllAsync(session.DomainEvents, ct);
-        session.ClearDomainEvents();
 
         var profileName = string.Empty;
         if (command.ProfileId is { } pid && pid != Guid.Empty)

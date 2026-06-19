@@ -8,16 +8,13 @@ public sealed class StartBreakCommandHandler
 {
     private readonly ISessionRepository _sessions;
     private readonly ISessionStateService _sessionState;
-    private readonly IDomainEventPublisher _publisher;
 
     public StartBreakCommandHandler(
         ISessionRepository sessions,
-        ISessionStateService sessionState,
-        IDomainEventPublisher publisher)
+        ISessionStateService sessionState)
     {
         _sessions = sessions;
         _sessionState = sessionState;
-        _publisher = publisher;
     }
 
     public async Task<StartBreakResult> HandleAsync(
@@ -34,8 +31,6 @@ public sealed class StartBreakCommandHandler
         session.StartBreak(DateTime.UtcNow);
 
         await _sessions.SaveAsync(session, ct);
-        await _publisher.PublishAllAsync(session.DomainEvents, ct);
-        session.ClearDomainEvents();
 
         var current = _sessionState.ActiveSession;
         if (current is not null)
