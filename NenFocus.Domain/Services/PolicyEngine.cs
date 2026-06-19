@@ -75,6 +75,11 @@ public sealed class PolicyEngine : IPolicyEngine
             _ => null
         };
 
+        // A Ritual Block whose Ritual was completed but whose session has since ended —
+        // the scheduler must not re-apply enforcement or re-trigger the Ritual.
+        var ritualBlock = activeBlocks.OfType<RitualBlock>().FirstOrDefault();
+        bool ritualSessionCompleted = ritualBlock?.RitualCompletedAt != null && !activeSessions.Any();
+
         return new ActivePolicySlice
         {
             ActiveSessionId = activeSessions.FirstOrDefault()?.Id,
@@ -84,7 +89,8 @@ public sealed class PolicyEngine : IPolicyEngine
             AllowedSites = allowedSites,
             BlockedSites = blockedSites,
             BlockedApps = blockedApps,
-            ActiveBlockType = activeBlockType
+            ActiveBlockType = activeBlockType,
+            RitualSessionCompleted = ritualSessionCompleted
         };
     }
 }

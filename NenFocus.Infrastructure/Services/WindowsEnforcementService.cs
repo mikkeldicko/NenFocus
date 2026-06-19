@@ -267,8 +267,23 @@ public sealed class WindowsEnforcementService : IEnforcementService, IDisposable
         if (url?.AbsolutePath == "/check")
         {
             var domain = context.Request.QueryString["domain"];
-            var isBlocked = _currentPolicy?.BlockedSites.Any(s =>
-                NormalizeDomain(s).Equals(domain, StringComparison.OrdinalIgnoreCase)) ?? false;
+            bool isBlocked;
+
+            if (_currentPolicy == null || !_isEnforcing || string.IsNullOrEmpty(domain))
+            {
+                isBlocked = false;
+            }
+            else if (_currentPolicy.WebsitePolicyMode == WebsitePolicy.Allowlist)
+            {
+                // Default-deny: block everything NOT in the allowed list
+                isBlocked = !_currentPolicy.AllowedSites.Any(s =>
+                    NormalizeDomain(s).Equals(domain, StringComparison.OrdinalIgnoreCase));
+            }
+            else
+            {
+                isBlocked = _currentPolicy.BlockedSites.Any(s =>
+                    NormalizeDomain(s).Equals(domain, StringComparison.OrdinalIgnoreCase));
+            }
 
             var json = JsonSerializer.Serialize(new { blocked = isBlocked });
             var buffer = Encoding.UTF8.GetBytes(json);
@@ -276,6 +291,16 @@ public sealed class WindowsEnforcementService : IEnforcementService, IDisposable
             context.Response.ContentType = "application/json";
             context.Response.ContentLength64 = buffer.Length;
             await context.Response.OutputStream.WriteAsync(buffer);
+        }
+
+        if (url?.AbsolutePath == "/report")
+        {
+            var domain = context.Request.QueryString["domain"];
+            var sessionId = _currentPolicy?.ActiveSessionId;
+            if (!string.IsNullOrEmpty(domain) && sessionId.HasValue)
+                _ = _attemptTracker.RecordWebBlockedAsync(sessionId.Value, domain);
+
+            context.Response.StatusCode = (int)HttpStatusCode.OK;
         }
 
         context.Response.Close();

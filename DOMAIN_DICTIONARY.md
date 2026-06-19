@@ -205,8 +205,8 @@ NenFocus has five pages accessible via the sidebar:
 5. **Browser extension** — intercepts navigations via `chrome.webNavigation.onBeforeNavigate`, queries the local HTTP API at `localhost:5005/check`, redirects blocked sites to `blocked.html`
 
 **Known gaps:**
-- The `/report` endpoint (for the extension to report blocked attempts back to the C# app) is not yet implemented in `HandleRequestAsync`. Blocked attempt tracking from the extension does not work yet.
-- Allowlist mode is not yet handled by the `/check` endpoint — only `BlockedSites` is checked. An Allowlist profile currently does not block anything via the extension.
+- The `/report` endpoint is implemented: when the extension reports a blocked navigation, `WindowsEnforcementService` calls `IBlockedAttemptTracker.RecordWebBlockedAsync` if an active session exists. Background Block attempts (no `ActiveSessionId`) are still not tracked.
+- Allowlist mode is handled by the `/check` endpoint: in Allowlist mode the endpoint returns `blocked: true` for any domain NOT in `AllowedSites`. Note that the hosts-file path cannot enforce allowlist mode (you cannot enumerate all domains); the browser extension is the sole allowlist enforcement mechanism.
 - Blocked attempt tracking currently only works for app process kills during Ritual sessions (via `IBlockedAttemptTracker`). Website blocked attempts and Background Block tracking are future work.
 - Time Budget enforcement is not yet implemented. `PolicyEngine` does not yet read `DailyBudgetUsage`. The `/report` endpoint does not yet handle usage reporting from the extension.
 

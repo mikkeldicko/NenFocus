@@ -53,12 +53,23 @@ public sealed class ScheduledEnforcementService : BackgroundService
 
                 if (policy is not null && !policy.IsEmpty)
                 {
-                    await _enforcement.ApplyPolicyAsync(policy, stoppingToken);
-
-                    if (policy.ActiveBlockType == BlockType.Ritual && _sessionState.ActiveSession == null)
-                        _sessionState.SetRitualRequired(true);
-                    else
+                    if (policy.RitualSessionCompleted)
+                    {
+                        // The Ritual Block is still within its scheduled window but the
+                        // session has already ended — don't re-apply enforcement or
+                        // push the user back into the Ritual.
                         _sessionState.SetRitualRequired(false);
+                        await _enforcement.RemoveEnforcementAsync(stoppingToken);
+                    }
+                    else
+                    {
+                        await _enforcement.ApplyPolicyAsync(policy, stoppingToken);
+
+                        if (policy.ActiveBlockType == BlockType.Ritual && _sessionState.ActiveSession == null)
+                            _sessionState.SetRitualRequired(true);
+                        else
+                            _sessionState.SetRitualRequired(false);
+                    }
                 }
                 else
                 {

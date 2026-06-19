@@ -136,7 +136,7 @@ These converters are approved and registered in `MainPageView.axaml`. Reuse befo
 
 | Converter | Key | Input → Output | Format Parameter |
 |-----------|-----|----------------|-----------------|
-| `TimeSpanToStringConverter` | `TimeSpanConverter` | `TimeSpan` → `string` | Optional format string, default `hh\:mm\:ss` |
+| `TimeSpanToStringConverter` | `TimeSpanConverter` | `TimeSpan` → `string` | Optional format string, default `hh\:mm\:ss`. Automatically escapes unescaped `:` in the format string before falling back to the default — never throws in a binding. |
 | `BoolToDotFillConverter` | _(inline)_ | `bool` → brush | — |
 | `BoolToOpacityConverter` | _(inline)_ | `bool` → opacity | — |
 | `CountToBoolConverter` | _(inline)_ | `int` → `bool` | — |
@@ -169,10 +169,14 @@ Every use case lives in its own folder with exactly four files:
 
 ```
 UseCases/Sessions/StartSession/
-    StartSessionCommand.cs
-    StartSessionCommandHandler.cs
+    StartSessionCommand.cs          ← implements ICommand<StartSessionResult>
+    StartSessionCommandHandler.cs   ← implements ICommandHandler<StartSessionCommand, StartSessionResult>
     StartSessionResult.cs
-    StartSessionValidator.cs   ← omit if no validation required
+    StartSessionValidator.cs        ← omit if no validation required; MUST live here, not in Validators/
 ```
 
 No shared base classes for commands or results. No `BaseCommand`. Copy the pattern, don't abstract it.
+
+**Validator location rule:** Validators are co-located inside the use-case folder — never in a top-level `Validators/` or `Application/Validators/` directory. The `AddValidatorsFromAssembly` scan in `DependencyInjection.cs` finds them automatically anywhere in the assembly.
+
+**Command marker interface:** Every command record must implement `ICommand<TResult>`. This is required for the reflection-based DI scan to match `ICommandHandler<TCommand,TResult>` correctly. The old `ICommandHandler<TCommand>` shorthand (returning `bool`) has been removed — all commands declare an explicit result type.
