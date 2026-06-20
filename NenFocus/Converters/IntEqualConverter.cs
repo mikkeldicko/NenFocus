@@ -2,7 +2,7 @@
 using System.Globalization;
 using Avalonia.Data.Converters;
 
-namespace NenFocus.ViewModels;
+namespace NenFocus.Converters;
 
 /// <summary>
 /// Returns true if the int binding value equals the string converter parameter.

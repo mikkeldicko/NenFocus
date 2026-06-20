@@ -1,8 +1,8 @@
-using System;
+﻿using System;
 using System.Globalization;
 using Avalonia.Data.Converters;
 
-namespace NenFocus.ViewModels;
+namespace NenFocus.Converters;
 
 public sealed class TimeSpanToStringConverter : IValueConverter
 {

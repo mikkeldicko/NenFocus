@@ -2,12 +2,13 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:NenFocus.ViewModels"
              xmlns:dto="using:NenFocus.Application.DTOs"
+             xmlns:conv="using:NenFocus.Converters"
              x:DataType="vm:PlannerPageViewModel"
              x:Class="NenFocus.Views.PlannerPageView"
              Background="#F5F5F7">
 
 	<UserControl.Resources>
-		<vm:WeekRangeToStringConverter x:Key="WeekRangeConverter"/>
+		<conv:WeekRangeToStringConverter x:Key="WeekRangeConverter"/>
 	</UserControl.Resources>
 
 	<UserControl.Styles>

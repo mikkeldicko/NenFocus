@@ -1,22 +1,19 @@
-using System;
+﻿using System;
 using System.Globalization;
 using Avalonia.Data.Converters;
 
-namespace NenFocus.ViewModels;
+namespace NenFocus.Converters;
 
-public sealed class DurationToStringConverter : IValueConverter
+public sealed class DateTimeToStringConverter : IValueConverter
 {
     public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
-        if (value is TimeSpan ts)
-        {
-            if (ts.TotalHours >= 1)
-                return $"{(int)ts.TotalHours}h {ts.Minutes}m";
-            return $"{(int)ts.TotalMinutes}m";
-        }
+        if (value is DateTime dt)
+            return dt.ToString(parameter as string ?? "h:mm tt", culture);
         return string.Empty;
     }
 
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
         => throw new NotSupportedException();
 }
+

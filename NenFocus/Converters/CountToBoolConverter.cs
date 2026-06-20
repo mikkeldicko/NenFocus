@@ -1,8 +1,8 @@
-using System;
+﻿using System;
 using System.Globalization;
 using Avalonia.Data.Converters;
 
-namespace NenFocus.ViewModels;
+namespace NenFocus.Converters;
 
 /// <summary>
 /// Converts an int count to a bool. <c>IsZero</c> returns true when the count is 0.

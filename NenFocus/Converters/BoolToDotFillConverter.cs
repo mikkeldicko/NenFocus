@@ -1,13 +1,13 @@
-using System;
+﻿using System;
 using System.Globalization;
 using Avalonia.Data.Converters;
 using Avalonia.Media;
 
-namespace NenFocus.ViewModels;
+namespace NenFocus.Converters;
 
 /// <summary>
 /// Converts a bool (is this dot's step active?) to a fill color.
-/// Active → gold, inactive → light gray.
+/// Active â†’ gold, inactive â†’ light gray.
 /// </summary>
 public sealed class BoolToDotFillConverter : IValueConverter
 {
@@ -22,3 +22,4 @@ public sealed class BoolToDotFillConverter : IValueConverter
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
         => throw new NotSupportedException();
 }
+

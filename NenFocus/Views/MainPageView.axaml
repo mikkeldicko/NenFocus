@@ -1,12 +1,13 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:NenFocus.ViewModels"
+             xmlns:conv="using:NenFocus.Converters"
              x:DataType="vm:MainPageViewModel"
              x:Class="NenFocus.Views.MainPageView"
              Background="#F5F5F7">
 
 	<UserControl.Resources>
-		<vm:TimeSpanToStringConverter x:Key="TimeSpanConverter"/>
+		<conv:TimeSpanToStringConverter x:Key="TimeSpanConverter"/>
 	</UserControl.Resources>
 
 	<UserControl.Styles>

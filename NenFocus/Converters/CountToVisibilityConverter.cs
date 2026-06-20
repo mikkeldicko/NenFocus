@@ -1,8 +1,8 @@
-using System;
+﻿using System;
 using System.Globalization;
 using Avalonia.Data.Converters;
 
-namespace NenFocus.ViewModels;
+namespace NenFocus.Converters;
 
 /// <summary>
 /// Converts a collection count to visibility.
@@ -26,3 +26,4 @@ public sealed class CountToVisibilityConverter : IValueConverter
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
         => throw new NotSupportedException();
 }
+

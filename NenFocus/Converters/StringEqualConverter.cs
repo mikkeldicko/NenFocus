@@ -1,8 +1,8 @@
-using System;
+﻿using System;
 using System.Globalization;
 using Avalonia.Data.Converters;
 
-namespace NenFocus.ViewModels;
+namespace NenFocus.Converters;
 
 /// <summary>
 /// Returns true if the binding value equals the converter parameter string.
@@ -18,3 +18,4 @@ public sealed class StringEqualConverter : IValueConverter
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
         => throw new NotSupportedException();
 }
+

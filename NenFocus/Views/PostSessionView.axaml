@@ -1,13 +1,14 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:NenFocus.ViewModels"
+             xmlns:conv="using:NenFocus.Converters"
              x:DataType="vm:PostSessionViewModel"
              x:Class="NenFocus.Views.PostSessionView"
              Background="#F5F5F7">
 
 	<UserControl.Resources>
-		<vm:DurationToStringConverter x:Key="DurationConverter"/>
-		<vm:DateTimeToStringConverter x:Key="DateTimeConverter"/>
+		<conv:DurationToStringConverter x:Key="DurationConverter"/>
+		<conv:DateTimeToStringConverter x:Key="DateTimeConverter"/>
 	</UserControl.Resources>
 
 	<UserControl.Styles>

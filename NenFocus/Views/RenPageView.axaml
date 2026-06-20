@@ -1,6 +1,7 @@
-<UserControl xmlns="https://github.com/avaloniaui"
+﻿<UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:NenFocus.ViewModels"
+             xmlns:conv="using:NenFocus.Converters"
              x:DataType="vm:RenPageViewModel"
              x:Class="NenFocus.Views.RenPageView"
              Background="Transparent">
@@ -50,7 +51,7 @@
             <StackPanel Spacing="0">
 
                 <!-- Kanji + Header -->
-                <TextBlock Text="錬"
+                <TextBlock Text="éŒ¬"
                            FontSize="72"
                            FontWeight="Thin"
                            Foreground="#DDDDE8"
@@ -71,7 +72,7 @@
 
                 <!-- Loading -->
                 <TextBlock IsVisible="{Binding IsLoading}"
-                           Text="Loading profiles…"
+                           Text="Loading profilesâ€¦"
                            FontSize="13"
                            Foreground="#AAAABC"
                            HorizontalAlignment="Center"
@@ -88,7 +89,7 @@
                                Margin="0,0,0,6"/>
 
                     <!-- No profiles empty state -->
-                    <TextBlock IsVisible="{Binding Profiles.Count, Converter={x:Static vm:CountToVisibilityConverter.IsZero}}"
+                    <TextBlock IsVisible="{Binding Profiles.Count, Converter={x:Static conv:CountToVisibilityConverter.IsZero}}"
                                Text="No profiles saved. Add apps or websites below for this session."
                                FontSize="13"
                                Foreground="#BBBBCC"
@@ -120,7 +121,7 @@
                                                 <TextBlock FontSize="11" Foreground="#AAAABC"
                                                            VerticalAlignment="Center">
                                                     <Run Text="{Binding Profile.AppCount}"/>
-                                                    <Run Text=" apps · "/>
+                                                    <Run Text=" apps Â· "/>
                                                     <Run Text="{Binding Profile.SiteCount}"/>
                                                     <Run Text=" sites"/>
                                                 </TextBlock>
@@ -129,7 +130,7 @@
                                         <!-- Selected checkmark -->
                                         <TextBlock Grid.Column="1"
                                                    IsVisible="{Binding IsSelected}"
-                                                   Text="✓"
+                                                   Text="âœ“"
                                                    FontSize="16"
                                                    Foreground="#B8922A"
                                                    VerticalAlignment="Center"/>
@@ -208,7 +209,7 @@
                                                    VerticalAlignment="Center"/>
                                         <Button Grid.Column="1"
                                                 Classes="remove-tag"
-                                                Content="✕"
+                                                Content="âœ•"
                                                 Command="{Binding $parent[UserControl].((vm:RenPageViewModel)DataContext).RemoveAppCommand}"
                                                 CommandParameter="{Binding}"/>
                                     </Grid>
@@ -264,7 +265,7 @@
                                                    VerticalAlignment="Center"/>
                                         <Button Grid.Column="1"
                                                 Classes="remove-tag"
-                                                Content="✕"
+                                                Content="âœ•"
                                                 Command="{Binding $parent[UserControl].((vm:RenPageViewModel)DataContext).RemoveWebsiteCommand}"
                                                 CommandParameter="{Binding}"/>
                                     </Grid>
@@ -294,3 +295,4 @@
         </Grid>
     </ScrollViewer>
 </UserControl>
+
