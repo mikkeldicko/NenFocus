@@ -1,6 +1,6 @@
-<UserControl xmlns="https://github.com/avaloniaui"
+﻿<UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:vm="using:NenFocus.ViewModels"
+             xmlns:vm="using:NenFocus.ViewModels.Ritual"
              x:DataType="vm:ZetsuPageViewModel"
              x:Class="NenFocus.Views.ZetsuPageView"
              Background="Transparent">
@@ -9,7 +9,7 @@
         <StackPanel Spacing="0" HorizontalAlignment="Stretch">
 
             <!-- Kanji -->
-            <TextBlock Text="舌"
+            <TextBlock Text="èˆŒ"
                        FontSize="72"
                        FontWeight="Thin"
                        Foreground="#DDDDE8"
@@ -66,3 +66,4 @@
         </StackPanel>
     </Grid>
 </UserControl>
+

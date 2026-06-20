@@ -1,6 +1,6 @@
-using CommunityToolkit.Mvvm.ComponentModel;
+﻿using CommunityToolkit.Mvvm.ComponentModel;
 
-namespace NenFocus.ViewModels;
+namespace NenFocus.ViewModels.Components;
 
 /// <summary>
 /// One hour label shown on the left axis of the week grid.
@@ -15,3 +15,4 @@ public partial class HourLabelViewModel : ViewModelBase
         Hour = hour;
     }
 }
+

@@ -1,6 +1,6 @@
-<UserControl xmlns="https://github.com/avaloniaui"
+﻿<UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:vm="using:NenFocus.ViewModels"
+             xmlns:vm="using:NenFocus.ViewModels.Pages"
              x:DataType="vm:InsightsPageViewModel"
              x:Class="NenFocus.Views.InsightsPageView"
              Background="#F5F5F7">
@@ -9,3 +9,4 @@
         <TextBlock Text="Coming soon" FontSize="13" Foreground="#3E3E55" HorizontalAlignment="Center"/>
     </StackPanel>
 </UserControl>
+

@@ -1,6 +1,6 @@
-<UserControl xmlns="https://github.com/avaloniaui"
+﻿<UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:vm="using:NenFocus.ViewModels"
+             xmlns:vm="using:NenFocus.ViewModels.Ritual"
              x:DataType="vm:TenPageViewModel"
              x:Class="NenFocus.Views.TenPageView"
              Background="Transparent">
@@ -9,7 +9,7 @@
         <StackPanel Spacing="0" HorizontalAlignment="Center">
 
             <!-- Kanji -->
-            <TextBlock Text="点"
+            <TextBlock Text="ç‚¹"
                        FontSize="72"
                        FontWeight="Thin"
                        Foreground="#DDDDE8"
@@ -34,7 +34,7 @@
                        TextWrapping="Wrap"
                        Margin="0,14,0,52"/>
 
-            <!-- Continue button — visible after countdown -->
+            <!-- Continue button â€” visible after countdown -->
 			<Button Command="{Binding ContinueCommand}"
         HorizontalAlignment="Center"
         Background="Transparent"
@@ -53,3 +53,4 @@
         </StackPanel>
     </Grid>
 </UserControl>
+

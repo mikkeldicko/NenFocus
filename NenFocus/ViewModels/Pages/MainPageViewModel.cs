@@ -1,4 +1,4 @@
-using Avalonia.Threading;
+﻿using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using NenFocus.Application.DTOs;
@@ -7,12 +7,13 @@ using NenFocus.Application.UseCases.Sessions.EndSession;
 using NenFocus.Application.UseCases.Sessions.ResumeFromBreak;
 using NenFocus.Application.UseCases.Sessions.StartBreak;
 using NenFocus.Domain.Enums;
+using NenFocus.ViewModels.Components;
 using System;
 using System.Collections.ObjectModel;
 using System.Threading.Tasks;
 
 
-namespace NenFocus.ViewModels;
+namespace NenFocus.ViewModels.Pages;
 
 public partial class MainPageViewModel : ViewModelBase
 {
@@ -25,7 +26,7 @@ public partial class MainPageViewModel : ViewModelBase
     private readonly ICommandHandler<ResumeFromBreakCommand, ResumeFromBreakResult> _resumeFromBreak;
     private Guid _activeSessionId;
 
-    // ── Session display ────────────────────────────────────────────────────
+    // â”€â”€ Session display â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(StartRitualCommand))]
@@ -44,7 +45,7 @@ public partial class MainPageViewModel : ViewModelBase
     [ObservableProperty]
     private string _activeProfileName = string.Empty;
 
-    // ── Break display ──────────────────────────────────────────────────────
+    // â”€â”€ Break display â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanTakeBreak))]
@@ -68,7 +69,7 @@ public partial class MainPageViewModel : ViewModelBase
 
     public bool CanTakeBreak => HasActiveSession && !IsOnBreak && HasBreakSettings;
 
-    // ── Header ─────────────────────────────────────────────────────────────
+    // â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     public string Greeting => DateTime.Now.Hour switch
     {
@@ -169,7 +170,7 @@ public partial class MainPageViewModel : ViewModelBase
         ActiveProfileName = string.Empty;
     }
 
-    // ── Commands ───────────────────────────────────────────────────────────
+    // â”€â”€ Commands â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [RelayCommand]
     private async Task EndSession()
@@ -200,3 +201,4 @@ public partial class MainPageViewModel : ViewModelBase
         await _resumeFromBreak.HandleAsync(new ResumeFromBreakCommand { SessionId = _activeSessionId });
     }
 }
+

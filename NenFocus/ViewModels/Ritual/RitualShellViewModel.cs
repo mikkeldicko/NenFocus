@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -7,7 +7,7 @@ using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.GetAllBlockProfiles;
 using NenFocus.Application.UseCases.Sessions.StartSession;
 
-namespace NenFocus.ViewModels;
+namespace NenFocus.ViewModels.Ritual;
 
 public partial class RitualShellViewModel : ViewModelBase
 {
@@ -118,3 +118,4 @@ public partial class RitualShellViewModel : ViewModelBase
             onBack: NavigateToRen);
     }
 }
+

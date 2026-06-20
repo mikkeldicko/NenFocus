@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -7,7 +7,7 @@ using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.UseCases.Sessions.StartSession;
 
-namespace NenFocus.ViewModels;
+namespace NenFocus.ViewModels.Ritual;
 
 public partial class HatsuPageViewModel : ViewModelBase
 {
@@ -16,7 +16,7 @@ public partial class HatsuPageViewModel : ViewModelBase
     private readonly Action _onSessionStarted;
     private readonly Action _onBack;
 
-    // ── Duration ───────────────────────────────────────────────────────────
+    // â”€â”€ Duration â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     public static int[] HourOptions { get; } = { 0, 1, 2, 3, 4, 5, 6, 7, 8 };
     public static int[] MinuteOptions { get; } = { 0, 5, 10, 15, 20, 30, 45 };
 
@@ -33,7 +33,7 @@ public partial class HatsuPageViewModel : ViewModelBase
     public int TotalMinutes => SelectedHours * 60 + SelectedMinutes;
     public bool ShowZeroError => TotalMinutes == 0;
 
-    // ── Break settings ─────────────────────────────────────────────────────
+    // â”€â”€ Break settings â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     [ObservableProperty]
     private bool _breakEnabled;
 
@@ -55,7 +55,7 @@ public partial class HatsuPageViewModel : ViewModelBase
     [ObservableProperty]
     private string _customBreakLengthInput = string.Empty;
 
-    // ── State ──────────────────────────────────────────────────────────────
+    // â”€â”€ State â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanStart))]
     private bool _isStarting;

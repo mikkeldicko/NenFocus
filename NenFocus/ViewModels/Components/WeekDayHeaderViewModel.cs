@@ -1,10 +1,10 @@
-using System;
+﻿using System;
 using CommunityToolkit.Mvvm.ComponentModel;
 
-namespace NenFocus.ViewModels;
+namespace NenFocus.ViewModels.Components;
 
 /// <summary>
-/// Header for a single day column (Mon–Sun) at the top of the week grid.
+/// Header for a single day column (Monâ€“Sun) at the top of the week grid.
 /// </summary>
 public partial class WeekDayHeaderViewModel : ViewModelBase
 {
@@ -18,3 +18,4 @@ public partial class WeekDayHeaderViewModel : ViewModelBase
         Date = date.Date;
     }
 }
+

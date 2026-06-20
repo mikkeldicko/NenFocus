@@ -1,6 +1,6 @@
-<UserControl xmlns="https://github.com/avaloniaui"
+﻿<UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:vm="using:NenFocus.ViewModels"
+             xmlns:vm="using:NenFocus.ViewModels.Pages"
              xmlns:dto="using:NenFocus.Application.DTOs"
              xmlns:conv="using:NenFocus.Converters"
              x:DataType="vm:PlannerPageViewModel"
@@ -143,9 +143,9 @@
 				</StackPanel>
 
 				<StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-					<Button Classes="navButton" Content="‹" Command="{Binding PreviousWeekCommand}"/>
+					<Button Classes="navButton" Content="â€¹" Command="{Binding PreviousWeekCommand}"/>
 					<Button Classes="todayButton" Content="Today" Command="{Binding GoToTodayCommand}"/>
-					<Button Classes="navButton" Content="›" Command="{Binding NextWeekCommand}"/>
+					<Button Classes="navButton" Content="â€º" Command="{Binding NextWeekCommand}"/>
 				</StackPanel>
 			</Grid>
 
@@ -218,7 +218,7 @@
 		<Border Background="#80FFFFFF"
                 IsVisible="{Binding IsLoading}"
                 IsHitTestVisible="{Binding IsLoading}">
-			<TextBlock Text="Loading…" FontSize="14" Foreground="#7A7A8C" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+			<TextBlock Text="Loadingâ€¦" FontSize="14" Foreground="#7A7A8C" HorizontalAlignment="Center" VerticalAlignment="Center"/>
 		</Border>
 
 		<Border Background="#80000000"

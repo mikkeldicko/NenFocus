@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.ObjectModel;
 using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -7,7 +7,7 @@ using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.UseCases.Sessions.SaveReflection;
 
-namespace NenFocus.ViewModels;
+namespace NenFocus.ViewModels.Pages;
 
 public partial class PostSessionViewModel : ViewModelBase
 {
@@ -15,7 +15,7 @@ public partial class PostSessionViewModel : ViewModelBase
     private readonly Action _onDone;
     private readonly PostSessionDto _data;
 
-    // ── Display properties ──────────────────────────────────────────────────
+    // â”€â”€ Display properties â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     public string Goal { get; }
     public string ProfileName { get; }
@@ -30,7 +30,7 @@ public partial class PostSessionViewModel : ViewModelBase
 
     public ObservableCollection<BlockedAttemptItemViewModel> BlockedAttemptItems { get; } = new();
 
-    // ── Reflection ──────────────────────────────────────────────────────────
+    // â”€â”€ Reflection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [ObservableProperty]
     private string _reflectionText = string.Empty;
@@ -40,6 +40,9 @@ public partial class PostSessionViewModel : ViewModelBase
 
     [ObservableProperty]
     private bool _isSaved;
+
+    [ObservableProperty]
+    private string? _errorMessage;
 
     public PostSessionViewModel(
         PostSessionDto data,
@@ -73,6 +76,8 @@ public partial class PostSessionViewModel : ViewModelBase
     {
         try
         {
+            ErrorMessage = null;
+
             if (!string.IsNullOrWhiteSpace(ReflectionText) && !IsSaved)
             {
                 IsSaving = true;
@@ -88,7 +93,7 @@ public partial class PostSessionViewModel : ViewModelBase
                 }
                 else
                 {
-                    System.Diagnostics.Debug.WriteLine($"Save failed: {result.ErrorMessage}");
+                    ErrorMessage = result.ErrorMessage;
                     return;
                 }
             }
@@ -97,7 +102,7 @@ public partial class PostSessionViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Critical error: {ex.Message}");
+            ErrorMessage = ex.Message;
         }
         finally
         {
@@ -122,3 +127,4 @@ public sealed class BlockedAttemptItemViewModel
         Display = $"{name} ({type})";
     }
 }
+

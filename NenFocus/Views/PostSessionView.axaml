@@ -1,6 +1,6 @@
-<UserControl xmlns="https://github.com/avaloniaui"
+﻿<UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:vm="using:NenFocus.ViewModels"
+             xmlns:vm="using:NenFocus.ViewModels.Pages"
              xmlns:conv="using:NenFocus.Converters"
              x:DataType="vm:PostSessionViewModel"
              x:Class="NenFocus.Views.PostSessionView"
@@ -58,9 +58,9 @@
 	<ScrollViewer>
 		<StackPanel Margin="52,44,52,44" MaxWidth="600" Spacing="32">
 
-			<!-- ── Header ─────────────────────────────────────── -->
+			<!-- â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
 			<StackPanel Spacing="8" HorizontalAlignment="Center">
-				<TextBlock Text="✦"
+				<TextBlock Text="âœ¦"
                            FontSize="24"
                            Foreground="#B8922A"
                            HorizontalAlignment="Center"/>
@@ -72,7 +72,7 @@
                            HorizontalAlignment="Center"/>
 			</StackPanel>
 
-			<!-- ── Summary card ───────────────────────────────── -->
+			<!-- â”€â”€ Summary card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
 			<Border Background="#FFFFFF"
                     CornerRadius="14"
                     BorderBrush="#E8E8F0"
@@ -132,7 +132,7 @@
 								<TextBlock Text="{Binding StartedAt, Converter={StaticResource DateTimeConverter}}"
                                            FontSize="14"
                                            Foreground="#555566"/>
-								<TextBlock Text="→"
+								<TextBlock Text="â†’"
                                            FontSize="14"
                                            Foreground="#BBBBCC"/>
 								<TextBlock Text="{Binding EndedAt, Converter={StaticResource DateTimeConverter}}"
@@ -171,7 +171,7 @@
 				</StackPanel>
 			</Border>
 
-			<!-- ── Blocked attempts ───────────────────────────── -->
+			<!-- â”€â”€ Blocked attempts â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
 			<Border Background="#FFFFFF"
 					CornerRadius="14"
 					BorderBrush="#E8E8F0"
@@ -219,7 +219,7 @@
 												Background="#F5F5FA"
 												CornerRadius="6"
 												Padding="8,2">
-											<TextBlock Text="{Binding AttemptCount, StringFormat='{}{0}×'}"
+											<TextBlock Text="{Binding AttemptCount, StringFormat='{}{0}Ã—'}"
 													   FontSize="12"
 													   FontWeight="Medium"
 													   Foreground="#888899"/>
@@ -233,7 +233,7 @@
 				</StackPanel>
 			</Border>
 
-			<!-- ── Reflection ─────────────────────────────────── -->
+			<!-- â”€â”€ Reflection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
 			<Border Background="#FFFFFF"
                     CornerRadius="14"
                     BorderBrush="#E8E8F0"
@@ -261,7 +261,7 @@
 				</StackPanel>
 			</Border>
 
-			<!-- ── Done button ────────────────────────────────── -->
+			<!-- â”€â”€ Done button â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
 			<Button Classes="done-btn"
                     Command="{Binding DoneCommand}">
 				<TextBlock Text="DONE"

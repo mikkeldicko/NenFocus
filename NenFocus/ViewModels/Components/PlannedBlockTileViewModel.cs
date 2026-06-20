@@ -1,9 +1,9 @@
-using System;
+﻿using System;
 using CommunityToolkit.Mvvm.ComponentModel;
 using NenFocus.Application.DTOs;
 using NenFocus.Domain.Enums;
 
-namespace NenFocus.ViewModels;
+namespace NenFocus.ViewModels.Components;
 
 /// <summary>
 /// Represents one planned block rendered as a tile on the week grid.
@@ -29,7 +29,7 @@ public partial class PlannedBlockTileViewModel : ViewModelBase
     public double Height { get; }
 
     public string TimeRangeText =>
-        $"{Start:HH:mm} – {End:HH:mm}";
+        $"{Start:HH:mm} â€“ {End:HH:mm}";
 
     public bool IsFocus => BlockType == BlockType.Ritual;
     public bool IsPassive => BlockType == BlockType.Background;

@@ -1,7 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
-using NenFocus.ViewModels;
+using NenFocus.ViewModels.Pages;
 using System.IO;
 
 namespace NenFocus.Views;

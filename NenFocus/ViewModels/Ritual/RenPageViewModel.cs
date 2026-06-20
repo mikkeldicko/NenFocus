@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Threading.Tasks;
@@ -8,7 +8,7 @@ using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.GetAllBlockProfiles;
 
-namespace NenFocus.ViewModels;
+namespace NenFocus.ViewModels.Ritual;
 
 /// <summary>Wraps a BlockProfileDto with selection state for the Ren page profile list.</summary>
 public partial class RenProfileCardViewModel : ViewModelBase
@@ -30,7 +30,7 @@ public partial class RenPageViewModel : ViewModelBase
     private readonly Action _onContinue;
     private readonly Action _onBack;
 
-    // ── Profile list ───────────────────────────────────────────────────────
+    // â”€â”€ Profile list â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     public ObservableCollection<RenProfileCardViewModel> Profiles { get; } = new();
 
     [ObservableProperty]
@@ -52,7 +52,7 @@ public partial class RenPageViewModel : ViewModelBase
     [ObservableProperty]
     private bool _isLoading = true;
 
-    // ── Session-only additions ─────────────────────────────────────────────
+    // â”€â”€ Session-only additions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     public ObservableCollection<string> SessionOnlyApps { get; } = new();
     public ObservableCollection<string> SessionOnlyWebsites { get; } = new();
 
@@ -89,7 +89,7 @@ public partial class RenPageViewModel : ViewModelBase
         }
     }
 
-    // ── Commands ───────────────────────────────────────────────────────────
+    // â”€â”€ Commands â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [RelayCommand]
     private void SelectProfile(RenProfileCardViewModel card)
@@ -154,3 +154,4 @@ public partial class RenPageViewModel : ViewModelBase
         _onBack();
     }
 }
+

@@ -19,6 +19,8 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using Avalonia;
+using NenFocus.ViewModels.Pages;
+using NenFocus.ViewModels.Ritual;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 

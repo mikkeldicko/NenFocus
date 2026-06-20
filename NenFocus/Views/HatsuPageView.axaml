@@ -1,6 +1,6 @@
 ﻿<UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:vm="using:NenFocus.ViewModels"
+             xmlns:vm="using:NenFocus.ViewModels.Ritual"
              xmlns:conv="using:NenFocus.Converters"
              x:DataType="vm:HatsuPageViewModel"
              x:Class="NenFocus.Views.HatsuPageView"
@@ -239,3 +239,4 @@
 		</Grid>
 	</ScrollViewer>
 </UserControl>
+

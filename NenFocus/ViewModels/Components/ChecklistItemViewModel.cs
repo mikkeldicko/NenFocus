@@ -1,6 +1,6 @@
-using CommunityToolkit.Mvvm.ComponentModel;
+﻿using CommunityToolkit.Mvvm.ComponentModel;
 
-namespace NenFocus.ViewModels;
+namespace NenFocus.ViewModels.Components;
 
 public partial class ChecklistItemViewModel : ViewModelBase
 {
@@ -15,3 +15,4 @@ public partial class ChecklistItemViewModel : ViewModelBase
         Text = text;
     }
 }
+

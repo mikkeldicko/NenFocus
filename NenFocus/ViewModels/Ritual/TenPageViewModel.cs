@@ -1,7 +1,7 @@
-using System;
+﻿using System;
 using CommunityToolkit.Mvvm.Input;
 
-namespace NenFocus.ViewModels;
+namespace NenFocus.ViewModels.Ritual;
 
 public partial class TenPageViewModel : ViewModelBase
 {
@@ -20,3 +20,4 @@ public partial class TenPageViewModel : ViewModelBase
     [RelayCommand]
     private void Back() => _onBack();
 }
+

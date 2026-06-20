@@ -1,7 +1,8 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
-using NenFocus.ViewModels;
+using NenFocus.ViewModels.Pages;
+using NenFocus.ViewModels.Components;
 using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;

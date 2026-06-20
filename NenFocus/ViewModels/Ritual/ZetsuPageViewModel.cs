@@ -1,8 +1,8 @@
-using System;
+﻿using System;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
-namespace NenFocus.ViewModels;
+namespace NenFocus.ViewModels.Ritual;
 
 public partial class ZetsuPageViewModel : ViewModelBase
 {
@@ -32,3 +32,4 @@ public partial class ZetsuPageViewModel : ViewModelBase
         _onBack();
     }
 }
+
