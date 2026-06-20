@@ -2,10 +2,13 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:NenFocus.ViewModels"
              xmlns:dto="using:NenFocus.Application.DTOs"
-             xmlns:conv="using:NenFocus.ViewModels"
              x:DataType="vm:PlannerPageViewModel"
              x:Class="NenFocus.Views.PlannerPageView"
              Background="#F5F5F7">
+
+	<UserControl.Resources>
+		<vm:WeekRangeToStringConverter x:Key="WeekRangeConverter"/>
+	</UserControl.Resources>
 
 	<UserControl.Styles>
 		<Style Selector="Border.dayHeader">
@@ -135,7 +138,7 @@
 			<Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,16">
 				<StackPanel Grid.Column="0" Spacing="2">
 					<TextBlock Text="Planner" FontSize="22" FontWeight="SemiBold" Foreground="#1A1A2E"/>
-					<TextBlock Text="{Binding WeekRangeText}" FontSize="13" Foreground="#7A7A8C"/>
+					<TextBlock Text="{Binding WeekStart, Converter={StaticResource WeekRangeConverter}}" FontSize="13" Foreground="#7A7A8C"/>
 				</StackPanel>
 
 				<StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">

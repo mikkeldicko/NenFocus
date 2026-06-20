@@ -34,6 +34,7 @@ public partial class ShellViewModel : ViewModelBase
     private readonly ICommandHandler<SaveReflectionCommand, SaveReflectionResult> _saveReflection;
     private readonly ISessionStateService _sessionState;
     private readonly IActiveSessionMonitor _monitor;
+    private readonly IPlannerClockService _plannerClock;
 
     [ObservableProperty] private ViewModelBase _currentPage = null!;
     [ObservableProperty] private bool _isRitualActive;
@@ -51,7 +52,8 @@ public partial class ShellViewModel : ViewModelBase
        ICommandHandler<ResumeFromBreakCommand, ResumeFromBreakResult> resumeFromBreak,
        ICommandHandler<SaveReflectionCommand, SaveReflectionResult> saveReflection,
        ISessionStateService sessionState,
-       IActiveSessionMonitor monitor,       
+       IActiveSessionMonitor monitor,
+       IPlannerClockService plannerClock,
        ICommandHandler<CreateBlockProfileCommand, CreateBlockProfileResult> createProfile,
        ICommandHandler<UpdateBlockProfileCommand, UpdateBlockProfileResult> updateProfile,
        ICommandHandler<DeleteBlockProfileCommand, DeleteBlockProfileResult> deleteProfile,
@@ -69,6 +71,7 @@ public partial class ShellViewModel : ViewModelBase
         _saveReflection = saveReflection;
         _sessionState = sessionState;
         _monitor = monitor;
+        _plannerClock = plannerClock;
 
         // --- REQUIREMENT 3: Automatic Pop-up Listener ---
         _sessionState.RitualRequirementChanged += (s, required) =>
@@ -93,7 +96,7 @@ public partial class ShellViewModel : ViewModelBase
 
         NavItems.Add(new NavItemViewModel("Main", "⊹", new MainPageViewModel(StartRitual, ShowPostSession, _sessionState, _monitor, _endSession, _startBreak, _resumeFromBreak), Select));
         NavItems.Add(new NavItemViewModel("Block Profiles", "◻", new BlockProfilePageViewModel(profilesQuery, createProfile, updateProfile, deleteProfile, duplicateProfile), Select));
-        NavItems.Add(new NavItemViewModel("Planner", "◫", new PlannerPageViewModel(profilesQuery, getBlocksForDay, createPlannedBlock, updatePlannedBlock, deletePlannedBlock), Select));
+        NavItems.Add(new NavItemViewModel("Planner", "◫", new PlannerPageViewModel(profilesQuery, getBlocksForDay, createPlannedBlock, updatePlannedBlock, deletePlannedBlock, _plannerClock), Select));
         NavItems.Add(new NavItemViewModel("Insights", "◈", new InsightsPageViewModel(), Select));
         NavItems.Add(new NavItemViewModel("Settings", "◎", new SettingsPageViewModel(), Select));
 

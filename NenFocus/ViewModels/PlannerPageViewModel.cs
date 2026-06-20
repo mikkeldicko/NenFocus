@@ -1,9 +1,9 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
-using System.Timers;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using NenFocus.Application.DTOs;
@@ -31,24 +31,13 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     private readonly ICommandHandler<CreatePlannedBlockCommand, CreatePlannedBlockResult> _createBlock;
     private readonly ICommandHandler<UpdatePlannedBlockCommand, UpdatePlannedBlockResult> _updateBlock;
     private readonly ICommandHandler<DeletePlannedBlockCommand, DeletePlannedBlockResult> _deleteBlock;
+    private readonly IPlannerClockService _clockService;
 
     private readonly Dictionary<Guid, PlannedBlockDto> _blocksInWeek = new();
     private Guid? _editingBlockId;
-    private Timer? _currentTimeTimer;
 
     // ── Week state ────────────────────────────────────────────────────────
     [ObservableProperty] private DateTime _weekStart;
-
-    public string WeekRangeText
-    {
-        get
-        {
-            var end = WeekStart.AddDays(6);
-            return WeekStart.Month == end.Month
-                ? $"{WeekStart:MMM d} – {end.Day}, {end.Year}"
-                : $"{WeekStart:MMM d} – {end:MMM d}, {end.Year}";
-        }
-    }
 
     /// <summary>
     /// Returns the Grid.Column index for the red "Current Time" line.
@@ -58,7 +47,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     {
         get
         {
-            int day = (int)DateTime.Now.DayOfWeek;
+            int day = (int)_clockService.LocalNow.DayOfWeek;
             int mondayBasedIndex = (day == 0) ? 6 : day - 1;
             return mondayBasedIndex + 1;
         }
@@ -101,13 +90,15 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         IQueryHandler<GetPlannedBlocksForDayQuery, IReadOnlyList<PlannedBlockDto>> getBlocksForDay,
         ICommandHandler<CreatePlannedBlockCommand, CreatePlannedBlockResult> createBlock,
         ICommandHandler<UpdatePlannedBlockCommand, UpdatePlannedBlockResult> updateBlock,
-        ICommandHandler<DeletePlannedBlockCommand, DeletePlannedBlockResult> deleteBlock)
+        ICommandHandler<DeletePlannedBlockCommand, DeletePlannedBlockResult> deleteBlock,
+        IPlannerClockService clockService)
     {
         _getProfiles = getProfiles;
         _getBlocksForDay = getBlocksForDay;
         _createBlock = createBlock;
         _updateBlock = updateBlock;
         _deleteBlock = deleteBlock;
+        _clockService = clockService;
 
         for (int h = FirstHour; h < LastHour; h++)
             HourLabels.Add(new HourLabelViewModel(h));
@@ -117,22 +108,20 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         WeekStart = StartOfWeek(DateTime.Today);
         BuildDayHeaders();
 
-        SetupCurrentTimeIndicator();
+        _clockService.Tick += OnClockTick;
+        UpdateCurrentTimePosition();
+
         _ = InitAsync();
     }
 
-    private void SetupCurrentTimeIndicator()
+    private void OnClockTick(object? sender, EventArgs e)
     {
-        _currentTimeTimer = new Timer(60000);
-        _currentTimeTimer.Elapsed += (s, e) => UpdateCurrentTimePosition();
-        _currentTimeTimer.AutoReset = true;
-        _currentTimeTimer.Enabled = true;
-        UpdateCurrentTimePosition();
+        Dispatcher.UIThread.Post(UpdateCurrentTimePosition);
     }
 
     private void UpdateCurrentTimePosition()
     {
-        var now = DateTime.Now;
+        var now = _clockService.LocalNow;
         var weekEnd = WeekStart.AddDays(7);
         IsTodayInView = now.Date >= WeekStart.Date && now.Date < weekEnd.Date;
 
@@ -193,8 +182,6 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         await LoadWeekAsync();
     }
 
-    partial void OnWeekStartChanged(DateTime value) => OnPropertyChanged(nameof(WeekRangeText));
-
     private void BuildDayHeaders()
     {
         DayHeaders.Clear();
@@ -239,7 +226,6 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
     private PlannedBlockTileViewModel? BuildTile(PlannedBlockDto dto, int columnIndex)
     {
-        // Convert UTC times from DB to Local time for the UI
         var localStart = dto.Start.ToLocalTime();
         var localEnd = dto.End.ToLocalTime();
 
@@ -247,7 +233,6 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         var visibleStart = dayStart.AddHours(FirstHour);
         var visibleEnd = dayStart.AddHours(LastHour);
 
-        // Use the local times for clipping and positioning
         var clippedStart = localStart < visibleStart ? visibleStart : localStart;
         var clippedEnd = localEnd > visibleEnd ? visibleEnd : localEnd;
 
@@ -259,7 +244,6 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         var top = (startMinutes / 60.0) * HourRowHeight;
         var height = Math.Max(HourRowHeight * 0.5, (durationMinutes / 60.0) * HourRowHeight);
 
-        // Create a new DTO with local times so the Tile VM shows correct labels
         var localDto = dto with { Start = localStart, End = localEnd };
 
         return new PlannedBlockTileViewModel(localDto, dto.BlockType, columnIndex, top, height);
@@ -274,7 +258,6 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         FormTitle = "New Block";
         ResetForm();
 
-        // Fix: Explicitly specify UTC kind to match TimeSpan.Zero
         var blockDate = DateTime.SpecifyKind(WeekStart.AddDays(slot.ColumnIndex).Date, DateTimeKind.Utc);
         FormDate = new DateTimeOffset(blockDate, TimeSpan.Zero);
 
@@ -294,7 +277,6 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         FormTitle = "Edit Block";
         ResetForm();
 
-        // Fix: Explicitly specify UTC kind to match TimeSpan.Zero for Edit as well
         var blockDate = DateTime.SpecifyKind(dto.Start.Date, DateTimeKind.Utc);
         FormDate = new DateTimeOffset(blockDate, TimeSpan.Zero);
 
@@ -333,24 +315,13 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         }
         if (endTime <= startTime) { FormError = "End time must be after start time."; return; }
 
-        // 1. Get the date from the form
         var dayDate = FormDate.Date;
-
-        // 2. Create local DateTimes (Assume the user entered these in their local time)
         var localStart = DateTime.SpecifyKind(dayDate.Add(startTime), DateTimeKind.Local);
         var localEnd = DateTime.SpecifyKind(dayDate.Add(endTime), DateTimeKind.Local);
-
-        // 3. Convert to UTC before saving to DB
         var startUtc = localStart.ToUniversalTime();
         var endUtc = localEnd.ToUniversalTime();
 
         var blockType = IsFocusBlock ? BlockType.Ritual : BlockType.Background;
-
-        if (blockType == BlockType.Ritual && HasOverlappingFocusBlock(startUtc, endUtc, _editingBlockId))
-        {
-            FormError = "This Focus block overlaps with an existing Focus block.";
-            return;
-        }
 
         if (IsEditing && _editingBlockId.HasValue)
         {
@@ -358,8 +329,8 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
             {
                 BlockId = _editingBlockId.Value,
                 ProfileId = SelectedProfile.Id,
-                Start = startUtc, // Save UTC
-                End = endUtc     // Save UTC
+                Start = startUtc,
+                End = endUtc
             });
             if (!result.Success) { FormError = result.ErrorMessage; return; }
         }
@@ -369,24 +340,13 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
             {
                 ProfileId = SelectedProfile.Id,
                 BlockType = blockType,
-                Start = startUtc, // Save UTC
-                End = endUtc     // Save UTC
+                Start = startUtc,
+                End = endUtc
             });
             if (!result.Success) { FormError = result.ErrorMessage; return; }
         }
         await LoadWeekAsync();
         CloseForm();
-    }
-
-    private bool HasOverlappingFocusBlock(DateTime start, DateTime end, Guid? excludeId)
-    {
-        foreach (var b in _blocksInWeek.Values)
-        {
-            if (b.BlockType != BlockType.Ritual) continue;
-            if (excludeId.HasValue && b.Id == excludeId.Value) continue;
-            if (start < b.End && b.Start < end) return true;
-        }
-        return false;
     }
 
     [RelayCommand]
@@ -408,7 +368,6 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
     public void Dispose()
     {
-        _currentTimeTimer?.Stop();
-        _currentTimeTimer?.Dispose();
+        _clockService.Tick -= OnClockTick;
     }
 }

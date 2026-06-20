@@ -49,6 +49,9 @@ public static class DependencyInjection
         // ── Session countdown monitor ──────────────────────────────────────
         services.AddSingleton<IActiveSessionMonitor, ActiveSessionMonitor>();
 
+        // ── Planner clock (current-time indicator) ─────────────────────────
+        services.AddSingleton<IPlannerClockService, PlannerClockService>();
+
         // ── Domain event publisher ─────────────────────────────────────────
         services.AddSingleton<IDomainEventPublisher, InProcessDomainEventPublisher>();
 

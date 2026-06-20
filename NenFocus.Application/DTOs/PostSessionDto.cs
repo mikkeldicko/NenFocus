@@ -15,6 +15,9 @@ public sealed record PostSessionDto
     public int ActualDurationMinutes { get; init; }
     public int BreaksTaken { get; init; }
 
+    public TimeSpan ActualDuration => TimeSpan.FromMinutes(ActualDurationMinutes);
+    public TimeSpan PlannedDuration => TimeSpan.FromMinutes(PlannedDurationMinutes);
+
     /// <summary>
     /// Blocked app attempts during the session, keyed by process name.
     /// E.g. { "Spotify": 3, "Discord": 1 }

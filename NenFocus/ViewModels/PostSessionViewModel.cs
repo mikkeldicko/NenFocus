@@ -19,10 +19,10 @@ public partial class PostSessionViewModel : ViewModelBase
 
     public string Goal { get; }
     public string ProfileName { get; }
-    public string StartedAtDisplay { get; }
-    public string EndedAtDisplay { get; }
-    public string DurationDisplay { get; }
-    public string PlannedDurationDisplay { get; }
+    public DateTime StartedAt { get; }
+    public DateTime EndedAt { get; }
+    public TimeSpan Duration { get; }
+    public TimeSpan PlannedDuration { get; }
     public int BreaksTaken { get; }
     public bool HasBreaks { get; }
     public int TotalBlockedAttempts { get; }
@@ -52,38 +52,20 @@ public partial class PostSessionViewModel : ViewModelBase
 
         Goal = data.Goal;
         ProfileName = data.ProfileName;
-        StartedAtDisplay = data.StartedAt.ToLocalTime().ToString("h:mm tt");
-        EndedAtDisplay = data.EndedAt.ToLocalTime().ToString("h:mm tt");
+        StartedAt = data.StartedAt.ToLocalTime();
+        EndedAt = data.EndedAt.ToLocalTime();
+        Duration = data.ActualDuration;
+        PlannedDuration = data.PlannedDuration;
         BreaksTaken = data.BreaksTaken;
         HasBreaks = data.BreaksTaken > 0;
         TotalBlockedAttempts = data.TotalBlockedAttempts;
         HasBlockedAttempts = data.TotalBlockedAttempts > 0;
 
-        // Duration display
-        var actual = data.EndedAt - data.StartedAt;
-        DurationDisplay = FormatDuration(actual);
-        PlannedDurationDisplay = FormatDuration(TimeSpan.FromMinutes(data.PlannedDurationMinutes));
-
-        // Fix for Apps
         foreach (var kvp in data.BlockedAppAttempts.OrderByDescending(x => x.Value))
-        {
-            // Added "App" as the third argument
             BlockedAttemptItems.Add(new BlockedAttemptItemViewModel(kvp.Key, kvp.Value, "App"));
-        }
 
-        // Fix for Websites
         foreach (var kvp in data.BlockedWebsiteAttempts.OrderByDescending(x => x.Value))
-        {
-            // Added "Site" as the third argument
             BlockedAttemptItems.Add(new BlockedAttemptItemViewModel(kvp.Key, kvp.Value, "Site"));
-        }
-    }
-
-    private static string FormatDuration(TimeSpan ts)
-    {
-        if (ts.TotalHours >= 1)
-            return $"{(int)ts.TotalHours}h {ts.Minutes}m";
-        return $"{(int)ts.TotalMinutes}m";
     }
 
     [RelayCommand]
@@ -91,7 +73,6 @@ public partial class PostSessionViewModel : ViewModelBase
     {
         try
         {
-            // Only attempt to save if there is text and we haven't saved successfully yet
             if (!string.IsNullOrWhiteSpace(ReflectionText) && !IsSaved)
             {
                 IsSaving = true;
@@ -103,17 +84,15 @@ public partial class PostSessionViewModel : ViewModelBase
 
                 if (result.Success)
                 {
-                    IsSaved = true; // Mark as saved so we don't try again
+                    IsSaved = true;
                 }
                 else
                 {
                     System.Diagnostics.Debug.WriteLine($"Save failed: {result.ErrorMessage}");
-                    return; // Stop here so the user can try again
+                    return;
                 }
             }
 
-            // If we get here, either we saved successfully OR the user left the text empty.
-            // In both cases, we are finished with this view.
             _onDone();
         }
         catch (Exception ex)
@@ -127,13 +106,13 @@ public partial class PostSessionViewModel : ViewModelBase
     }
 }
 
-    /// <summary>Display item for a blocked app attempt in the post-session list.</summary>
-    public sealed class BlockedAttemptItemViewModel
-    {
-        public string ProcessName { get; }
-        public int AttemptCount { get; }
-        public string Display { get; }
-        public string TypeLabel { get; } // "App" or "Site"
+/// <summary>Display item for a blocked app or website attempt in the post-session list.</summary>
+public sealed class BlockedAttemptItemViewModel
+{
+    public string ProcessName { get; }
+    public int AttemptCount { get; }
+    public string Display { get; }
+    public string TypeLabel { get; }
 
     public BlockedAttemptItemViewModel(string name, int count, string type)
     {
@@ -143,4 +122,3 @@ public partial class PostSessionViewModel : ViewModelBase
         Display = $"{name} ({type})";
     }
 }
-
