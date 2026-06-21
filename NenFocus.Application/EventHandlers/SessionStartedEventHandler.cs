@@ -27,8 +27,8 @@ public sealed class SessionStartedEventHandler
     {
         // FIX: Records use positional parameters: (DateTime.UtcNow)
         var policy = await _policyQuery.HandleAsync(
-     new ComputeActivePolicySliceQuery(DateTime.Now), // Not UtcNow
-     cancellationToken);
+            new ComputeActivePolicySliceQuery(DateTime.UtcNow),
+            cancellationToken);
 
         if (policy is not null)
         {

@@ -1,4 +1,4 @@
-﻿namespace NenFocus.Application.UseCases.BlockProfiles.UpdateBlockProfile;
+namespace NenFocus.Application.UseCases.BlockProfiles.UpdateBlockProfile;
 
 public sealed record UpdateBlockProfileResult
 {

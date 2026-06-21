@@ -1,4 +1,4 @@
-﻿using FluentValidation;
+using FluentValidation;
 using NenFocus.Application.Interfaces;
 using NenFocus.Domain.Constants;
 

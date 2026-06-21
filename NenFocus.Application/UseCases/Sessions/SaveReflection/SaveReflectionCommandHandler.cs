@@ -18,7 +18,6 @@ public sealed class SaveReflectionCommandHandler : ICommandHandler<SaveReflectio
         var session = await _sessions.GetByIdAsync(command.SessionId, ct);
         if (session == null) return new SaveReflectionResult(false, "Session not found.");
 
-        // FIX: Uncomment and call the method with both parameters
         session.SetReflection(command.Reflection, command.Rating);
 
         await _sessions.SaveAsync(session, ct);

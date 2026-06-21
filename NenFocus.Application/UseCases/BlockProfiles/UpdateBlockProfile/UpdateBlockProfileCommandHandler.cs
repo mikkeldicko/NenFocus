@@ -1,4 +1,4 @@
-﻿using FluentValidation;
+using FluentValidation;
 using NenFocus.Application.Interfaces;
 using NenFocus.Domain.ValueObjects;
 using System.Linq;
@@ -33,22 +33,18 @@ public sealed class UpdateBlockProfileCommandHandler
         if (profile is null)
             return UpdateBlockProfileResult.Fail($"Profile '{command.ProfileId}' not found.");
 
-        // Fix the call to skip Guid mismatch
         if (await _profiles.ExistsWithNameAsync(command.Name, excludeId: command.ProfileId, cancellationToken: cancellationToken))
             return UpdateBlockProfileResult.Fail($"A profile named '{command.Name}' already exists.");
 
         profile.Rename(command.Name);
         profile.ChangeWebsitePolicy(command.WebsitePolicy);
 
-        // Apps
         foreach (var existing in profile.BlockedApps.ToList()) profile.RemoveBlockedApp(existing);
         foreach (var appName in command.BlockedApps) profile.AddBlockedApp(new BlockedApp(appName));
 
-        // Websites
         foreach (var existing in profile.Websites.ToList()) profile.RemoveWebsite(existing);
         foreach (var url in command.Websites) profile.AddWebsite(new BlockedSite(url));
 
-        // Tags
         foreach (var existing in profile.Tags.ToList()) profile.RemoveTag(existing);
         foreach (var tag in command.Tags) profile.AddTag(tag);
 

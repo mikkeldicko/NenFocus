@@ -17,4 +17,17 @@ public abstract class PlannedBlock
         => atTime >= Start && atTime < End;
 
     public TimeSpan GetDuration() => End - Start;
+
+    public void Reschedule(DateTime start, DateTime end)
+    {
+        if (end <= start)
+            throw new ArgumentException("End time must be after start time.");
+        Start = start;
+        End = end;
+    }
+
+    public void AssignProfile(Guid profileId)
+    {
+        BlockProfileId = profileId;
+    }
 }

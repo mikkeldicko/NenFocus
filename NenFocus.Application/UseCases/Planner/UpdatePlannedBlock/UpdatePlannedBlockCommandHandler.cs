@@ -40,13 +40,10 @@ public sealed class UpdatePlannedBlockCommandHandler : ICommandHandler<UpdatePla
                 return UpdatePlannedBlockResult.Fail("A Ritual block already exists in this time window.");
         }
 
-        await _blocks.DeleteAsync(command.BlockId, cancellationToken);
+        existing.Reschedule(startTime, endTime);
+        existing.AssignProfile(command.ProfileId);
 
-        PlannedBlock updated = existing is RitualBlock
-            ? RitualBlock.Create(Guid.NewGuid(), command.ProfileId, startTime, endTime, existing.Title)
-            : BackgroundBlock.Create(Guid.NewGuid(), command.ProfileId, startTime, endTime, existing.Title);
-
-        await _blocks.AddAsync(updated, cancellationToken);
+        await _blocks.UpdateAsync(existing, cancellationToken);
 
         return UpdatePlannedBlockResult.Ok();
     }

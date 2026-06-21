@@ -1,4 +1,4 @@
-﻿using NenFocus.Domain.Enums;
+using NenFocus.Domain.Enums;
 using System;
 using System.Collections.Generic;
 using NenFocus.Application.Interfaces;
