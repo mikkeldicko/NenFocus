@@ -105,4 +105,13 @@ public sealed class PlannedBlockRepository : IPlannedBlockRepository
 
         _context.PlannedBlocks.Remove(block);
     }
+
+    public Task<bool> HasFutureBlocksForProfileAsync(
+        Guid profileId,
+        DateTime after,
+        CancellationToken cancellationToken = default)
+    {
+        return _context.PlannedBlocks
+            .AnyAsync(b => b.BlockProfileId == profileId && b.End > after, cancellationToken);
+    }
 }

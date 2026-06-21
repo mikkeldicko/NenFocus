@@ -66,4 +66,13 @@ public interface IPlannedBlockRepository
     Task DeleteAsync(
         Guid id,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns true if any planned block after <paramref name="after"/> references the given profile.
+    /// Used to guard delete/update operations.
+    /// </summary>
+    Task<bool> HasFutureBlocksForProfileAsync(
+        Guid profileId,
+        DateTime after,
+        CancellationToken cancellationToken = default);
 }

@@ -104,6 +104,7 @@ public partial class BlockProfilePageViewModel : ViewModelBase
     // ── Delete confirmation ───────────────────────────────────────────────
     [ObservableProperty] private bool _isConfirmDeleteVisible;
     [ObservableProperty] private string _confirmDeleteMessage = string.Empty;
+    [ObservableProperty] private string? _confirmDeleteError;
     private BlockProfileCardViewModel? _pendingDeleteCard;
 
     // ── Constructor ───────────────────────────────────────────────────────
@@ -195,6 +196,7 @@ public partial class BlockProfilePageViewModel : ViewModelBase
     {
         _pendingDeleteCard = card;
         ConfirmDeleteMessage = $"Delete \"{card.Name}\"? This cannot be undone.";
+        ConfirmDeleteError = null;
         IsConfirmDeleteVisible = true;
     }
 
@@ -202,8 +204,13 @@ public partial class BlockProfilePageViewModel : ViewModelBase
     private async Task ConfirmDeleteAsync()
     {
         if (_pendingDeleteCard is null) return;
-        await _deleteProfile.HandleAsync(
+        var result = await _deleteProfile.HandleAsync(
             new DeleteBlockProfileCommand { ProfileId = _pendingDeleteCard.Id });
+        if (!result.Success)
+        {
+            ConfirmDeleteError = result.ErrorMessage;
+            return;
+        }
         Profiles.Remove(_pendingDeleteCard);
         _pendingDeleteCard = null;
         IsConfirmDeleteVisible = false;
@@ -213,6 +220,7 @@ public partial class BlockProfilePageViewModel : ViewModelBase
     private void CancelDelete()
     {
         _pendingDeleteCard = null;
+        ConfirmDeleteError = null;
         IsConfirmDeleteVisible = false;
     }
 

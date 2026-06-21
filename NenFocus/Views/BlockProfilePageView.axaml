@@ -392,6 +392,11 @@
                                FontSize="18" FontWeight="SemiBold" Foreground="#1A1A2E"/>
 					<TextBlock Text="{Binding ConfirmDeleteMessage}"
                                FontSize="14" Foreground="#888899" TextWrapping="Wrap"/>
+					<Border IsVisible="{Binding ConfirmDeleteError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                            Background="#FFF5F5" CornerRadius="8" Padding="14,10">
+						<TextBlock Text="{Binding ConfirmDeleteError}"
+                                   FontSize="13" Foreground="#C0392B" TextWrapping="Wrap"/>
+					</Border>
 					<StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="12">
 						<Button Classes="secondary" Command="{Binding CancelDeleteCommand}">Cancel</Button>
 						<Button Classes="danger-btn" Command="{Binding ConfirmDeleteCommand}">Delete</Button>

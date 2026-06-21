@@ -364,4 +364,3 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         _clockService.Tick -= OnClockTick;
     }
 }
-

@@ -15,7 +15,6 @@ public partial class PostSessionViewModel : ViewModelBase
     private readonly Action _onDone;
     private readonly PostSessionDto _data;
 
-    // â”€â”€ Display properties â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     public string Goal { get; }
     public string ProfileName { get; }
@@ -30,7 +29,6 @@ public partial class PostSessionViewModel : ViewModelBase
 
     public ObservableCollection<BlockedAttemptItemViewModel> BlockedAttemptItems { get; } = new();
 
-    // â”€â”€ Reflection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [ObservableProperty]
     private string _reflectionText = string.Empty;
