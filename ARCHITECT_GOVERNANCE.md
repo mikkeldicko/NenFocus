@@ -192,6 +192,23 @@ The same fragmentation pushes domain-event dispatching out to every handler: eac
 
 **Design decision recorded:** Option B (heartbeat inference — deriving usage from the enforcement heartbeat's wall-clock timing rather than extension-reported events) was explicitly considered and rejected during the Design Gap interrogation. Usage tracking must be accurate: only time the user actively spends on a site counts, which requires the extension to report it directly. Do not reopen this question.
 
+### Open Gap C — Crash Resilience: Session Recovery After Unexpected Shutdown
+
+**The gap:** If the app crashes or is force-killed mid-session, the current recovery path relies entirely on `SessionStateService.InitializeAsync()` querying `ISessionRepository.GetActiveAsync()` at startup. This is sufficient for clean restarts (the session was committed to SQLite before the crash), but it does not cover two failure cases:
+
+1. **Mid-write crash** — the session was started, OS enforcement was applied (`WindowsEnforcementService.ApplyPolicyAsync`), but the DB write had not yet committed when the process died. On restart the DB shows no active session, so enforcement is never re-applied and the user's desktop is unblocked silently.
+2. **Enforcement state drift** — the hosts file and process kill timer may be in an enforcing state after a crash, but `WindowsEnforcementService._currentPolicy` is `null` on restart. `ScheduledEnforcementService` will re-apply enforcement on its next heartbeat (≤5 s), so the window is small — but it is a window.
+
+**Why deferred:** Both failure cases require the app to be crashed in a narrow write window. The risk is low for a personal focus tool and the correct fix (a proper recovery protocol) is non-trivial to design correctly. A previous incomplete attempt (`SessionPersistenceService`, a JSON sidecar file) was deleted because it introduced a second source of truth with no active consumer, which creates a divergence risk worse than the problem it was solving.
+
+**Direction (subject to interrogation when closed):** The correct design is to make SQLite the single durable source of truth and close the write window, rather than maintaining a sidecar file. Candidate approaches — to be interrogated before any code is written:
+
+- Begin each session command in a DB transaction that also records an "enforcement intent" row; `ScheduledEnforcementService` reads this on startup before its first heartbeat to re-apply enforcement immediately rather than waiting up to 5 s.
+- Alternatively, treat the 5-second heartbeat window as acceptable and document it; add a startup check in `HostExtensions` that calls `WindowsEnforcementService.ApplyPolicyAsync` synchronously if `GetActiveAsync` returns a live session, closing the enforcement drift window to zero.
+- Do **not** reintroduce a JSON sidecar — any file-based approach must explain how it stays in sync with the DB on every write, which is the Unit of Work problem (Gap A) in disguise.
+
+**Must be closed before:** The app is used in a high-stakes environment (e.g., exam blocking, supervised study) where a crash silently removing enforcement would be a product safety failure. For personal use, the current behavior is acceptable.
+
 \---
 
 ## Minor Cleanups
