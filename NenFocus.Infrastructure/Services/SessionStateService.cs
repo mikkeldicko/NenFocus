@@ -8,7 +8,7 @@ namespace NenFocus.Infrastructure.Services;
 public sealed class SessionStateService : ISessionStateService
 {
     private readonly ISessionRepository _sessionRepository;
-    private readonly IBlockProfileRepository _profileRepository; // ADDED THIS
+    private readonly IBlockProfileRepository _profileRepository;
     private SessionDto? _activeSession;
     private bool _isRitualRequired;
 
@@ -18,7 +18,6 @@ public sealed class SessionStateService : ISessionStateService
     public event EventHandler<SessionDto?>? SessionChanged;
     public event EventHandler<bool>? RitualRequirementChanged;
 
-    // UPDATE CONSTRUCTOR: Inject the profile repository too
     public SessionStateService(
         ISessionRepository sessionRepository,
         IBlockProfileRepository profileRepository)
@@ -32,15 +31,14 @@ public sealed class SessionStateService : ISessionStateService
         var session = await _sessionRepository.GetActiveAsync();
         if (session != null)
         {
-            // NEW LOGIC: Fetch the profile to get its real name
             var profileName = "Unknown Profile";
             if (session.BlockProfileId != Guid.Empty)
             {
                 var profile = await _profileRepository.GetByIdAsync(session.BlockProfileId);
-                profileName = profile?.Name ?? "Default Profile";
+                profileName = profile?.Name ?? "Unknown Profile";
             }
 
-            _activeSession = MapToDto(session, profileName); // Pass the name here
+            _activeSession = MapToDto(session, profileName);
             SessionChanged?.Invoke(this, _activeSession);
         }
     }

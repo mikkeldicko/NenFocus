@@ -31,15 +31,15 @@ public sealed class BlockedAttemptTracker : IBlockedAttemptTracker
 
         var threshold = DateTime.UtcNow.AddSeconds(-2);
 
-        // 1. Fetch only the items for this session and resource from the DB.
-        // We leave the time comparison out of the 'await' to avoid the SQLite error.
-        var recentAttempts = await context.BlockedAttempts
+        // SQLite can't apply the OccurredAt comparison in-query, so fetch the most
+        // recent row only and compare in C#.
+        var latest = await context.BlockedAttempts
             .Where(a => a.SessionId == attempt.SessionId &&
                         a.ResourceName == attempt.ResourceName)
-            .ToListAsync();
+            .OrderByDescending(a => a.OccurredAt)
+            .FirstOrDefaultAsync();
 
-        // 2. Perform the time check in C# memory
-        bool alreadyLoggedRecently = recentAttempts.Any(a => a.OccurredAt > threshold);
+        bool alreadyLoggedRecently = latest is not null && latest.OccurredAt > threshold;
 
         if (!alreadyLoggedRecently)
         {

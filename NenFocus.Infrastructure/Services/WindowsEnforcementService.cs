@@ -25,7 +25,6 @@ public sealed class WindowsEnforcementService : IEnforcementService, IDisposable
     private readonly System.Timers.Timer _processKillTimer;
     private readonly IBlockedAttemptTracker _attemptTracker;
 
-    // FIX: Added missing private field and updated type
     private ActivePolicySlice? _currentPolicy;
     private HashSet<string> _blockedProcessNames = new(StringComparer.OrdinalIgnoreCase);
     private bool _isEnforcing;
@@ -47,7 +46,6 @@ public sealed class WindowsEnforcementService : IEnforcementService, IDisposable
         StartLocalServer();
     }
 
-    // FIX: Updated return type to match interface
     public Task<ActivePolicySlice?> GetCurrentPolicyAsync(CancellationToken ct = default)
         => Task.FromResult(_currentPolicy);
 
@@ -65,7 +63,7 @@ public sealed class WindowsEnforcementService : IEnforcementService, IDisposable
             await ApplyHostsRulesAsync(policy, ct);
 
             _blockedProcessNames = new HashSet<string>(
-                policy.BlockedApps.Select(NormalizeProcessName),
+                policy.BlockedApps.Select(ProcessUtils.NormalizeProcessName),
                 StringComparer.OrdinalIgnoreCase);
 
             if (_blockedProcessNames.Count > 0)
@@ -94,8 +92,6 @@ public sealed class WindowsEnforcementService : IEnforcementService, IDisposable
         }
         finally { _lock.Release(); }
     }
-
-    // ... (Keep the rest of the private methods like KillBlockedProcessesImmediate, Normalize, etc. as they were) ...
 
     private void KillBlockedProcessesImmediate()
     {
@@ -201,7 +197,6 @@ public sealed class WindowsEnforcementService : IEnforcementService, IDisposable
         }
     }
 
-    private static string NormalizeProcessName(string app) { var trimmed = app.Trim(); return trimmed.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? trimmed[..^4] : trimmed; }
     private static string NormalizeDomain(string site)
     {
         if (string.IsNullOrWhiteSpace(site)) return string.Empty;
@@ -243,7 +238,7 @@ public sealed class WindowsEnforcementService : IEnforcementService, IDisposable
                 try
                 {
                     var context = await _httpListener.GetContextAsync();
-                    _ = HandleRequestAsync(context); // This makes the method NOT greyed out
+                    _ = HandleRequestAsync(context);
                 }
                 catch { /* Handle listener shutdown */ }
             }
@@ -251,7 +246,6 @@ public sealed class WindowsEnforcementService : IEnforcementService, IDisposable
     }
     private async Task HandleRequestAsync(HttpListenerContext context)
     {
-        // 1. ADD THIS: Mandatory CORS header for the extension to read the response
         context.Response.AppendHeader("Access-Control-Allow-Origin", "*");
         context.Response.AppendHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
 

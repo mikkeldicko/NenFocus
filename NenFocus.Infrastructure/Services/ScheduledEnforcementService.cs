@@ -38,15 +38,13 @@ public sealed class ScheduledEnforcementService : BackgroundService
             {
                 using var scope = _scopeFactory.CreateScope();
 
-                // 1. Point to ActivePolicySlice, not DTO
                 var computeHandler = scope.ServiceProvider
                     .GetRequiredService<IQueryHandler<ComputeActivePolicySliceQuery, ActivePolicySlice>>();
 
-                var now = DateTime.Now; // Not UtcNow
+                var now = DateTime.UtcNow;
 
                 await CheckForUpcomingBlocksAsync(scope, now, stoppingToken);
 
-                // 2. Call the record constructor correctly
                 var policy = await computeHandler.HandleAsync(
                     new ComputeActivePolicySliceQuery(now),
                     stoppingToken);
