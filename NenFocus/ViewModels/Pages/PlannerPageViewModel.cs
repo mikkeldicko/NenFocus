@@ -14,14 +14,13 @@ using NenFocus.Application.UseCases.Planner.CreatePlannedBlock;
 using NenFocus.Application.UseCases.Planner.DeletePlannedBlock;
 using NenFocus.Application.UseCases.Planner.UpdatePlannedBlock;
 using NenFocus.Domain.Enums;
-using NenFocus.Helpers;
 using NenFocus.ViewModels.Components;
 
 namespace NenFocus.ViewModels.Pages;
 
 public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 {
-    // â”€â”€ Layout constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Layout constants ──────────────────────────────────────────────────
     public const double HourRowHeight = 56.0;
     public const int FirstHour = 0;
     public const int LastHour = 24;
@@ -38,7 +37,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     private readonly Dictionary<Guid, PlannedBlockDto> _blocksInWeek = new();
     private Guid? _editingBlockId;
 
-    // â”€â”€ Week state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Week state ────────────────────────────────────────────────────────
     [ObservableProperty] private DateTime _weekStart;
 
     /// <summary>

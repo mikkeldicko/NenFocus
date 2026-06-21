@@ -75,7 +75,6 @@ public partial class ShellViewModel : ViewModelBase
         _monitor = monitor;
         _plannerClock = plannerClock;
 
-        // --- REQUIREMENT 3: Automatic Pop-up Listener ---
         _sessionState.RitualRequirementChanged += (s, required) =>
         {
             if (required && !IsRitualActive)

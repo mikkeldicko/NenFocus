@@ -30,7 +30,7 @@ public partial class RenPageViewModel : ViewModelBase
     private readonly Action _onContinue;
     private readonly Action _onBack;
 
-    // â”€â”€ Profile list â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Profile list ───────────────────────────────────────────────────────
     public ObservableCollection<RenProfileCardViewModel> Profiles { get; } = new();
 
     [ObservableProperty]
@@ -52,7 +52,7 @@ public partial class RenPageViewModel : ViewModelBase
     [ObservableProperty]
     private bool _isLoading = true;
 
-    // â”€â”€ Session-only additions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Session-only additions ─────────────────────────────────────────────
     public ObservableCollection<string> SessionOnlyApps { get; } = new();
     public ObservableCollection<string> SessionOnlyWebsites { get; } = new();
 
@@ -89,7 +89,7 @@ public partial class RenPageViewModel : ViewModelBase
         }
     }
 
-    // â”€â”€ Commands â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Commands ───────────────────────────────────────────────────────────
 
     [RelayCommand]
     private void SelectProfile(RenProfileCardViewModel card)

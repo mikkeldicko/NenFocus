@@ -27,7 +27,7 @@ public partial class MainPageViewModel : ViewModelBase
     private readonly IPlannerClockService _clock;
     private Guid _activeSessionId;
 
-    // â”€â”€ Session display â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Session display ────────────────────────────────────────────────────
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(StartRitualCommand))]
@@ -46,7 +46,7 @@ public partial class MainPageViewModel : ViewModelBase
     [ObservableProperty]
     private string _activeProfileName = string.Empty;
 
-    // â”€â”€ Break display â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Break display ──────────────────────────────────────────────────────
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanTakeBreak))]
@@ -70,7 +70,7 @@ public partial class MainPageViewModel : ViewModelBase
 
     public bool CanTakeBreak => HasActiveSession && !IsOnBreak && HasBreakSettings;
 
-    // â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Header ─────────────────────────────────────────────────────────────
 
     public string Greeting => _clock.LocalNow.Hour switch
     {
@@ -173,7 +173,7 @@ public partial class MainPageViewModel : ViewModelBase
         ActiveProfileName = string.Empty;
     }
 
-    // â”€â”€ Commands â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Commands ───────────────────────────────────────────────────────────
 
     [RelayCommand]
     private async Task EndSession()

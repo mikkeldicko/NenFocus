@@ -1,6 +1,6 @@
 using System;
 
-namespace NenFocus.Helpers;
+namespace NenFocus.ViewModels.Components;
 
 internal static class PlannerLayout
 {
