@@ -1,9 +1,9 @@
-﻿using NenFocus.Domain.Enums;
+using NenFocus.Domain.Enums;
 using NenFocus.Domain.Events;
 using NenFocus.Domain.Interfaces;
 using NenFocus.Domain.ValueObjects;
 
-namespace NenFocus.Domain.Aggregates;
+namespace NenFocus.Domain.Entities;
 
 public class BlockProfile : IHasDomainEvents
 {

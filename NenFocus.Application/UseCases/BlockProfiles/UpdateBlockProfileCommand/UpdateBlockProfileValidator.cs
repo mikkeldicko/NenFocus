@@ -1,8 +1,6 @@
 ﻿using FluentValidation;
 using NenFocus.Application.Interfaces;
 using NenFocus.Domain.Constants;
-using System;
-using System.IO;
 
 namespace NenFocus.Application.UseCases.BlockProfiles.UpdateBlockProfile;
 
@@ -26,20 +24,7 @@ public sealed class UpdateBlockProfileValidator : AbstractValidator<UpdateBlockP
             .WithMessage("This profile is assigned to one or more future planned blocks and cannot be modified.");
 
         RuleForEach(x => x.BlockedApps)
-            .Must(app => !SystemSafetyConstants.UnkillableProcesses.Contains(Normalize(app)))
+            .Must(app => !SystemSafetyConstants.UnkillableProcesses.Contains(ProcessUtils.NormalizeProcessName(app)))
             .WithMessage((cmd, app) => $"'{app}' is a critical system process and cannot be blocked.");
-    }
-
-    private static string Normalize(string input)
-    {
-        if (string.IsNullOrWhiteSpace(input)) return string.Empty;
-        try
-        {
-            string fileName = Path.GetFileName(input);
-            if (fileName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
-                fileName = fileName[..^4];
-            return fileName.Trim().ToLowerInvariant();
-        }
-        catch { return input.Trim().ToLowerInvariant(); }
     }
 }

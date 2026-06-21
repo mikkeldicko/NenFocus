@@ -17,7 +17,7 @@ namespace NenFocus.Infrastructure.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "9.0.2");
 
-            modelBuilder.Entity("NenFocus.Domain.Aggregates.BlockProfile", b =>
+            modelBuilder.Entity("NenFocus.Domain.Entities.BlockProfile", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("TEXT");
@@ -191,7 +191,7 @@ namespace NenFocus.Infrastructure.Migrations
                     b.HasDiscriminator().HasValue("Ritual");
                 });
 
-            modelBuilder.Entity("NenFocus.Domain.Aggregates.BlockProfile", b =>
+            modelBuilder.Entity("NenFocus.Domain.Entities.BlockProfile", b =>
                 {
                     b.OwnsMany("NenFocus.Domain.ValueObjects.BlockedApp", "BlockedApps", b1 =>
                         {

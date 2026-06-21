@@ -1,4 +1,5 @@
 using NenFocus.Application.Interfaces;
+using NenFocus.Domain.Entities;
 using NenFocus.Domain.Services;
 using NenFocus.Domain.ValueObjects;
 
@@ -34,7 +35,7 @@ public sealed class ComputeActivePolicySliceQueryHandler
             .Where(id => id != Guid.Empty)
             .Distinct();
 
-        var profiles = new List<NenFocus.Domain.Aggregates.BlockProfile>();
+        var profiles = new List<BlockProfile>();
         foreach (var id in profileIds)
         {
             var profile = await _profiles.GetByIdAsync(id, ct);

@@ -1,7 +1,6 @@
 ﻿using FluentValidation;
 using NenFocus.Application.Interfaces;
 using NenFocus.Domain.Constants;
-using NenFocus.Domain.Utils;
 
 namespace NenFocus.Application.UseCases.BlockProfiles.CreateBlockProfile;
 

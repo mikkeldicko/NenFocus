@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using NenFocus.Application.Interfaces;
-using NenFocus.Domain.Aggregates;
+using NenFocus.Domain.Entities;
 
 namespace NenFocus.Infrastructure.Persistence.Repositories;
 

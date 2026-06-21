@@ -1,4 +1,4 @@
-using NenFocus.Domain.Aggregates;
+using NenFocus.Domain.Entities;
 
 namespace NenFocus.Application.Interfaces;
 

@@ -1,5 +1,4 @@
-﻿using NenFocus.Domain.Aggregates;
-using NenFocus.Domain.Entities;
+﻿using NenFocus.Domain.Entities;
 using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Domain.Services;
