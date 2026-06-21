@@ -58,9 +58,9 @@
 	<ScrollViewer>
 		<StackPanel Margin="52,44,52,44" MaxWidth="600" Spacing="32">
 
-			<!-- â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+			<!-- ── Header ─────────────────────────────────────── -->
 			<StackPanel Spacing="8" HorizontalAlignment="Center">
-				<TextBlock Text="âœ¦"
+				<TextBlock Text="✦"
                            FontSize="24"
                            Foreground="#B8922A"
                            HorizontalAlignment="Center"/>
@@ -72,7 +72,7 @@
                            HorizontalAlignment="Center"/>
 			</StackPanel>
 
-			<!-- â”€â”€ Summary card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+			<!-- ── Summary card ───────────────────────────────── -->
 			<Border Background="#FFFFFF"
                     CornerRadius="14"
                     BorderBrush="#E8E8F0"
@@ -132,7 +132,7 @@
 								<TextBlock Text="{Binding StartedAt, Converter={StaticResource DateTimeConverter}}"
                                            FontSize="14"
                                            Foreground="#555566"/>
-								<TextBlock Text="â†’"
+								<TextBlock Text="→"
                                            FontSize="14"
                                            Foreground="#BBBBCC"/>
 								<TextBlock Text="{Binding EndedAt, Converter={StaticResource DateTimeConverter}}"
@@ -171,7 +171,7 @@
 				</StackPanel>
 			</Border>
 
-			<!-- â”€â”€ Blocked attempts â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+			<!-- ── Blocked attempts ───────────────────────────── -->
 			<Border Background="#FFFFFF"
 					CornerRadius="14"
 					BorderBrush="#E8E8F0"
@@ -219,7 +219,7 @@
 												Background="#F5F5FA"
 												CornerRadius="6"
 												Padding="8,2">
-											<TextBlock Text="{Binding AttemptCount, StringFormat='{}{0}Ã—'}"
+											<TextBlock Text="{Binding AttemptCount, StringFormat='{}{0}×'}"
 													   FontSize="12"
 													   FontWeight="Medium"
 													   Foreground="#888899"/>
@@ -233,7 +233,7 @@
 				</StackPanel>
 			</Border>
 
-			<!-- â”€â”€ Reflection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+			<!-- ── Reflection ─────────────────────────────────── -->
 			<Border Background="#FFFFFF"
                     CornerRadius="14"
                     BorderBrush="#E8E8F0"
@@ -261,7 +261,7 @@
 				</StackPanel>
 			</Border>
 
-			<!-- â”€â”€ Done button â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+			<!-- ── Done button ────────────────────────────────── -->
 			<Button Classes="done-btn"
                     Command="{Binding DoneCommand}">
 				<TextBlock Text="DONE"

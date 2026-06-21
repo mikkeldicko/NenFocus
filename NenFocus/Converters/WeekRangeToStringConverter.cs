@@ -12,8 +12,8 @@ public sealed class WeekRangeToStringConverter : IValueConverter
         {
             var end = weekStart.AddDays(6);
             return weekStart.Month == end.Month
-                ? $"{weekStart:MMM d} â€“ {end.Day}, {end.Year}"
-                : $"{weekStart:MMM d} â€“ {end:MMM d}, {end.Year}";
+                ? $"{weekStart:MMM d} – {end.Day}, {end.Year}"
+                : $"{weekStart:MMM d} – {end:MMM d}, {end.Year}";
         }
         return string.Empty;
     }

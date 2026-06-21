@@ -145,9 +145,9 @@
 				</StackPanel>
 
 				<StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-					<Button Classes="navButton" Content="â€¹" Command="{Binding PreviousWeekCommand}"/>
+					<Button Classes="navButton" Content="‹" Command="{Binding PreviousWeekCommand}"/>
 					<Button Classes="todayButton" Content="Today" Command="{Binding GoToTodayCommand}"/>
-					<Button Classes="navButton" Content="â€º" Command="{Binding NextWeekCommand}"/>
+					<Button Classes="navButton" Content="›" Command="{Binding NextWeekCommand}"/>
 				</StackPanel>
 			</Grid>
 
@@ -220,7 +220,7 @@
 		<Border Background="#80FFFFFF"
                 IsVisible="{Binding IsLoading}"
                 IsHitTestVisible="{Binding IsLoading}">
-			<TextBlock Text="Loadingâ€¦" FontSize="14" Foreground="#7A7A8C" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+			<TextBlock Text="Loading…" FontSize="14" Foreground="#7A7A8C" HorizontalAlignment="Center" VerticalAlignment="Center"/>
 		</Border>
 
 		<Border Background="#80000000"

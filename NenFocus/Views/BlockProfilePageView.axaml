@@ -177,14 +177,14 @@
 					</Button>
 				</Grid>
 
-				<TextBlock IsVisible="{Binding IsLoading}" Text="Loadingâ€¦"
+				<TextBlock IsVisible="{Binding IsLoading}" Text="Loading…"
                            FontSize="14" Foreground="#AAAABC" HorizontalAlignment="Center"/>
 
 				<Border IsVisible="{Binding HasNoProfiles}"
                         Background="#FFFFFF" CornerRadius="14"
                         BorderBrush="#E8E8F0" BorderThickness="1" Padding="52,48">
 					<StackPanel Spacing="12" HorizontalAlignment="Center">
-						<TextBlock Text="â—»" FontSize="36" Foreground="#DDDDEE"
+						<TextBlock Text="◻" FontSize="36" Foreground="#DDDDEE"
                                    HorizontalAlignment="Center"/>
 						<TextBlock Text="No block profiles yet"
                                    FontSize="16" FontWeight="Medium" Foreground="#888899"
@@ -236,17 +236,17 @@
 										<Button Classes="icon-btn" ToolTip.Tip="Duplicate"
                                                 Command="{Binding $parent[UserControl].((vm:BlockProfilePageViewModel)DataContext).DuplicateProfileCommand}"
                                                 CommandParameter="{Binding}">
-											<TextBlock Text="â§‰" FontSize="14" Foreground="#888899"/>
+											<TextBlock Text="⧉" FontSize="14" Foreground="#888899"/>
 										</Button>
 										<Button Classes="icon-btn" ToolTip.Tip="Edit"
                                                 Command="{Binding $parent[UserControl].((vm:BlockProfilePageViewModel)DataContext).EditProfileCommand}"
                                                 CommandParameter="{Binding}">
-											<TextBlock Text="âœŽ" FontSize="14" Foreground="#888899"/>
+											<TextBlock Text="✎" FontSize="14" Foreground="#888899"/>
 										</Button>
 										<Button Classes="icon-btn danger" ToolTip.Tip="Delete"
                                                 Command="{Binding $parent[UserControl].((vm:BlockProfilePageViewModel)DataContext).RequestDeleteProfileCommand}"
                                                 CommandParameter="{Binding}">
-											<TextBlock Text="âœ•" FontSize="14" Foreground="#C0392B"/>
+											<TextBlock Text="✕" FontSize="14" Foreground="#C0392B"/>
 										</Button>
 									</StackPanel>
 								</Grid>
@@ -273,7 +273,7 @@
                                    VerticalAlignment="Center"/>
 						<Button Grid.Column="1" Classes="icon-btn"
                                 Command="{Binding CloseFormCommand}">
-							<TextBlock Text="âœ•" FontSize="14" Foreground="#888899"/>
+							<TextBlock Text="✕" FontSize="14" Foreground="#888899"/>
 						</Button>
 					</Grid>
 
@@ -284,7 +284,7 @@
 						<TextBlock Text="NAME" FontSize="9" FontWeight="Medium"
                                    Foreground="#AAAABC" LetterSpacing="4"/>
 						<TextBox Classes="form-field" Text="{Binding FormName}"
-                                 Watermark="e.g. Deep Work, No Social Mediaâ€¦"/>
+                                 Watermark="e.g. Deep Work, No Social Media…"/>
 					</StackPanel>
 
 					<!-- Tab bar -->
@@ -311,7 +311,7 @@
 						<Grid ColumnDefinitions="*,Auto">
 							<TextBox Grid.Column="0" Classes="form-field"
 									 Text="{Binding NewSiteText}"
-									 Watermark="e.g. reddit.com, twitter.comâ€¦"
+									 Watermark="e.g. reddit.com, twitter.com…"
 									 Margin="0,0,8,0"/>
 							<Button Grid.Column="1" Classes="secondary"
 									Command="{Binding AddSiteCommand}"
@@ -339,8 +339,8 @@
 								HorizontalAlignment="Left"
 								Click="BrowseForApp_Click">
 							<StackPanel Orientation="Horizontal" Spacing="8">
-								<TextBlock Text="ðŸ“‚" FontSize="12" VerticalAlignment="Center"/>
-								<TextBlock Text="Browse for appâ€¦" VerticalAlignment="Center"/>
+								<TextBlock Text="📂" FontSize="12" VerticalAlignment="Center"/>
+								<TextBlock Text="Browse for app…" VerticalAlignment="Center"/>
 							</StackPanel>
 						</Button>
 						<TextBlock Text="Process name without .exe  (e.g. chrome, spotify, discord)"

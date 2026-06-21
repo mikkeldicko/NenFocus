@@ -17,11 +17,11 @@ public static class DependencyInjection
         this IServiceCollection services,
         string dbPath)
     {
-        // ── Application layer ──────────────────────────────────────────────
+        // -- Application layer --
         services.AddApplication();
         RegisterDecoratedCommandHandlers(services);
 
-        // ── Database ───────────────────────────────────────────────────────
+        // -- Database --
         // 1. Register the Factory (This satisfies BlockedAttemptTracker)
         services.AddDbContextFactory<NenFocusDbContext>(options =>
             options.UseSqlite($"Data Source={dbPath}"));
@@ -30,35 +30,35 @@ public static class DependencyInjection
         services.AddDbContext<NenFocusDbContext>(options =>
             options.UseSqlite($"Data Source={dbPath}"));
 
-        // ── Repositories ───────────────────────────────────────────────────
+        // -- Repositories --
         services.AddScoped<ISessionRepository, SessionRepository>();
         services.AddScoped<IBlockProfileRepository, BlockProfileRepository>();
         services.AddScoped<IPlannedBlockRepository, PlannedBlockRepository>();
 
 
-        // ── Notifications ──────────────────────────────────────────────────
+        // -- Notifications --
         services.AddSingleton<INotificationService, WindowsNotificationService>();
 
-        // ── Enforcement ────────────────────────────────────────────────────
+        // -- Enforcement --
         services.AddSingleton<IBlockedAttemptTracker, BlockedAttemptTracker>();
         services.AddSingleton<IEnforcementService, WindowsEnforcementService>();
 
-        // ── Session state (UI noticeboard) ─────────────────────────────────
+        // -- Session state (UI noticeboard) --
         services.AddSingleton<ISessionStateService, SessionStateService>();
 
-        // ── Session countdown monitor ──────────────────────────────────────
+        // -- Session countdown monitor --
         services.AddSingleton<IActiveSessionMonitor, ActiveSessionMonitor>();
 
-        // ── Planner clock (current-time indicator) ─────────────────────────
+        // -- Planner clock (current-time indicator) --
         services.AddSingleton<IPlannerClockService, PlannerClockService>();
 
-        // ── Domain event publisher ─────────────────────────────────────────
+        // -- Domain event publisher --
         services.AddSingleton<IDomainEventPublisher, InProcessDomainEventPublisher>();
 
-        // ── Unit of Work ───────────────────────────────────────────────────
+        // -- Unit of Work --
         services.AddScoped<IUnitOfWork, EfCoreUnitOfWork>();
 
-        // ── Scheduled enforcement background service ───────────────────────
+        // -- Scheduled enforcement background service --
         services.AddHostedService<ScheduledEnforcementService>();
 
         return services;

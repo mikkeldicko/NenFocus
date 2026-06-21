@@ -9,7 +9,7 @@
         <StackPanel Spacing="0" HorizontalAlignment="Stretch">
 
             <!-- Kanji -->
-            <TextBlock Text="èˆŒ"
+            <TextBlock Text="舌"
                        FontSize="72"
                        FontWeight="Thin"
                        Foreground="#DDDDE8"

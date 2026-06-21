@@ -29,7 +29,7 @@ public partial class PlannedBlockTileViewModel : ViewModelBase
     public double Height { get; }
 
     public string TimeRangeText =>
-        $"{Start:HH:mm} â€“ {End:HH:mm}";
+        $"{Start:HH:mm} – {End:HH:mm}";
 
     public bool IsFocus => BlockType == BlockType.Ritual;
     public bool IsPassive => BlockType == BlockType.Background;

@@ -61,7 +61,7 @@
 
 	<Grid>
 
-		<!-- ── Normal shell (sidebar + content) ──────────────────────── -->
+		<!-- Normal shell (sidebar + content) -->
 		<Grid ColumnDefinitions="210,*"
               IsVisible="{Binding !IsRitualActive}">
 
@@ -113,7 +113,7 @@
                             IsVisible="{Binding IsPostSessionActive}"/>
 		</Grid>
 
-		<!-- ── Ritual full-screen overlay ────────────────────────────── -->
+		<!-- Ritual full-screen overlay -->
 		<ContentControl Content="{Binding RitualViewModel}"
                         IsVisible="{Binding IsRitualActive}"/>
 

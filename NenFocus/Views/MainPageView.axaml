@@ -95,7 +95,7 @@
 	<ScrollViewer>
 		<StackPanel Margin="52,44,52,44" MaxWidth="600" Spacing="36">
 
-			<!-- â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+			<!-- ── Header ─────────────────────────────────────────── -->
 			<StackPanel Spacing="6">
 				<TextBlock Text="{Binding Greeting}"
                            FontSize="28"
@@ -106,12 +106,12 @@
                            Foreground="#AAAABC"/>
 			</StackPanel>
 
-			<!-- â”€â”€ Use Nen button (idle state) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+			<!-- ── Use Nen button (idle state) ───────────────────── -->
 			<Button Classes="use-nen"
                     IsVisible="{Binding !HasActiveSession}"
                     Command="{Binding StartRitualCommand}">
 				<StackPanel Orientation="Horizontal" Spacing="16">
-					<TextBlock Text="âœ¦"
+					<TextBlock Text="✦"
                                FontSize="17"
                                Foreground="#B8922A"
                                VerticalAlignment="Center"/>
@@ -124,7 +124,7 @@
 				</StackPanel>
 			</Button>
 
-			<!-- â”€â”€ Active Session Panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+			<!-- ── Active Session Panel ──────────────────────────── -->
 			<Border IsVisible="{Binding HasActiveSession}"
                     Background="#FFFFFF"
                     CornerRadius="14"
@@ -231,7 +231,7 @@
 						<TextBlock Text="Profile"
                                    FontSize="11"
                                    Foreground="#BBBBCC"/>
-						<TextBlock Text="Â·"
+						<TextBlock Text="·"
                                    FontSize="11"
                                    Foreground="#BBBBCC"/>
 						<TextBlock Text="{Binding ActiveProfileName}"
@@ -275,10 +275,10 @@
 				</StackPanel>
 			</Border>
 
-			<!-- â”€â”€ Section divider â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+			<!-- ── Section divider ───────────────────────────────── -->
 			<Border Height="1" Background="#E4E4EE" Margin="-2,0"/>
 
-			<!-- â”€â”€ Today's checklist â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+			<!-- ── Today's checklist ─────────────────────────────── -->
 			<StackPanel Spacing="14">
 
 				<TextBlock Text="TODAY"

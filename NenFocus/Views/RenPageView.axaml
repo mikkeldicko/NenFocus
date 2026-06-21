@@ -51,7 +51,7 @@
             <StackPanel Spacing="0">
 
                 <!-- Kanji + Header -->
-                <TextBlock Text="éŒ¬"
+                <TextBlock Text="錬"
                            FontSize="72"
                            FontWeight="Thin"
                            Foreground="#DDDDE8"
@@ -72,7 +72,7 @@
 
                 <!-- Loading -->
                 <TextBlock IsVisible="{Binding IsLoading}"
-                           Text="Loading profilesâ€¦"
+                           Text="Loading profiles…"
                            FontSize="13"
                            Foreground="#AAAABC"
                            HorizontalAlignment="Center"
@@ -121,7 +121,7 @@
                                                 <TextBlock FontSize="11" Foreground="#AAAABC"
                                                            VerticalAlignment="Center">
                                                     <Run Text="{Binding Profile.AppCount}"/>
-                                                    <Run Text=" apps Â· "/>
+                                                    <Run Text=" apps · "/>
                                                     <Run Text="{Binding Profile.SiteCount}"/>
                                                     <Run Text=" sites"/>
                                                 </TextBlock>
@@ -130,7 +130,7 @@
                                         <!-- Selected checkmark -->
                                         <TextBlock Grid.Column="1"
                                                    IsVisible="{Binding IsSelected}"
-                                                   Text="âœ“"
+                                                   Text="✓"
                                                    FontSize="16"
                                                    Foreground="#B8922A"
                                                    VerticalAlignment="Center"/>
@@ -209,7 +209,7 @@
                                                    VerticalAlignment="Center"/>
                                         <Button Grid.Column="1"
                                                 Classes="remove-tag"
-                                                Content="âœ•"
+                                                Content="✕"
                                                 Command="{Binding $parent[UserControl].((vm:RenPageViewModel)DataContext).RemoveAppCommand}"
                                                 CommandParameter="{Binding}"/>
                                     </Grid>
@@ -265,7 +265,7 @@
                                                    VerticalAlignment="Center"/>
                                         <Button Grid.Column="1"
                                                 Classes="remove-tag"
-                                                Content="âœ•"
+                                                Content="✕"
                                                 Command="{Binding $parent[UserControl].((vm:RenPageViewModel)DataContext).RemoveWebsiteCommand}"
                                                 CommandParameter="{Binding}"/>
                                     </Grid>

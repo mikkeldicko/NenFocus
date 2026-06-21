@@ -58,7 +58,7 @@ public class NenFocusDbContext : DbContext
         base.OnModelCreating(modelBuilder);
         modelBuilder.Ignore<DomainEvent>();
 
-        // ── Session ────────────────────────────────────────────────────────
+        // -- Session --
         modelBuilder.Entity<Session>(entity =>
         {
             entity.ToTable("Sessions");
@@ -126,7 +126,7 @@ public class NenFocusDbContext : DbContext
                 .HasDefaultValueSql("'[]'");
         });
 
-        // ── BlockProfile ───────────────────────────────────────────────────
+        // -- BlockProfile --
         modelBuilder.Entity<BlockProfile>(entity =>
         {
             entity.ToTable("BlockProfiles");
@@ -172,7 +172,7 @@ public class NenFocusDbContext : DbContext
             });
         });
 
-        // ── PlannedBlocks (TPH for RitualBlock / BackgroundBlock) ──────────
+        // -- PlannedBlocks (TPH for RitualBlock / BackgroundBlock) --
         modelBuilder.Entity<PlannedBlock>(entity =>
         {
             entity.ToTable("PlannedBlocks");
@@ -203,7 +203,7 @@ public class NenFocusDbContext : DbContext
             entity.Property(r => r.RitualCompletedAt);
         });
 
-        // ── BlockedAttempt ─────────────────────────────────────────────────
+        // -- BlockedAttempt --
         modelBuilder.Entity<BlockedAttempt>(entity =>
         {
             entity.ToTable("BlockedAttempts");

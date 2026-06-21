@@ -23,7 +23,7 @@
 
     <Grid RowDefinitions="56,*">
 
-        <!-- â”€â”€ Top bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+        <!-- ── Top bar ──────────────────────────────────────────────── -->
         <Grid Grid.Row="0"
               ColumnDefinitions="120,*,120"
               Margin="28,0">
@@ -34,7 +34,7 @@
                     VerticalAlignment="Center"
                     Command="{Binding GoBackCommand}">
                 <StackPanel Orientation="Horizontal" Spacing="8">
-                    <TextBlock Text="â†" FontSize="15" Foreground="#AAAABC" VerticalAlignment="Center"/>
+                    <TextBlock Text="←" FontSize="15" Foreground="#AAAABC" VerticalAlignment="Center"/>
                     <TextBlock Text="Back" FontSize="13" Foreground="#AAAABC" VerticalAlignment="Center"/>
                 </StackPanel>
             </Button>
@@ -57,7 +57,7 @@
 
         </Grid>
 
-        <!-- â”€â”€ Step content with crossfade â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+        <!-- ── Step content with crossfade ──────────────────────────── -->
         <TransitioningContentControl Grid.Row="1"
                                       Content="{Binding CurrentStep}">
             <TransitioningContentControl.PageTransition>

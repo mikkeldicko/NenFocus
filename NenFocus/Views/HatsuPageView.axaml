@@ -35,7 +35,7 @@
 			<StackPanel Spacing="0">
 
 				<!-- Kanji + Header -->
-				<TextBlock Text="ç™º"
+				<TextBlock Text="発"
                            FontSize="72"
                            FontWeight="Thin"
                            Foreground="#DDDDE8"
