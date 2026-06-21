@@ -6,7 +6,8 @@ public class SessionStartedEvent : DomainEvent
     public Guid BlockProfileId { get; }
     public string Goal { get; }
 
-    public SessionStartedEvent(Guid sessionId, Guid blockProfileId, string goal)
+    public SessionStartedEvent(Guid sessionId, Guid blockProfileId, string goal, DateTime occurredAt)
+        : base(occurredAt)
     {
         SessionId = sessionId;
         BlockProfileId = blockProfileId;

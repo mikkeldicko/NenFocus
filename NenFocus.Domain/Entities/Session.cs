@@ -73,7 +73,7 @@ public class Session : IHasDomainEvents
 
         Status = SessionStatus.Active;
         StartedAt = startedAt;
-        _domainEvents.Add(new SessionStartedEvent(Id, BlockProfileId, Goal.Value));
+        _domainEvents.Add(new SessionStartedEvent(Id, BlockProfileId, Goal.Value, startedAt));
     }
 
     public void StartBreak(DateTime breakStartedAt)
@@ -89,7 +89,7 @@ public class Session : IHasDomainEvents
         Status = SessionStatus.OnBreak;
         BreakStartedAt = breakStartedAt;
         BreaksTaken++;
-        _domainEvents.Add(new BreakStartedEvent(Id, BreaksTaken));
+        _domainEvents.Add(new BreakStartedEvent(Id, BreaksTaken, breakStartedAt));
     }
 
     public void ResumeFromBreak()

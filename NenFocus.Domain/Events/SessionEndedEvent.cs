@@ -6,6 +6,7 @@ public class SessionEndedEvent : DomainEvent
     public DateTime EndedAt { get; }
 
     public SessionEndedEvent(Guid sessionId, DateTime endedAt)
+        : base(endedAt)
     {
         SessionId = sessionId;
         EndedAt = endedAt;

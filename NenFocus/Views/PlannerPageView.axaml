@@ -1,6 +1,7 @@
 ﻿<UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:NenFocus.ViewModels.Pages"
+             xmlns:comp="using:NenFocus.ViewModels.Components"
              xmlns:dto="using:NenFocus.Application.DTOs"
              xmlns:conv="using:NenFocus.Converters"
              x:DataType="vm:PlannerPageViewModel"
@@ -9,6 +10,7 @@
 
 	<UserControl.Resources>
 		<conv:WeekRangeToStringConverter x:Key="WeekRangeConverter"/>
+		<conv:DateTimeToUpperStringConverter x:Key="DateTimeUpperConverter"/>
 	</UserControl.Resources>
 
 	<UserControl.Styles>
@@ -166,11 +168,11 @@
 								</ItemsPanelTemplate>
 							</ItemsControl.ItemsPanel>
 							<ItemsControl.ItemTemplate>
-								<DataTemplate>
+								<DataTemplate DataType="comp:WeekDayHeaderViewModel">
 									<Border Classes="dayHeader" Classes.today="{Binding IsToday}">
 										<StackPanel HorizontalAlignment="Center" Spacing="2">
-											<TextBlock Text="{Binding DayName}" FontSize="11" FontWeight="Medium" Foreground="#7A7A8C" HorizontalAlignment="Center"/>
-											<TextBlock Text="{Binding DayNumber}" FontSize="18" FontWeight="SemiBold" Foreground="#1A1A2E" HorizontalAlignment="Center"/>
+											<TextBlock Text="{Binding Date, Converter={StaticResource DateTimeUpperConverter}, ConverterParameter='ddd'}" FontSize="11" FontWeight="Medium" Foreground="#7A7A8C" HorizontalAlignment="Center"/>
+											<TextBlock Text="{Binding Date.Day}" FontSize="18" FontWeight="SemiBold" Foreground="#1A1A2E" HorizontalAlignment="Center"/>
 										</StackPanel>
 									</Border>
 								</DataTemplate>

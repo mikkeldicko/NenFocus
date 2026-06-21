@@ -35,7 +35,7 @@ public sealed class CreateBlockProfileCommandHandler
             return CreateBlockProfileResult.Fail($"A profile named '{command.Name}' already exists.");
 
         // 3. Create Domain Aggregate (using your factory method)
-        var profile = BlockProfile.Create(Guid.NewGuid(), command.Name, command.WebsitePolicy, command.Tags.ToList());
+        var profile = BlockProfile.Create(Guid.NewGuid(), command.Name, command.WebsitePolicy, DateTime.UtcNow, command.Tags.ToList());
 
         foreach (var appName in command.BlockedApps)
             profile.AddBlockedApp(new BlockedApp(appName));

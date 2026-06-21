@@ -24,6 +24,7 @@ public partial class MainPageViewModel : ViewModelBase
     private readonly ICommandHandler<EndSessionCommand, EndSessionResult> _endSession;
     private readonly ICommandHandler<StartBreakCommand, StartBreakResult> _startBreak;
     private readonly ICommandHandler<ResumeFromBreakCommand, ResumeFromBreakResult> _resumeFromBreak;
+    private readonly IPlannerClockService _clock;
     private Guid _activeSessionId;
 
     // â”€â”€ Session display â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -71,14 +72,14 @@ public partial class MainPageViewModel : ViewModelBase
 
     // â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-    public string Greeting => DateTime.Now.Hour switch
+    public string Greeting => _clock.LocalNow.Hour switch
     {
         < 12 => "Good morning.",
         < 17 => "Good afternoon.",
         _ => "Good evening."
     };
 
-    public string TodayDate => DateTime.Now.ToString("dddd, MMMM d");
+    public DateTime Today => _clock.LocalNow;
 
     public ObservableCollection<ChecklistItemViewModel> TodaysChecklist { get; } = new();
     public bool HasNoChecklist => TodaysChecklist.Count == 0;
@@ -90,7 +91,8 @@ public partial class MainPageViewModel : ViewModelBase
         IActiveSessionMonitor monitor,
         ICommandHandler<EndSessionCommand, EndSessionResult> endSession,
         ICommandHandler<StartBreakCommand, StartBreakResult> startBreak,
-        ICommandHandler<ResumeFromBreakCommand, ResumeFromBreakResult> resumeFromBreak)
+        ICommandHandler<ResumeFromBreakCommand, ResumeFromBreakResult> resumeFromBreak,
+        IPlannerClockService clock)
     {
         _onStartRitual = onStartRitual;
         _onShowPostSession = onShowPostSession;
@@ -99,6 +101,7 @@ public partial class MainPageViewModel : ViewModelBase
         _endSession = endSession;
         _startBreak = startBreak;
         _resumeFromBreak = resumeFromBreak;
+        _clock = clock;
 
         _sessionState.RitualRequirementChanged += (_, required) =>
             Dispatcher.UIThread.Post(() => IsRitualBannerVisible = required);

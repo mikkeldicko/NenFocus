@@ -23,10 +23,11 @@ public sealed class DuplicateBlockProfileCommandHandler
 
         var newName = command.NewName ?? $"Copy of {source.Name}";
 
+        var now = DateTime.UtcNow;
         if (await _profiles.ExistsWithNameAsync(newName, cancellationToken: cancellationToken))
-            newName = $"{newName} ({DateTime.UtcNow:HH:mm})";
+            newName = $"{newName} ({now:HH:mm})";
 
-        var duplicate = source.Duplicate(newName, Guid.NewGuid());
+        var duplicate = source.Duplicate(newName, Guid.NewGuid(), now);
         await _profiles.AddAsync(duplicate, cancellationToken);
 
         return DuplicateBlockProfileResult.Ok(duplicate.Id);

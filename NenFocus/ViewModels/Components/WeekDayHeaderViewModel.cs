@@ -3,19 +3,17 @@ using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace NenFocus.ViewModels.Components;
 
-/// <summary>
-/// Header for a single day column (Monâ€“Sun) at the top of the week grid.
-/// </summary>
 public partial class WeekDayHeaderViewModel : ViewModelBase
 {
-    public DateTime Date { get; }
-    public string DayName => Date.ToString("ddd").ToUpperInvariant();
-    public string DayNumber => Date.Day.ToString();
-    public bool IsToday => Date.Date == DateTime.Today;
+    private readonly DateTime _today;
 
-    public WeekDayHeaderViewModel(DateTime date)
+    public DateTime Date { get; }
+    public bool IsToday => Date.Date == _today.Date;
+
+    public WeekDayHeaderViewModel(DateTime date, DateTime today)
     {
         Date = date.Date;
+        _today = today.Date;
     }
 }
 

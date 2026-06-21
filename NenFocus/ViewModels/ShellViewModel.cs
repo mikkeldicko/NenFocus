@@ -96,7 +96,7 @@ public partial class ShellViewModel : ViewModelBase
             CurrentPage = selected.PageViewModel;
         }
 
-        NavItems.Add(new NavItemViewModel("Main", "⊹", new MainPageViewModel(StartRitual, ShowPostSession, _sessionState, _monitor, _endSession, _startBreak, _resumeFromBreak), Select));
+        NavItems.Add(new NavItemViewModel("Main", "⊹", new MainPageViewModel(StartRitual, ShowPostSession, _sessionState, _monitor, _endSession, _startBreak, _resumeFromBreak, _plannerClock), Select));
         NavItems.Add(new NavItemViewModel("Block Profiles", "◻", new BlockProfilePageViewModel(profilesQuery, createProfile, updateProfile, deleteProfile, duplicateProfile), Select));
         NavItems.Add(new NavItemViewModel("Planner", "◫", new PlannerPageViewModel(profilesQuery, getBlocksForDay, createPlannedBlock, updatePlannedBlock, deletePlannedBlock, _plannerClock), Select));
         NavItems.Add(new NavItemViewModel("Insights", "◈", new InsightsPageViewModel(), Select));

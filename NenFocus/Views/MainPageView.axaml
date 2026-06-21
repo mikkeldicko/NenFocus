@@ -9,6 +9,7 @@
 
 	<UserControl.Resources>
 		<conv:TimeSpanToStringConverter x:Key="TimeSpanConverter"/>
+		<conv:DateTimeToStringConverter x:Key="DateTimeConverter"/>
 	</UserControl.Resources>
 
 	<UserControl.Styles>
@@ -100,7 +101,7 @@
                            FontSize="28"
                            FontWeight="SemiBold"
                            Foreground="#1A1A2E"/>
-				<TextBlock Text="{Binding TodayDate}"
+				<TextBlock Text="{Binding Today, Converter={StaticResource DateTimeConverter}, ConverterParameter='dddd, MMMM d'}"
                            FontSize="13"
                            Foreground="#AAAABC"/>
 			</StackPanel>

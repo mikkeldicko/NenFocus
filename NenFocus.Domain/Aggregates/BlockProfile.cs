@@ -29,6 +29,7 @@ public class BlockProfile : IHasDomainEvents
         Guid id,
         string name,
         WebsitePolicy websitePolicy,
+        DateTime createdAt,
         IEnumerable<string>? tags = null)
     {
         if (string.IsNullOrWhiteSpace(name))
@@ -47,7 +48,7 @@ public class BlockProfile : IHasDomainEvents
             foreach (var tag in tags)
                 profile._tags.Add(tag.Trim());
 
-        profile._domainEvents.Add(new BlockProfileCreatedEvent(id, name.Trim()));
+        profile._domainEvents.Add(new BlockProfileCreatedEvent(id, name.Trim(), createdAt));
 
         return profile;
     }
@@ -105,9 +106,9 @@ public class BlockProfile : IHasDomainEvents
         _tags.Remove(tag.Trim());
     }
 
-    public BlockProfile Duplicate(string newName, Guid newId)
+    public BlockProfile Duplicate(string newName, Guid newId, DateTime duplicatedAt)
     {
-        var copy = Create(newId, newName, WebsitePolicy, _tags);
+        var copy = Create(newId, newName, WebsitePolicy, duplicatedAt, _tags);
         foreach (var app in _blockedApps)
             copy.AddBlockedApp(new BlockedApp(app.ProcessName));
         foreach (var site in _websites)

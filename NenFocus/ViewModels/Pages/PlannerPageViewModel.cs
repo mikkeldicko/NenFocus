@@ -14,6 +14,7 @@ using NenFocus.Application.UseCases.Planner.CreatePlannedBlock;
 using NenFocus.Application.UseCases.Planner.DeletePlannedBlock;
 using NenFocus.Application.UseCases.Planner.UpdatePlannedBlock;
 using NenFocus.Domain.Enums;
+using NenFocus.Helpers;
 using NenFocus.ViewModels.Components;
 
 namespace NenFocus.ViewModels.Pages;
@@ -106,7 +107,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
         GenerateTimeOptions();
 
-        WeekStart = StartOfWeek(DateTime.Today);
+        WeekStart = StartOfWeek(_clockService.LocalNow.Date);
         BuildDayHeaders();
 
         _clockService.Tick += OnClockTick;
@@ -127,10 +128,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         IsTodayInView = now.Date >= WeekStart.Date && now.Date < weekEnd.Date;
 
         if (IsTodayInView)
-        {
-            double totalMinutes = (now.Hour - FirstHour) * 60 + now.Minute;
-            CurrentTimeY = (totalMinutes / 60.0) * HourRowHeight;
-        }
+            CurrentTimeY = PlannerLayout.GetCurrentTimeY(now, FirstHour, HourRowHeight);
 
         OnPropertyChanged(nameof(TodayColumnIndex));
     }
@@ -175,7 +173,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private async Task GoToTodayAsync()
     {
-        var today = StartOfWeek(DateTime.Today);
+        var today = StartOfWeek(_clockService.LocalNow.Date);
         if (today == WeekStart) return;
         WeekStart = today;
         BuildDayHeaders();
@@ -185,9 +183,10 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
     private void BuildDayHeaders()
     {
+        var today = _clockService.LocalNow.Date;
         DayHeaders.Clear();
         for (int i = 0; i < 7; i++)
-            DayHeaders.Add(new WeekDayHeaderViewModel(WeekStart.AddDays(i)));
+            DayHeaders.Add(new WeekDayHeaderViewModel(WeekStart.AddDays(i), today));
     }
 
     private static DateTime StartOfWeek(DateTime date)
@@ -234,20 +233,11 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         var visibleStart = dayStart.AddHours(FirstHour);
         var visibleEnd = dayStart.AddHours(LastHour);
 
-        var clippedStart = localStart < visibleStart ? visibleStart : localStart;
-        var clippedEnd = localEnd > visibleEnd ? visibleEnd : localEnd;
-
-        if (clippedEnd <= clippedStart) return null;
-
-        var startMinutes = (clippedStart - visibleStart).TotalMinutes;
-        var durationMinutes = (clippedEnd - clippedStart).TotalMinutes;
-
-        var top = (startMinutes / 60.0) * HourRowHeight;
-        var height = Math.Max(HourRowHeight * 0.5, (durationMinutes / 60.0) * HourRowHeight);
+        var position = PlannerLayout.GetTilePosition(localStart, localEnd, visibleStart, visibleEnd, HourRowHeight);
+        if (position is null) return null;
 
         var localDto = dto with { Start = localStart, End = localEnd };
-
-        return new PlannedBlockTileViewModel(localDto, dto.BlockType, columnIndex, top, height);
+        return new PlannedBlockTileViewModel(localDto, dto.BlockType, columnIndex, position.Value.Top, position.Value.Height);
     }
 
     [RelayCommand]
@@ -278,11 +268,13 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         FormTitle = "Edit Block";
         ResetForm();
 
-        var blockDate = DateTime.SpecifyKind(dto.Start.Date, DateTimeKind.Utc);
+        var localStart = dto.Start.ToLocalTime();
+        var localEnd = dto.End.ToLocalTime();
+        var blockDate = DateTime.SpecifyKind(localStart.Date, DateTimeKind.Utc);
         FormDate = new DateTimeOffset(blockDate, TimeSpan.Zero);
 
-        FormStartTime = dto.Start.ToString("HH:mm");
-        FormEndTime = dto.End.ToString("HH:mm");
+        FormStartTime = $"{localStart.Hour:D2}:{localStart.Minute:D2}";
+        FormEndTime = $"{localEnd.Hour:D2}:{localEnd.Minute:D2}";
         IsFocusBlock = dto.BlockType == BlockType.Ritual;
         SelectedProfile = AvailableProfiles.FirstOrDefault(p => p.Id == dto.ProfileId)
                           ?? AvailableProfiles.FirstOrDefault();
