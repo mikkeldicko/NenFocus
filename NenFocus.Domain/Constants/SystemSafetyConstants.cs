@@ -1,4 +1,4 @@
-﻿namespace NenFocus.Domain.Constants;
+namespace NenFocus.Domain.Constants;
 
 public static class SystemSafetyConstants
 {
@@ -9,5 +9,5 @@ public static class SystemSafetyConstants
     };
 
     public const string MicrosoftPublisher = "O=Microsoft Corporation";
-    public const string NenFocusPublisher = "PC-NenFocus-Developer"; // Update to your actual cert subject
+    public const string NenFocusPublisher = "PC-NenFocus-Developer";
 }

@@ -2,10 +2,7 @@
 
 public sealed class RitualBlock : PlannedBlock
 {
-    /// <summary>
-    /// Set when the user completes the Nen Ritual after this block activates.
-    /// Null means the Ritual was never completed — Insights shows this as missed.
-    /// </summary>
+    /// <summary>Null means the Ritual was never completed for this block.</summary>
     public DateTime? RitualCompletedAt { get; private set; }
 
     private RitualBlock() { }

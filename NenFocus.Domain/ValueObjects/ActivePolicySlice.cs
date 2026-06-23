@@ -15,7 +15,7 @@ public sealed record ActivePolicySlice
     public BlockType? ActiveBlockType { get; init; }
 
     // True when a Ritual Block is still within its scheduled window but its session has
-    // already ended — stops ScheduledEnforcementService from re-applying enforcement.
+    // already ended — prevents enforcement from being re-applied mid-window.
     public bool RitualSessionCompleted { get; init; }
 
     public bool IsEmpty =>
