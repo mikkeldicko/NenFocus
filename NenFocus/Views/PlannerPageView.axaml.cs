@@ -209,7 +209,7 @@ public partial class PlannerPageView : UserControl
 
         stack.Children.Add(new TextBlock
         {
-            Text = tile.TimeRangeText,
+            Text = $"{tile.Start:HH:mm} – {tile.End:HH:mm}",
             FontSize = 10,
             Opacity = 0.85
         });

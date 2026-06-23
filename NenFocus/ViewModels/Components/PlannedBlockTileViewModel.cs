@@ -23,9 +23,6 @@ public partial class PlannedBlockTileViewModel : ViewModelBase
     /// <summary>Tile height in pixels.</summary>
     public double Height { get; }
 
-    public string TimeRangeText =>
-        $"{Start:HH:mm} – {End:HH:mm}";
-
     public bool IsFocus => BlockType == BlockType.Ritual;
     public bool IsPassive => BlockType == BlockType.Background;
 
