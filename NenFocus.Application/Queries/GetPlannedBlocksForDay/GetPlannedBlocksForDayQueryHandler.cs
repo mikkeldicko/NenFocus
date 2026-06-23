@@ -36,7 +36,7 @@ public sealed class GetPlannedBlocksForDayQueryHandler
                 Id = b.Id,
                 ProfileId = b.BlockProfileId,
                 ProfileName = profile?.Name ?? "Unknown",
-                BlockType = b is RitualBlock ? BlockType.Ritual : BlockType.Background,
+                BlockType = b is FocusBlock ? BlockType.Focus : BlockType.Background,
                 Start = b.Start,
                 End = b.End,
                 IsAllowlistMode = profile?.WebsitePolicy == WebsitePolicy.Allowlist

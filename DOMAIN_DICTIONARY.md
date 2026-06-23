@@ -11,13 +11,13 @@ This file is the canonical reference for every domain concept in NenFocus. It ex
 | **Session** | A bounded focus period; lifecycle `NotStarted → Active → (OnBreak ↔ Active) → Completed` |
 | **Ritual** | The four-step wizard (Ten → Zetsu → Ren → Hatsu) that creates a Session |
 | **Block Profile** | A reusable template of blocked apps + website policy; typed as Ritual or Background at creation |
-| **Planned Block** | Abstract base for `RitualBlock` and `BackgroundBlock`; carries `Start`, `End`, `BlockProfileId`, `IsActive()`, `OverlapsWith()` |
-| **Ritual Block** | A planned calendar entry that activates enforcement AND triggers the Nen Ritual at the designated time |
+| **Planned Block** | Abstract base for `FocusBlock` and `BackgroundBlock`; carries `Start`, `End`, `BlockProfileId`, `IsActive()`, `OverlapsWith()` |
+| **Focus Block** | A planned calendar entry that activates enforcement AND triggers the Nen Ritual at the designated time |
 | **Background Block** | A planned calendar entry that activates enforcement at the designated time without triggering the Ritual |
 | **Policy Slice** | The merged, computed enforcement state at a given instant; represented as `ActivePolicySlice` (Domain Value Object), produced by `PolicyEngine` |
 | **PolicyEngine** | Stateless Domain service (`NenFocus.Domain/Services/`) that computes `ActivePolicySlice` from raw aggregates; sole owner of all merge rules |
 | **Impromptu Session** | A Session created by completing the Ritual manually from the Main Page; no Block entity exists; `Origin = Impromptu` |
-| **Planned Session** | A Session created via the Ritual triggered by a scheduled Ritual Block; `Origin = Planned` |
+| **Planned Session** | A Session created via the Ritual triggered by a scheduled Focus Block; `Origin = Planned` |
 | **SessionOrigin** | Enum (`Impromptu` \| `Planned`) that tags every Session with how it was initiated |
 | **Blocked Attempt** | An append-only fact recording a user's attempt to access a blocked app or site during a Session |
 | **Contract** | *(Future)* A time-bounded commitment (day/week/month) with user-defined strictness rules governing block schedule changes |
@@ -40,7 +40,7 @@ NenFocus has five pages accessible via the sidebar:
 |------|---------|
 | **Main Page** | Home screen; shows "Use Nen" button when idle, active session timer when a session is running |
 | **Block Profile Page** | CRUD for Block Profiles; Ritual and Background profiles displayed together with filter option |
-| **Planner Page** | Calendar view for scheduling Ritual Blocks, Background Blocks, and (future) Contracts |
+| **Planner Page** | Calendar view for scheduling Focus Blocks, Background Blocks, and (future) Contracts |
 | **Insights Page** | Session history, block history, blocked attempt analytics, calendar view of past blocks, usage graphs |
 | **Settings Page** | User preferences: break behaviour, strict mode, plan rules, and other enforcement configuration |
 
@@ -89,7 +89,7 @@ NenFocus has five pages accessible via the sidebar:
 
 **Two activation paths:**
 - **Impromptu:** User clicks "Use Nen" on the Main Page. All four steps are fully user-controlled.
-- **Planned:** A scheduled Ritual Block activates and pushes the user to the Ritual. The Ren and Hatsu steps are constrained (see below).
+- **Planned:** A scheduled Focus Block activates and pushes the user to the Ritual. The Ren and Hatsu steps are constrained (see below).
 
 **Step meanings:**
 
@@ -97,8 +97,8 @@ NenFocus has five pages accessible via the sidebar:
 |------|-------|-------------|---------------|
 | **Ten** | Awareness | "Focus the mind, reflect upon the self, and determine the goal" | Greet the user; prompt internal reflection before continuing. Same for both Impromptu and Planned. |
 | **Zetsu** | Silence | "Put it into words" | User writes their session goal into a text box. Same for both Impromptu and Planned. |
-| **Ren** | Persistence | "Intensify your will" | **Impromptu:** User selects a Ritual-type Block Profile from their existing profiles. **Planned:** Block Profile is pre-selected and locked (chosen when the Ritual Block was scheduled); user cannot change it. |
-| **Hatsu** | Output | "Put it into action" | **Impromptu:** User selects session duration (5 min – 8 hours) and optionally configures break reminders. **Planned:** Duration is pre-determined by the Ritual Block's scheduled end time (displayed as "active until [time]"); user can only configure break reminders. User clicks "Start Session." |
+| **Ren** | Persistence | "Intensify your will" | **Impromptu:** User selects a Ritual-type Block Profile from their existing profiles. **Planned:** Block Profile is pre-selected and locked (chosen when the Focus Block was scheduled); user cannot change it. |
+| **Hatsu** | Output | "Put it into action" | **Impromptu:** User selects session duration (5 min – 8 hours) and optionally configures break reminders. **Planned:** Duration is pre-determined by the Focus Block's scheduled end time (displayed as "active until [time]"); user can only configure break reminders. User clicks "Start Session." |
 
 **Technical mapping:**
 
@@ -113,7 +113,7 @@ NenFocus has five pages accessible via the sidebar:
 
 ## Block Profile
 
-**Definition:** A reusable, named configuration of blocked applications and a website policy. A Block Profile is typed as either **Ritual** or **Background** at creation time. This type is immutable — to change it, delete and recreate the profile. The type acts as a filter: Ritual profiles only appear when starting a Ritual session (Ren page) or scheduling a Ritual Block (Planner); Background profiles only appear when scheduling a Background Block (Planner).
+**Definition:** A reusable, named configuration of blocked applications and a website policy. A Block Profile is typed as either **Ritual** or **Background** at creation time. This type is immutable — to change it, delete and recreate the profile. The type acts as a filter: Ritual profiles only appear when starting a Ritual session (Ren page) or scheduling a Focus Block (Planner); Background profiles only appear when scheduling a Background Block (Planner).
 
 **Lifecycle:** Created in Block Profiles page (type chosen at creation) → (optionally duplicated or edited) → attached to Session at Ritual (Ren step) or to a Planned Block in the Planner → locked for duration of Session or active Block.
 
@@ -123,7 +123,7 @@ NenFocus has five pages accessible via the sidebar:
 
 **Ubiquitous language rules:**
 - A profile is *attached* to a session or block, not *assigned* or *applied*.
-- A profile is *locked* when a Ritual Block activates — no edits are permitted from the block's designated start time through the end of the session, including the period before the Ritual is completed.
+- A profile is *locked* when a Focus Block activates — no edits are permitted from the block's designated start time through the end of the session, including the period before the Ritual is completed.
 - A profile is *locked* during a session — no edits are permitted while a session using it is active.
 
 **UI display:** On the Block Profile page, Ritual and Background profiles are displayed together in a single list with a type label. A filter option lets the user show only one type.
@@ -232,14 +232,14 @@ NenFocus has five pages accessible via the sidebar:
 - **Websites:** if *any* active profile uses `Allowlist` mode → default-deny, allowed = intersection of all allowlists minus any blocklist entries. Otherwise → block the union of all blocklisted sites. Includes `TemporaryBlockedSites` from the active `Session` entity.
 - **Time Budgets *(not yet implemented)*:** In a future slice, `PolicyEngine.ComputeSlice()` will read `DailyBudgetUsage` to determine remaining budget per site. Sites whose `TimeBudget` has been fully consumed for the current calendar day will be added to the blocked set regardless of `WebsitePolicy` mode.
 - An `ActivePolicySlice` is considered "empty" only in `Blocklist` mode with no blocked apps or sites. It is *never* empty in `Allowlist` mode.
-- **`ActiveBlockType`:** set to `BlockType.Ritual` if any Ritual Block is currently active, `BlockType.Background` if only Background Blocks are active, `null` if enforcement is driven solely by an active Session with no planned block. Ritual always takes precedence over Background when both overlap.
+- **`ActiveBlockType`:** set to `BlockType.Focus` if any Focus Block is currently active, `BlockType.Background` if only Background Blocks are active, `null` if enforcement is driven solely by an active Session with no planned block. Ritual always takes precedence over Background when both overlap.
 
 **Overlap rules:**
 - Multiple Background Blocks can overlap freely. The net enforcement is the union of all their profiles.
-- A Ritual Block can overlap with Background Blocks. The net enforcement is the union of all active profiles. The Ritual is still triggered.
-- Two Ritual Blocks cannot overlap. The Planner prevents scheduling conflicts. An Impromptu session cannot be started if it would overlap with an upcoming Ritual Block.
+- A Focus Block can overlap with Background Blocks. The net enforcement is the union of all active profiles. The Ritual is still triggered.
+- Two Focus Blocks cannot overlap. The Planner prevents scheduling conflicts. An Impromptu session cannot be started if it would overlap with an upcoming Focus Block.
 
-**Why `ActiveBlockType` matters:** `ScheduledEnforcementService` reads this field each heartbeat cycle. If `ActiveBlockType == Ritual` and no Session is active, it calls `_sessionState.SetRitualRequired(true)` to push the user into the Ritual. If `ActiveBlockType == Background`, enforcement is applied silently with no Ritual prompt. This is the correct application of the Ubiquitous Language principle — the difference between a Ritual Block and a Background Block is expressed as a domain enum in the result, not as a boolean flag scattered across callers.
+**Why `ActiveBlockType` matters:** `ScheduledEnforcementService` reads this field each heartbeat cycle. If `ActiveBlockType == Ritual` and no Session is active, it calls `_sessionState.SetRitualRequired(true)` to push the user into the Ritual. If `ActiveBlockType == Background`, enforcement is applied silently with no Ritual prompt. This is the correct application of the Ubiquitous Language principle — the difference between a Focus Block and a Background Block is expressed as a domain enum in the result, not as a boolean flag scattered across callers.
 
 **Source of Truth flow:** `Database → PolicyEngine (Domain) → ActivePolicySlice (VO) → WindowsEnforcementService (OS)`
 
@@ -259,7 +259,7 @@ NenFocus has five pages accessible via the sidebar:
 
 **Definition:** The sole Domain service responsible for computing the `ActivePolicySlice`. It is a stateless, synchronous function: given a point in time, a list of `BlockProfile` aggregates, a list of active `Session` entities, and a list of active `PlannedBlock` entities, it returns the complete enforcement state for that moment.
 
-**Why it is a Domain Service (not an Application service):** Policy merge logic — the rules for unioning blocked apps, resolving allowlist/blocklist precedence, and assigning `ActiveBlockType` — is domain logic. It expresses invariants of the domain ("an allowlist profile beats a blocklist profile", "a Ritual Block takes priority over a Background Block") that must be consistent wherever policy is computed. Placing this logic in a Domain service makes it unit-testable without a database and reachable by any future consumer (e.g., a Planner "preview" query).
+**Why it is a Domain Service (not an Application service):** Policy merge logic — the rules for unioning blocked apps, resolving allowlist/blocklist precedence, and assigning `ActiveBlockType` — is domain logic. It expresses invariants of the domain ("an allowlist profile beats a blocklist profile", "a Focus Block takes priority over a Background Block") that must be consistent wherever policy is computed. Placing this logic in a Domain service makes it unit-testable without a database and reachable by any future consumer (e.g., a Planner "preview" query).
 
 **Interface contract:**
 ```csharp
@@ -284,7 +284,7 @@ ActivePolicySlice ComputeSlice(
 
 ## Planned Block
 
-**Definition:** The abstract base class for all calendar-scheduled enforcement entries. A `PlannedBlock` has a `Start` time, an `End` time, a `BlockProfileId`, and an optional `Title`. It is never instantiated directly — only its two concrete subtypes (`RitualBlock` and `BackgroundBlock`) are created. The C# class type encodes the block type; there is no stored `BlockType` column.
+**Definition:** The abstract base class for all calendar-scheduled enforcement entries. A `PlannedBlock` has a `Start` time, an `End` time, a `BlockProfileId`, and an optional `Title`. It is never instantiated directly — only its two concrete subtypes (`FocusBlock` and `BackgroundBlock`) are created. The C# class type encodes the block type; there is no stored `BlockType` column.
 
 **Domain behaviour:** `PlannedBlock` carries two domain methods used by both subtypes and the query layer:
 - `IsActive(DateTime atTime)` — returns `true` if `atTime` falls within `[Start, End)`.
@@ -296,57 +296,57 @@ ActivePolicySlice ComputeSlice(
 
 | Layer | Artifact | Role |
 |-------|----------|------|
-| Domain | `PlannedBlock` abstract class (`Entities/PlannedBlock.cs`) | Base for `RitualBlock` and `BackgroundBlock`; exposes `IsActive()` and `OverlapsWith()` |
+| Domain | `PlannedBlock` abstract class (`Entities/PlannedBlock.cs`) | Base for `FocusBlock` and `BackgroundBlock`; exposes `IsActive()` and `OverlapsWith()` |
 | Application | `IPlannedBlockRepository` | Returns `IReadOnlyList<PlannedBlock>`; callers cast to concrete type when subtype behaviour is needed |
-| Application | `ComputeActivePolicySliceQueryHandler` | Pattern-matches on `RitualBlock` / `BackgroundBlock` to set `ActiveBlockType` on the `ActivePolicySlice` value object |
+| Application | `ComputeActivePolicySliceQueryHandler` | Pattern-matches on `FocusBlock` / `BackgroundBlock` to set `ActiveBlockType` on the `ActivePolicySlice` value object |
 
 ---
 
-## Ritual Block
+## Focus Block
 
-**Definition:** A planned calendar entry that does two things simultaneously at its designated start time: (1) enforcement activates immediately — the block profile's rules are applied before the user has done anything, and (2) the user is pushed to the Nen Ritual page to consciously start the session. The session created via the Ritual is the *Planned Session* associated with this block. Critically, enforcement is already in place from the designated time regardless of whether the user completes the Ritual immediately. If the user never completes the Ritual, the `RitualBlock` row still exists and Insights shows it as "missed" (`RitualCompletedAt` is null). Enforcement still expires at the block's scheduled end time whether the Ritual was completed or not.
+**Definition:** A planned calendar entry that does two things simultaneously at its designated start time: (1) enforcement activates immediately — the block profile's rules are applied before the user has done anything, and (2) the user is pushed to the Nen Ritual page to consciously start the session. The session created via the Ritual is the *Planned Session* associated with this block. Critically, enforcement is already in place from the designated time regardless of whether the user completes the Ritual immediately. If the user never completes the Ritual, the `FocusBlock` row still exists and Insights shows it as "missed" (`RitualCompletedAt` is null). Enforcement still expires at the block's scheduled end time whether the Ritual was completed or not.
 
-**Must use a Ritual-type Block Profile.** Only profiles created with the Ritual type are available when scheduling a Ritual Block in the Planner or selecting a profile during the Ren step.
+**Must use a Ritual-type Block Profile.** Only profiles created with the Ritual type are available when scheduling a Focus Block in the Planner or selecting a profile during the Ren step.
 
-**Overlap rules:** Two Ritual Blocks cannot overlap each other. A Ritual Block can overlap with one or more Background Blocks — the net enforcement is the union of all active profiles.
+**Overlap rules:** Two Focus Blocks cannot overlap each other. A Focus Block can overlap with one or more Background Blocks — the net enforcement is the union of all active profiles.
 
 **Ubiquitous language rules:**
-- A Ritual Block is *scheduled*, not *started*.
-- A Ritual Block *activates* and *expires* — it is not started or ended.
-- Enforcement from a Ritual Block is *pre-emptive* — it does not wait for the Ritual to complete.
+- A Focus Block is *scheduled*, not *started*.
+- A Focus Block *activates* and *expires* — it is not started or ended.
+- Enforcement from a Focus Block is *pre-emptive* — it does not wait for the Ritual to complete.
 
 **Activation sequence:**
 1. System clock reaches the block's `Start` time
 2. Enforcement applies immediately (policy slice computed, OS-level blocking begins)
 3. App navigates user to the Nen Ritual (Ten → Zetsu → Ren → Hatsu)
 4. User completes Ritual → `StartSessionCommand` dispatched with `Origin = Planned` and `OriginatingBlockId = <this block's Id>`
-5. `StartSessionCommandHandler` calls `RitualBlock.MarkRitualCompleted(DateTime.UtcNow)` and saves the block
-6. The resulting Session (with `Origin = Planned`) is linked to this Ritual Block via `Session.OriginatingBlockId`
+5. `StartSessionCommandHandler` calls `FocusBlock.MarkRitualCompleted(DateTime.UtcNow)` and saves the block
+6. The resulting Session (with `Origin = Planned`) is linked to this Focus Block via `Session.OriginatingBlockId`
 
 **Technical mapping:**
 
 | Layer | Artifact | Role |
 |-------|----------|------|
-| Domain | `RitualBlock` entity (`Entities/RitualBlock.cs`) | Extends `PlannedBlock`; inherits `Id`, `BlockProfileId`, `Start`, `End`, `Title?`; own field: `RitualCompletedAt?`; block type derived from C# class (`RitualBlock` → `BlockType.Ritual` in query handler — no stored column) |
+| Domain | `FocusBlock` entity (`Entities/FocusBlock.cs`) | Extends `PlannedBlock`; inherits `Id`, `BlockProfileId`, `Start`, `End`, `Title?`; own field: `RitualCompletedAt?`; block type derived from C# class (`FocusBlock` → `BlockType.Focus` in query handler — no stored column) |
 | Application | `IPlannedBlockRepository` | Retrieves blocks for overlap validation and active-state queries |
 | Application | `ComputeActivePolicySliceQueryHandler` | Queries blocks covering `DateTime.UtcNow`; merges with active Session |
-| Application | `StartSessionCommandHandler` | Calls `RitualBlock.MarkRitualCompleted(DateTime.UtcNow)` when `OriginatingBlockId` is provided |
-| UI | `PlannerPageViewModel` | (Stub) — will create, update, delete Ritual Blocks |
-| UI | `ShellViewModel` | (Not yet built) — will detect Ritual Block activation and trigger Ritual overlay |
+| Application | `StartSessionCommandHandler` | Calls `FocusBlock.MarkRitualCompleted(DateTime.UtcNow)` when `OriginatingBlockId` is provided |
+| UI | `PlannerPageViewModel` | (Stub) — will create, update, delete Focus Blocks |
+| UI | `ShellViewModel` | (Not yet built) — will detect Focus Block activation and trigger Ritual overlay |
 
 ---
 
 ## Background Block
 
-**Definition:** A planned calendar entry that activates enforcement at its designated start time, exactly like a Ritual Block, but does **not** trigger the Nen Ritual. The user is not prompted to start a session — the block profile's rules simply become active. There is no associated Session entity. The block expires at its `End` time and enforcement is removed. The `BackgroundBlock` row itself is the complete Insights record — it appears in the Calendar view regardless of whether the machine was on during the scheduled time.
+**Definition:** A planned calendar entry that activates enforcement at its designated start time, exactly like a Focus Block, but does **not** trigger the Nen Ritual. The user is not prompted to start a session — the block profile's rules simply become active. There is no associated Session entity. The block expires at its `End` time and enforcement is removed. The `BackgroundBlock` row itself is the complete Insights record — it appears in the Calendar view regardless of whether the machine was on during the scheduled time.
 
 **Must use a Background-type Block Profile.** Only profiles created with the Background type are available when scheduling a Background Block in the Planner.
 
-**Overlap rules:** Multiple Background Blocks can run simultaneously. Their profiles are merged via the PolicyEngine — the net enforcement is the union of all active profiles. Background Blocks can also overlap with Ritual Blocks.
+**Overlap rules:** Multiple Background Blocks can run simultaneously. Their profiles are merged via the PolicyEngine — the net enforcement is the union of all active profiles. Background Blocks can also overlap with Focus Blocks.
 
-**Contrast with Ritual Block:**
+**Contrast with Focus Block:**
 
-| | Ritual Block | Background Block |
+| | Focus Block | Background Block |
 |---|---|---|
 | Enforcement at start time | ✅ | ✅ |
 | Triggers Nen Ritual | ✅ | ❌ |
@@ -373,13 +373,13 @@ ActivePolicySlice ComputeSlice(
 
 ## Impromptu Session
 
-**Definition:** A Session created by the user clicking "Use Nen" on the Main Page and completing the full Nen Ritual (Ten → Zetsu → Ren → Hatsu), outside of any scheduled Ritual Block. The user has full control: they choose the Block Profile (Ritual-type only), set the duration, and configure break reminders. The Session is created with `Origin = Impromptu` and `OriginatingBlockId = null`. No Block entity of any kind is created.
+**Definition:** A Session created by the user clicking "Use Nen" on the Main Page and completing the full Nen Ritual (Ten → Zetsu → Ren → Hatsu), outside of any scheduled Focus Block. The user has full control: they choose the Block Profile (Ritual-type only), set the duration, and configure break reminders. The Session is created with `Origin = Impromptu` and `OriginatingBlockId = null`. No Block entity of any kind is created.
 
 **Product invariant:** A manual enforcement session cannot exist without a completed Ritual. This is a product invariant enforced by design, not by validation code. If the user abandons the Ritual at any step before clicking "Start Session" on the Hatsu page, no record is saved anywhere — no draft, no partial session, no recovery state.
 
-**Conflict rule:** An Impromptu Session cannot be started if it would overlap with an upcoming Ritual Block. For example, if a Ritual Block is scheduled at 18:00, the user cannot start a 30-minute session at 17:45.
+**Conflict rule:** An Impromptu Session cannot be started if it would overlap with an upcoming Focus Block. For example, if a Focus Block is scheduled at 18:00, the user cannot start a 30-minute session at 17:45.
 
-**Contrast with Planned Session:** An Impromptu Session is user-initiated and requires no pre-scheduled block. A Planned Session is triggered by a Ritual Block at its scheduled start time. In an Impromptu Session the user freely chooses the Block Profile and duration; in a Planned Session both are pre-determined.
+**Contrast with Planned Session:** An Impromptu Session is user-initiated and requires no pre-scheduled block. A Planned Session is triggered by a Focus Block at its scheduled start time. In an Impromptu Session the user freely chooses the Block Profile and duration; in a Planned Session both are pre-determined.
 
 **Technical mapping:** No Block entity — distinguished at the Application layer by `Session.Origin == Impromptu`. `Session.OriginatingBlockId` is `null`.
 
@@ -387,13 +387,13 @@ ActivePolicySlice ComputeSlice(
 
 ## Planned Session
 
-**Definition:** A Session created by the user completing the Nen Ritual after a scheduled Ritual Block activated and pushed them to the Ritual overlay. The Block Profile and duration are pre-determined by the Ritual Block — the user cannot change the profile (Ren step) or the end time (Hatsu step), but can configure break reminders. The Session is saved with `Origin = Planned` and `OriginatingBlockId = <the triggering RitualBlock's Id>`. `StartSessionCommandHandler` stamps `RitualBlock.RitualCompletedAt` at this moment. If the user never completes the Ritual, no Session row is created; the `RitualBlock` row remains with `RitualCompletedAt = null` and Insights shows it as "missed." Enforcement still runs until the block's scheduled end time regardless.
+**Definition:** A Session created by the user completing the Nen Ritual after a scheduled Focus Block activated and pushed them to the Ritual overlay. The Block Profile and duration are pre-determined by the Focus Block — the user cannot change the profile (Ren step) or the end time (Hatsu step), but can configure break reminders. The Session is saved with `Origin = Planned` and `OriginatingBlockId = <the triggering FocusBlock's Id>`. `StartSessionCommandHandler` stamps `FocusBlock.RitualCompletedAt` at this moment. If the user never completes the Ritual, no Session row is created; the `FocusBlock` row remains with `RitualCompletedAt = null` and Insights shows it as "missed." Enforcement still runs until the block's scheduled end time regardless.
 
 ---
 
 ## SessionOrigin
 
-**Definition:** An enum that tags every `Session` with how it was initiated. Values: `Impromptu` (user completed the Ritual from the Main Page without a pre-scheduled block) and `Planned` (user completed the Ritual after a Ritual Block pushed them to it).
+**Definition:** An enum that tags every `Session` with how it was initiated. Values: `Impromptu` (user completed the Ritual from the Main Page without a pre-scheduled block) and `Planned` (user completed the Ritual after a Focus Block pushed them to it).
 
 **Why this is not a nullable FK check:** `Session.OriginatingBlockId` is `null` for Impromptu sessions, but reading nullness as "origin type" is a leaky boolean. `SessionOrigin` makes the intent explicit and self-documenting. It remains unambiguous when future origin types are added.
 
@@ -445,13 +445,13 @@ ActivePolicySlice ComputeSlice(
 
 ## GetInsightsCalendarQuery
 
-**Definition:** A single query that unifies three data sources — `BackgroundBlock` rows, `RitualBlock` rows, and `Session` rows where `Origin = Impromptu` — into a single `InsightsEntryDto` list for the Insights Calendar view. The Insights ViewModel never queries these sources directly.
+**Definition:** A single query that unifies three data sources — `BackgroundBlock` rows, `FocusBlock` rows, and `Session` rows where `Origin = Impromptu` — into a single `InsightsEntryDto` list for the Insights Calendar view. The Insights ViewModel never queries these sources directly.
 
 **Why it is a Deep Module:** The three-source complexity (different entities, different table shapes, different "missed" detection logic) is hidden behind a single `IQueryHandler<GetInsightsCalendarQuery, IReadOnlyList<InsightsEntryDto>>` interface. Adding a fourth source requires a change to the handler only — the ViewModel and its bindings are untouched.
 
 **Status:** Stub defined. Implementation deferred until the Insights page is built.
 
-**Insights page will also include:** session history, blocked attempt analytics (most-attempted sites, per-session breakdown), block profile usage stats, total focus time for configurable periods (last week, since January, etc.), calendar view of past Ritual Blocks, Background Blocks, and Impromptu Sessions, and graphs for usage trends.
+**Insights page will also include:** session history, blocked attempt analytics (most-attempted sites, per-session breakdown), block profile usage stats, total focus time for configurable periods (last week, since January, etc.), calendar view of past Focus Blocks, Background Blocks, and Impromptu Sessions, and graphs for usage trends.
 
 **Technical mapping:**
 
@@ -465,16 +465,16 @@ ActivePolicySlice ComputeSlice(
 
 ## Contract *(Future — not yet built)*
 
-**Definition:** A time-bounded commitment the user makes to a schedule of Ritual Blocks and Background Blocks, with self-imposed rules governing how much the schedule can be changed during the commitment period. The name is inspired by the concept of binding agreements — the user is making a contract with themselves.
+**Definition:** A time-bounded commitment the user makes to a schedule of Focus Blocks and Background Blocks, with self-imposed rules governing how much the schedule can be changed during the commitment period. The name is inspired by the concept of binding agreements — the user is making a contract with themselves.
 
 **Scope:** A Contract covers a fixed period: one day, three days, one week, or one month.
 
-**Creation flow:** In the Planner page, the user selects a Contract period → places Ritual Blocks and Background Blocks throughout the period using existing Block Profiles → at the end, specifies the strictness rules for the Contract.
+**Creation flow:** In the Planner page, the user selects a Contract period → places Focus Blocks and Background Blocks throughout the period using existing Block Profiles → at the end, specifies the strictness rules for the Contract.
 
 **Strictness rules (user-configurable, examples):**
 - **Fully locked:** No changes allowed during the Contract period. Blocks cannot be moved, removed, or shortened. New blocks can still be added.
 - **Daily flexibility:** Within each day, the user can move blocks around, add or remove them freely, but only for the current or upcoming day.
-- **Time-budget (daily):** Blocks can be rearranged within a day, but the total block time for that day must remain the same (e.g. 4 hours of Ritual Blocks planned = 4 hours must remain).
+- **Time-budget (daily):** Blocks can be rearranged within a day, but the total block time for that day must remain the same (e.g. 4 hours of Focus Blocks planned = 4 hours must remain).
 - **Time-budget (period):** Same as daily, but the budget is tracked across the full Contract period (e.g. user can do 2 fewer hours today if they add 2 hours on another day within the Contract).
 - **Custom combinations:** The user picks which constraints apply.
 

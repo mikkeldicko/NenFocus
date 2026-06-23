@@ -51,9 +51,9 @@ public sealed class ScheduledEnforcementService : BackgroundService
 
                 if (policy is not null && !policy.IsEmpty)
                 {
-                    if (policy.RitualSessionCompleted)
+                    if (policy.FocusSessionCompleted)
                     {
-                        // The Ritual Block is still within its scheduled window but the
+                        // The Focus Block is still within its scheduled window but the
                         // session has already ended — don't re-apply enforcement or
                         // push the user back into the Ritual.
                         _sessionState.SetRitualRequired(false);
@@ -63,7 +63,7 @@ public sealed class ScheduledEnforcementService : BackgroundService
                     {
                         await _enforcement.ApplyPolicyAsync(policy, stoppingToken);
 
-                        if (policy.ActiveBlockType == BlockType.Ritual && _sessionState.ActiveSession == null)
+                        if (policy.ActiveBlockType == BlockType.Focus && _sessionState.ActiveSession == null)
                             _sessionState.SetRitualRequired(true);
                         else
                             _sessionState.SetRitualRequired(false);

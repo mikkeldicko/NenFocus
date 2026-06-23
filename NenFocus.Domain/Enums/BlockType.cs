@@ -1,7 +1,7 @@
-﻿namespace NenFocus.Domain.Enums;
+namespace NenFocus.Domain.Enums;
 
 public enum BlockType
 {
-    Ritual,
+    Focus,
     Background
 }

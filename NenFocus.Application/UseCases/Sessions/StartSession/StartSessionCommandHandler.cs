@@ -38,7 +38,7 @@ public sealed class StartSessionCommandHandler
 
         var upcomingBlocks = await _plannedBlocks.GetForRangeAsync(now, requestedEnd, ct);
         var conflictingBlock = upcomingBlocks
-            .OfType<RitualBlock>()
+            .OfType<FocusBlock>()
             .OrderBy(b => b.Start)
             .FirstOrDefault();
 
@@ -47,7 +47,7 @@ public sealed class StartSessionCommandHandler
             var minutesAvailable = conflictingBlock.MinutesUntilStart(now);
             if (minutesAvailable > 0)
                 return StartSessionResult.Fail(
-                    $"A planned ritual block starts in {minutesAvailable} minutes. " +
+                    $"A planned focus block starts in {minutesAvailable} minutes. " +
                     $"Please set your duration to {minutesAvailable} minutes or less.");
         }
 
@@ -78,13 +78,13 @@ public sealed class StartSessionCommandHandler
 
         if (command.OriginatingBlockId.HasValue)
         {
-            var ritualBlock = await _plannedBlocks.GetByIdAsync(
-                command.OriginatingBlockId.Value, ct) as RitualBlock;
+            var focusBlock = await _plannedBlocks.GetByIdAsync(
+                command.OriginatingBlockId.Value, ct) as FocusBlock;
 
-            ritualBlock?.MarkRitualCompleted(now);
+            focusBlock?.MarkRitualCompleted(now);
 
-            if (ritualBlock is not null)
-                await _plannedBlocks.SaveAsync(ritualBlock, ct);
+            if (focusBlock is not null)
+                await _plannedBlocks.SaveAsync(focusBlock, ct);
         }
 
         await _sessions.SaveAsync(session, ct);

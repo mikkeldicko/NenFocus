@@ -181,7 +181,7 @@ namespace NenFocus.Infrastructure.Migrations
                     b.HasDiscriminator().HasValue("Background");
                 });
 
-            modelBuilder.Entity("NenFocus.Domain.Entities.RitualBlock", b =>
+            modelBuilder.Entity("NenFocus.Domain.Entities.FocusBlock", b =>
                 {
                     b.HasBaseType("NenFocus.Domain.Entities.PlannedBlock");
 

@@ -1,13 +1,13 @@
-﻿namespace NenFocus.Domain.Entities;
+namespace NenFocus.Domain.Entities;
 
-public sealed class RitualBlock : PlannedBlock
+public sealed class FocusBlock : PlannedBlock
 {
     /// <summary>Null means the Ritual was never completed for this block.</summary>
     public DateTime? RitualCompletedAt { get; private set; }
 
-    private RitualBlock() { }
+    private FocusBlock() { }
 
-    public static RitualBlock Create(
+    public static FocusBlock Create(
         Guid id,
         Guid blockProfileId,
         DateTime start,
@@ -17,7 +17,7 @@ public sealed class RitualBlock : PlannedBlock
         if (end <= start)
             throw new ArgumentException("End time must be after start time.");
 
-        return new RitualBlock
+        return new FocusBlock
         {
             Id = id,
             BlockProfileId = blockProfileId,

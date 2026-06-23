@@ -53,7 +53,7 @@ public sealed class PlannedBlockRepository : IPlannedBlockRepository
         var blocks = await query.ToListAsync(cancellationToken);
 
         if (ritualOnly)
-            return blocks.OfType<RitualBlock>().ToList<PlannedBlock>();
+            return blocks.OfType<FocusBlock>().ToList<PlannedBlock>();
 
         return blocks;
     }

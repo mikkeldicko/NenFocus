@@ -23,11 +23,11 @@ For active design tension, see the **Open Gaps** section in `ARCHITECT_GOVERNANC
 
 ## Gap 2 — BlockType Promotion: From Leaky Boolean to Domain Enum *(closed)*
 
-**The gap:** The system could not distinguish between a Ritual Block (which must trigger the Ritual) and a Background Block (which enforces silently) after computing a policy slice. A boolean `RequiresRitual` flag would have been the shallow solution — a boolean with no domain meaning that every caller must interpret differently.
+**The gap:** The system could not distinguish between a Focus Block (which must trigger the Ritual) and a Background Block (which enforces silently) after computing a policy slice. A boolean `RequiresRitual` flag would have been the shallow solution — a boolean with no domain meaning that every caller must interpret differently.
 
 **The closure:** `PolicySliceDto` now carries `ActiveBlockType (BlockType?)` — a domain enum from `NenFocus.Domain.Enums`. `ComputeActivePolicySliceQueryHandler` sets it to the type of the highest-priority active planned block (Ritual > Background). `ScheduledEnforcementService` reads this field and calls `SetRitualRequired(true)` only when `ActiveBlockType == Ritual` with no active session. The decision is expressed once, in the domain's language, in one place.
 
-**Principle demonstrated:** Ubiquitous Language — the difference between a Ritual Block and a Background Block was already a domain concept. Promoting it to the `PolicySliceDto` made the contract self-documenting and eliminated a class of future bugs where callers would have needed to re-derive the distinction themselves.
+**Principle demonstrated:** Ubiquitous Language — the difference between a Focus Block and a Background Block was already a domain concept. Promoting it to the `PolicySliceDto` made the contract self-documenting and eliminated a class of future bugs where callers would have needed to re-derive the distinction themselves.
 
 **Side fix included:** Blocklist mode in `ComputeActivePolicySliceQueryHandler` was previously broken — `BlockedSites` was always an empty set (missing `case WebsitePolicy.Blocklist:`). Fixed in the same slice. The browser extension was receiving an empty blocklist for all Blocklist-mode profiles.
 
@@ -35,25 +35,25 @@ For active design tension, see the **Open Gaps** section in `ARCHITECT_GOVERNANC
 
 ## Gap 3 — Impromptu Sessions, Insights Architecture, and the Block Hierarchy *(closed)*
 
-**The gap:** The domain had no way to distinguish a planned Session from a manually-started one, making the planned Insights page impossible to build correctly. Additionally, the block hierarchy was being reconsidered — a proposed `InstantRitualBlock` class and a rename to Ritual Block / Background Block were both under evaluation. The `BlockedAttempt` entity was also being considered for conversion to a Value Object.
+**The gap:** The domain had no way to distinguish a planned Session from a manually-started one, making the planned Insights page impossible to build correctly. Additionally, the block hierarchy was being reconsidered — a proposed `InstantFocusBlock` class and a rename to Focus Block / Background Block were both under evaluation. The `BlockedAttempt` entity was also being considered for conversion to a Value Object.
 
 **The interrogation revealed:**
-- Insights requires a unified calendar view showing Ritual Blocks (completed and missed), Background Blocks, and Impromptu Sessions
+- Insights requires a unified calendar view showing Focus Blocks (completed and missed), Background Blocks, and Impromptu Sessions
 - Insights requires analytics including session quality comparison between Planned and Impromptu sessions and block profile follow-through rates
 - Background Blocks must appear in Insights using scheduled time as canonical truth regardless of machine state
-- A Ritual Block where the user missed the Ritual must appear in Insights as "missed" — the `RitualBlock` row is the record
+- A Focus Block where the user missed the Ritual must appear in Insights as "missed" — the `FocusBlock` row is the record
 - An Impromptu Session that did not complete the Ritual must not be saved anywhere
 - The ONLY manual path to enforcement is through the full Nen Ritual — this is a product invariant, not a validation rule
 - Browsing time tracking on all websites is a desired future feature requiring extension changes
 - Planned Period / Strict Mode is a desired future feature
 
 **The closure:**
-- `InstantRitualBlock` rejected: an Impromptu Session is not a Block. It has no calendar identity, no life outside its Session, and no state transitions. Creating an entity to make the schema look symmetric would violate DDD and fail the Deep Module test.
+- `InstantFocusBlock` rejected: an Impromptu Session is not a Block. It has no calendar identity, no life outside its Session, and no state transitions. Creating an entity to make the schema look symmetric would violate DDD and fail the Deep Module test.
 - `BlockedAttempt` kept as append-only fact table: burying it in JSON would make Insights analytics queries require full in-memory deserialisation across hundreds of sessions.
-- `FocusBlock` renamed to `RitualBlock`, `PassiveBlock` renamed to `BackgroundBlock`, `BlockType` enum values updated to `Ritual` and `Background`. Rename is complete at every layer: entity, enum, DTO, handler, service, dictionary.
+- `FocusBlock` renamed to `FocusBlock`, `PassiveBlock` renamed to `BackgroundBlock`, `BlockType` enum values updated to `Ritual` and `Background`. Rename is complete at every layer: entity, enum, DTO, handler, service, dictionary.
 - `Session.Origin (SessionOrigin)` added: explicit `Impromptu` / `Planned` tag. Does not rely on null-checking `OriginatingBlockId` so it remains unambiguous when future origin types are added.
-- `Session.OriginatingBlockId (Guid?)` added: closes the known gap from `TECHNICAL_SPEC_INFRA.md`. Written by `StartSessionCommandHandler` when a Ritual Block triggered the session.
-- `RitualBlock.RitualCompletedAt (DateTime?)` added: allows Insights to detect missed blocks from the entity alone without a join to Session.
+- `Session.OriginatingBlockId (Guid?)` added: closes the known gap from `TECHNICAL_SPEC_INFRA.md`. Written by `StartSessionCommandHandler` when a Focus Block triggered the session.
+- `FocusBlock.RitualCompletedAt (DateTime?)` added: allows Insights to detect missed blocks from the entity alone without a join to Session.
 - `GetInsightsCalendarQuery` stubbed: single query handler that unifies three sources behind one interface. The ViewModel never touches the individual tables.
 
 **Principle demonstrated:** The asymmetry between Planned and Impromptu in the schema (Block + Session vs Session alone) is correct and intentional. It reflects a real asymmetry in the domain — a planned block exists before and independently of any Session; an impromptu block does not. Hiding this asymmetry with a synthetic entity would be lying with code. `GetInsightsCalendarQuery` is the correct place to unify the three sources — complexity is hidden behind a narrow interface, not erased from the domain.

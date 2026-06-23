@@ -272,7 +272,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
         FormStartTime = $"{localStart.Hour:D2}:{localStart.Minute:D2}";
         FormEndTime = $"{localEnd.Hour:D2}:{localEnd.Minute:D2}";
-        IsFocusBlock = dto.BlockType == BlockType.Ritual;
+        IsFocusBlock = dto.BlockType == BlockType.Focus;
         SelectedProfile = AvailableProfiles.FirstOrDefault(p => p.Id == dto.ProfileId)
                           ?? AvailableProfiles.FirstOrDefault();
         IsFormVisible = true;
@@ -291,7 +291,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     }
 
     [RelayCommand] private void SetFocusBlock() => IsFocusBlock = true;
-    [RelayCommand] private void SetPassiveBlock() => IsFocusBlock = false;
+    [RelayCommand] private void SetBackgroundBlock() => IsFocusBlock = false;
 
     [RelayCommand]
     private async Task SaveAsync()
@@ -311,7 +311,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         var startUtc = localStart.ToUniversalTime();
         var endUtc = localEnd.ToUniversalTime();
 
-        var blockType = IsFocusBlock ? BlockType.Ritual : BlockType.Background;
+        var blockType = IsFocusBlock ? BlockType.Focus : BlockType.Background;
 
         if (IsEditing && _editingBlockId.HasValue)
         {

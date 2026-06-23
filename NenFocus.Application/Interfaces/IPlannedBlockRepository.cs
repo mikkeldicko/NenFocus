@@ -21,8 +21,8 @@ public interface IPlannedBlockRepository
 
     /// <summary>
     /// Returns any planned blocks that overlap with the given time window.
-    /// If ritualOnly is true, only RitualBlocks are checked — used to
-    /// enforce the Ritual+Ritual overlap rule at planning time.
+    /// If ritualOnly is true, only FocusBlocks are checked — used to
+    /// enforce the Focus+Focus overlap rule at planning time.
     /// </summary>
     Task<IReadOnlyList<PlannedBlock>> GetOverlappingAsync(
         DateTime start,

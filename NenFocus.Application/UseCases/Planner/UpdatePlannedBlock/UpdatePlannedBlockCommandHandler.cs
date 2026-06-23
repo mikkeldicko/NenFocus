@@ -37,7 +37,7 @@ public sealed class UpdatePlannedBlockCommandHandler : ICommandHandler<UpdatePla
         if (profile is null)
             return UpdatePlannedBlockResult.Fail($"Profile '{command.ProfileId}' not found.");
 
-        if (existing is RitualBlock)
+        if (existing is FocusBlock)
         {
             var overlapping = await _blocks.GetOverlappingAsync(
                 startTime,
@@ -47,7 +47,7 @@ public sealed class UpdatePlannedBlockCommandHandler : ICommandHandler<UpdatePla
                 cancellationToken: cancellationToken);
 
             if (overlapping.Count > 0)
-                return UpdatePlannedBlockResult.Fail("A Ritual block already exists in this time window.");
+                return UpdatePlannedBlockResult.Fail("A Focus block already exists in this time window.");
         }
 
         existing.Reschedule(startTime, endTime);

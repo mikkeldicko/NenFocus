@@ -23,7 +23,7 @@ Before implementing anything, ask as many questions as necessary to reach a shar
 
 **Principle:** Use a shared vocabulary to eliminate communication overhead.
 
-Always refer to the terms defined in `DOMAIN\\\_DICTIONARY.md` (Ritual, Session, Enforcement, Policy Slice, Ritual Block, Background Block, SessionOrigin, Quest, Deep Module, etc.). If a new concept needs to be introduced, define and name it together before writing any code.
+Always refer to the terms defined in `DOMAIN\\\_DICTIONARY.md` (Ritual, Session, Enforcement, Policy Slice, Focus Block, Background Block, SessionOrigin, Quest, Deep Module, etc.). If a new concept needs to be introduced, define and name it together before writing any code.
 
 **Product invariant:** A manual enforcement session cannot exist without a completed Ritual. This is a product invariant enforced by design, not by validation code. The full Nen Ritual (Ten → Zetsu → Ren → Hatsu) is the only path to creating an Impromptu Session. Abandoning the Ritual at any point produces no saved record anywhere.
 
@@ -142,15 +142,15 @@ Gaps that have been identified but not yet closed. Each is here because deferrin
 
 ### Open Gap A — Persistence Boundary: Per-Repository SaveChanges vs. Unit of Work
 
-**The gap:** Repositories currently call `SaveChangesAsync` internally on each `SaveAsync`. `StartSessionCommandHandler` therefore performs two separate database round-trips when a Ritual Block triggers a session: one to stamp `RitualBlock.RitualCompletedAt`, one to insert the new `Session` row. If the second save fails, the database is left with a Ritual Block marked completed but no corresponding Session — violating the invariant in `DOMAIN\\\_DICTIONARY.md` that a completed Ritual Block always has an associated Planned Session.
+**The gap:** Repositories currently call `SaveChangesAsync` internally on each `SaveAsync`. `StartSessionCommandHandler` therefore performs two separate database round-trips when a Focus Block triggers a session: one to stamp `FocusBlock.RitualCompletedAt`, one to insert the new `Session` row. If the second save fails, the database is left with a Focus Block marked completed but no corresponding Session — violating the invariant in `DOMAIN\\\_DICTIONARY.md` that a completed Focus Block always has an associated Planned Session.
 
 The same fragmentation pushes domain-event dispatching out to every handler: each must remember to call `PublishAllAsync` and `ClearDomainEvents` in the right order relative to `SaveAsync`. The rule "save, then publish, then clear" is repeated in every handler instead of being encapsulated once — a Deep Modules violation.
 
-**Why deferred:** The consistency bug only manifests on the Planned Session path. Per the dictionary, `ShellViewModel` (which detects Ritual Block activation and triggers the Ritual overlay) is "not yet built." The fragile path is not yet reachable from the UI.
+**Why deferred:** The consistency bug only manifests on the Planned Session path. Per the dictionary, `ShellViewModel` (which detects Focus Block activation and triggers the Ritual overlay) is "not yet built." The fragile path is not yet reachable from the UI.
 
 **Direction (subject to interrogation when closed):** Repositories register changes without calling `SaveChangesAsync`. `NenFocusDbContext.SaveChangesAsync` is overridden to commit the transaction, walk the change tracker for aggregates with pending `DomainEvents`, publish them via `IDomainEventPublisher`, and clear them. Command handlers shrink to: validate → mutate aggregate → `SaveChangesAsync` → return result.
 
-**Must be closed before:** `ShellViewModel` is built and the Ritual Block activation path becomes reachable.
+**Must be closed before:** `ShellViewModel` is built and the Focus Block activation path becomes reachable.
 
 ### Open Gap B — Time Budget Feature (three-slice implementation)
 

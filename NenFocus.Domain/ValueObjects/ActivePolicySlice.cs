@@ -14,9 +14,9 @@ public sealed record ActivePolicySlice
     public IReadOnlySet<string> BlockedApps  { get; init; } = new HashSet<string>();
     public BlockType? ActiveBlockType { get; init; }
 
-    // True when a Ritual Block is still within its scheduled window but its session has
+    // True when a Focus Block is still within its scheduled window but its session has
     // already ended — prevents enforcement from being re-applied mid-window.
-    public bool RitualSessionCompleted { get; init; }
+    public bool FocusSessionCompleted { get; init; }
 
     public bool IsEmpty =>
         WebsitePolicyMode == WebsitePolicy.Blocklist &&

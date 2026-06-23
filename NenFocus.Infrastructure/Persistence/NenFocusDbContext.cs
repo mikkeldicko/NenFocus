@@ -167,7 +167,7 @@ public class NenFocusDbContext : DbContext
             });
         });
 
-        // TPH: RitualBlock and BackgroundBlock share this table via a BlockKind discriminator.
+        // TPH: FocusBlock and BackgroundBlock share this table via a BlockKind discriminator.
         modelBuilder.Entity<PlannedBlock>(entity =>
         {
             entity.ToTable("PlannedBlocks");
@@ -189,11 +189,11 @@ public class NenFocusDbContext : DbContext
                 .HasMaxLength(100);
 
             entity.HasDiscriminator<string>("BlockKind")
-                .HasValue<RitualBlock>("Ritual")
+                .HasValue<FocusBlock>("Ritual")
                 .HasValue<BackgroundBlock>("Background");
         });
 
-        modelBuilder.Entity<RitualBlock>(entity =>
+        modelBuilder.Entity<FocusBlock>(entity =>
         {
             entity.Property(r => r.RitualCompletedAt);
         });

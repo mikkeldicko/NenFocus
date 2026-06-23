@@ -8,7 +8,7 @@ Tactical implementation details, current build state, and platform-specific gotc
 
 ### Done
 
-- Full domain model (Session, BlockProfile, RitualBlock, BackgroundBlock, all value objects and events)
+- Full domain model (Session, BlockProfile, FocusBlock, BackgroundBlock, all value objects and events)
 - `Session` entity has `Rating (int?)` and `Reflection (string?)` properties; `ResumeFromBreak()`, `SetReflection(string, int)`, and `Complete()` methods
 - All Application commands, queries, validators, and event handlers — fully refactored to Vertical Slice Architecture (feature folders)
 - `SystemSafetyConstants.UnkillableProcesses` safety shield prevents blocking critical Windows processes (validated in command validators via normalised process name)
@@ -40,15 +40,15 @@ Tactical implementation details, current build state, and platform-specific gotc
 - `Session` entity now stores `TemporaryBlockedApps` and `TemporaryBlockedSites` (`List<string>`, JSON-serialised to TEXT columns); `ComputeActivePolicySliceQueryHandler` unions these into every policy computation so session-level Ren page overrides are enforced immediately
 - `StartSessionCommandHandler` now fetches `ProfileName` from `IBlockProfileRepository` and includes it in the `SessionDto` passed to `ISessionStateService.SetActive`; profile name is no longer blank on the Main page after session start
 - `StartSessionCommandHandler` publishes `SessionStartedEvent` via `IDomainEventPublisher` after saving the session and setting state, completing the event-driven enforcement chain
-- `ScheduledEnforcementService` reads `ActiveBlockType` from the computed `ActivePolicySlice` (Domain Value Object) each heartbeat cycle; calls `_sessionState.SetRitualRequired(true)` when `ActiveBlockType == Ritual` and no session is active, triggering the Ritual overlay automatically at the Ritual Block's designated start time
+- `ScheduledEnforcementService` reads `ActiveBlockType` from the computed `ActivePolicySlice` (Domain Value Object) each heartbeat cycle; calls `_sessionState.SetRitualRequired(true)` when `ActiveBlockType == Focus` and no session is active, triggering the Ritual overlay automatically at the Focus Block's designated start time
 - `SessionOrigin` enum added (`Enums/SessionOrigin.cs`); values: `Impromptu`, `Planned`
 - `Session.Origin (SessionOrigin)` and `Session.OriginatingBlockId (Guid?)` added to the `Session` entity; set by `StartSessionCommandHandler` at session creation time; never changed after the session starts
-- `RitualBlock.RitualCompletedAt (DateTime?)` added; `RitualBlock.MarkRitualCompleted(DateTime completedAt)` method stamps completion at the exact moment the session is created; called by `StartSessionCommandHandler` when a Planned session starts; allows Insights to detect missed blocks from the entity alone without a join to Session
-- `StartSessionCommandHandler` updated: when `OriginatingBlockId` is provided, fetches the `RitualBlock`, calls `MarkRitualCompleted(DateTime.UtcNow)`, and saves it; sets `Session.Origin = Planned`; when `OriginatingBlockId` is null, sets `Session.Origin = Impromptu`
-- `GetInsightsCalendarQuery` / `GetInsightsCalendarQueryHandler` stubbed: merges `BackgroundBlock` rows, `RitualBlock` rows, and `Session` rows where `Origin = Impromptu` into a unified `InsightsEntryDto` list; Deep Module hiding three-source complexity from the Insights ViewModel; implementation deferred to Insights page build
+- `FocusBlock.RitualCompletedAt (DateTime?)` added; `FocusBlock.MarkRitualCompleted(DateTime completedAt)` method stamps completion at the exact moment the session is created; called by `StartSessionCommandHandler` when a Planned session starts; allows Insights to detect missed blocks from the entity alone without a join to Session
+- `StartSessionCommandHandler` updated: when `OriginatingBlockId` is provided, fetches the `FocusBlock`, calls `MarkRitualCompleted(DateTime.UtcNow)`, and saves it; sets `Session.Origin = Planned`; when `OriginatingBlockId` is null, sets `Session.Origin = Impromptu`
+- `GetInsightsCalendarQuery` / `GetInsightsCalendarQueryHandler` stubbed: merges `BackgroundBlock` rows, `FocusBlock` rows, and `Session` rows where `Origin = Impromptu` into a unified `InsightsEntryDto` list; Deep Module hiding three-source complexity from the Insights ViewModel; implementation deferred to Insights page build
 - **DDD entity refactors (Gap 4 closure)**: `BaseEntity` abstract class deleted — `Id (Guid)` is now declared directly on each entity/aggregate with a private setter; `CreatedAt` removed from all entities and from every DB table. Each aggregate (`Session`, `BlockProfile`) owns a private `_domainEvents` list; `DomainEvents` and `ClearDomainEvents()` expose it. Domain events are appended inside entity state-transition methods (`Session.Start()`, `Session.Complete()`, `Session.StartBreak()`, `BlockProfile.Create()`, etc.) — not inside command handlers. Handlers call `entity.DomainEvents` and dispatch via `IDomainEventPublisher.PublishAllAsync`, then clear with `entity.ClearDomainEvents()`.
 - `Session.BlockedAttemptsSerialized` and any related `SetBlockedAttempts()` method removed. `BlockedAttempt` rows (append-only, keyed by `SessionId`) are the sole persistence path for attempt data. Migration `20260512000001_RemoveBlockedAttemptsSerialized` drops the `BlockedAttempts` column from the `Sessions` table.
-- **Entity hierarchy refactored**: `FocusBlock` entity deleted. `PassiveBlock` renamed to `BackgroundBlock` (`NenFocus.Domain/Entities/BackgroundBlock.cs`). `RitualBlock` is now a first-class entity at `NenFocus.Domain/Entities/RitualBlock.cs` (extends `PlannedBlock`; owns `RitualCompletedAt (DateTime?)` and `MarkRitualCompleted(DateTime)`). `PlannedBlock` no longer carries `Type (BlockType)`, `IsPlanned (bool)`, or `StartTime`/`EndTime` aliases — it is now a minimal base with `Id`, `BlockProfileId`, `Start`, `End`, `Title`.
+- **Entity hierarchy refactored**: `FocusBlock` entity deleted. `PassiveBlock` renamed to `BackgroundBlock` (`NenFocus.Domain/Entities/BackgroundBlock.cs`). `FocusBlock` is now a first-class entity at `NenFocus.Domain/Entities/FocusBlock.cs` (extends `PlannedBlock`; owns `RitualCompletedAt (DateTime?)` and `MarkRitualCompleted(DateTime)`). `PlannedBlock` no longer carries `Type (BlockType)`, `IsPlanned (bool)`, or `StartTime`/`EndTime` aliases — it is now a minimal base with `Id`, `BlockProfileId`, `Start`, `End`, `Title`.
 - **`BlockType` enum values renamed**: `Focus`→`Ritual`, `Passive`→`Background`. All callers updated: `PlannerPageViewModel`, `PlannedBlockTileViewModel`, `CreatePlannedBlockCommandHandler`, EF Core discriminator values, and migrations.
 - **`BlockedAttempt` entity refactored**: `Timestamp (DateTimeOffset)` renamed to `OccurredAt (DateTime)`. Public constructor removed; replaced with static factory `BlockedAttempt.Record(Guid id, Guid sessionId, string resourceName, BlockedAttemptType attemptType, DateTime occurredAt)`. The caller supplies the UTC timestamp — the entity never reads the clock. DB index changed from `IX_BlockedAttempts_Timestamp` to `IX_BlockedAttempts_OccurredAt`.
 - **CQRS interface files split**: `IHandlers.cs` deleted. Each interface now lives in its own file in `NenFocus.Application/Interfaces/`: `ICommand<TResult>` (`ICommand.cs`), `ICommandHandler<TCommand,TResult>` (`ICommandHandler.cs`), `IQuery<TResult>` (`IQuery.cs`), `IQueryHandler<TQuery,TResult>` (`IQueryHandler.cs`). The `ICommandHandler<TCommand>` shorthand (returning `bool`) is removed — all commands declare an explicit result type.
@@ -65,12 +65,12 @@ Tactical implementation details, current build state, and platform-specific gotc
 | Area | Notes |
 |------|-------|
 | Planner page | Stub only — calendar, block creation, Planned Period wizard (use cases are built; UI is not) |
-| Insights page | Two views: Calendar (past Ritual Blocks, Background Blocks, Impromptu Sessions with click-through to session detail) and Analytics (hours by period, blocked app frequency, profile follow-through rates, planned vs impromptu comparison). Powered by `GetInsightsCalendarQuery`. |
-| GetInsightsCalendarQuery | Stub exists. Merges `BackgroundBlock` rows, `RitualBlock` rows, and Impromptu `Session` rows into unified `InsightsEntryDto` list. Implement when Insights page is built. |
+| Insights page | Two views: Calendar (past Focus Blocks, Background Blocks, Impromptu Sessions with click-through to session detail) and Analytics (hours by period, blocked app frequency, profile follow-through rates, planned vs impromptu comparison). Powered by `GetInsightsCalendarQuery`. |
+| GetInsightsCalendarQuery | Stub exists. Merges `BackgroundBlock` rows, `FocusBlock` rows, and Impromptu `Session` rows into unified `InsightsEntryDto` list. Implement when Insights page is built. |
 | Browsing time tracking | Extension currently tracks navigation attempts only. Future: add time-spent-per-domain tracking via tab activation and idle detection events. New `/report-time` endpoint needed on `WindowsEnforcementService`. Do not add DB columns until this is scoped. |
 | Planned Period / Strict Mode | User commits to a block schedule for 1–4 weeks. Strict Mode prevents removing blocks during committed period. Daily adjustment window with user-defined constraints. `SessionOrigin` enum is the correct foundation. |
 | Recurring Blocks | UI not built. Each recurrence instance is a separate row. Google Calendar edit model (edit one instance, others unchanged). |
-| RitualBlock → Session link | CLOSED in Gap 3. `Session.OriginatingBlockId` and `RitualBlock.RitualCompletedAt` added. |
+| FocusBlock → Session link | CLOSED in Gap 3. `Session.OriginatingBlockId` and `FocusBlock.RitualCompletedAt` added. |
 | Settings page | Stub only — theme, strict mode toggle, notification filter, sounds, daily adjustment window constraints. |
 | Checklist / Quest persistence | UI present on Main page. No storage wired up. |
 | Daily Ritual Summary | Morning popup with today's scheduled blocks and streak. Not built. |
@@ -106,8 +106,8 @@ The Source of Truth flow: `Database → PolicyEngine (Domain) → ActivePolicySl
 `PolicyEngine.ComputeSlice()` rules, given all active blocks and sessions at time `t`:
 - **Apps**: union of all blocked apps across all active profiles (always blocklist). Includes `TemporaryBlockedApps` from the active `Session` entity.
 - **Websites**: if any active profile uses Allowlist mode → default-deny, allowed = intersection of all allowlists minus any blocklist union. Otherwise → block the union of all blocklisted sites. Includes `TemporaryBlockedSites` from the active `Session` entity.
-- **Both Ritual Blocks and Background Blocks are included** in the computation. A Background Block enforces at its designated time — it does not skip enforcement. The difference is that Background Blocks do not trigger the Ritual.
-- **`ActiveBlockType`**: set to the type of the highest-priority active planned block. `RitualBlock` takes precedence over `BackgroundBlock` (`OrderByDescending(b => b is RitualBlock)`). `null` if no planned block is currently active. This field drives the `ScheduledEnforcementService` Ritual trigger decision.
+- **Both Focus Blocks and Background Blocks are included** in the computation. A Background Block enforces at its designated time — it does not skip enforcement. The difference is that Background Blocks do not trigger the Ritual.
+- **`ActiveBlockType`**: set to the type of the highest-priority active planned block. `FocusBlock` takes precedence over `BackgroundBlock` (`OrderByDescending(b => b is FocusBlock)`). `null` if no planned block is currently active. This field drives the `ScheduledEnforcementService` Ritual trigger decision.
 
 ### Enforcement Implementation Details
 
@@ -137,7 +137,7 @@ The Source of Truth flow: `Database → PolicyEngine (Domain) → ActivePolicySl
 
 ### Known Workarounds
 
-- **RitualBlock update**: There is no `RitualBlock.Update()` method — `UpdatePlannedBlockCommand` uses delete + recreate.
+- **FocusBlock update**: There is no `FocusBlock.Update()` method — `UpdatePlannedBlockCommand` uses delete + recreate.
 - **Hosts file markers**: must be exactly `# NEN_FOCUS_START` and `# NEN_FOCUS_END` (case-sensitive, underscores). Any deviation causes duplicate entries on next write.
 - **Break reminders**: Implemented as `Task.Delay` fire-and-forget tasks tracked by `CancellationTokenSource`. They do not survive app restarts. A persistent scheduler is a future concern.
 

@@ -23,8 +23,8 @@ public partial class PlannedBlockTileViewModel : ViewModelBase
     /// <summary>Tile height in pixels.</summary>
     public double Height { get; }
 
-    public bool IsFocus => BlockType == BlockType.Ritual;
-    public bool IsPassive => BlockType == BlockType.Background;
+    public bool IsFocus => BlockType == BlockType.Focus;
+    public bool IsBackground => BlockType == BlockType.Background;
 
     public PlannedBlockTileViewModel(
         PlannedBlockDto dto,

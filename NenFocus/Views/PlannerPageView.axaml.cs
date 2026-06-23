@@ -162,7 +162,7 @@ public partial class PlannerPageView : UserControl
     {
         var btn = new Button
         {
-            Classes = { "blockTile", tile.IsFocus ? "focusTile" : "passiveTile" },
+            Classes = { "blockTile", tile.IsFocus ? "focusTile" : "backgroundTile" },
             CornerRadius = new Avalonia.CornerRadius(6),
             DataContext = tile
         };

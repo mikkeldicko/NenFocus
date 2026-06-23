@@ -61,18 +61,18 @@ public sealed class PolicyEngine : IPolicyEngine
             foreach (var site in session.TemporaryBlockedSites)
                 blockedSites.Add(site);
 
-        var activePlannedBlock = activeBlocks.OrderByDescending(b => b is RitualBlock).FirstOrDefault();
+        var activePlannedBlock = activeBlocks.OrderByDescending(b => b is FocusBlock).FirstOrDefault();
         BlockType? activeBlockType = activePlannedBlock switch
         {
-            RitualBlock => BlockType.Ritual,
+            FocusBlock => BlockType.Focus,
             BackgroundBlock => BlockType.Background,
             _ => null
         };
 
-        // A Ritual Block whose Ritual was completed but whose session has since ended —
+        // A Focus Block whose Ritual was completed but whose session has since ended —
         // the scheduler must not re-apply enforcement or re-trigger the Ritual.
-        var ritualBlock = activeBlocks.OfType<RitualBlock>().FirstOrDefault();
-        bool ritualSessionCompleted = ritualBlock?.RitualCompletedAt != null && !activeSessions.Any();
+        var focusBlock = activeBlocks.OfType<FocusBlock>().FirstOrDefault();
+        bool focusSessionCompleted = focusBlock?.RitualCompletedAt != null && !activeSessions.Any();
 
         return new ActivePolicySlice
         {
@@ -84,7 +84,7 @@ public sealed class PolicyEngine : IPolicyEngine
             BlockedSites = blockedSites,
             BlockedApps = blockedApps,
             ActiveBlockType = activeBlockType,
-            RitualSessionCompleted = ritualSessionCompleted
+            FocusSessionCompleted = focusSessionCompleted
         };
     }
 }

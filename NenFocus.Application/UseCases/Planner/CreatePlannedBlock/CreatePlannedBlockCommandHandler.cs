@@ -33,14 +33,14 @@ public sealed class CreatePlannedBlockCommandHandler : ICommandHandler<CreatePla
         var profile = await _profiles.GetByIdAsync(command.ProfileId, cancellationToken);
         if (profile is null) return CreatePlannedBlockResult.Fail("Profile not found.");
 
-        if (command.BlockType == BlockType.Ritual)
+        if (command.BlockType == BlockType.Focus)
         {
             var overlapping = await _blocks.GetOverlappingAsync(startTime, endTime, ritualOnly: true, cancellationToken: cancellationToken);
-            if (overlapping.Count > 0) return CreatePlannedBlockResult.Fail("A Ritual block already exists here.");
+            if (overlapping.Count > 0) return CreatePlannedBlockResult.Fail("A Focus block already exists here.");
         }
 
-        PlannedBlock block = command.BlockType == BlockType.Ritual
-            ? RitualBlock.Create(Guid.NewGuid(), command.ProfileId, startTime, endTime)
+        PlannedBlock block = command.BlockType == BlockType.Focus
+            ? FocusBlock.Create(Guid.NewGuid(), command.ProfileId, startTime, endTime)
             : BackgroundBlock.Create(Guid.NewGuid(), command.ProfileId, startTime, endTime);
 
         await _blocks.AddAsync(block, cancellationToken);
