@@ -1,3 +1,4 @@
+using FluentValidation;
 using NenFocus.Application.Interfaces;
 using NenFocus.Domain.Entities;
 
@@ -7,15 +8,24 @@ public sealed class UpdatePlannedBlockCommandHandler : ICommandHandler<UpdatePla
 {
     private readonly IPlannedBlockRepository _blocks;
     private readonly IBlockProfileRepository _profiles;
+    private readonly IValidator<UpdatePlannedBlockCommand> _validator;
 
-    public UpdatePlannedBlockCommandHandler(IPlannedBlockRepository blocks, IBlockProfileRepository profiles)
+    public UpdatePlannedBlockCommandHandler(
+        IPlannedBlockRepository blocks,
+        IBlockProfileRepository profiles,
+        IValidator<UpdatePlannedBlockCommand> validator)
     {
         _blocks = blocks;
         _profiles = profiles;
+        _validator = validator;
     }
 
     public async Task<UpdatePlannedBlockResult> HandleAsync(UpdatePlannedBlockCommand command, CancellationToken cancellationToken = default)
     {
+        var validationResult = await _validator.ValidateAsync(command, cancellationToken);
+        if (!validationResult.IsValid)
+            return UpdatePlannedBlockResult.Fail(validationResult.Errors.First().ErrorMessage);
+
         var startTime = command.Start.ToUniversalTime();
         var endTime = command.End.ToUniversalTime();
 
@@ -44,7 +54,6 @@ public sealed class UpdatePlannedBlockCommandHandler : ICommandHandler<UpdatePla
         existing.AssignProfile(command.ProfileId);
 
         await _blocks.UpdateAsync(existing, cancellationToken);
-
         return UpdatePlannedBlockResult.Ok();
     }
 }

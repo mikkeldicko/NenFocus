@@ -1,10 +1,11 @@
 using FluentValidation;
+using NenFocus.Application.Interfaces;
 
 namespace NenFocus.Application.UseCases.Planner.UpdatePlannedBlock;
 
 public sealed class UpdatePlannedBlockValidator : AbstractValidator<UpdatePlannedBlockCommand>
 {
-    public UpdatePlannedBlockValidator()
+    public UpdatePlannedBlockValidator(ISystemClock clock)
     {
         RuleFor(x => x.BlockId)
             .NotEmpty().WithMessage("Block ID is required.");
@@ -13,8 +14,8 @@ public sealed class UpdatePlannedBlockValidator : AbstractValidator<UpdatePlanne
             .NotEmpty().WithMessage("Profile ID is required.");
 
         RuleFor(x => x.Start)
-            .Must(start => start >= DateTime.UtcNow.AddMinutes(-5))
-            .WithMessage("Start time cannot be more than 5 minutes in the past.");
+            .Must(start => start >= clock.UtcNow.AddMinutes(1))
+            .WithMessage("Start time must be at least 1 minute in the future.");
 
         RuleFor(x => x.End)
             .GreaterThan(x => x.Start)

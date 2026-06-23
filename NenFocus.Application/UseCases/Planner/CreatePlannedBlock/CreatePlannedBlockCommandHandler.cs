@@ -1,3 +1,4 @@
+using FluentValidation;
 using NenFocus.Application.Interfaces;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
@@ -8,15 +9,24 @@ public sealed class CreatePlannedBlockCommandHandler : ICommandHandler<CreatePla
 {
     private readonly IPlannedBlockRepository _blocks;
     private readonly IBlockProfileRepository _profiles;
+    private readonly IValidator<CreatePlannedBlockCommand> _validator;
 
-    public CreatePlannedBlockCommandHandler(IPlannedBlockRepository blocks, IBlockProfileRepository profiles)
+    public CreatePlannedBlockCommandHandler(
+        IPlannedBlockRepository blocks,
+        IBlockProfileRepository profiles,
+        IValidator<CreatePlannedBlockCommand> validator)
     {
         _blocks = blocks;
         _profiles = profiles;
+        _validator = validator;
     }
 
     public async Task<CreatePlannedBlockResult> HandleAsync(CreatePlannedBlockCommand command, CancellationToken cancellationToken = default)
     {
+        var validationResult = await _validator.ValidateAsync(command, cancellationToken);
+        if (!validationResult.IsValid)
+            return CreatePlannedBlockResult.Fail(validationResult.Errors.First().ErrorMessage);
+
         var startTime = command.Start.ToUniversalTime();
         var endTime = command.End.ToUniversalTime();
 
