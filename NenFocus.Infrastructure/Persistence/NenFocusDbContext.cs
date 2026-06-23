@@ -30,7 +30,6 @@ public class NenFocusDbContext : DbContext
             .HaveConversion<NullableUtcDateTimeConverter>();
     }
 
-    // 1. Define the Converter for non-nullable DateTime
     private class UtcDateTimeConverter : ValueConverter<DateTime, DateTime>
     {
         public UtcDateTimeConverter()
@@ -41,7 +40,6 @@ public class NenFocusDbContext : DbContext
         }
     }
 
-    // 2. Define the Converter for nullable DateTime?
     private class NullableUtcDateTimeConverter : ValueConverter<DateTime?, DateTime?>
     {
         public NullableUtcDateTimeConverter()
@@ -57,7 +55,6 @@ public class NenFocusDbContext : DbContext
         base.OnModelCreating(modelBuilder);
         modelBuilder.Ignore<DomainEvent>();
 
-        // -- Session --
         modelBuilder.Entity<Session>(entity =>
         {
             entity.ToTable("Sessions");
@@ -125,7 +122,6 @@ public class NenFocusDbContext : DbContext
                 .HasDefaultValueSql("'[]'");
         });
 
-        // -- BlockProfile --
         modelBuilder.Entity<BlockProfile>(entity =>
         {
             entity.ToTable("BlockProfiles");
@@ -171,7 +167,7 @@ public class NenFocusDbContext : DbContext
             });
         });
 
-        // -- PlannedBlocks (TPH for RitualBlock / BackgroundBlock) --
+        // TPH: RitualBlock and BackgroundBlock share this table via a BlockKind discriminator.
         modelBuilder.Entity<PlannedBlock>(entity =>
         {
             entity.ToTable("PlannedBlocks");
@@ -202,7 +198,6 @@ public class NenFocusDbContext : DbContext
             entity.Property(r => r.RitualCompletedAt);
         });
 
-        // -- BlockedAttempt --
         modelBuilder.Entity<BlockedAttempt>(entity =>
         {
             entity.ToTable("BlockedAttempts");

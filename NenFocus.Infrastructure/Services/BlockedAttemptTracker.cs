@@ -52,12 +52,10 @@ public sealed class BlockedAttemptTracker : IBlockedAttemptTracker
     {
         using var context = await _dbFactory.CreateDbContextAsync();
 
-        // 1. Fetch the data from the DB first without sorting
         var attempts = await context.BlockedAttempts
             .Where(a => a.SessionId == sessionId)
             .ToListAsync();
 
-        // 2. Sort the list in memory using C# logic
         return attempts
             .OrderByDescending(a => a.OccurredAt)
             .ToList();

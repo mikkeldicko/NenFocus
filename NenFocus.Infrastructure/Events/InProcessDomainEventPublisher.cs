@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
 using NenFocus.Application.EventHandlers;
 using NenFocus.Application.Interfaces;
 using NenFocus.Domain.Events;
@@ -6,10 +6,8 @@ using NenFocus.Domain.Events;
 namespace NenFocus.Infrastructure.Events;
 
 /// <summary>
-/// In-process implementation of <see cref="IDomainEventPublisher"/>.
-/// Resolves event handlers from DI and invokes them sequentially.
-/// Handlers are resolved from a scoped service provider so they have access
-/// to the same DbContext scope as the command that raised the events.
+/// Resolves event handlers from a fresh DI scope per dispatch, keeping scoped
+/// services (DbContext, repositories) isolated between events.
 /// </summary>
 public sealed class InProcessDomainEventPublisher : IDomainEventPublisher
 {
@@ -40,10 +38,6 @@ public sealed class InProcessDomainEventPublisher : IDomainEventPublisher
         }
     }
 
-    // -------------------------------------------------------------------------
-    // Dispatch
-    // -------------------------------------------------------------------------
-
     private async Task DispatchAsync(DomainEvent domainEvent, CancellationToken ct)
     {
         // Resolve a fresh scope so each event dispatch gets scoped services
@@ -68,13 +62,12 @@ public sealed class InProcessDomainEventPublisher : IDomainEventPublisher
                         .HandleAsync(e, ct);
                 break;
 
-            case Domain.Events.BlockProfileCreatedEvent e:
+            case BlockProfileCreatedEvent e:
                 await sp.GetRequiredService<BlockProfileCreatedEventHandler>()
                         .HandleAsync(e, ct);
                 break;
 
             default:
-                // Unknown event type — no handler registered; ignore silently.
                 break;
         }
     }

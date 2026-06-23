@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using NenFocus.Application;
 using NenFocus.Application.Interfaces;
@@ -17,48 +17,33 @@ public static class DependencyInjection
         this IServiceCollection services,
         string dbPath)
     {
-        // -- Application layer --
         services.AddApplication();
         RegisterDecoratedCommandHandlers(services);
 
-        // -- Database --
-        // 1. Register the Factory (This satisfies BlockedAttemptTracker)
+        // Both factory and context are needed: factory for singleton services that
+        // create their own isolated contexts; context for scoped repositories.
         services.AddDbContextFactory<NenFocusDbContext>(options =>
             options.UseSqlite($"Data Source={dbPath}"));
 
-        // 2. Register the Context itself (This satisfies the repositories)
         services.AddDbContext<NenFocusDbContext>(options =>
             options.UseSqlite($"Data Source={dbPath}"));
 
-        // -- Repositories --
         services.AddScoped<ISessionRepository, SessionRepository>();
         services.AddScoped<IBlockProfileRepository, BlockProfileRepository>();
         services.AddScoped<IPlannedBlockRepository, PlannedBlockRepository>();
 
-
-        // -- Notifications --
         services.AddSingleton<INotificationService, WindowsNotificationService>();
 
-        // -- Enforcement --
         services.AddSingleton<IBlockedAttemptTracker, BlockedAttemptTracker>();
         services.AddSingleton<IEnforcementService, WindowsEnforcementService>();
 
-        // -- Session state (UI noticeboard) --
         services.AddSingleton<ISessionStateService, SessionStateService>();
-
-        // -- Session countdown monitor --
         services.AddSingleton<IActiveSessionMonitor, ActiveSessionMonitor>();
-
-        // -- Planner clock (current-time indicator) --
         services.AddSingleton<IPlannerClockService, PlannerClockService>();
-
-        // -- Domain event publisher --
         services.AddSingleton<IDomainEventPublisher, InProcessDomainEventPublisher>();
 
-        // -- Unit of Work --
         services.AddScoped<IUnitOfWork, EfCoreUnitOfWork>();
 
-        // -- Scheduled enforcement background service --
         services.AddHostedService<ScheduledEnforcementService>();
 
         return services;

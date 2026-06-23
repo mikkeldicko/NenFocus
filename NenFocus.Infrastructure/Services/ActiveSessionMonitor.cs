@@ -8,12 +8,7 @@ using System.Timers;
 
 namespace NenFocus.Infrastructure.Services;
 
-/// <summary>
-/// Singleton that owns the 1-second countdown timer.
-/// Listens to ISessionStateService for session changes, recalculates remaining
-/// time on each tick, and auto-ends/resumes via the Application command handlers
-/// when timers expire — keeping that logic out of the ViewModel.
-/// </summary>
+/// <summary>Owns the 1-second countdown timer, keeping all timer logic out of ViewModels.</summary>
 public sealed class ActiveSessionMonitor : IActiveSessionMonitor, IDisposable
 {
     private readonly IServiceScopeFactory _scopeFactory;

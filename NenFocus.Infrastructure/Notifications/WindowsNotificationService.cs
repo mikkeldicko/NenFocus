@@ -12,7 +12,6 @@ public sealed class WindowsNotificationService : INotificationService, IDisposab
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        // Updated for .NET 9 compatibility
         new ToastContentBuilder()
             .AddText(title)
             .AddText(body)
