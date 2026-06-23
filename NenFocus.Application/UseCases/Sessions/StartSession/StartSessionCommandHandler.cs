@@ -70,9 +70,7 @@ public sealed class StartSessionCommandHandler
             blockProfileId: command.ProfileId ?? Guid.Empty,
             origin: origin,
             originatingBlockId: command.OriginatingBlockId,
-            breakSettings: breakSettings,
-            temporaryBlockedApps: command.TemporaryBlockedApps.ToList(),
-            temporaryBlockedSites: command.TemporaryBlockedSites.ToList());
+            breakSettings: breakSettings);
 
         session.Start(now);
 
@@ -106,9 +104,7 @@ public sealed class StartSessionCommandHandler
             Status = session.Status,
             Origin = session.Origin,
             OriginatingBlockId = session.OriginatingBlockId,
-            BreakSettings = command.BreakSettings,
-            TemporaryBlockedApps = command.TemporaryBlockedApps,
-            TemporaryBlockedSites = command.TemporaryBlockedSites
+            BreakSettings = command.BreakSettings
         });
 
         return StartSessionResult.Ok(session.Id);

@@ -24,10 +24,6 @@ public sealed class PolicyEngine : IPolicyEngine
             .SelectMany(p => p.BlockedApps.Select(a => ProcessUtils.NormalizeProcessName(a.ProcessName)))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var session in activeSessions)
-            foreach (var app in session.TemporaryBlockedApps)
-                blockedApps.Add(ProcessUtils.NormalizeProcessName(app));
-
         var effectivePolicy = activeProfiles.Any(p => p.WebsitePolicy == WebsitePolicy.Allowlist)
             ? WebsitePolicy.Allowlist
             : WebsitePolicy.Blocklist;
@@ -56,10 +52,6 @@ public sealed class PolicyEngine : IPolicyEngine
         {
             blockedSites = activeProfiles.SelectMany(p => p.Websites.Select(s => s.Url)).ToHashSet(StringComparer.OrdinalIgnoreCase);
         }
-
-        foreach (var session in activeSessions)
-            foreach (var site in session.TemporaryBlockedSites)
-                blockedSites.Add(site);
 
         var activePlannedBlock = activeBlocks.OrderByDescending(b => b is FocusBlock).FirstOrDefault();
         BlockType? activeBlockType = activePlannedBlock switch

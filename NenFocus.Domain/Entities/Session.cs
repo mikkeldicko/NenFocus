@@ -21,8 +21,6 @@ public class Session : IHasDomainEvents
     public BreakSettings? BreakSettings { get; private set; }
     public int BreaksTaken { get; private set; }
     public DateTime? BreakStartedAt { get; private set; }
-    public List<string> TemporaryBlockedApps { get; private set; } = [];
-    public List<string> TemporaryBlockedSites { get; private set; } = [];
     public string? Reflection { get; private set; }
     public int? Rating { get; private set; }
 
@@ -38,9 +36,7 @@ public class Session : IHasDomainEvents
         Guid blockProfileId,
         SessionOrigin origin,
         Guid? originatingBlockId = null,
-        BreakSettings? breakSettings = null,
-        List<string>? temporaryBlockedApps = null,
-        List<string>? temporaryBlockedSites = null)
+        BreakSettings? breakSettings = null)
     {
         if (origin == SessionOrigin.Planned && originatingBlockId is null)
             throw new ArgumentException(
@@ -59,9 +55,7 @@ public class Session : IHasDomainEvents
             Origin = origin,
             OriginatingBlockId = originatingBlockId,
             BreakSettings = breakSettings,
-            Status = SessionStatus.NotStarted,
-            TemporaryBlockedApps = temporaryBlockedApps ?? [],
-            TemporaryBlockedSites = temporaryBlockedSites ?? []
+            Status = SessionStatus.NotStarted
         };
     }
 

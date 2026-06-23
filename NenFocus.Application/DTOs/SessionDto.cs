@@ -16,6 +16,4 @@ public sealed record SessionDto
     public BreakSettingsDto? BreakSettings { get; init; }
     public int BreaksTaken { get; init; }
     public DateTime? BreakStartedAt { get; init; }
-    public IReadOnlyList<string> TemporaryBlockedApps { get; init; } = [];
-    public IReadOnlyList<string> TemporaryBlockedSites { get; init; } = [];
 }

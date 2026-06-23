@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Threading.Tasks;
@@ -37,29 +37,16 @@ public partial class RenPageViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(SelectedProfile))]
     [NotifyPropertyChangedFor(nameof(HasSelectedProfile))]
     [NotifyPropertyChangedFor(nameof(IsAllowlistMode))]
-    [NotifyPropertyChangedFor(nameof(CanAddWebsites))]
     [NotifyPropertyChangedFor(nameof(AllowlistHintVisible))]
     private RenProfileCardViewModel? _selectedProfileCard;
 
     public BlockProfileDto? SelectedProfile => SelectedProfileCard?.Profile;
     public bool HasSelectedProfile => SelectedProfile is not null;
     public bool IsAllowlistMode => SelectedProfile?.WebsitePolicy == WebsitePolicy.Allowlist;
-
-    /// <summary>Websites can be added in any mode except allowlist with a profile selected.</summary>
-    public bool CanAddWebsites => !IsAllowlistMode;
     public bool AllowlistHintVisible => IsAllowlistMode;
 
     [ObservableProperty]
     private bool _isLoading = true;
-
-    public ObservableCollection<string> SessionOnlyApps { get; } = new();
-    public ObservableCollection<string> SessionOnlyWebsites { get; } = new();
-
-    [ObservableProperty]
-    private string _newAppInput = string.Empty;
-
-    [ObservableProperty]
-    private string _newWebsiteInput = string.Empty;
 
     public RenPageViewModel(
         IQueryHandler<GetAllBlockProfilesQuery, IReadOnlyList<BlockProfileDto>> profilesQuery,
@@ -106,43 +93,11 @@ public partial class RenPageViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void AddApp()
-    {
-        var app = NewAppInput.Trim();
-        if (!string.IsNullOrWhiteSpace(app) && !SessionOnlyApps.Contains(app))
-        {
-            SessionOnlyApps.Add(app);
-            NewAppInput = string.Empty;
-        }
-    }
-
-    [RelayCommand]
-    private void RemoveApp(string app) => SessionOnlyApps.Remove(app);
-
-    [RelayCommand]
-    private void AddWebsite()
-    {
-        var site = NewWebsiteInput.Trim();
-        if (!string.IsNullOrWhiteSpace(site) && !SessionOnlyWebsites.Contains(site))
-        {
-            SessionOnlyWebsites.Add(site);
-            NewWebsiteInput = string.Empty;
-        }
-    }
-
-    [RelayCommand]
-    private void RemoveWebsite(string site) => SessionOnlyWebsites.Remove(site);
-
-    [RelayCommand]
     private void Continue() => _onContinue();
 
     [RelayCommand]
     private void Back()
     {
-        SessionOnlyApps.Clear();
-        SessionOnlyWebsites.Clear();
-        NewAppInput = string.Empty;
-        NewWebsiteInput = string.Empty;
         if (SelectedProfileCard is not null)
         {
             SelectedProfileCard.IsSelected = false;
@@ -151,4 +106,3 @@ public partial class RenPageViewModel : ViewModelBase
         _onBack();
     }
 }
-

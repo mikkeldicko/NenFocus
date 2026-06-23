@@ -142,9 +142,7 @@ public partial class HatsuPageViewModel : ViewModelBase
             Goal = data.Goal,
             ProfileId = data.ProfileId,
             DurationMinutes = TotalMinutes,
-            BreakSettings = breakSettings,
-            TemporaryBlockedApps = data.SessionOnlyApps,
-            TemporaryBlockedSites = data.SessionOnlyWebsites
+            BreakSettings = breakSettings
         };
 
         IsStarting = true;
@@ -164,6 +162,4 @@ public sealed record HatsuData
 {
     public string Goal { get; init; } = string.Empty;
     public Guid? ProfileId { get; init; }
-    public IReadOnlyList<string> SessionOnlyApps { get; init; } = [];
-    public IReadOnlyList<string> SessionOnlyWebsites { get; init; } = [];
 }

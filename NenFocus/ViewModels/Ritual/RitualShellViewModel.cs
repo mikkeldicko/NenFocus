@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -35,8 +35,6 @@ public partial class RitualShellViewModel : ViewModelBase
 
     private string _goal = string.Empty;
     private Guid? _selectedProfileId;
-    private List<string> _sessionOnlyApps = [];
-    private List<string> _sessionOnlyWebsites = [];
 
     private ZetsuPageViewModel? _zetsuVm;
     private RenPageViewModel? _renVm;
@@ -95,11 +93,7 @@ public partial class RitualShellViewModel : ViewModelBase
     private void NavigateToHatsu()
     {
         if (_renVm is not null)
-        {
             _selectedProfileId = _renVm.SelectedProfile?.Id;
-            _sessionOnlyApps = [.._renVm.SessionOnlyApps];
-            _sessionOnlyWebsites = [.._renVm.SessionOnlyWebsites];
-        }
 
         StepIndex = 3;
         _currentBackAction = NavigateToRen;
@@ -108,12 +102,9 @@ public partial class RitualShellViewModel : ViewModelBase
             getData: () => new HatsuData
             {
                 Goal = _goal,
-                ProfileId = _selectedProfileId,
-                SessionOnlyApps = _sessionOnlyApps,
-                SessionOnlyWebsites = _sessionOnlyWebsites
+                ProfileId = _selectedProfileId
             },
             onSessionStarted: _onComplete,
             onBack: NavigateToRen);
     }
 }
-

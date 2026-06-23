@@ -107,19 +107,6 @@ public class NenFocusDbContext : DbContext
                     .HasColumnName("BreakLengthMinutes");
             });
 
-            entity.Property(s => s.TemporaryBlockedApps)
-                .HasConversion(
-                    v => JsonSerializer.Serialize(v, (JsonSerializerOptions?)null),
-                    v => JsonSerializer.Deserialize<List<string>>(v, (JsonSerializerOptions?)null) ?? new List<string>())
-                .HasColumnType("TEXT")
-                .HasDefaultValueSql("'[]'");
-
-            entity.Property(s => s.TemporaryBlockedSites)
-                .HasConversion(
-                    v => JsonSerializer.Serialize(v, (JsonSerializerOptions?)null),
-                    v => JsonSerializer.Deserialize<List<string>>(v, (JsonSerializerOptions?)null) ?? new List<string>())
-                .HasColumnType("TEXT")
-                .HasDefaultValueSql("'[]'");
         });
 
         modelBuilder.Entity<BlockProfile>(entity =>

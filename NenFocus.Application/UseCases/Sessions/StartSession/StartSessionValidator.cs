@@ -1,5 +1,4 @@
 using FluentValidation;
-using NenFocus.Domain.Constants;
 
 namespace NenFocus.Application.UseCases.Sessions.StartSession;
 
@@ -10,10 +9,6 @@ public sealed class StartSessionValidator : AbstractValidator<StartSessionComman
         RuleFor(x => x.Goal).NotEmpty().MaximumLength(500);
         RuleFor(x => x.ProfileId).NotEmpty().WithMessage("A block profile must be selected.");
         RuleFor(x => x.DurationMinutes).InclusiveBetween(1, 480);
-
-        RuleForEach(x => x.TemporaryBlockedApps)
-            .Must(app => !SystemSafetyConstants.UnkillableProcesses.Contains(ProcessUtils.NormalizeProcessName(app)))
-            .WithMessage(app => $"'{app}' is a critical system process and cannot be blocked.");
 
         When(x => x.BreakSettings != null && x.BreakSettings.Enabled, () =>
         {
