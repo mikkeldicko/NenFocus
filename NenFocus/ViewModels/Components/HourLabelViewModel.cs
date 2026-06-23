@@ -2,9 +2,6 @@
 
 namespace NenFocus.ViewModels.Components;
 
-/// <summary>
-/// One hour label shown on the left axis of the week grid.
-/// </summary>
 public partial class HourLabelViewModel : ViewModelBase
 {
     public int Hour { get; }

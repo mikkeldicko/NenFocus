@@ -5,11 +5,6 @@ using NenFocus.Domain.Enums;
 
 namespace NenFocus.ViewModels.Components;
 
-/// <summary>
-/// Represents one planned block rendered as a tile on the week grid.
-/// Layout properties (Top, Height, ColumnIndex) are computed by the page VM
-/// based on the block's start/end times relative to the visible hour range.
-/// </summary>
 public partial class PlannedBlockTileViewModel : ViewModelBase
 {
     public Guid Id { get; }

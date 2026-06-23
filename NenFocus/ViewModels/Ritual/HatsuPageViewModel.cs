@@ -16,7 +16,6 @@ public partial class HatsuPageViewModel : ViewModelBase
     private readonly Action _onSessionStarted;
     private readonly Action _onBack;
 
-    // ── Duration ───────────────────────────────────────────────────────────
     public static int[] HourOptions { get; } = { 0, 1, 2, 3, 4, 5, 6, 7, 8 };
     public static int[] MinuteOptions { get; } = { 0, 5, 10, 15, 20, 30, 45 };
 
@@ -33,7 +32,6 @@ public partial class HatsuPageViewModel : ViewModelBase
     public int TotalMinutes => SelectedHours * 60 + SelectedMinutes;
     public bool ShowZeroError => TotalMinutes == 0;
 
-    // ── Break settings ─────────────────────────────────────────────────────
     [ObservableProperty]
     private bool _breakEnabled;
 
@@ -55,7 +53,6 @@ public partial class HatsuPageViewModel : ViewModelBase
     [ObservableProperty]
     private string _customBreakLengthInput = string.Empty;
 
-    // ── State ──────────────────────────────────────────────────────────────
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanStart))]
     private bool _isStarting;

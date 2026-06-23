@@ -37,7 +37,6 @@ public partial class App : Avalonia.Application
                         var session = await sessionRepository.GetByIdAsync(sessionDto.Id);
                         if (session != null)
                         {
-                            // Use the new Sync method to update the entity safely
                             session.SyncState(sessionDto.BreaksTaken, sessionDto.BreakStartedAt);
 
                             await sessionRepository.SaveAsync(session);

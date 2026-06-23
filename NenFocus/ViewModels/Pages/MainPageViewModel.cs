@@ -27,8 +27,6 @@ public partial class MainPageViewModel : ViewModelBase
     private readonly IPlannerClockService _clock;
     private Guid _activeSessionId;
 
-    // ── Session display ────────────────────────────────────────────────────
-
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(StartRitualCommand))]
     [NotifyPropertyChangedFor(nameof(CanTakeBreak))]
@@ -45,8 +43,6 @@ public partial class MainPageViewModel : ViewModelBase
 
     [ObservableProperty]
     private string _activeProfileName = string.Empty;
-
-    // ── Break display ──────────────────────────────────────────────────────
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanTakeBreak))]
@@ -69,8 +65,6 @@ public partial class MainPageViewModel : ViewModelBase
     private bool _hasBreakSettings;
 
     public bool CanTakeBreak => HasActiveSession && !IsOnBreak && HasBreakSettings;
-
-    // ── Header ─────────────────────────────────────────────────────────────
 
     public string Greeting => _clock.LocalNow.Hour switch
     {
@@ -172,8 +166,6 @@ public partial class MainPageViewModel : ViewModelBase
         SessionGoal = string.Empty;
         ActiveProfileName = string.Empty;
     }
-
-    // ── Commands ───────────────────────────────────────────────────────────
 
     [RelayCommand]
     private async Task EndSession()

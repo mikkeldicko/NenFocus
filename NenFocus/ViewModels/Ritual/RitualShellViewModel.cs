@@ -26,7 +26,6 @@ public partial class RitualShellViewModel : ViewModelBase
     [ObservableProperty]
     private ViewModelBase _currentStep = null!;
 
-    // Tracks what "back" means at the current step
     private Action _currentBackAction = () => { };
 
     public bool IsDot0Active => StepIndex == 0;
@@ -34,7 +33,6 @@ public partial class RitualShellViewModel : ViewModelBase
     public bool IsDot2Active => StepIndex == 2;
     public bool IsDot3Active => StepIndex == 3;
 
-    // Data collected across steps
     private string _goal = string.Empty;
     private Guid? _selectedProfileId;
     private List<string> _sessionOnlyApps = [];

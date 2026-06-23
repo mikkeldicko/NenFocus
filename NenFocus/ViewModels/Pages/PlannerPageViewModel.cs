@@ -20,7 +20,6 @@ namespace NenFocus.ViewModels.Pages;
 
 public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 {
-    // ── Layout constants ──────────────────────────────────────────────────
     public const double HourRowHeight = 56.0;
     public const int FirstHour = 0;
     public const int LastHour = 24;
@@ -37,7 +36,6 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     private readonly Dictionary<Guid, PlannedBlockDto> _blocksInWeek = new();
     private Guid? _editingBlockId;
 
-    // ── Week state ────────────────────────────────────────────────────────
     [ObservableProperty] private DateTime _weekStart;
 
     /// <summary>

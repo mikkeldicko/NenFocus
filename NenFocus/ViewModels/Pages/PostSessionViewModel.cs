@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using NenFocus.Application.DTOs;
@@ -70,7 +71,7 @@ public partial class PostSessionViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private async System.Threading.Tasks.Task Done()
+    private async Task Done()
     {
         try
         {
@@ -109,7 +110,6 @@ public partial class PostSessionViewModel : ViewModelBase
     }
 }
 
-/// <summary>Display item for a blocked app or website attempt in the post-session list.</summary>
 public sealed class BlockedAttemptItemViewModel
 {
     public string ProcessName { get; }

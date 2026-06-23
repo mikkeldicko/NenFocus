@@ -31,7 +31,6 @@ public partial class RenPageViewModel : ViewModelBase
     private readonly Action _onContinue;
     private readonly Action _onBack;
 
-    // ── Profile list ───────────────────────────────────────────────────────
     public ObservableCollection<RenProfileCardViewModel> Profiles { get; } = new();
 
     [ObservableProperty]
@@ -53,7 +52,6 @@ public partial class RenPageViewModel : ViewModelBase
     [ObservableProperty]
     private bool _isLoading = true;
 
-    // ── Session-only additions ─────────────────────────────────────────────
     public ObservableCollection<string> SessionOnlyApps { get; } = new();
     public ObservableCollection<string> SessionOnlyWebsites { get; } = new();
 
@@ -89,8 +87,6 @@ public partial class RenPageViewModel : ViewModelBase
             IsLoading = false;
         }
     }
-
-    // ── Commands ───────────────────────────────────────────────────────────
 
     [RelayCommand]
     private void SelectProfile(RenProfileCardViewModel card)

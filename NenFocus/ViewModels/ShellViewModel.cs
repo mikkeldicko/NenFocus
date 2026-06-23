@@ -79,7 +79,6 @@ public partial class ShellViewModel : ViewModelBase
         {
             if (required && !IsRitualActive)
             {
-                // Dispatch to UI thread to handle visual changes
                 Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
                 {
                     StartRitual();

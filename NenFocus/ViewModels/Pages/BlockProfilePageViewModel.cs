@@ -53,23 +53,19 @@ public partial class BlockProfilePageViewModel : ViewModelBase
 
     private Guid? _editingProfileId;
 
-    // ── Profile list ─────────────────────────────────────────────────────
     public ObservableCollection<BlockProfileCardViewModel> Profiles { get; } = new();
     [ObservableProperty] private bool _isLoading;
     public bool HasNoProfiles => Profiles.Count == 0 && !IsLoading;
 
-    // ── Modal ─────────────────────────────────────────────────────────────
     [ObservableProperty] private bool _isFormVisible;
     [ObservableProperty] private bool _isEditing;
     [ObservableProperty] private string _formTitle = "New Profile";
     [ObservableProperty] private string? _formError;
 
-    // ── Name + tags ───────────────────────────────────────────────────────
     [ObservableProperty] private string _formName = string.Empty;
     [ObservableProperty] private string _newTagText = string.Empty;
     public ObservableCollection<string> FormTags { get; } = new();
 
-    // ── Tabs (0 = Websites, 1 = Apps) ────────────────────────────────────
     [ObservableProperty] private int _activeTab;
     public bool IsWebsiteTab => ActiveTab == 0;
     public bool IsAppTab => ActiveTab == 1;
@@ -79,7 +75,6 @@ public partial class BlockProfilePageViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsAppTab));
     }
 
-    // ── Websites tab ──────────────────────────────────────────────────────
     [ObservableProperty] private bool _isAllowlist;
     [ObservableProperty] private string _newSiteText = string.Empty;
     [ObservableProperty] private string? _selectedSite;
@@ -92,22 +87,18 @@ public partial class BlockProfilePageViewModel : ViewModelBase
     partial void OnIsAllowlistChanged(bool value) =>
         OnPropertyChanged(nameof(WebsitePolicyHint));
 
-    // ── Apps tab ──────────────────────────────────────────────────────────
     [ObservableProperty] private string? _selectedApp;
     public ObservableCollection<string> FormApps { get; } = new();
 
-    // ── Save button label ─────────────────────────────────────────────────
     public string SaveButtonLabel => IsEditing ? "Save Changes" : "Create Profile";
     partial void OnIsEditingChanged(bool value) =>
         OnPropertyChanged(nameof(SaveButtonLabel));
 
-    // ── Delete confirmation ───────────────────────────────────────────────
     [ObservableProperty] private bool _isConfirmDeleteVisible;
     [ObservableProperty] private string _confirmDeleteMessage = string.Empty;
     [ObservableProperty] private string? _confirmDeleteError;
     private BlockProfileCardViewModel? _pendingDeleteCard;
 
-    // ── Constructor ───────────────────────────────────────────────────────
     public BlockProfilePageViewModel(
         IQueryHandler<GetAllBlockProfilesQuery, IReadOnlyList<BlockProfileDto>> getProfiles,
         ICommandHandler<CreateBlockProfileCommand, CreateBlockProfileResult> createProfile,
@@ -125,7 +116,6 @@ public partial class BlockProfilePageViewModel : ViewModelBase
         _ = LoadProfilesAsync();
     }
 
-    // ── Load ──────────────────────────────────────────────────────────────
     private async Task LoadProfilesAsync()
     {
         IsLoading = true;
@@ -137,7 +127,6 @@ public partial class BlockProfilePageViewModel : ViewModelBase
         OnPropertyChanged(nameof(HasNoProfiles));
     }
 
-    // ── Form helpers ──────────────────────────────────────────────────────
     private void ResetForm()
     {
         FormName = string.Empty;
@@ -153,7 +142,6 @@ public partial class BlockProfilePageViewModel : ViewModelBase
         FormError = null;
     }
 
-    // ── New profile ───────────────────────────────────────────────────────
     [RelayCommand]
     private void NewProfile()
     {
@@ -164,7 +152,6 @@ public partial class BlockProfilePageViewModel : ViewModelBase
         IsFormVisible = true;
     }
 
-    // ── Edit ──────────────────────────────────────────────────────────────
     [RelayCommand]
     private void EditProfile(BlockProfileCardViewModel card)
     {
@@ -224,15 +211,12 @@ public partial class BlockProfilePageViewModel : ViewModelBase
         IsConfirmDeleteVisible = false;
     }
 
-    // ── Tab switching ─────────────────────────────────────────────────────
     [RelayCommand] private void ShowWebsiteTab() => ActiveTab = 0;
     [RelayCommand] private void ShowAppTab() => ActiveTab = 1;
 
-    // ── Policy toggle ─────────────────────────────────────────────────────
     [RelayCommand] private void SetBlocklist() => IsAllowlist = false;
     [RelayCommand] private void SetAllowlist() => IsAllowlist = true;
 
-    // ── Tags ──────────────────────────────────────────────────────────────
     [RelayCommand]
     private void AddTag()
     {
@@ -245,7 +229,6 @@ public partial class BlockProfilePageViewModel : ViewModelBase
     [RelayCommand]
     private void RemoveTag(string tag) => FormTags.Remove(tag);
 
-    // ── Sites ─────────────────────────────────────────────────────────────
     [RelayCommand]
     private void AddSite()
     {
@@ -265,9 +248,6 @@ public partial class BlockProfilePageViewModel : ViewModelBase
         }
     }
 
-    // ── Apps ──────────────────────────────────────────────────────────────
-
-    // ── Browse for app (called from code-behind) ──────────────────────────
     public void AddAppFromExePath(string processName)
     {
         if (!string.IsNullOrEmpty(processName) &&
@@ -285,7 +265,6 @@ public partial class BlockProfilePageViewModel : ViewModelBase
         }
     }
 
-    // ── Save ──────────────────────────────────────────────────────────────
     [RelayCommand]
     private async Task SaveAsync()
     {
@@ -330,7 +309,6 @@ public partial class BlockProfilePageViewModel : ViewModelBase
         CloseForm();
     }
 
-    // ── Close ─────────────────────────────────────────────────────────────
     [RelayCommand]
     private void CloseForm()
     {
