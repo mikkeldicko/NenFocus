@@ -11,8 +11,8 @@ public sealed class CreatePlannedBlockValidator : AbstractValidator<CreatePlanne
             .NotEmpty().WithMessage("Profile ID is required.");
 
         RuleFor(x => x.Start)
-            .Must(start => start >= clock.UtcNow.AddMinutes(1))
-            .WithMessage("Start time must be at least 1 minute in the future.");
+            .Must(start => start > clock.UtcNow)
+            .WithMessage("Start time must be in the future.");
 
         RuleFor(x => x.End)
             .GreaterThan(x => x.Start)

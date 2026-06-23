@@ -251,11 +251,19 @@
 
 							<Grid ColumnDefinitions="*,12,*">
 								<StackPanel Grid.Column="0" Spacing="4">
-									<TextBlock Text="Start" FontSize="12" Foreground="#7A7A8C"/>
+									<StackPanel Orientation="Horizontal" Spacing="6">
+										<TextBlock Text="Start" FontSize="12" Foreground="#7A7A8C"/>
+										<TextBlock Text="(in progress)"
+										           FontSize="11"
+										           Foreground="#BBBBCC"
+										           FontStyle="Italic"
+										           IsVisible="{Binding IsStartLocked}"/>
+									</StackPanel>
 									<AutoCompleteBox ItemsSource="{Binding TimeOptions}"
                                                      Text="{Binding FormStartTime, Mode=TwoWay}"
                                                      FilterMode="Contains"
-                                                     Watermark="HH:mm" />
+                                                     Watermark="HH:mm"
+                                                     IsEnabled="{Binding !IsStartLocked}"/>
 								</StackPanel>
 								<StackPanel Grid.Column="2" Spacing="4">
 									<TextBlock Text="End" FontSize="12" Foreground="#7A7A8C"/>

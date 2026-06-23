@@ -74,6 +74,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
     [ObservableProperty] private bool _isFocusBlock = true;
     [ObservableProperty] private BlockProfileDto? _selectedProfile;
+    [ObservableProperty] private bool _isStartLocked;
 
     public string SaveButtonLabel => IsEditing ? "Save Changes" : "Create Block";
     public bool CanDeleteFromForm => IsEditing;
@@ -243,6 +244,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         await EnsureProfilesLoadedAsync();
         _editingBlockId = null;
         IsEditing = false;
+        IsStartLocked = false;
         FormTitle = "New Block";
         ResetForm();
 
@@ -262,6 +264,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         await EnsureProfilesLoadedAsync();
         _editingBlockId = dto.Id;
         IsEditing = true;
+        IsStartLocked = dto.Start <= DateTime.UtcNow;
         FormTitle = "Edit Block";
         ResetForm();
 
@@ -353,6 +356,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     {
         IsFormVisible = false;
         FormError = null;
+        IsStartLocked = false;
         _editingBlockId = null;
     }
 
