@@ -215,6 +215,5 @@ The same fragmentation pushes domain-event dispatching out to every handler: eac
 
 Trivial style or consistency fixes that don't rise to the level of a Design Gap. Deferred until the relevant file is next edited for other reasons. Items here should be deletable in a single line change.
 
-* **`StartSessionCommandHandler.cs` — extract minutes-available calc to domain.** The line `(int)(conflictingBlock.Start - now).TotalMinutes` computes "how long until the next conflicting Ritual Block" inline. Replace with a `PlannedBlock.MinutesUntilStart(asOf)` method. Ubiquitous language; no behavior change.
-* **`EndSessionCommandHandler.cs` — use existing helper for elapsed time.** `(int)(session.EndedAt.Value - session.StartedAt.Value).TotalMinutes` should use `session.GetElapsedTime(session.EndedAt.Value)`. The helper already exists on `Session`.
+*(No outstanding items.)*
 

@@ -13,27 +13,29 @@ public sealed class StartSessionCommandHandler
     private readonly IPlannedBlockRepository _plannedBlocks;
     private readonly ISessionStateService _sessionState;
     private readonly IBlockProfileRepository _profiles;
+    private readonly ISystemClock _clock;
 
     public StartSessionCommandHandler(
         ISessionRepository sessions,
         IPlannedBlockRepository plannedBlocks,
         ISessionStateService sessionState,
-        IBlockProfileRepository profiles)
+        IBlockProfileRepository profiles,
+        ISystemClock clock)
     {
         _sessions = sessions;
         _plannedBlocks = plannedBlocks;
         _sessionState = sessionState;
         _profiles = profiles;
+        _clock = clock;
     }
 
     public async Task<StartSessionResult> HandleAsync(
         StartSessionCommand command,
         CancellationToken ct)
     {
-        var now = DateTime.UtcNow;
+        var now = _clock.UtcNow;
         var requestedEnd = now.AddMinutes(command.DurationMinutes);
 
-        // Check for conflicting RitualBlocks ahead
         var upcomingBlocks = await _plannedBlocks.GetForRangeAsync(now, requestedEnd, ct);
         var conflictingBlock = upcomingBlocks
             .OfType<RitualBlock>()
@@ -42,7 +44,7 @@ public sealed class StartSessionCommandHandler
 
         if (conflictingBlock is not null)
         {
-            var minutesAvailable = (int)(conflictingBlock.Start - now).TotalMinutes;
+            var minutesAvailable = conflictingBlock.MinutesUntilStart(now);
             if (minutesAvailable > 0)
                 return StartSessionResult.Fail(
                     $"A planned ritual block starts in {minutesAvailable} minutes. " +
@@ -57,7 +59,6 @@ public sealed class StartSessionCommandHandler
                 command.BreakSettings.BreakDurationMinutes);
         }
 
-        // Determine origin — if a RitualBlock triggered this, it is Planned
         var origin = command.OriginatingBlockId.HasValue
             ? SessionOrigin.Planned
             : SessionOrigin.Impromptu;
@@ -75,7 +76,6 @@ public sealed class StartSessionCommandHandler
 
         session.Start(now);
 
-        // If this was triggered by a RitualBlock, mark it completed
         if (command.OriginatingBlockId.HasValue)
         {
             var ritualBlock = await _plannedBlocks.GetByIdAsync(

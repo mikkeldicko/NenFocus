@@ -67,8 +67,7 @@ public sealed class EndSessionCommandHandler
             StartedAt = session.StartedAt!.Value,
             EndedAt = session.EndedAt!.Value,
             PlannedDurationMinutes = (int)session.Duration.Value.TotalMinutes,
-            ActualDurationMinutes = (int)(
-                session.EndedAt.Value - session.StartedAt.Value).TotalMinutes,
+            ActualDurationMinutes = (int)(session.GetElapsedTime(session.EndedAt.Value)?.TotalMinutes ?? 0),
             BreaksTaken = session.BreaksTaken,
             BlockedAppAttempts = appAttempts,
             BlockedWebsiteAttempts = websiteAttempts,

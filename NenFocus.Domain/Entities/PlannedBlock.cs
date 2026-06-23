@@ -18,6 +18,8 @@ public abstract class PlannedBlock
 
     public TimeSpan GetDuration() => End - Start;
 
+    public int MinutesUntilStart(DateTime asOf) => (int)(Start - asOf).TotalMinutes;
+
     public void Reschedule(DateTime start, DateTime end)
     {
         if (end <= start)
