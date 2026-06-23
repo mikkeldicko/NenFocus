@@ -1,4 +1,4 @@
-﻿using FluentValidation;
+using FluentValidation;
 using NenFocus.Application.Interfaces;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.ValueObjects;
@@ -23,18 +23,13 @@ public sealed class CreateBlockProfileCommandHandler
         CreateBlockProfileCommand command,
         CancellationToken cancellationToken = default)
     {
-        // 1. Safety Shield Validation
         var validationResult = await _validator.ValidateAsync(command, cancellationToken);
         if (!validationResult.IsValid)
-        {
             return CreateBlockProfileResult.Fail(validationResult.Errors.First().ErrorMessage);
-        }
 
-        // 2. Business Logic Check
         if (await _profiles.ExistsWithNameAsync(command.Name, cancellationToken: cancellationToken))
             return CreateBlockProfileResult.Fail($"A profile named '{command.Name}' already exists.");
 
-        // 3. Create Domain Aggregate (using your factory method)
         var profile = BlockProfile.Create(Guid.NewGuid(), command.Name, command.WebsitePolicy, DateTime.UtcNow, command.Tags.ToList());
 
         foreach (var appName in command.BlockedApps)

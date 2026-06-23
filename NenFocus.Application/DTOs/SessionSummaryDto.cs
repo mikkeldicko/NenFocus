@@ -1,9 +1,5 @@
 namespace NenFocus.Application.DTOs;
 
-/// <summary>
-/// Lightweight session record for Insights list and calendar views.
-/// Returned by GetSessionHistoryQuery.
-/// </summary>
 public sealed record SessionSummaryDto
 {
     public Guid Id { get; init; }

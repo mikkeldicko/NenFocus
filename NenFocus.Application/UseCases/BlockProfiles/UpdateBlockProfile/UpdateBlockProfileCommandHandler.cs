@@ -1,9 +1,6 @@
 using FluentValidation;
 using NenFocus.Application.Interfaces;
 using NenFocus.Domain.ValueObjects;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace NenFocus.Application.UseCases.BlockProfiles.UpdateBlockProfile;
 

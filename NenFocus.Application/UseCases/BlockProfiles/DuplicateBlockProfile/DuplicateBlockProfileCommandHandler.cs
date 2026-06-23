@@ -1,7 +1,4 @@
-﻿using NenFocus.Application.Interfaces;
-using System;
-using System.Threading;
-using System.Threading.Tasks;
+using NenFocus.Application.Interfaces;
 
 namespace NenFocus.Application.UseCases.BlockProfiles.DuplicateBlockProfile;
 

@@ -24,7 +24,7 @@ public sealed class GetAllBlockProfilesQueryHandler
             Id = p.Id,
             Name = p.Name,
             Tags = p.Tags,
-            WebsitePolicy = p.WebsitePolicy.ToString(),
+            WebsitePolicy = p.WebsitePolicy,
             BlockedApps = p.BlockedApps.Select(a => a.ProcessName).ToList(),
             Websites = p.Websites.Select(s => s.Url).ToList()
         }).ToList();

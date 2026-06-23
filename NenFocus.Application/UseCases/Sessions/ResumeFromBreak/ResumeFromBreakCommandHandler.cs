@@ -1,7 +1,5 @@
-﻿using NenFocus.Application.Interfaces;
+using NenFocus.Application.Interfaces;
 using NenFocus.Domain.Enums;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace NenFocus.Application.UseCases.Sessions.ResumeFromBreak;
 
@@ -11,12 +9,13 @@ public sealed class ResumeFromBreakCommandHandler : ICommandHandler<ResumeFromBr
     private readonly ISessionStateService _sessionState;
 
     public ResumeFromBreakCommandHandler(
-           ISessionRepository sessions,
-           ISessionStateService sessionState)
+        ISessionRepository sessions,
+        ISessionStateService sessionState)
     {
         _sessions = sessions;
         _sessionState = sessionState;
     }
+
     public async Task<ResumeFromBreakResult> HandleAsync(ResumeFromBreakCommand command, CancellationToken ct = default)
     {
         var session = await _sessions.GetByIdAsync(command.SessionId, ct);

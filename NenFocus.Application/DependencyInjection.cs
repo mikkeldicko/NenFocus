@@ -1,8 +1,7 @@
-using System.Linq;
 using System.Reflection;
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
-using NenFocus.Application.Interfaces; 
+using NenFocus.Application.Interfaces;
 using NenFocus.Domain.Services;
 
 namespace NenFocus.Application;
@@ -13,13 +12,10 @@ public static class DependencyInjection
     {
         var assembly = Assembly.GetExecutingAssembly();
 
-        // 1. Register All Command and Query Handlers via Reflection
         RegisterHandlers(services, assembly);
 
-        // 2. Register FluentValidation
         services.AddValidatorsFromAssembly(assembly);
 
-        // 3. Register Domain Services
         services.AddScoped<IPolicyEngine, PolicyEngine>();
 
         return services;

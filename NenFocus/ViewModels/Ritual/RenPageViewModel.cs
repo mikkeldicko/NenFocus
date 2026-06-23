@@ -7,6 +7,7 @@ using CommunityToolkit.Mvvm.Input;
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.GetAllBlockProfiles;
+using NenFocus.Domain.Enums;
 
 namespace NenFocus.ViewModels.Ritual;
 
@@ -43,7 +44,7 @@ public partial class RenPageViewModel : ViewModelBase
 
     public BlockProfileDto? SelectedProfile => SelectedProfileCard?.Profile;
     public bool HasSelectedProfile => SelectedProfile is not null;
-    public bool IsAllowlistMode => SelectedProfile?.WebsitePolicy == "Allowlist";
+    public bool IsAllowlistMode => SelectedProfile?.WebsitePolicy == WebsitePolicy.Allowlist;
 
     /// <summary>Websites can be added in any mode except allowlist with a profile selected.</summary>
     public bool CanAddWebsites => !IsAllowlistMode;

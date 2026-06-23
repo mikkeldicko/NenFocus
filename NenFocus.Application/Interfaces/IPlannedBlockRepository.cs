@@ -54,7 +54,6 @@ public interface IPlannedBlockRepository
 
     /// <summary>
     /// Saves a planned block — add or update.
-    /// Used by StartSessionCommandHandler to stamp RitualCompletedAt.
     /// </summary>
     Task SaveAsync(
         PlannedBlock block,

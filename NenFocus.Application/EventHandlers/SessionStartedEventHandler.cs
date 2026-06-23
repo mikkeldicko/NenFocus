@@ -1,7 +1,7 @@
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.ComputeActivePolicySlice;
 using NenFocus.Domain.Events;
-using NenFocus.Domain.ValueObjects; // Added
+using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Application.EventHandlers;
 
@@ -25,7 +25,6 @@ public sealed class SessionStartedEventHandler
         SessionStartedEvent domainEvent,
         CancellationToken cancellationToken = default)
     {
-        // FIX: Records use positional parameters: (DateTime.UtcNow)
         var policy = await _policyQuery.HandleAsync(
             new ComputeActivePolicySliceQuery(DateTime.UtcNow),
             cancellationToken);

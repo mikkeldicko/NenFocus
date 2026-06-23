@@ -1,6 +1,5 @@
-﻿using NenFocus.Domain.Enums;
-using System.Collections.Generic;
-using NenFocus.Application.Interfaces;
+﻿using NenFocus.Application.Interfaces;
+using NenFocus.Domain.Enums;
 
 namespace NenFocus.Application.UseCases.BlockProfiles.CreateBlockProfile;
 

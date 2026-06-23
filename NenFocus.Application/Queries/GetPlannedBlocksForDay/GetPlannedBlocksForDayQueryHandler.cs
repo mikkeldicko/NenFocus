@@ -1,6 +1,7 @@
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Domain.Entities;
+using NenFocus.Domain.Enums;
 
 namespace NenFocus.Application.Queries.GetPlannedBlocksForDay;
 
@@ -35,12 +36,10 @@ public sealed class GetPlannedBlocksForDayQueryHandler
                 Id = b.Id,
                 ProfileId = b.BlockProfileId,
                 ProfileName = profile?.Name ?? "Unknown",
-                BlockType = b is RitualBlock
-                    ? NenFocus.Domain.Enums.BlockType.Ritual
-                    : NenFocus.Domain.Enums.BlockType.Background,
+                BlockType = b is RitualBlock ? BlockType.Ritual : BlockType.Background,
                 Start = b.Start,
                 End = b.End,
-                IsAllowlistMode = profile?.WebsitePolicy == Domain.Enums.WebsitePolicy.Allowlist
+                IsAllowlistMode = profile?.WebsitePolicy == WebsitePolicy.Allowlist
             };
         }).ToList();
     }

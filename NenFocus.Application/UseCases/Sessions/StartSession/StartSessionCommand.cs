@@ -12,9 +12,5 @@ public sealed record StartSessionCommand : ICommand<StartSessionResult>
     public IReadOnlyList<string> TemporaryBlockedApps { get; init; } = [];
     public IReadOnlyList<string> TemporaryBlockedSites { get; init; } = [];
 
-    /// <summary>
-    /// Set by the Hatsu page when a RitualBlock triggered the Ritual.
-    /// Null for Impromptu sessions.
-    /// </summary>
     public Guid? OriginatingBlockId { get; init; }
 }

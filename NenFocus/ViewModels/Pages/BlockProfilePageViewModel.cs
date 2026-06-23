@@ -20,7 +20,7 @@ public partial class BlockProfileCardViewModel : ViewModelBase
 {
     public Guid Id { get; }
     public string Name { get; }
-    public string WebsitePolicy { get; }
+    public WebsitePolicy WebsitePolicy { get; }
 
     public IReadOnlyList<string> Tags { get; }
     public IReadOnlyList<string> BlockedApps { get; }
@@ -173,7 +173,7 @@ public partial class BlockProfilePageViewModel : ViewModelBase
         FormTitle = "Edit Profile";
         ResetForm();
         FormName = card.Name;
-        IsAllowlist = card.WebsitePolicy == "Allowlist";
+        IsAllowlist = card.WebsitePolicy == WebsitePolicy.Allowlist;
         foreach (var t in card.Tags) FormTags.Add(t);
         foreach (var s in card.Websites) FormSites.Add(s);
         foreach (var a in card.BlockedApps) FormApps.Add(a);

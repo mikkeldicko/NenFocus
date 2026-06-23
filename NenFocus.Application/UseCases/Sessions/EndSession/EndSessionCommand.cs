@@ -1,5 +1,4 @@
-﻿using System;
-using NenFocus.Application.Interfaces;
+﻿using NenFocus.Application.Interfaces;
 
 namespace NenFocus.Application.UseCases.Sessions.EndSession;
 
