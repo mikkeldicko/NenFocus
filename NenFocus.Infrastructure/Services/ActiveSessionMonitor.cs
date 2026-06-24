@@ -12,6 +12,7 @@ namespace NenFocus.Infrastructure.Services;
 public sealed class ActiveSessionMonitor : IActiveSessionMonitor, IDisposable
 {
     private readonly IServiceScopeFactory _scopeFactory;
+    private readonly ISystemClock _clock;
     private System.Timers.Timer? _timer;
 
     private Guid _sessionId;
@@ -29,9 +30,10 @@ public sealed class ActiveSessionMonitor : IActiveSessionMonitor, IDisposable
     public event EventHandler? Tick;
     public event EventHandler<PostSessionDto>? SessionAutoEnded;
 
-    public ActiveSessionMonitor(ISessionStateService sessionState, IServiceScopeFactory scopeFactory)
+    public ActiveSessionMonitor(ISessionStateService sessionState, IServiceScopeFactory scopeFactory, ISystemClock clock)
     {
         _scopeFactory = scopeFactory;
+        _clock = clock;
         sessionState.SessionChanged += OnSessionChanged;
     }
 
@@ -87,7 +89,7 @@ public sealed class ActiveSessionMonitor : IActiveSessionMonitor, IDisposable
 
     private void Recalculate()
     {
-        var remaining = _sessionEnd - DateTime.UtcNow;
+        var remaining = _sessionEnd - _clock.UtcNow;
 
         if (remaining <= TimeSpan.Zero)
         {
@@ -108,7 +110,7 @@ public sealed class ActiveSessionMonitor : IActiveSessionMonitor, IDisposable
         if (_breakStartedAt.HasValue)
         {
             var breakEnd = _breakStartedAt.Value.AddSeconds(_effectiveBreakSeconds);
-            var breakRemaining = breakEnd - DateTime.UtcNow;
+            var breakRemaining = breakEnd - _clock.UtcNow;
 
             if (breakRemaining <= TimeSpan.Zero)
             {

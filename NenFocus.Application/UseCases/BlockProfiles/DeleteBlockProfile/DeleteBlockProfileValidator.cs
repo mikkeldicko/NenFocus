@@ -7,7 +7,8 @@ public sealed class DeleteBlockProfileValidator : AbstractValidator<DeleteBlockP
 {
     public DeleteBlockProfileValidator(
         ISessionRepository sessions,
-        IPlannedBlockRepository plannedBlocks)
+        IPlannedBlockRepository plannedBlocks,
+        ISystemClock clock)
     {
         RuleFor(x => x.ProfileId)
             .MustAsync(async (id, ct) =>
@@ -19,7 +20,7 @@ public sealed class DeleteBlockProfileValidator : AbstractValidator<DeleteBlockP
 
         RuleFor(x => x.ProfileId)
             .MustAsync(async (id, ct) =>
-                !await plannedBlocks.HasFutureBlocksForProfileAsync(id, DateTime.UtcNow, ct))
+                !await plannedBlocks.HasFutureBlocksForProfileAsync(id, clock.UtcNow, ct))
             .WithMessage("This profile is assigned to one or more future planned blocks and cannot be deleted.");
     }
 }

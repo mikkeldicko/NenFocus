@@ -8,13 +8,16 @@ public sealed class StartBreakCommandHandler
 {
     private readonly ISessionRepository _sessions;
     private readonly ISessionStateService _sessionState;
+    private readonly ISystemClock _clock;
 
     public StartBreakCommandHandler(
         ISessionRepository sessions,
-        ISessionStateService sessionState)
+        ISessionStateService sessionState,
+        ISystemClock clock)
     {
         _sessions = sessions;
         _sessionState = sessionState;
+        _clock = clock;
     }
 
     public async Task<StartBreakResult> HandleAsync(
@@ -28,7 +31,7 @@ public sealed class StartBreakCommandHandler
         if (session.Status != SessionStatus.Active)
             return new StartBreakResult(false, "Can only start a break from an active session.");
 
-        session.StartBreak(DateTime.UtcNow);
+        session.StartBreak(_clock.UtcNow);
 
         await _sessions.SaveAsync(session, ct);
 

@@ -11,17 +11,20 @@ public sealed class EndSessionCommandHandler
     private readonly IBlockProfileRepository _profiles;
     private readonly IPlannedBlockRepository _plannedBlocks;
     private readonly IBlockedAttemptTracker _attemptTracker;
+    private readonly ISystemClock _clock;
 
     public EndSessionCommandHandler(
         ISessionRepository sessions,
         IBlockProfileRepository profiles,
         IPlannedBlockRepository plannedBlocks,
-        IBlockedAttemptTracker attemptTracker)
+        IBlockedAttemptTracker attemptTracker,
+        ISystemClock clock)
     {
         _sessions = sessions;
         _profiles = profiles;
         _plannedBlocks = plannedBlocks;
         _attemptTracker = attemptTracker;
+        _clock = clock;
     }
 
     public async Task<EndSessionResult> HandleAsync(
@@ -48,7 +51,7 @@ public sealed class EndSessionCommandHandler
             .GroupBy(a => a.ResourceName)
             .ToDictionary(g => g.Key, g => g.Count());
 
-        var endedAt = DateTime.UtcNow;
+        var endedAt = _clock.UtcNow;
         session.Complete(endedAt);
 
         await _sessions.SaveAsync(session, ct);

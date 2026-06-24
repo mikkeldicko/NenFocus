@@ -14,6 +14,7 @@ public sealed class ScheduledEnforcementService : BackgroundService
     private readonly ISessionStateService _sessionState;
     private readonly IEnforcementService _enforcement;
     private readonly INotificationService _notifications;
+    private readonly ISystemClock _clock;
     private readonly TimeSpan _interval = TimeSpan.FromSeconds(5);
 
     private DateTime? _lastWarningSentAt;
@@ -22,12 +23,14 @@ public sealed class ScheduledEnforcementService : BackgroundService
         IServiceScopeFactory scopeFactory,
         ISessionStateService sessionState,
         IEnforcementService enforcement,
-        INotificationService notifications)
+        INotificationService notifications,
+        ISystemClock clock)
     {
         _scopeFactory = scopeFactory;
         _sessionState = sessionState;
         _enforcement = enforcement;
         _notifications = notifications;
+        _clock = clock;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -41,7 +44,7 @@ public sealed class ScheduledEnforcementService : BackgroundService
                 var computeHandler = scope.ServiceProvider
                     .GetRequiredService<IQueryHandler<ComputeActivePolicySliceQuery, ActivePolicySlice>>();
 
-                var now = DateTime.UtcNow;
+                var now = _clock.UtcNow;
 
                 await CheckForUpcomingBlocksAsync(scope, now, stoppingToken);
 

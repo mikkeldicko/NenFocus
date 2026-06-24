@@ -10,13 +10,16 @@ public sealed class CreateBlockProfileCommandHandler
 {
     private readonly IBlockProfileRepository _profiles;
     private readonly IValidator<CreateBlockProfileCommand> _validator;
+    private readonly ISystemClock _clock;
 
     public CreateBlockProfileCommandHandler(
         IBlockProfileRepository profiles,
-        IValidator<CreateBlockProfileCommand> validator)
+        IValidator<CreateBlockProfileCommand> validator,
+        ISystemClock clock)
     {
         _profiles = profiles;
         _validator = validator;
+        _clock = clock;
     }
 
     public async Task<CreateBlockProfileResult> HandleAsync(
@@ -30,7 +33,7 @@ public sealed class CreateBlockProfileCommandHandler
         if (await _profiles.ExistsWithNameAsync(command.Name, cancellationToken: cancellationToken))
             return CreateBlockProfileResult.Fail($"A profile named '{command.Name}' already exists.");
 
-        var profile = BlockProfile.Create(Guid.NewGuid(), command.Name, command.WebsitePolicy, command.ProfileType, DateTime.UtcNow, command.Tags.ToList());
+        var profile = BlockProfile.Create(Guid.NewGuid(), command.Name, command.WebsitePolicy, command.ProfileType, _clock.UtcNow, command.Tags.ToList());
 
         foreach (var appName in command.BlockedApps)
             profile.AddBlockedApp(new BlockedApp(appName));
