@@ -7,7 +7,7 @@ using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.GetAllBlockProfiles;
 using NenFocus.Application.Queries.GetFocusBlockSchedule;
 using NenFocus.Application.UseCases.Sessions.StartSession;
-using NenFocus.Enums;
+using NenFocus.Domain.Enums;
 
 namespace NenFocus.ViewModels.Ritual;
 
@@ -39,7 +39,7 @@ public partial class RitualShellViewModel : ViewModelBase
     private readonly Guid? _originatingBlockId;
     private readonly BlockProfileDto? _lockedProfile;
     private readonly FocusBlockSchedule? _lockedSchedule;
-    private readonly RitualMode _mode;
+    private readonly SessionOrigin _mode;
 
     private string _goal = string.Empty;
     private Guid? _selectedProfileId;
@@ -63,7 +63,7 @@ public partial class RitualShellViewModel : ViewModelBase
         _originatingBlockId = originatingBlockId;
         _lockedProfile = lockedProfile;
         _lockedSchedule = lockedSchedule;
-        _mode = lockedProfile is not null ? RitualMode.Planned : RitualMode.Spontaneous;
+        _mode = lockedProfile is not null ? SessionOrigin.Planned : SessionOrigin.Spontaneous;
         _onComplete = onComplete;
         _onCancel = onCancel;
 
@@ -100,7 +100,7 @@ public partial class RitualShellViewModel : ViewModelBase
 
         StepIndex = 2;
         _renVm = new RenPageViewModel(
-            profilesQuery: _mode == RitualMode.Spontaneous ? _profilesQuery : null,
+            profilesQuery: _mode == SessionOrigin.Spontaneous ? _profilesQuery : null,
             mode: _mode,
             lockedProfile: _lockedProfile,
             onContinue: NavigateToHatsu,
@@ -111,9 +111,9 @@ public partial class RitualShellViewModel : ViewModelBase
 
     private void NavigateToHatsu()
     {
-        if (_renVm is not null && _mode == RitualMode.Spontaneous)
+        if (_renVm is not null && _mode == SessionOrigin.Spontaneous)
             _selectedProfileId = _renVm.SelectedProfile?.Id;
-        else if (_mode == RitualMode.Planned)
+        else if (_mode == SessionOrigin.Planned)
             _selectedProfileId = _lockedProfile?.Id;
 
         StepIndex = 3;
@@ -131,6 +131,6 @@ public partial class RitualShellViewModel : ViewModelBase
             },
             onSessionStarted: _onComplete,
             onBack: NavigateToRen,
-            plannedSchedule: _mode == RitualMode.Planned ? _lockedSchedule : null);
+            plannedSchedule: _mode == SessionOrigin.Planned ? _lockedSchedule : null);
     }
 }

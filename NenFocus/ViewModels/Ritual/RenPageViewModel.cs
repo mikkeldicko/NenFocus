@@ -8,7 +8,6 @@ using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.GetAllBlockProfiles;
 using NenFocus.Domain.Enums;
-using NenFocus.Enums;
 
 namespace NenFocus.ViewModels.Ritual;
 
@@ -34,8 +33,8 @@ public partial class RenPageViewModel : ViewModelBase
     private readonly Action _onContinue;
     private readonly Action _onBack;
 
-    public RitualMode Mode { get; }
-    public bool IsPlannedMode => Mode == RitualMode.Planned;
+    public SessionOrigin Mode { get; }
+    public bool IsPlannedMode => Mode == SessionOrigin.Planned;
 
     // Spontaneous mode: list of selectable profile cards.
     public ObservableCollection<RenProfileCardViewModel> Profiles { get; } = new();
@@ -83,7 +82,7 @@ public partial class RenPageViewModel : ViewModelBase
 
     public RenPageViewModel(
         IQueryHandler<GetAllBlockProfilesQuery, IReadOnlyList<BlockProfileDto>>? profilesQuery,
-        RitualMode mode,
+        SessionOrigin mode,
         BlockProfileDto? lockedProfile,
         Action onContinue,
         Action onBack)
@@ -93,7 +92,7 @@ public partial class RenPageViewModel : ViewModelBase
         _onContinue = onContinue;
         _onBack = onBack;
 
-        if (mode == RitualMode.Planned && lockedProfile is not null)
+        if (mode == SessionOrigin.Planned && lockedProfile is not null)
         {
             LockedProfileCard = new RenProfileCardViewModel(lockedProfile);
             IsLoading = false;
