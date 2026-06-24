@@ -49,6 +49,8 @@ public partial class RenPageViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(IsAllowlistMode))]
     [NotifyPropertyChangedFor(nameof(AllowlistHintVisible))]
     [NotifyPropertyChangedFor(nameof(CanAddSites))]
+    [NotifyPropertyChangedFor(nameof(IsProfileSelected))]
+    [NotifyPropertyChangedFor(nameof(ShowExtraBlockingPanel))]
     private RenProfileCardViewModel? _selectedProfileCard;
 
     public BlockProfileDto? SelectedProfile => IsPlannedMode
@@ -59,8 +61,12 @@ public partial class RenPageViewModel : ViewModelBase
     public bool IsAllowlistMode => SelectedProfile?.WebsitePolicy == WebsitePolicy.Allowlist;
     public bool AllowlistHintVisible => IsAllowlistMode;
 
-    // In Planned mode, sites cannot be added when the profile is Allowlist.
-    public bool CanAddSites => IsPlannedMode && !IsAllowlistMode;
+    // True when the user has picked a profile in spontaneous mode.
+    public bool IsProfileSelected => !IsPlannedMode && SelectedProfileCard is not null;
+
+    // Whether the extra-blocking panel (add sites/apps) is available.
+    public bool ShowExtraBlockingPanel => IsPlannedMode || IsProfileSelected;
+    public bool CanAddSites => ShowExtraBlockingPanel && !IsAllowlistMode;
 
     // Additional session-only blocked items (Planned mode only).
     public ObservableCollection<string> AdditionalBlockedSites { get; } = new();
@@ -118,18 +124,29 @@ public partial class RenPageViewModel : ViewModelBase
     [RelayCommand]
     private void SelectProfile(RenProfileCardViewModel card)
     {
-        if (SelectedProfileCard == card)
-        {
-            card.IsSelected = false;
-            SelectedProfileCard = null;
-        }
-        else
-        {
-            if (SelectedProfileCard is not null)
-                SelectedProfileCard.IsSelected = false;
-            card.IsSelected = true;
-            SelectedProfileCard = card;
-        }
+        if (SelectedProfileCard is not null)
+            SelectedProfileCard.IsSelected = false;
+        card.IsSelected = true;
+        SelectedProfileCard = card;
+    }
+
+    [RelayCommand]
+    private void ChangeProfile()
+    {
+        if (SelectedProfileCard is not null)
+            SelectedProfileCard.IsSelected = false;
+        SelectedProfileCard = null;
+        AdditionalBlockedSites.Clear();
+        AdditionalBlockedApps.Clear();
+        AddSiteInput = string.Empty;
+        AddSiteError = null;
+    }
+
+    [RelayCommand]
+    private void ToggleSelectedCardExpanded()
+    {
+        if (SelectedProfileCard is not null)
+            SelectedProfileCard.IsExpanded = !SelectedProfileCard.IsExpanded;
     }
 
     [RelayCommand]

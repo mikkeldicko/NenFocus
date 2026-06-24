@@ -10,9 +10,14 @@ public partial class RenPageView : UserControl
     public RenPageView()
     {
         InitializeComponent();
-        var btn = this.FindControl<Button>("BrowseForAppButton");
-        if (btn is not null)
-            btn.Click += BrowseForApp_Click;
+
+        var plannedBtn = this.FindControl<Button>("BrowseForAppButton");
+        if (plannedBtn is not null)
+            plannedBtn.Click += BrowseForApp_Click;
+
+        var spontaneousBtn = this.FindControl<Button>("BrowseForAppButtonSpontaneous");
+        if (spontaneousBtn is not null)
+            spontaneousBtn.Click += BrowseForApp_Click;
     }
 
     private async void BrowseForApp_Click(object? sender, RoutedEventArgs e)
