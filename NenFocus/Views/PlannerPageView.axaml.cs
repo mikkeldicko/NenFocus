@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
+using NenFocus.Domain.Enums;
 using NenFocus.ViewModels.Pages;
 using NenFocus.ViewModels.Components;
 using System;
@@ -175,7 +176,7 @@ public partial class PlannerPageView : UserControl
 
         // Title row: profile name + optional AL (allowlist) chip
         var titleRow = new DockPanel { LastChildFill = true };
-        if (tile.IsAllowlistMode)
+        if (tile.WebsitePolicy == WebsitePolicy.Allowlist)
         {
             var chip = new Border
             {

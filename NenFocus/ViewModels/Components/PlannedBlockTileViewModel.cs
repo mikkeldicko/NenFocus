@@ -12,7 +12,7 @@ public partial class PlannedBlockTileViewModel : ViewModelBase
     public BlockType BlockType { get; }
     public DateTime Start { get; }
     public DateTime End { get; }
-    public bool IsAllowlistMode { get; }
+    public WebsitePolicy WebsitePolicy { get; }
 
     /// <summary>0 = Monday, 6 = Sunday.</summary>
     public int ColumnIndex { get; }
@@ -38,7 +38,7 @@ public partial class PlannedBlockTileViewModel : ViewModelBase
         BlockType = blockType;
         Start = dto.Start;
         End = dto.End;
-        IsAllowlistMode = dto.IsAllowlistMode;
+        WebsitePolicy = dto.WebsitePolicy;
         ColumnIndex = columnIndex;
         Top = top;
         Height = height;

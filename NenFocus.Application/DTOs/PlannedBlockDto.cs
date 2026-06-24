@@ -13,8 +13,7 @@ public sealed record PlannedBlockDto
     public DateTime Start { get; init; }
     public DateTime End { get; init; }
 
-    /// <summary>True if this block has an allowlist-mode profile attached.</summary>
-    public bool IsAllowlistMode { get; init; }
+    public WebsitePolicy WebsitePolicy { get; init; }
 
     public int DurationMinutes => (int)(End - Start).TotalMinutes;
 }
