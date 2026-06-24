@@ -1,8 +1,9 @@
-﻿using NenFocus.Application.DTOs;
+using NenFocus.Application.DTOs;
+using NenFocus.Application.Interfaces;
 
 namespace NenFocus.Application.UseCases.Sessions.EndSession;
 
-public sealed record EndSessionResult
+public sealed record EndSessionResult : ICommandResult<EndSessionResult>
 {
     public bool Success { get; init; }
     public string? ErrorMessage { get; init; }

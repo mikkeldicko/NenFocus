@@ -1,6 +1,8 @@
+using NenFocus.Application.Interfaces;
+
 namespace NenFocus.Application.UseCases.Planner.UpdatePlannedBlock;
 
-public sealed record UpdatePlannedBlockResult
+public sealed record UpdatePlannedBlockResult : ICommandResult<UpdatePlannedBlockResult>
 {
     public bool Success { get; init; }
     public string? ErrorMessage { get; init; }

@@ -14,11 +14,11 @@ public sealed class SaveReflectionCommandHandler : ICommandHandler<SaveReflectio
     public async Task<SaveReflectionResult> HandleAsync(SaveReflectionCommand command, CancellationToken ct = default)
     {
         var session = await _sessions.GetByIdAsync(command.SessionId, ct);
-        if (session == null) return new SaveReflectionResult(false, "Session not found.");
+        if (session == null) return SaveReflectionResult.Fail("Session not found.");
 
         session.SetReflection(command.Reflection, command.Rating);
 
         await _sessions.SaveAsync(session, ct);
-        return new SaveReflectionResult(true);
+        return SaveReflectionResult.Ok();
     }
 }

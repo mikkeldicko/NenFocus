@@ -1,10 +1,13 @@
-﻿namespace NenFocus.Application.UseCases.BlockProfiles.DeleteBlockProfile;
+using NenFocus.Application.Interfaces;
 
-public sealed record DeleteBlockProfileResult
+namespace NenFocus.Application.UseCases.BlockProfiles.DeleteBlockProfile;
+
+public sealed record DeleteBlockProfileResult : ICommandResult<DeleteBlockProfileResult>
 {
     public bool Success { get; init; }
     public string? ErrorMessage { get; init; }
 
     public static DeleteBlockProfileResult Ok() => new() { Success = true };
-    public static DeleteBlockProfileResult Fail(string error) => new() { Success = false, ErrorMessage = error };
+    public static DeleteBlockProfileResult Fail(string message) =>
+        new() { Success = false, ErrorMessage = message };
 }

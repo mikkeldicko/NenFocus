@@ -1,6 +1,9 @@
+using System;
+using NenFocus.Application.Interfaces;
+
 namespace NenFocus.Application.UseCases.Planner.CreatePlannedBlock;
 
-public sealed record CreatePlannedBlockResult
+public sealed record CreatePlannedBlockResult : ICommandResult<CreatePlannedBlockResult>
 {
     public bool Success { get; init; }
     public Guid? BlockId { get; init; }

@@ -1,8 +1,9 @@
-﻿using System;
+using System;
+using NenFocus.Application.Interfaces;
 
 namespace NenFocus.Application.UseCases.BlockProfiles.DuplicateBlockProfile;
 
-public sealed record DuplicateBlockProfileResult
+public sealed record DuplicateBlockProfileResult : ICommandResult<DuplicateBlockProfileResult>
 {
     public bool Success { get; init; }
     public Guid? NewProfileId { get; init; }

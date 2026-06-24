@@ -3,7 +3,7 @@ using NenFocus.Domain.Events;
 
 namespace NenFocus.Application.EventHandlers;
 
-public sealed class SessionEndedEventHandler
+public sealed class SessionEndedEventHandler : IDomainEventHandler<SessionEndedEvent>
 {
     private readonly IEnforcementService _enforcement;
     private readonly INotificationService _notifications;

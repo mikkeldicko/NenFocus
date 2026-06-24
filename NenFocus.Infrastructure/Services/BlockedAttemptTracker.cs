@@ -9,27 +9,29 @@ namespace NenFocus.Infrastructure.Services;
 public sealed class BlockedAttemptTracker : IBlockedAttemptTracker
 {
     private readonly IDbContextFactory<NenFocusDbContext> _dbFactory;
+    private readonly ISystemClock _clock;
 
-    public BlockedAttemptTracker(IDbContextFactory<NenFocusDbContext> dbFactory)
+    public BlockedAttemptTracker(IDbContextFactory<NenFocusDbContext> dbFactory, ISystemClock clock)
     {
         _dbFactory = dbFactory;
+        _clock = clock;
     }
 
     public async Task RecordAppBlockedAsync(Guid sessionId, string processName)
     {
-        await SaveAttemptInternal(BlockedAttempt.Record(Guid.NewGuid(), sessionId, processName, BlockedAttemptType.App, DateTime.UtcNow));
+        await SaveAttemptInternal(BlockedAttempt.Record(Guid.NewGuid(), sessionId, processName, BlockedAttemptType.App, _clock.UtcNow));
     }
 
     public async Task RecordWebBlockedAsync(Guid sessionId, string domain)
     {
-        await SaveAttemptInternal(BlockedAttempt.Record(Guid.NewGuid(), sessionId, domain, BlockedAttemptType.Website, DateTime.UtcNow));
+        await SaveAttemptInternal(BlockedAttempt.Record(Guid.NewGuid(), sessionId, domain, BlockedAttemptType.Website, _clock.UtcNow));
     }
 
     private async Task SaveAttemptInternal(BlockedAttempt attempt)
     {
         using var context = await _dbFactory.CreateDbContextAsync();
 
-        var threshold = DateTime.UtcNow.AddSeconds(-2);
+        var threshold = _clock.UtcNow.AddSeconds(-2);
 
         // SQLite can't apply the OccurredAt comparison in-query, so fetch the most
         // recent row only and compare in C#.

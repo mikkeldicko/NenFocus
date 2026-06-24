@@ -1,6 +1,8 @@
+using NenFocus.Application.Interfaces;
+
 namespace NenFocus.Application.UseCases.BlockProfiles.UpdateBlockProfile;
 
-public sealed record UpdateBlockProfileResult
+public sealed record UpdateBlockProfileResult : ICommandResult<UpdateBlockProfileResult>
 {
     public bool Success { get; init; }
     public string? ErrorMessage { get; init; }

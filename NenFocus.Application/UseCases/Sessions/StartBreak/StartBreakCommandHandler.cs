@@ -26,10 +26,10 @@ public sealed class StartBreakCommandHandler
     {
         var session = await _sessions.GetByIdAsync(command.SessionId, ct);
         if (session is null)
-            return new StartBreakResult(false, "Session not found.");
+            return StartBreakResult.Fail("Session not found.");
 
         if (session.Status != SessionStatus.Active)
-            return new StartBreakResult(false, "Can only start a break from an active session.");
+            return StartBreakResult.Fail("Can only start a break from an active session.");
 
         session.StartBreak(_clock.UtcNow);
 
@@ -46,6 +46,6 @@ public sealed class StartBreakCommandHandler
             });
         }
 
-        return new StartBreakResult(true);
+        return StartBreakResult.Ok();
     }
 }

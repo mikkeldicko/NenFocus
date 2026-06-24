@@ -1,8 +1,9 @@
-﻿using System;
+using System;
+using NenFocus.Application.Interfaces;
 
 namespace NenFocus.Application.UseCases.Sessions.StartSession;
 
-public sealed record StartSessionResult
+public sealed record StartSessionResult : ICommandResult<StartSessionResult>
 {
     public bool Success { get; init; }
     public Guid? SessionId { get; init; }

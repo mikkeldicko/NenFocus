@@ -1,3 +1,12 @@
-﻿namespace NenFocus.Application.UseCases.Sessions.SaveReflection;
+using NenFocus.Application.Interfaces;
 
-public sealed record SaveReflectionResult(bool Success, string? ErrorMessage = null);
+namespace NenFocus.Application.UseCases.Sessions.SaveReflection;
+
+public sealed record SaveReflectionResult : ICommandResult<SaveReflectionResult>
+{
+    public bool Success { get; init; }
+    public string? ErrorMessage { get; init; }
+
+    public static SaveReflectionResult Ok() => new() { Success = true };
+    public static SaveReflectionResult Fail(string message) => new() { Success = false, ErrorMessage = message };
+}

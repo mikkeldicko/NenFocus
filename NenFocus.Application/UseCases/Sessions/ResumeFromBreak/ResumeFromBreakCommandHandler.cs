@@ -19,10 +19,10 @@ public sealed class ResumeFromBreakCommandHandler : ICommandHandler<ResumeFromBr
     public async Task<ResumeFromBreakResult> HandleAsync(ResumeFromBreakCommand command, CancellationToken ct = default)
     {
         var session = await _sessions.GetByIdAsync(command.SessionId, ct);
-        if (session == null) return new ResumeFromBreakResult(false, "Session not found.");
+        if (session == null) return ResumeFromBreakResult.Fail("Session not found.");
 
         if (session.Status != SessionStatus.OnBreak)
-            return new ResumeFromBreakResult(false, "Session is not on a break.");
+            return ResumeFromBreakResult.Fail("Session is not on a break.");
 
         session.ResumeFromBreak();
         await _sessions.SaveAsync(session, ct);
@@ -37,6 +37,6 @@ public sealed class ResumeFromBreakCommandHandler : ICommandHandler<ResumeFromBr
             });
         }
 
-        return new ResumeFromBreakResult(true);
+        return ResumeFromBreakResult.Ok();
     }
 }

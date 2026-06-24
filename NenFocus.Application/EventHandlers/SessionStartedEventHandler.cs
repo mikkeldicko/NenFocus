@@ -5,7 +5,7 @@ using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Application.EventHandlers;
 
-public sealed class SessionStartedEventHandler
+public sealed class SessionStartedEventHandler : IDomainEventHandler<SessionStartedEvent>
 {
     private readonly IEnforcementService _enforcement;
     private readonly IQueryHandler<ComputeActivePolicySliceQuery, ActivePolicySlice> _policyQuery;

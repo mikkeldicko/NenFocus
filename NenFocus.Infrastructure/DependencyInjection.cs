@@ -52,7 +52,9 @@ public static class DependencyInjection
     {
         var appAssembly = Assembly.GetAssembly(typeof(NenFocus.Application.DependencyInjection))!;
         var commandHandlerInterface = typeof(ICommandHandler<,>);
-        var decoratorType = typeof(TransactionalCommandHandler<,>);
+        var transactionalDecorator = typeof(TransactionalCommandHandler<,>);
+        var validatingDecorator = typeof(ValidatingCommandHandler<,>);
+        var commandResultInterface = typeof(ICommandResult<>);
 
         var handlers = appAssembly.GetTypes()
             .Where(t => t is { IsClass: true, IsAbstract: false })
@@ -66,14 +68,28 @@ public static class DependencyInjection
         {
             services.AddTransient(concreteType);
 
-            var typeArgs = @interface.GetGenericArguments();
-            var closedDecorator = decoratorType.MakeGenericType(typeArgs);
+            var typeArgs = @interface.GetGenericArguments(); // [TCommand, TResult]
+            var resultType = typeArgs[1];
+
+            var closedTransactional = transactionalDecorator.MakeGenericType(typeArgs);
+
+            // Only wrap with ValidatingCommandHandler when the result type
+            // implements ICommandResult<TSelf> (i.e. can express validation failure).
+            bool supportsValidation = resultType.GetInterfaces().Any(i =>
+                i.IsGenericType &&
+                i.GetGenericTypeDefinition() == commandResultInterface &&
+                i.GetGenericArguments()[0] == resultType);
 
             services.AddTransient(@interface, sp =>
             {
                 var inner = sp.GetRequiredService(concreteType);
                 var uow = sp.GetRequiredService<IUnitOfWork>();
-                return Activator.CreateInstance(closedDecorator, inner, uow)!;
+                var transactional = Activator.CreateInstance(closedTransactional, inner, uow)!;
+
+                if (!supportsValidation) return transactional;
+
+                var closedValidating = validatingDecorator.MakeGenericType(typeArgs);
+                return Activator.CreateInstance(closedValidating, transactional, sp)!;
             });
         }
     }

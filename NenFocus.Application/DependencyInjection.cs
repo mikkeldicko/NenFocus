@@ -36,10 +36,12 @@ public static class DependencyInjection
                 // TransactionalCommandHandler in Infrastructure DI.
                 if (def == typeof(IQueryHandler<,>))
                     services.AddTransient(@interface, type);
-            }
 
-            if (type.Name.EndsWith("EventHandler"))
-                services.AddTransient(type);
+                // Event handlers registered by their generic interface so
+                // InProcessDomainEventPublisher can resolve them by event type.
+                if (def == typeof(IDomainEventHandler<>))
+                    services.AddTransient(@interface, type);
+            }
         }
     }
 }

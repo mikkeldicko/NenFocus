@@ -3,7 +3,7 @@ using NenFocus.Domain.Events;
 
 namespace NenFocus.Application.EventHandlers;
 
-public sealed class BreakStartedEventHandler
+public sealed class BreakStartedEventHandler : IDomainEventHandler<BreakStartedEvent>
 {
     private readonly IEnforcementService _enforcement;
     private readonly INotificationService _notifications;

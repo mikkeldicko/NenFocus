@@ -1,8 +1,9 @@
-﻿using System;
+using System;
+using NenFocus.Application.Interfaces;
 
 namespace NenFocus.Application.UseCases.BlockProfiles.CreateBlockProfile;
 
-public sealed record CreateBlockProfileResult
+public sealed record CreateBlockProfileResult : ICommandResult<CreateBlockProfileResult>
 {
     public bool Success { get; init; }
     public Guid? ProfileId { get; init; }
