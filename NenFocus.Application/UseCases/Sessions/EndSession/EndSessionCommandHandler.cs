@@ -9,18 +9,15 @@ public sealed class EndSessionCommandHandler
 {
     private readonly ISessionRepository _sessions;
     private readonly IBlockProfileRepository _profiles;
-    private readonly ISessionStateService _sessionState;
     private readonly IBlockedAttemptTracker _attemptTracker;
 
     public EndSessionCommandHandler(
         ISessionRepository sessions,
         IBlockProfileRepository profiles,
-        ISessionStateService sessionState,
         IBlockedAttemptTracker attemptTracker)
     {
         _sessions = sessions;
         _profiles = profiles;
-        _sessionState = sessionState;
         _attemptTracker = attemptTracker;
     }
 
@@ -73,8 +70,6 @@ public sealed class EndSessionCommandHandler
             BlockedWebsiteAttempts = websiteAttempts,
             TotalBlockedAttempts = attempts.Count
         };
-
-        _sessionState.Clear();
 
         return EndSessionResult.Ok(postSession);
     }
