@@ -3,7 +3,7 @@ using NenFocus.Application.EventHandlers;
 using NenFocus.Application.Interfaces;
 using NenFocus.Domain.Events;
 
-namespace NenFocus.Infrastructure.Events;
+namespace NenFocus.Infrastructure.Services;
 
 /// <summary>
 /// Resolves event handlers from a fresh DI scope per dispatch, keeping scoped

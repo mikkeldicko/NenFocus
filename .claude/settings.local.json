@@ -13,7 +13,11 @@
       "Bash(dotnet add *)",
       "Bash(dotnet test *)",
       "Bash(Get-Content \"C:\\\\Users\\\\mikke\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-mikke-source-repos-NenFocus\\\\613aa9c4-e7cb-4d40-a469-26dee1a5d66f\\\\tasks\\\\bhzm4unov.output\" -Wait -Tail 20)",
-      "Bash(Select-Object -First 20)"
+      "Bash(Select-Object -First 20)",
+      "Bash(git *)",
+      "PowerShell(dotnet build *)",
+      "PowerShell(Get-Process *)",
+      "PowerShell(Stop-Process *)"
     ]
   }
 }

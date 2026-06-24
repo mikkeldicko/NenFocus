@@ -2,8 +2,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using NenFocus.Application;
 using NenFocus.Application.Interfaces;
-using NenFocus.Infrastructure.Events;
-using NenFocus.Infrastructure.Notifications;
 using NenFocus.Infrastructure.Persistence;
 using NenFocus.Infrastructure.Persistence.Repositories;
 using NenFocus.Infrastructure.Services;

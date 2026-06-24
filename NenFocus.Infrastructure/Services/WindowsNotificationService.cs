@@ -2,7 +2,7 @@
 using Microsoft.Toolkit.Uwp.Notifications;
 using NenFocus.Application.Interfaces;
 
-namespace NenFocus.Infrastructure.Notifications;
+namespace NenFocus.Infrastructure.Services;
 
 public sealed class WindowsNotificationService : INotificationService, IDisposable
 {
