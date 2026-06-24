@@ -1,5 +1,6 @@
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
+using NenFocus.Domain.Enums;
 
 namespace NenFocus.Application.Queries.GetSessionHistory;
 
@@ -44,7 +45,7 @@ public sealed class GetSessionHistoryQueryHandler
                     ? (int)elapsed.Value.TotalMinutes : 0,
                 StartedAt = s.StartedAt.GetValueOrDefault(),
                 EndedAt = s.EndedAt,
-                Completed = s.Status == Domain.Enums.SessionStatus.Completed,
+                Status = s.Status,
                 BreaksTaken = s.BreaksTaken
             };
         }).ToList();
