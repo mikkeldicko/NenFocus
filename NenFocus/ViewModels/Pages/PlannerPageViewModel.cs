@@ -32,6 +32,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     private readonly ICommandHandler<UpdatePlannedBlockCommand, UpdatePlannedBlockResult> _updateBlock;
     private readonly ICommandHandler<DeletePlannedBlockCommand, DeletePlannedBlockResult> _deleteBlock;
     private readonly IPlannerClockService _clockService;
+    private readonly ISessionStateService _sessionState;
 
     private readonly Dictionary<Guid, PlannedBlockDto> _blocksInWeek = new();
     private readonly List<BlockProfileDto> _allProfiles = new();
@@ -92,7 +93,8 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         ICommandHandler<CreatePlannedBlockCommand, CreatePlannedBlockResult> createBlock,
         ICommandHandler<UpdatePlannedBlockCommand, UpdatePlannedBlockResult> updateBlock,
         ICommandHandler<DeletePlannedBlockCommand, DeletePlannedBlockResult> deleteBlock,
-        IPlannerClockService clockService)
+        IPlannerClockService clockService,
+        ISessionStateService sessionState)
     {
         _getProfiles = getProfiles;
         _getBlocksForDay = getBlocksForDay;
@@ -100,6 +102,8 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         _updateBlock = updateBlock;
         _deleteBlock = deleteBlock;
         _clockService = clockService;
+        _sessionState = sessionState;
+        _sessionState.SessionChanged += OnSessionChanged;
 
         for (int h = FirstHour; h < LastHour; h++)
             HourLabels.Add(new HourLabelViewModel(h));
@@ -118,6 +122,12 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     private void OnClockTick(object? sender, EventArgs e)
     {
         Dispatcher.UIThread.Post(UpdateCurrentTimePosition);
+    }
+
+    private void OnSessionChanged(object? sender, SessionDto? session)
+    {
+        if (session is null)
+            Dispatcher.UIThread.Post(() => _ = LoadWeekAsync());
     }
 
     private void UpdateCurrentTimePosition()
@@ -379,5 +389,6 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     public void Dispose()
     {
         _clockService.Tick -= OnClockTick;
+        _sessionState.SessionChanged -= OnSessionChanged;
     }
 }

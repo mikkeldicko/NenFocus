@@ -28,6 +28,13 @@ public abstract class PlannedBlock
         End = end;
     }
 
+    public void TrimEnd(DateTime newEnd)
+    {
+        if (newEnd <= Start)
+            throw new ArgumentException("New end time must be after start time.");
+        End = newEnd;
+    }
+
     public void AssignProfile(Guid profileId)
     {
         BlockProfileId = profileId;

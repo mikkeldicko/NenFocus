@@ -9,15 +9,18 @@ public sealed class EndSessionCommandHandler
 {
     private readonly ISessionRepository _sessions;
     private readonly IBlockProfileRepository _profiles;
+    private readonly IPlannedBlockRepository _plannedBlocks;
     private readonly IBlockedAttemptTracker _attemptTracker;
 
     public EndSessionCommandHandler(
         ISessionRepository sessions,
         IBlockProfileRepository profiles,
+        IPlannedBlockRepository plannedBlocks,
         IBlockedAttemptTracker attemptTracker)
     {
         _sessions = sessions;
         _profiles = profiles;
+        _plannedBlocks = plannedBlocks;
         _attemptTracker = attemptTracker;
     }
 
@@ -45,9 +48,20 @@ public sealed class EndSessionCommandHandler
             .GroupBy(a => a.ResourceName)
             .ToDictionary(g => g.Key, g => g.Count());
 
-        session.Complete(DateTime.UtcNow);
+        var endedAt = DateTime.UtcNow;
+        session.Complete(endedAt);
 
         await _sessions.SaveAsync(session, ct);
+
+        if (session.OriginatingBlockId.HasValue)
+        {
+            var block = await _plannedBlocks.GetByIdAsync(session.OriginatingBlockId.Value, ct);
+            if (block is not null && endedAt < block.End)
+            {
+                block.TrimEnd(endedAt);
+                await _plannedBlocks.SaveAsync(block, ct);
+            }
+        }
 
         var profileName = string.Empty;
         if (session.BlockProfileId != Guid.Empty)
