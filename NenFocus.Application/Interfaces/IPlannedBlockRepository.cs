@@ -74,4 +74,11 @@ public interface IPlannedBlockRepository
         Guid profileId,
         DateTime after,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns true if a FocusBlock is active at the given point in time.
+    /// </summary>
+    Task<bool> HasActiveFocusBlockAsync(
+        DateTime at,
+        CancellationToken cancellationToken = default);
 }

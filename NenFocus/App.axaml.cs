@@ -44,7 +44,14 @@ public partial class App : Avalonia.Application
                     }
                     else
                     {
-                        await enforcement.RemoveEnforcementAsync();
+                        // Keep enforcement active if a FocusBlock is currently running,
+                        // even if the ritual wasn't completed before the app closed.
+                        var clock = scope.ServiceProvider.GetRequiredService<ISystemClock>();
+                        var plannedBlocks = scope.ServiceProvider.GetRequiredService<IPlannedBlockRepository>();
+                        bool hasFocusBlock = await plannedBlocks.HasActiveFocusBlockAsync(clock.UtcNow);
+
+                        if (!hasFocusBlock)
+                            await enforcement.RemoveEnforcementAsync();
                     }
                 }
             };

@@ -114,4 +114,13 @@ public sealed class PlannedBlockRepository : IPlannedBlockRepository
         return _context.PlannedBlocks
             .AnyAsync(b => b.BlockProfileId == profileId && b.End > after, cancellationToken);
     }
+
+    public Task<bool> HasActiveFocusBlockAsync(
+        DateTime at,
+        CancellationToken cancellationToken = default)
+    {
+        return _context.PlannedBlocks
+            .OfType<FocusBlock>()
+            .AnyAsync(b => b.Start <= at && b.End > at, cancellationToken);
+    }
 }
