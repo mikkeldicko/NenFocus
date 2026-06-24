@@ -135,10 +135,6 @@ public class NenFocusDbContext : DbContext
                 .IsRequired()
                 .HasMaxLength(60);
 
-            entity.Property(p => p.IsActive)
-                .IsRequired()
-                .HasDefaultValue(true);
-
             entity.Property(p => p.WebsitePolicy)
                 .HasConversion<string>()
                 .IsRequired();
@@ -168,10 +164,10 @@ public class NenFocusDbContext : DbContext
             var bgAllowlistId     = new Guid("a0000001-0000-0000-0000-000000000004");
 
             entity.HasData(
-                new { Id = focusAllowlistId, Name = "Focus — Allowlist",     WebsitePolicy = WebsitePolicy.Allowlist, ProfileType = BlockType.Focus,       IsActive = true, TagsSerialized = "" },
-                new { Id = focusBlocklistId, Name = "Focus — Blocklist",      WebsitePolicy = WebsitePolicy.Blocklist, ProfileType = BlockType.Focus,       IsActive = true, TagsSerialized = "" },
-                new { Id = bgBlocklistId,    Name = "Background — Blocklist", WebsitePolicy = WebsitePolicy.Blocklist, ProfileType = BlockType.Background,  IsActive = true, TagsSerialized = "" },
-                new { Id = bgAllowlistId,    Name = "Background — Allowlist", WebsitePolicy = WebsitePolicy.Allowlist, ProfileType = BlockType.Background,  IsActive = true, TagsSerialized = "" }
+                new { Id = focusAllowlistId, Name = "Focus — Allowlist",     WebsitePolicy = WebsitePolicy.Allowlist, ProfileType = BlockType.Focus,      TagsSerialized = "" },
+                new { Id = focusBlocklistId, Name = "Focus — Blocklist",      WebsitePolicy = WebsitePolicy.Blocklist, ProfileType = BlockType.Focus,      TagsSerialized = "" },
+                new { Id = bgBlocklistId,    Name = "Background — Blocklist", WebsitePolicy = WebsitePolicy.Blocklist, ProfileType = BlockType.Background, TagsSerialized = "" },
+                new { Id = bgAllowlistId,    Name = "Background — Allowlist", WebsitePolicy = WebsitePolicy.Allowlist, ProfileType = BlockType.Background, TagsSerialized = "" }
             );
 
             entity.OwnsMany(p => p.Websites, s =>

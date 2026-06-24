@@ -16,7 +16,6 @@ public class BlockProfile : IHasDomainEvents
     public string Name { get; private set; } = null!;
     public WebsitePolicy WebsitePolicy { get; private set; }
     public BlockType ProfileType { get; private set; }
-    public bool IsActive { get; private set; }
 
     public IReadOnlyList<BlockedApp> BlockedApps => _blockedApps.AsReadOnly();
     public IReadOnlyList<BlockedSite> Websites => _websites.AsReadOnly();
@@ -43,8 +42,7 @@ public class BlockProfile : IHasDomainEvents
             Id = id,
             Name = name.Trim(),
             WebsitePolicy = websitePolicy,
-            ProfileType = profileType,
-            IsActive = true
+            ProfileType = profileType
         };
 
         if (tags is not null)
@@ -121,6 +119,4 @@ public class BlockProfile : IHasDomainEvents
         return copy;
     }
 
-    public void Deactivate() => IsActive = false;
-    public void Activate() => IsActive = true;
 }

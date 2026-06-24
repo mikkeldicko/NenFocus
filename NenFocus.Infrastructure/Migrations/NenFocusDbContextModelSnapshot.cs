@@ -22,11 +22,6 @@ namespace NenFocus.Infrastructure.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("TEXT");
 
-                    b.Property<bool>("IsActive")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER")
-                        .HasDefaultValue(true);
-
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(60)
@@ -56,7 +51,6 @@ namespace NenFocus.Infrastructure.Migrations
                         new
                         {
                             Id = new Guid("a0000001-0000-0000-0000-000000000001"),
-                            IsActive = true,
                             Name = "Focus — Allowlist",
                             ProfileType = "Focus",
                             TagsSerialized = "",
@@ -65,7 +59,6 @@ namespace NenFocus.Infrastructure.Migrations
                         new
                         {
                             Id = new Guid("a0000001-0000-0000-0000-000000000002"),
-                            IsActive = true,
                             Name = "Focus — Blocklist",
                             ProfileType = "Focus",
                             TagsSerialized = "",
@@ -74,7 +67,6 @@ namespace NenFocus.Infrastructure.Migrations
                         new
                         {
                             Id = new Guid("a0000001-0000-0000-0000-000000000003"),
-                            IsActive = true,
                             Name = "Background — Blocklist",
                             ProfileType = "Background",
                             TagsSerialized = "",
@@ -83,7 +75,6 @@ namespace NenFocus.Infrastructure.Migrations
                         new
                         {
                             Id = new Guid("a0000001-0000-0000-0000-000000000004"),
-                            IsActive = true,
                             Name = "Background — Allowlist",
                             ProfileType = "Background",
                             TagsSerialized = "",
