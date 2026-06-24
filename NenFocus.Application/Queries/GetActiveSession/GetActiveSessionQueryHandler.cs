@@ -37,7 +37,6 @@ public sealed class GetActiveSessionQueryHandler
             EndedAt = session.EndedAt,
             BreakSettings = session.BreakSettings is null ? null : new BreakSettingsDto
             {
-                Enabled = true,
                 IntervalMinutes = session.BreakSettings.IntervalMinutes,
                 BreakDurationMinutes = session.BreakSettings.BreakLengthMinutes
             }

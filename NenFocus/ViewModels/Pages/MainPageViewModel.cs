@@ -148,7 +148,7 @@ public partial class MainPageViewModel : ViewModelBase
         SessionGoal = session.Goal;
         ActiveProfileName = session.ProfileName;
         HasActiveSession = true;
-        HasBreakSettings = session.BreakSettings?.Enabled == true;
+        HasBreakSettings = session.BreakSettings is not null;
         BreaksTaken = session.BreaksTaken;
         IsOnBreak = session.Status == SessionStatus.OnBreak;
     }

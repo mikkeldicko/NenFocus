@@ -85,7 +85,6 @@ public sealed class SessionStateService : ISessionStateService
         BreakSettings = s.BreakSettings is not null
             ? new BreakSettingsDto
             {
-                Enabled = true,
                 IntervalMinutes = s.BreakSettings.IntervalMinutes,
                 BreakDurationMinutes = s.BreakSettings.BreakLengthMinutes
             }

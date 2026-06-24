@@ -25,7 +25,7 @@ public sealed class StartSessionValidator : AbstractValidator<StartSessionComman
                 .WithMessage("Only focus profiles can be used to start a session.");
         });
 
-        When(x => x.BreakSettings != null && x.BreakSettings.Enabled, () =>
+        When(x => x.BreakSettings != null, () =>
         {
             RuleFor(x => x.BreakSettings!.IntervalMinutes).Must(v => v is 25 or 45 or 60);
             RuleFor(x => x.BreakSettings!.BreakDurationMinutes).Must(v => v is 5 or 10 or 15);

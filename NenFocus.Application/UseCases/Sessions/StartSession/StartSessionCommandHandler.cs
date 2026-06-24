@@ -52,7 +52,7 @@ public sealed class StartSessionCommandHandler
         }
 
         BreakSettings? breakSettings = null;
-        if (command.BreakSettings is { Enabled: true })
+        if (command.BreakSettings is not null)
         {
             breakSettings = new BreakSettings(
                 command.BreakSettings.IntervalMinutes,

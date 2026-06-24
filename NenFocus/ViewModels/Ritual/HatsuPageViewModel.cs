@@ -164,7 +164,6 @@ public partial class HatsuPageViewModel : ViewModelBase
 
             breakSettings = new BreakSettingsDto
             {
-                Enabled = true,
                 IntervalMinutes = interval,
                 BreakDurationMinutes = breakLen
             };

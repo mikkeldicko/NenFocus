@@ -2,8 +2,6 @@ namespace NenFocus.Application.DTOs;
 
 public sealed record BreakSettingsDto
 {
-    public bool Enabled { get; init; }
-
     /// <summary>Typical values: 25, 45, 60.</summary>
     public int IntervalMinutes { get; init; }
 
