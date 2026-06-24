@@ -10,7 +10,7 @@ This file is the canonical reference for every domain concept in NenFocus. It ex
 |------|---------------------|
 | **Session** | A bounded focus period; lifecycle `NotStarted → Active → (OnBreak ↔ Active) → Completed` |
 | **Ritual** | The four-step wizard (Ten → Zetsu → Ren → Hatsu) that creates a Session |
-| **Block Profile** | A reusable template of blocked apps + website policy; typed as Ritual or Background at creation |
+| **Block Profile** | A reusable template of blocked apps + website policy; typed as Focus or Background at creation |
 | **Planned Block** | Abstract base for `FocusBlock` and `BackgroundBlock`; carries `Start`, `End`, `BlockProfileId`, `IsActive()`, `OverlapsWith()` |
 | **Focus Block** | A planned calendar entry that activates enforcement AND triggers the Nen Ritual at the designated time |
 | **Background Block** | A planned calendar entry that activates enforcement at the designated time without triggering the Ritual |
@@ -97,7 +97,7 @@ NenFocus has five pages accessible via the sidebar:
 |------|-------|-------------|---------------|
 | **Ten** | Awareness | "Focus the mind, reflect upon the self, and determine the goal" | Greet the user; prompt internal reflection before continuing. Same for both Impromptu and Planned. |
 | **Zetsu** | Silence | "Put it into words" | User writes their session goal into a text box. Same for both Impromptu and Planned. |
-| **Ren** | Persistence | "Intensify your will" | **Impromptu:** User selects a Ritual-type Block Profile from their existing profiles. **Planned:** Block Profile is pre-selected and locked (chosen when the Focus Block was scheduled); user cannot change it. |
+| **Ren** | Persistence | "Intensify your will" | **Impromptu:** User selects a Focus-type Block Profile from their existing profiles. **Planned:** Block Profile is pre-selected and locked (chosen when the Focus Block was scheduled); user cannot change it. |
 | **Hatsu** | Output | "Put it into action" | **Impromptu:** User selects session duration (5 min – 8 hours) and optionally configures break reminders. **Planned:** Duration is pre-determined by the Focus Block's scheduled end time (displayed as "active until [time]"); user can only configure break reminders. User clicks "Start Session." |
 
 **Technical mapping:**
@@ -113,9 +113,9 @@ NenFocus has five pages accessible via the sidebar:
 
 ## Block Profile
 
-**Definition:** A reusable, named configuration of blocked applications and a website policy. A Block Profile is typed as either **Ritual** or **Background** at creation time. This type is immutable — to change it, delete and recreate the profile. The type acts as a filter: Ritual profiles only appear when starting a Ritual session (Ren page) or scheduling a Focus Block (Planner); Background profiles only appear when scheduling a Background Block (Planner).
+**Definition:** A reusable, named configuration of blocked applications and a website policy. A Block Profile is typed as either **Focus** or **Background** at creation time. The type can be changed later provided the profile is not currently attached to any scheduled block or active session. The type acts as a filter: Focus profiles only appear during the Ren step and when scheduling a Focus Block (Planner); Background profiles only appear when scheduling a Background Block (Planner).
 
-**Lifecycle:** Created in Block Profiles page (type chosen at creation) → (optionally duplicated or edited) → attached to Session at Ritual (Ren step) or to a Planned Block in the Planner → locked for duration of Session or active Block.
+**Lifecycle:** Created in Block Profiles page (type chosen via picker at creation) → (optionally duplicated or edited; type may be changed if no active blocks reference it) → attached to Session at Ritual (Ren step, Focus-type only) or to a Planned Block in the Planner → locked for duration of Session or active Block.
 
 **Website policy:** Each profile carries a `WebsitePolicy` of either `Blocklist` (block specific sites, allow everything else) or `Allowlist` (allow specific sites, block everything else). Both Ritual and Background profiles can use either mode. Both can also specify blocked apps.
 
@@ -126,13 +126,13 @@ NenFocus has five pages accessible via the sidebar:
 - A profile is *locked* when a Focus Block activates — no edits are permitted from the block's designated start time through the end of the session, including the period before the Ritual is completed.
 - A profile is *locked* during a session — no edits are permitted while a session using it is active.
 
-**UI display:** On the Block Profile page, Ritual and Background profiles are displayed together in a single list with a type label. A filter option lets the user show only one type.
+**UI display:** On the Block Profile page, Focus and Background profiles are displayed together in a single list with a type badge (blue = Focus, green = Background). A filter bar lets the user show All, Focus only, or Background only.
 
 **Technical mapping:**
 
 | Layer | Artifact | Role |
 |-------|----------|------|
-| Domain | `BlockProfile` aggregate (`Aggregates/BlockProfile.cs`) | Owns the list of `BlockedApp` and `BlockedSite` value objects, the `WebsitePolicy`, and the profile type (Ritual or Background) |
+| Domain | `BlockProfile` aggregate (`Aggregates/BlockProfile.cs`) | Owns the list of `BlockedApp` and `BlockedSite` value objects, the `WebsitePolicy`, and the profile type (`BlockType.Focus` or `BlockType.Background`) |
 | Domain | `BlockedApp`, `BlockedSite` value objects | Immutable; validated at construction. `BlockedSite` optionally carries a `TimeBudget`; a site with no `TimeBudget` is a plain hard block |
 | Domain | `WebsitePolicy` enum | `Blocklist` or `Allowlist` |
 | Application | `IBlockProfileRepository` | CRUD persistence contract |
@@ -152,7 +152,7 @@ NenFocus has five pages accessible via the sidebar:
 - The reset time (when the daily budget resets to full) — a user-wide preference in Settings; default midnight.
 - The warning threshold (how many minutes before exhaustion to notify the user) — a user-wide preference in Settings; not per-profile.
 
-**Profile type scope:** Time Budgets can be configured on both Ritual-type and Background-type Block Profiles. They are expected to be more commonly used on Background profiles.
+**Profile type scope:** Time Budgets can be configured on both Focus-type and Background-type Block Profiles. They are expected to be more commonly used on Background profiles.
 
 **Hard block interaction:** If a site has a `TimeBudget` but is also covered by a separate active hard-block profile (for example, a Background Block that hard-blocks it with no budget), the hard block wins and the budget is not consumed during that period. The budget is only consumed while the site is genuinely accessible — that is, no overlapping profile hard-blocks it.
 
@@ -306,7 +306,7 @@ ActivePolicySlice ComputeSlice(
 
 **Definition:** A planned calendar entry that does two things simultaneously at its designated start time: (1) enforcement activates immediately — the block profile's rules are applied before the user has done anything, and (2) the user is pushed to the Nen Ritual page to consciously start the session. The session created via the Ritual is the *Planned Session* associated with this block. Critically, enforcement is already in place from the designated time regardless of whether the user completes the Ritual immediately. If the user never completes the Ritual, the `FocusBlock` row still exists and Insights shows it as "missed" (`RitualCompletedAt` is null). Enforcement still expires at the block's scheduled end time whether the Ritual was completed or not.
 
-**Must use a Ritual-type Block Profile.** Only profiles created with the Ritual type are available when scheduling a Focus Block in the Planner or selecting a profile during the Ren step.
+**Must use a Focus-type Block Profile.** Only profiles created with the Focus type are available when scheduling a Focus Block in the Planner or selecting a profile during the Ren step.
 
 **Overlap rules:** Two Focus Blocks cannot overlap each other. A Focus Block can overlap with one or more Background Blocks — the net enforcement is the union of all active profiles.
 
@@ -373,7 +373,7 @@ ActivePolicySlice ComputeSlice(
 
 ## Impromptu Session
 
-**Definition:** A Session created by the user clicking "Use Nen" on the Main Page and completing the full Nen Ritual (Ten → Zetsu → Ren → Hatsu), outside of any scheduled Focus Block. The user has full control: they choose the Block Profile (Ritual-type only), set the duration, and configure break reminders. The Session is created with `Origin = Impromptu` and `OriginatingBlockId = null`. No Block entity of any kind is created.
+**Definition:** A Session created by the user clicking "Use Nen" on the Main Page and completing the full Nen Ritual (Ten → Zetsu → Ren → Hatsu), outside of any scheduled Focus Block. The user has full control: they choose the Block Profile (Focus-type only), set the duration, and configure break reminders. The Session is created with `Origin = Impromptu` and `OriginatingBlockId = null`. No Block entity of any kind is created.
 
 **Product invariant:** A manual enforcement session cannot exist without a completed Ritual. This is a product invariant enforced by design, not by validation code. If the user abandons the Ritual at any step before clicking "Start Session" on the Hatsu page, no record is saved anywhere — no draft, no partial session, no recovery state.
 

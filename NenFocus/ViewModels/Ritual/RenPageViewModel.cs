@@ -64,7 +64,7 @@ public partial class RenPageViewModel : ViewModelBase
         IsLoading = true;
         try
         {
-            var profiles = await _profilesQuery.HandleAsync(new GetAllBlockProfilesQuery());
+            var profiles = await _profilesQuery.HandleAsync(new GetAllBlockProfilesQuery { ProfileType = BlockType.Focus });
             Profiles.Clear();
             foreach (var p in profiles)
                 Profiles.Add(new RenProfileCardViewModel(p));

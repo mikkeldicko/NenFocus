@@ -129,6 +129,11 @@ public class NenFocusDbContext : DbContext
                 .HasConversion<string>()
                 .IsRequired();
 
+            entity.Property(p => p.ProfileType)
+                .HasConversion<string>()
+                .IsRequired()
+                .HasDefaultValue(BlockType.Focus);
+
             entity.Property<string>("TagsSerialized")
                 .HasColumnName("Tags")
                 .HasDefaultValue("");
@@ -143,6 +148,18 @@ public class NenFocusDbContext : DbContext
                 a.HasKey("BlockProfileId", "ProcessName");
             });
 
+            var focusAllowlistId  = new Guid("a0000001-0000-0000-0000-000000000001");
+            var focusBlocklistId  = new Guid("a0000001-0000-0000-0000-000000000002");
+            var bgBlocklistId     = new Guid("a0000001-0000-0000-0000-000000000003");
+            var bgAllowlistId     = new Guid("a0000001-0000-0000-0000-000000000004");
+
+            entity.HasData(
+                new { Id = focusAllowlistId, Name = "Focus — Allowlist",     WebsitePolicy = WebsitePolicy.Allowlist, ProfileType = BlockType.Focus,       IsActive = true, TagsSerialized = "" },
+                new { Id = focusBlocklistId, Name = "Focus — Blocklist",      WebsitePolicy = WebsitePolicy.Blocklist, ProfileType = BlockType.Focus,       IsActive = true, TagsSerialized = "" },
+                new { Id = bgBlocklistId,    Name = "Background — Blocklist", WebsitePolicy = WebsitePolicy.Blocklist, ProfileType = BlockType.Background,  IsActive = true, TagsSerialized = "" },
+                new { Id = bgAllowlistId,    Name = "Background — Allowlist", WebsitePolicy = WebsitePolicy.Allowlist, ProfileType = BlockType.Background,  IsActive = true, TagsSerialized = "" }
+            );
+
             entity.OwnsMany(p => p.Websites, s =>
             {
                 s.ToTable("BlockedSites");
@@ -151,6 +168,30 @@ public class NenFocusDbContext : DbContext
                     .IsRequired()
                     .HasMaxLength(500);
                 s.HasKey("BlockProfileId", "Url");
+                s.HasData(
+                    new { BlockProfileId = focusAllowlistId, Url = "gemini.google.com" },
+                    new { BlockProfileId = focusAllowlistId, Url = "claude.ai" },
+                    new { BlockProfileId = focusAllowlistId, Url = "github.com" },
+
+                    new { BlockProfileId = focusBlocklistId, Url = "youtube.com" },
+                    new { BlockProfileId = focusBlocklistId, Url = "twitter.com" },
+                    new { BlockProfileId = focusBlocklistId, Url = "instagram.com" },
+                    new { BlockProfileId = focusBlocklistId, Url = "reddit.com" },
+                    new { BlockProfileId = focusBlocklistId, Url = "facebook.com" },
+
+                    new { BlockProfileId = bgBlocklistId, Url = "youtube.com" },
+                    new { BlockProfileId = bgBlocklistId, Url = "twitter.com" },
+                    new { BlockProfileId = bgBlocklistId, Url = "instagram.com" },
+                    new { BlockProfileId = bgBlocklistId, Url = "reddit.com" },
+                    new { BlockProfileId = bgBlocklistId, Url = "facebook.com" },
+
+                    new { BlockProfileId = bgAllowlistId, Url = "google.com" },
+                    new { BlockProfileId = bgAllowlistId, Url = "soundcloud.com" },
+                    new { BlockProfileId = bgAllowlistId, Url = "mail.google.com" },
+                    new { BlockProfileId = bgAllowlistId, Url = "gemini.google.com" },
+                    new { BlockProfileId = bgAllowlistId, Url = "claude.ai" },
+                    new { BlockProfileId = bgAllowlistId, Url = "github.com" }
+                );
             });
         });
 
@@ -176,7 +217,7 @@ public class NenFocusDbContext : DbContext
                 .HasMaxLength(100);
 
             entity.HasDiscriminator<string>("BlockKind")
-                .HasValue<FocusBlock>("Ritual")
+                .HasValue<FocusBlock>("Focus")
                 .HasValue<BackgroundBlock>("Background");
         });
 

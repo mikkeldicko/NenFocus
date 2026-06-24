@@ -99,6 +99,7 @@ public sealed class StartSessionCommandHandler
             Id = session.Id,
             Goal = session.Goal.Value,
             ProfileName = profileName,
+            BlockProfileId = session.BlockProfileId,
             DurationMinutes = command.DurationMinutes,
             StartedAt = session.StartedAt ?? now,
             Status = session.Status,

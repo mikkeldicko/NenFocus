@@ -34,6 +34,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     private readonly IPlannerClockService _clockService;
 
     private readonly Dictionary<Guid, PlannedBlockDto> _blocksInWeek = new();
+    private readonly List<BlockProfileDto> _allProfiles = new();
     private Guid? _editingBlockId;
 
     [ObservableProperty] private DateTime _weekStart;
@@ -196,8 +197,23 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     private async Task LoadProfilesAsync()
     {
         var profiles = await _getProfiles.HandleAsync(new GetAllBlockProfilesQuery());
+        _allProfiles.Clear();
+        _allProfiles.AddRange(profiles);
+        RefreshAvailableProfiles();
+    }
+
+    private void RefreshAvailableProfiles()
+    {
+        var requiredType = IsFocusBlock ? BlockType.Focus : BlockType.Background;
         AvailableProfiles.Clear();
-        foreach (var p in profiles) AvailableProfiles.Add(p);
+        foreach (var p in _allProfiles.Where(p => p.ProfileType == requiredType))
+            AvailableProfiles.Add(p);
+    }
+
+    partial void OnIsFocusBlockChanged(bool value)
+    {
+        RefreshAvailableProfiles();
+        SelectedProfile = AvailableProfiles.FirstOrDefault();
     }
 
     private async Task LoadWeekAsync()

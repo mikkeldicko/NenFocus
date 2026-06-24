@@ -1,5 +1,7 @@
 using FluentValidation;
 using NenFocus.Application.Interfaces;
+using NenFocus.Domain.Entities;
+using NenFocus.Domain.Enums;
 
 namespace NenFocus.Application.UseCases.Planner.UpdatePlannedBlock;
 
@@ -8,7 +10,10 @@ public sealed class UpdatePlannedBlockValidator : AbstractValidator<UpdatePlanne
     private readonly IPlannedBlockRepository _blocks;
     private readonly ISystemClock _clock;
 
-    public UpdatePlannedBlockValidator(IPlannedBlockRepository blocks, ISystemClock clock)
+    public UpdatePlannedBlockValidator(
+        IPlannedBlockRepository blocks,
+        IBlockProfileRepository profiles,
+        ISystemClock clock)
     {
         _blocks = blocks;
         _clock = clock;
@@ -18,6 +23,18 @@ public sealed class UpdatePlannedBlockValidator : AbstractValidator<UpdatePlanne
 
         RuleFor(x => x.ProfileId)
             .NotEmpty().WithMessage("Profile ID is required.");
+
+        RuleFor(x => x)
+            .MustAsync(async (command, ct) =>
+            {
+                if (command.ProfileId == Guid.Empty || command.BlockId == Guid.Empty) return true;
+                var block   = await _blocks.GetByIdAsync(command.BlockId, ct);
+                var profile = await profiles.GetByIdAsync(command.ProfileId, ct);
+                if (block is null || profile is null) return true;
+                var required = block is FocusBlock ? BlockType.Focus : BlockType.Background;
+                return profile.ProfileType == required;
+            })
+            .WithMessage("The selected profile type does not match this block type.");
 
         // If the block has already started its start time is locked — the UI greys it
         // out and sends the original value. Skip the future check in that case so a

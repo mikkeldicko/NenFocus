@@ -32,6 +32,12 @@ namespace NenFocus.Infrastructure.Migrations
                         .HasMaxLength(60)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("ProfileType")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("Focus");
+
                     b.Property<string>("TagsSerialized")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT")
@@ -45,6 +51,44 @@ namespace NenFocus.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("BlockProfiles", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("a0000001-0000-0000-0000-000000000001"),
+                            IsActive = true,
+                            Name = "Focus — Allowlist",
+                            ProfileType = "Focus",
+                            TagsSerialized = "",
+                            WebsitePolicy = "Allowlist"
+                        },
+                        new
+                        {
+                            Id = new Guid("a0000001-0000-0000-0000-000000000002"),
+                            IsActive = true,
+                            Name = "Focus — Blocklist",
+                            ProfileType = "Focus",
+                            TagsSerialized = "",
+                            WebsitePolicy = "Blocklist"
+                        },
+                        new
+                        {
+                            Id = new Guid("a0000001-0000-0000-0000-000000000003"),
+                            IsActive = true,
+                            Name = "Background — Blocklist",
+                            ProfileType = "Background",
+                            TagsSerialized = "",
+                            WebsitePolicy = "Blocklist"
+                        },
+                        new
+                        {
+                            Id = new Guid("a0000001-0000-0000-0000-000000000004"),
+                            IsActive = true,
+                            Name = "Background — Allowlist",
+                            ProfileType = "Background",
+                            TagsSerialized = "",
+                            WebsitePolicy = "Allowlist"
+                        });
                 });
 
             modelBuilder.Entity("NenFocus.Domain.Entities.BlockedAttempt", b =>
@@ -176,7 +220,7 @@ namespace NenFocus.Infrastructure.Migrations
                     b.Property<DateTime?>("RitualCompletedAt")
                         .HasColumnType("TEXT");
 
-                    b.HasDiscriminator().HasValue("Ritual");
+                    b.HasDiscriminator().HasValue("Focus");
                 });
 
             modelBuilder.Entity("NenFocus.Domain.Entities.BlockProfile", b =>
@@ -213,6 +257,103 @@ namespace NenFocus.Infrastructure.Migrations
 
                             b1.WithOwner()
                                 .HasForeignKey("BlockProfileId");
+
+                            b1.HasData(
+                                new
+                                {
+                                    BlockProfileId = new Guid("a0000001-0000-0000-0000-000000000001"),
+                                    Url = "gemini.google.com"
+                                },
+                                new
+                                {
+                                    BlockProfileId = new Guid("a0000001-0000-0000-0000-000000000001"),
+                                    Url = "claude.ai"
+                                },
+                                new
+                                {
+                                    BlockProfileId = new Guid("a0000001-0000-0000-0000-000000000001"),
+                                    Url = "github.com"
+                                },
+                                new
+                                {
+                                    BlockProfileId = new Guid("a0000001-0000-0000-0000-000000000002"),
+                                    Url = "youtube.com"
+                                },
+                                new
+                                {
+                                    BlockProfileId = new Guid("a0000001-0000-0000-0000-000000000002"),
+                                    Url = "twitter.com"
+                                },
+                                new
+                                {
+                                    BlockProfileId = new Guid("a0000001-0000-0000-0000-000000000002"),
+                                    Url = "instagram.com"
+                                },
+                                new
+                                {
+                                    BlockProfileId = new Guid("a0000001-0000-0000-0000-000000000002"),
+                                    Url = "reddit.com"
+                                },
+                                new
+                                {
+                                    BlockProfileId = new Guid("a0000001-0000-0000-0000-000000000002"),
+                                    Url = "facebook.com"
+                                },
+                                new
+                                {
+                                    BlockProfileId = new Guid("a0000001-0000-0000-0000-000000000003"),
+                                    Url = "youtube.com"
+                                },
+                                new
+                                {
+                                    BlockProfileId = new Guid("a0000001-0000-0000-0000-000000000003"),
+                                    Url = "twitter.com"
+                                },
+                                new
+                                {
+                                    BlockProfileId = new Guid("a0000001-0000-0000-0000-000000000003"),
+                                    Url = "instagram.com"
+                                },
+                                new
+                                {
+                                    BlockProfileId = new Guid("a0000001-0000-0000-0000-000000000003"),
+                                    Url = "reddit.com"
+                                },
+                                new
+                                {
+                                    BlockProfileId = new Guid("a0000001-0000-0000-0000-000000000003"),
+                                    Url = "facebook.com"
+                                },
+                                new
+                                {
+                                    BlockProfileId = new Guid("a0000001-0000-0000-0000-000000000004"),
+                                    Url = "google.com"
+                                },
+                                new
+                                {
+                                    BlockProfileId = new Guid("a0000001-0000-0000-0000-000000000004"),
+                                    Url = "soundcloud.com"
+                                },
+                                new
+                                {
+                                    BlockProfileId = new Guid("a0000001-0000-0000-0000-000000000004"),
+                                    Url = "mail.google.com"
+                                },
+                                new
+                                {
+                                    BlockProfileId = new Guid("a0000001-0000-0000-0000-000000000004"),
+                                    Url = "gemini.google.com"
+                                },
+                                new
+                                {
+                                    BlockProfileId = new Guid("a0000001-0000-0000-0000-000000000004"),
+                                    Url = "claude.ai"
+                                },
+                                new
+                                {
+                                    BlockProfileId = new Guid("a0000001-0000-0000-0000-000000000004"),
+                                    Url = "github.com"
+                                });
                         });
 
                     b.Navigation("BlockedApps");

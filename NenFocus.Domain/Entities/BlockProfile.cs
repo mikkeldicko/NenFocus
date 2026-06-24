@@ -15,6 +15,7 @@ public class BlockProfile : IHasDomainEvents
     public Guid Id { get; private set; }
     public string Name { get; private set; } = null!;
     public WebsitePolicy WebsitePolicy { get; private set; }
+    public BlockType ProfileType { get; private set; }
     public bool IsActive { get; private set; }
 
     public IReadOnlyList<BlockedApp> BlockedApps => _blockedApps.AsReadOnly();
@@ -29,6 +30,7 @@ public class BlockProfile : IHasDomainEvents
         Guid id,
         string name,
         WebsitePolicy websitePolicy,
+        BlockType profileType,
         DateTime createdAt,
         IEnumerable<string>? tags = null)
     {
@@ -41,6 +43,7 @@ public class BlockProfile : IHasDomainEvents
             Id = id,
             Name = name.Trim(),
             WebsitePolicy = websitePolicy,
+            ProfileType = profileType,
             IsActive = true
         };
 
@@ -52,6 +55,8 @@ public class BlockProfile : IHasDomainEvents
 
         return profile;
     }
+
+    public void ChangeProfileType(BlockType newType) => ProfileType = newType;
 
     public void Rename(string newName)
     {
@@ -108,7 +113,7 @@ public class BlockProfile : IHasDomainEvents
 
     public BlockProfile Duplicate(string newName, Guid newId, DateTime duplicatedAt)
     {
-        var copy = Create(newId, newName, WebsitePolicy, duplicatedAt, _tags);
+        var copy = Create(newId, newName, WebsitePolicy, ProfileType, duplicatedAt, _tags);
         foreach (var app in _blockedApps)
             copy.AddBlockedApp(new BlockedApp(app.ProcessName));
         foreach (var site in _websites)

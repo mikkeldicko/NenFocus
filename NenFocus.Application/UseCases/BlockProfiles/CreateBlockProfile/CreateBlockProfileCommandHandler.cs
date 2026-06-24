@@ -30,7 +30,7 @@ public sealed class CreateBlockProfileCommandHandler
         if (await _profiles.ExistsWithNameAsync(command.Name, cancellationToken: cancellationToken))
             return CreateBlockProfileResult.Fail($"A profile named '{command.Name}' already exists.");
 
-        var profile = BlockProfile.Create(Guid.NewGuid(), command.Name, command.WebsitePolicy, DateTime.UtcNow, command.Tags.ToList());
+        var profile = BlockProfile.Create(Guid.NewGuid(), command.Name, command.WebsitePolicy, command.ProfileType, DateTime.UtcNow, command.Tags.ToList());
 
         foreach (var appName in command.BlockedApps)
             profile.AddBlockedApp(new BlockedApp(appName));

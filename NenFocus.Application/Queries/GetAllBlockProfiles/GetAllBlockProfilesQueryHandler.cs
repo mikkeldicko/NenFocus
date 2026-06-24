@@ -19,12 +19,17 @@ public sealed class GetAllBlockProfilesQueryHandler
             ? await _profiles.GetAllAsync(cancellationToken)
             : await _profiles.GetByTagsAsync([query.Tag], cancellationToken);
 
-        return profiles.Select(p => new BlockProfileDto
+        IEnumerable<Domain.Entities.BlockProfile> filtered = profiles;
+        if (query.ProfileType.HasValue)
+            filtered = profiles.Where(p => p.ProfileType == query.ProfileType.Value);
+
+        return filtered.Select(p => new BlockProfileDto
         {
             Id = p.Id,
             Name = p.Name,
             Tags = p.Tags,
             WebsitePolicy = p.WebsitePolicy,
+            ProfileType = p.ProfileType,
             BlockedApps = p.BlockedApps.Select(a => a.ProcessName).ToList(),
             Websites = p.Websites.Select(s => s.Url).ToList()
         }).ToList();

@@ -35,6 +35,8 @@ public sealed class UpdateBlockProfileCommandHandler
 
         profile.Rename(command.Name);
         profile.ChangeWebsitePolicy(command.WebsitePolicy);
+        if (command.ProfileType != profile.ProfileType)
+            profile.ChangeProfileType(command.ProfileType);
 
         foreach (var existing in profile.BlockedApps.ToList()) profile.RemoveBlockedApp(existing);
         foreach (var appName in command.BlockedApps) profile.AddBlockedApp(new BlockedApp(appName));

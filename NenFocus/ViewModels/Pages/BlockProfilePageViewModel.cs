@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
@@ -21,6 +21,7 @@ public partial class BlockProfileCardViewModel : ViewModelBase
     public Guid Id { get; }
     public string Name { get; }
     public WebsitePolicy WebsitePolicy { get; }
+    public BlockType ProfileType { get; }
 
     public IReadOnlyList<string> Tags { get; }
     public IReadOnlyList<string> BlockedApps { get; }
@@ -36,6 +37,7 @@ public partial class BlockProfileCardViewModel : ViewModelBase
     {
         Id = dto.Id;
         Name = dto.Name;
+        ProfileType = dto.ProfileType;
         WebsitePolicy = dto.WebsitePolicy;
         Tags = dto.Tags;
         BlockedApps = dto.BlockedApps;
@@ -52,11 +54,64 @@ public partial class BlockProfilePageViewModel : ViewModelBase
     private readonly ICommandHandler<DuplicateBlockProfileCommand, DuplicateBlockProfileResult> _duplicateProfile;
 
     private Guid? _editingProfileId;
+    private readonly List<BlockProfileCardViewModel> _allProfileCards = new();
+    private BlockType? _activeTypeFilter;
 
     public ObservableCollection<BlockProfileCardViewModel> Profiles { get; } = new();
     [ObservableProperty] private bool _isLoading;
     public bool HasNoProfiles => Profiles.Count == 0 && !IsLoading;
 
+    // ── Type filter ────────────────────────────────────────────────────────
+    public bool IsAllFilterActive => !_activeTypeFilter.HasValue;
+    public bool IsFocusFilterActive => _activeTypeFilter == BlockType.Focus;
+    public bool IsBackgroundFilterActive => _activeTypeFilter == BlockType.Background;
+
+    private void SetFilter(BlockType? type)
+    {
+        _activeTypeFilter = type;
+        ApplyTypeFilter();
+        OnPropertyChanged(nameof(IsAllFilterActive));
+        OnPropertyChanged(nameof(IsFocusFilterActive));
+        OnPropertyChanged(nameof(IsBackgroundFilterActive));
+    }
+
+    [RelayCommand] private void SetFilterAll() => SetFilter(null);
+    [RelayCommand] private void SetFilterFocus() => SetFilter(BlockType.Focus);
+    [RelayCommand] private void SetFilterBackground() => SetFilter(BlockType.Background);
+
+    private void ApplyTypeFilter()
+    {
+        Profiles.Clear();
+        var filtered = _activeTypeFilter.HasValue
+            ? _allProfileCards.Where(c => c.ProfileType == _activeTypeFilter.Value)
+            : (IEnumerable<BlockProfileCardViewModel>)_allProfileCards;
+        foreach (var c in filtered) Profiles.Add(c);
+        OnPropertyChanged(nameof(HasNoProfiles));
+    }
+
+    // ── Type picker modal ─────────────────────────────────────────────────
+    [ObservableProperty] private bool _isTypePickerVisible;
+
+    [RelayCommand]
+    private void SelectFocusType()
+    {
+        FormProfileType = BlockType.Focus;
+        IsTypePickerVisible = false;
+        IsFormVisible = true;
+    }
+
+    [RelayCommand]
+    private void SelectBackgroundType()
+    {
+        FormProfileType = BlockType.Background;
+        IsTypePickerVisible = false;
+        IsFormVisible = true;
+    }
+
+    [RelayCommand]
+    private void CancelTypePicker() => IsTypePickerVisible = false;
+
+    // ── Form state ────────────────────────────────────────────────────────
     [ObservableProperty] private bool _isFormVisible;
     [ObservableProperty] private bool _isEditing;
     [ObservableProperty] private string _formTitle = "New Profile";
@@ -90,6 +145,17 @@ public partial class BlockProfilePageViewModel : ViewModelBase
     [ObservableProperty] private string? _selectedApp;
     public ObservableCollection<string> FormApps { get; } = new();
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsFocusProfileType))]
+    [NotifyPropertyChangedFor(nameof(IsBackgroundProfileType))]
+    private BlockType _formProfileType;
+
+    public bool IsFocusProfileType => FormProfileType == BlockType.Focus;
+    public bool IsBackgroundProfileType => FormProfileType == BlockType.Background;
+
+    [RelayCommand] private void SetProfileTypeFocus() => FormProfileType = BlockType.Focus;
+    [RelayCommand] private void SetProfileTypeBackground() => FormProfileType = BlockType.Background;
+
     public string SaveButtonLabel => IsEditing ? "Save Changes" : "Create Profile";
     partial void OnIsEditingChanged(bool value) =>
         OnPropertyChanged(nameof(SaveButtonLabel));
@@ -120,16 +186,17 @@ public partial class BlockProfilePageViewModel : ViewModelBase
     {
         IsLoading = true;
         var profiles = await _getProfiles.HandleAsync(new GetAllBlockProfilesQuery());
-        Profiles.Clear();
+        _allProfileCards.Clear();
         foreach (var p in profiles)
-            Profiles.Add(new BlockProfileCardViewModel(p));
+            _allProfileCards.Add(new BlockProfileCardViewModel(p));
+        ApplyTypeFilter();
         IsLoading = false;
-        OnPropertyChanged(nameof(HasNoProfiles));
     }
 
     private void ResetForm()
     {
         FormName = string.Empty;
+        FormProfileType = BlockType.Focus;
         IsAllowlist = false;
         ActiveTab = 0;
         FormTags.Clear();
@@ -149,7 +216,16 @@ public partial class BlockProfilePageViewModel : ViewModelBase
         IsEditing = false;
         FormTitle = "New Profile";
         ResetForm();
-        IsFormVisible = true;
+
+        if (_activeTypeFilter.HasValue)
+        {
+            FormProfileType = _activeTypeFilter.Value;
+            IsFormVisible = true;
+        }
+        else
+        {
+            IsTypePickerVisible = true;
+        }
     }
 
     [RelayCommand]
@@ -160,6 +236,7 @@ public partial class BlockProfilePageViewModel : ViewModelBase
         FormTitle = "Edit Profile";
         ResetForm();
         FormName = card.Name;
+        FormProfileType = card.ProfileType;
         IsAllowlist = card.WebsitePolicy == WebsitePolicy.Allowlist;
         foreach (var t in card.Tags) FormTags.Add(t);
         foreach (var s in card.Websites) FormSites.Add(s);
@@ -198,7 +275,8 @@ public partial class BlockProfilePageViewModel : ViewModelBase
             ConfirmDeleteError = result.ErrorMessage;
             return;
         }
-        Profiles.Remove(_pendingDeleteCard);
+        _allProfileCards.Remove(_pendingDeleteCard);
+        ApplyTypeFilter();
         _pendingDeleteCard = null;
         IsConfirmDeleteVisible = false;
     }
@@ -287,6 +365,7 @@ public partial class BlockProfilePageViewModel : ViewModelBase
                 Name = name,
                 Tags = FormTags.ToList(),
                 WebsitePolicy = policy,
+                ProfileType = FormProfileType,
                 BlockedApps = FormApps.ToList(),
                 Websites = FormSites.ToList()
             });
@@ -299,6 +378,7 @@ public partial class BlockProfilePageViewModel : ViewModelBase
                 Name = name,
                 Tags = FormTags.ToList(),
                 WebsitePolicy = policy,
+                ProfileType = FormProfileType,
                 BlockedApps = FormApps.ToList(),
                 Websites = FormSites.ToList()
             });

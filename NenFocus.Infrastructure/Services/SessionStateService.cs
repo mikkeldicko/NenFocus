@@ -71,6 +71,7 @@ public sealed class SessionStateService : ISessionStateService
         Id = s.Id,
         Goal = s.Goal?.Value ?? string.Empty,
         ProfileName = profileName,
+        BlockProfileId = s.BlockProfileId,
         DurationMinutes = (int)s.Duration.Value.TotalMinutes,
         Status = s.Status,
         StartedAt = s.StartedAt ?? DateTime.UtcNow,
