@@ -29,6 +29,9 @@ public partial class RitualShellViewModel : ViewModelBase
     [ObservableProperty]
     private ViewModelBase _currentStep = null!;
 
+    [ObservableProperty]
+    private bool _isBackVisible = true;
+
     private Action _currentBackAction = () => { };
 
     public bool IsDot0Active => StepIndex == 0;
@@ -77,6 +80,8 @@ public partial class RitualShellViewModel : ViewModelBase
     {
         StepIndex = 0;
         _currentBackAction = _onCancel;
+        // Planned rituals are mandatory — hide the back/cancel button on Ten.
+        IsBackVisible = _mode != SessionOrigin.Planned;
         _zetsuVm = null;
         CurrentStep = new TenPageViewModel(
             onContinue: NavigateToZetsu,
@@ -86,6 +91,7 @@ public partial class RitualShellViewModel : ViewModelBase
     private void NavigateToZetsu()
     {
         StepIndex = 1;
+        IsBackVisible = true;
         _zetsuVm = new ZetsuPageViewModel(
             onContinue: NavigateToRen,
             onBack: NavigateToTen);

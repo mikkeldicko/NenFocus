@@ -31,6 +31,7 @@
             <!-- Back -->
             <Button Grid.Column="0"
                     Classes="back-btn"
+                    IsVisible="{Binding IsBackVisible}"
                     VerticalAlignment="Center"
                     Command="{Binding GoBackCommand}">
                 <StackPanel Orientation="Horizontal" Spacing="8">

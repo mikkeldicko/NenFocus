@@ -148,6 +148,8 @@ public partial class ShellViewModel : ViewModelBase
                 new GetFocusBlockScheduleQuery { FocusBlockId = blockId });
         }
 
+        bool isPlanned = lockedProfile is not null;
+
         RitualViewModel = new RitualShellViewModel(
             profilesQuery: _profilesQuery,
             startSession: _startSession,
@@ -155,8 +157,8 @@ public partial class ShellViewModel : ViewModelBase
             originatingBlockId: _sessionState.PendingFocusBlockId,
             lockedProfile: lockedProfile,
             lockedSchedule: lockedSchedule,
-            onComplete: ExitRitual,
-            onCancel: ExitRitual);
+            onComplete: ExitRitualAndGoToMain,
+            onCancel: isPlanned ? () => { } : ExitRitual);
         IsRitualActive = true;
     }
 
@@ -164,6 +166,17 @@ public partial class ShellViewModel : ViewModelBase
     {
         IsRitualActive = false;
         RitualViewModel = null;
+    }
+
+    private void ExitRitualAndGoToMain()
+    {
+        IsRitualActive = false;
+        RitualViewModel = null;
+
+        // Always land on the Main page so the session timer is immediately visible.
+        foreach (var item in NavItems) item.IsSelected = false;
+        NavItems[0].IsSelected = true;
+        CurrentPage = NavItems[0].PageViewModel;
     }
 
     private void ShowPostSession(PostSessionDto data)
