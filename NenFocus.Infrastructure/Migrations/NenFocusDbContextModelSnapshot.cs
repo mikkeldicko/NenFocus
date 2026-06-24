@@ -201,6 +201,20 @@ namespace NenFocus.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("TemporaryBlockedApps")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("TemporaryBlockedApps")
+                        .HasDefaultValueSql("'[]'");
+
+                    b.Property<string>("TemporaryBlockedSites")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("TemporaryBlockedSites")
+                        .HasDefaultValueSql("'[]'");
+
                     b.HasKey("Id");
 
                     b.ToTable("Sessions", (string)null);

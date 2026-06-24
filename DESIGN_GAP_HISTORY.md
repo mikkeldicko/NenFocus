@@ -33,30 +33,30 @@ For active design tension, see the **Open Gaps** section in `ARCHITECT_GOVERNANC
 
 ---
 
-## Gap 3 — Impromptu Sessions, Insights Architecture, and the Block Hierarchy *(closed)*
+## Gap 3 — Spontaneous Sessions, Insights Architecture, and the Block Hierarchy *(closed)*
 
 **The gap:** The domain had no way to distinguish a planned Session from a manually-started one, making the planned Insights page impossible to build correctly. Additionally, the block hierarchy was being reconsidered — a proposed `InstantFocusBlock` class and a rename to Focus Block / Background Block were both under evaluation. The `BlockedAttempt` entity was also being considered for conversion to a Value Object.
 
 **The interrogation revealed:**
-- Insights requires a unified calendar view showing Focus Blocks (completed and missed), Background Blocks, and Impromptu Sessions
-- Insights requires analytics including session quality comparison between Planned and Impromptu sessions and block profile follow-through rates
+- Insights requires a unified calendar view showing Focus Blocks (completed and missed), Background Blocks, and Spontaneous Sessions
+- Insights requires analytics including session quality comparison between Planned and Spontaneous sessions and block profile follow-through rates
 - Background Blocks must appear in Insights using scheduled time as canonical truth regardless of machine state
 - A Focus Block where the user missed the Ritual must appear in Insights as "missed" — the `FocusBlock` row is the record
-- An Impromptu Session that did not complete the Ritual must not be saved anywhere
+- A Spontaneous Session that did not complete the Ritual must not be saved anywhere
 - The ONLY manual path to enforcement is through the full Nen Ritual — this is a product invariant, not a validation rule
 - Browsing time tracking on all websites is a desired future feature requiring extension changes
 - Planned Period / Strict Mode is a desired future feature
 
 **The closure:**
-- `InstantFocusBlock` rejected: an Impromptu Session is not a Block. It has no calendar identity, no life outside its Session, and no state transitions. Creating an entity to make the schema look symmetric would violate DDD and fail the Deep Module test.
+- `InstantFocusBlock` rejected: a Spontaneous Session is not a Block. It has no calendar identity, no life outside its Session, and no state transitions. Creating an entity to make the schema look symmetric would violate DDD and fail the Deep Module test.
 - `BlockedAttempt` kept as append-only fact table: burying it in JSON would make Insights analytics queries require full in-memory deserialisation across hundreds of sessions.
 - `FocusBlock` renamed to `FocusBlock`, `PassiveBlock` renamed to `BackgroundBlock`, `BlockType` enum values updated to `Ritual` and `Background`. Rename is complete at every layer: entity, enum, DTO, handler, service, dictionary.
-- `Session.Origin (SessionOrigin)` added: explicit `Impromptu` / `Planned` tag. Does not rely on null-checking `OriginatingBlockId` so it remains unambiguous when future origin types are added.
+- `Session.Origin (SessionOrigin)` added: explicit `Spontaneous` / `Planned` tag. Does not rely on null-checking `OriginatingBlockId` so it remains unambiguous when future origin types are added.
 - `Session.OriginatingBlockId (Guid?)` added: closes the known gap from `TECHNICAL_SPEC_INFRA.md`. Written by `StartSessionCommandHandler` when a Focus Block triggered the session.
 - `FocusBlock.RitualCompletedAt (DateTime?)` added: allows Insights to detect missed blocks from the entity alone without a join to Session.
 - `GetInsightsCalendarQuery` stubbed: single query handler that unifies three sources behind one interface. The ViewModel never touches the individual tables.
 
-**Principle demonstrated:** The asymmetry between Planned and Impromptu in the schema (Block + Session vs Session alone) is correct and intentional. It reflects a real asymmetry in the domain — a planned block exists before and independently of any Session; an impromptu block does not. Hiding this asymmetry with a synthetic entity would be lying with code. `GetInsightsCalendarQuery` is the correct place to unify the three sources — complexity is hidden behind a narrow interface, not erased from the domain.
+**Principle demonstrated:** The asymmetry between Planned and Spontaneous in the schema (Block + Session vs Session alone) is correct and intentional. It reflects a real asymmetry in the domain — a planned block exists before and independently of any Session; a spontaneous one does not. Hiding this asymmetry with a synthetic entity would be lying with code. `GetInsightsCalendarQuery` is the correct place to unify the three sources — complexity is hidden behind a narrow interface, not erased from the domain.
 
 ---
 

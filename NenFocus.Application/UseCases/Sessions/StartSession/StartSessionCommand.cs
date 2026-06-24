@@ -10,4 +10,6 @@ public sealed record StartSessionCommand : ICommand<StartSessionResult>
     public int DurationMinutes { get; init; }
     public BreakSettingsDto? BreakSettings { get; init; }
     public Guid? OriginatingBlockId { get; init; }
+    public IReadOnlyList<string> AdditionalBlockedSites { get; init; } = [];
+    public IReadOnlyList<string> AdditionalBlockedApps { get; init; } = [];
 }

@@ -61,7 +61,7 @@ public sealed class StartSessionCommandHandler
 
         var origin = command.OriginatingBlockId.HasValue
             ? SessionOrigin.Planned
-            : SessionOrigin.Impromptu;
+            : SessionOrigin.Spontaneous;
 
         var session = Session.Create(
             id: Guid.NewGuid(),
@@ -70,7 +70,9 @@ public sealed class StartSessionCommandHandler
             blockProfileId: command.ProfileId ?? Guid.Empty,
             origin: origin,
             originatingBlockId: command.OriginatingBlockId,
-            breakSettings: breakSettings);
+            breakSettings: breakSettings,
+            temporaryBlockedApps: command.AdditionalBlockedApps.Count > 0 ? command.AdditionalBlockedApps : null,
+            temporaryBlockedSites: command.AdditionalBlockedSites.Count > 0 ? command.AdditionalBlockedSites : null);
 
         session.Start(now);
 

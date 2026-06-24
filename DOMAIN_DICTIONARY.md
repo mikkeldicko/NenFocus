@@ -16,9 +16,9 @@ This file is the canonical reference for every domain concept in NenFocus. It ex
 | **Background Block** | A planned calendar entry that activates enforcement at the designated time without triggering the Ritual |
 | **Policy Slice** | The merged, computed enforcement state at a given instant; represented as `ActivePolicySlice` (Domain Value Object), produced by `PolicyEngine` |
 | **PolicyEngine** | Stateless Domain service (`NenFocus.Domain/Services/`) that computes `ActivePolicySlice` from raw aggregates; sole owner of all merge rules |
-| **Impromptu Session** | A Session created by completing the Ritual manually from the Main Page; no Block entity exists; `Origin = Impromptu` |
+| **Spontaneous Session** | A Session created by completing the Ritual manually from the Main Page; no Block entity exists; `Origin = Spontaneous` |
 | **Planned Session** | A Session created via the Ritual triggered by a scheduled Focus Block; `Origin = Planned` |
-| **SessionOrigin** | Enum (`Impromptu` \| `Planned`) that tags every Session with how it was initiated |
+| **SessionOrigin** | Enum (`Spontaneous` \| `Planned`) that tags every Session with how it was initiated |
 | **Blocked Attempt** | An append-only fact recording a user's attempt to access a blocked app or site during a Session |
 | **Contract** | *(Future)* A time-bounded commitment (day/week/month) with user-defined strictness rules governing block schedule changes |
 | **Enforcement** | OS-level mechanisms (process kill, hosts file, registry, extension) that apply a Policy Slice |
@@ -67,7 +67,7 @@ NenFocus has five pages accessible via the sidebar:
 |-------|----------|------|
 | Domain | `Session` entity (`Entities/Session.cs`) | Owns all state transitions via `Start()`, `StartBreak()`, `ResumeFromBreak()`, `Complete()`; raises domain events internally; carries `Origin (SessionOrigin)` and `OriginatingBlockId (Guid?)` |
 | Domain | `SessionStatus` enum | Valid states: `NotStarted`, `Active`, `OnBreak`, `Completed` |
-| Domain | `SessionOrigin` enum | Valid values: `Impromptu`, `Planned`; tags every Session with how it was initiated |
+| Domain | `SessionOrigin` enum | Valid values: `Spontaneous`, `Planned`; tags every Session with how it was initiated |
 | Domain | `SessionGoal`, `SessionDuration`, `BreakSettings` value objects | Immutable configuration attached at creation |
 | Application | `ISessionRepository` | Persistence contract; `GetActiveAsync()` is the startup rehydration entry point |
 | Application | `ISessionStateService` | Singleton in-memory noticeboard; the single source of truth for the UI's view of the active session |
@@ -88,17 +88,17 @@ NenFocus has five pages accessible via the sidebar:
 **Lifecycle:** Opened by user → steps navigated → `StartSessionCommand` dispatched on Hatsu completion → Ritual closed → user returns to Main Page with active session.
 
 **Two activation paths:**
-- **Impromptu:** User clicks "Use Nen" on the Main Page. All four steps are fully user-controlled.
+- **Spontaneous:** User clicks "Use Nen" on the Main Page. All four steps are fully user-controlled.
 - **Planned:** A scheduled Focus Block activates and pushes the user to the Ritual. The Ren and Hatsu steps are constrained (see below).
 
 **Step meanings:**
 
 | Step | Theme | Header Text | Purpose in UI |
 |------|-------|-------------|---------------|
-| **Ten** | Awareness | "Focus the mind, reflect upon the self, and determine the goal" | Greet the user; prompt internal reflection before continuing. Same for both Impromptu and Planned. |
-| **Zetsu** | Silence | "Put it into words" | User writes their session goal into a text box. Same for both Impromptu and Planned. |
-| **Ren** | Persistence | "Intensify your will" | **Impromptu:** User selects a Focus-type Block Profile from their existing profiles. **Planned:** Block Profile is pre-selected and locked (chosen when the Focus Block was scheduled); user cannot change it. |
-| **Hatsu** | Output | "Put it into action" | **Impromptu:** User selects session duration (5 min – 8 hours) and optionally configures break reminders. **Planned:** Duration is pre-determined by the Focus Block's scheduled end time (displayed as "active until [time]"); user can only configure break reminders. User clicks "Start Session." |
+| **Ten** | Awareness | "Focus the mind, reflect upon the self, and determine the goal" | Greet the user; prompt internal reflection before continuing. Same for both Spontaneous and Planned. |
+| **Zetsu** | Silence | "Put it into words" | User writes their session goal into a text box. Same for both Spontaneous and Planned. |
+| **Ren** | Persistence | "Intensify your will" | **Spontaneous:** User selects a Focus-type Block Profile from their existing profiles. **Planned:** Block Profile is pre-selected and locked (chosen when the Focus Block was scheduled); user cannot change it. User may add additional sites (Blocklist profiles only) and apps for this session only — these are not saved to the profile. |
+| **Hatsu** | Output | "Put it into action" | **Spontaneous:** User selects session duration (5 min – 8 hours) and optionally configures break reminders. **Planned:** Duration is pre-determined by the Focus Block's scheduled end time (displayed as "active until [time]"); user can only configure break reminders. User clicks "Start Session." |
 
 **Technical mapping:**
 
@@ -237,7 +237,7 @@ NenFocus has five pages accessible via the sidebar:
 **Overlap rules:**
 - Multiple Background Blocks can overlap freely. The net enforcement is the union of all their profiles.
 - A Focus Block can overlap with Background Blocks. The net enforcement is the union of all active profiles. The Ritual is still triggered.
-- Two Focus Blocks cannot overlap. The Planner prevents scheduling conflicts. An Impromptu session cannot be started if it would overlap with an upcoming Focus Block.
+- Two Focus Blocks cannot overlap. The Planner prevents scheduling conflicts. A Spontaneous session cannot be started if it would overlap with an upcoming Focus Block.
 
 **Why `ActiveBlockType` matters:** `ScheduledEnforcementService` reads this field each heartbeat cycle. If `ActiveBlockType == Ritual` and no Session is active, it calls `_sessionState.SetRitualRequired(true)` to push the user into the Ritual. If `ActiveBlockType == Background`, enforcement is applied silently with no Ritual prompt. This is the correct application of the Ubiquitous Language principle — the difference between a Focus Block and a Background Block is expressed as a domain enum in the result, not as a boolean flag scattered across callers.
 
@@ -371,17 +371,17 @@ ActivePolicySlice ComputeSlice(
 
 ---
 
-## Impromptu Session
+## Spontaneous Session
 
-**Definition:** A Session created by the user clicking "Use Nen" on the Main Page and completing the full Nen Ritual (Ten → Zetsu → Ren → Hatsu), outside of any scheduled Focus Block. The user has full control: they choose the Block Profile (Focus-type only), set the duration, and configure break reminders. The Session is created with `Origin = Impromptu` and `OriginatingBlockId = null`. No Block entity of any kind is created.
+**Definition:** A Session created by the user clicking "Use Nen" on the Main Page and completing the full Nen Ritual (Ten → Zetsu → Ren → Hatsu), outside of any scheduled Focus Block. The user has full control: they choose the Block Profile (Focus-type only), set the duration, and configure break reminders. The Session is created with `Origin = Spontaneous` and `OriginatingBlockId = null`. No Block entity of any kind is created.
 
 **Product invariant:** A manual enforcement session cannot exist without a completed Ritual. This is a product invariant enforced by design, not by validation code. If the user abandons the Ritual at any step before clicking "Start Session" on the Hatsu page, no record is saved anywhere — no draft, no partial session, no recovery state.
 
-**Conflict rule:** An Impromptu Session cannot be started if it would overlap with an upcoming Focus Block. For example, if a Focus Block is scheduled at 18:00, the user cannot start a 30-minute session at 17:45.
+**Conflict rule:** A Spontaneous Session cannot be started if it would overlap with an upcoming Focus Block. For example, if a Focus Block is scheduled at 18:00, the user cannot start a 30-minute session at 17:45.
 
-**Contrast with Planned Session:** An Impromptu Session is user-initiated and requires no pre-scheduled block. A Planned Session is triggered by a Focus Block at its scheduled start time. In an Impromptu Session the user freely chooses the Block Profile and duration; in a Planned Session both are pre-determined.
+**Contrast with Planned Session:** A Spontaneous Session is user-initiated and requires no pre-scheduled block. A Planned Session is triggered by a Focus Block at its scheduled start time. In a Spontaneous Session the user freely chooses the Block Profile and duration; in a Planned Session both are pre-determined.
 
-**Technical mapping:** No Block entity — distinguished at the Application layer by `Session.Origin == Impromptu`. `Session.OriginatingBlockId` is `null`.
+**Technical mapping:** No Block entity — distinguished at the Application layer by `Session.Origin == Spontaneous`. `Session.OriginatingBlockId` is `null`.
 
 ---
 
@@ -393,18 +393,18 @@ ActivePolicySlice ComputeSlice(
 
 ## SessionOrigin
 
-**Definition:** An enum that tags every `Session` with how it was initiated. Values: `Impromptu` (user completed the Ritual from the Main Page without a pre-scheduled block) and `Planned` (user completed the Ritual after a Focus Block pushed them to it).
+**Definition:** An enum that tags every `Session` with how it was initiated. Values: `Spontaneous` (user completed the Ritual from the Main Page without a pre-scheduled block) and `Planned` (user completed the Ritual after a Focus Block pushed them to it).
 
-**Why this is not a nullable FK check:** `Session.OriginatingBlockId` is `null` for Impromptu sessions, but reading nullness as "origin type" is a leaky boolean. `SessionOrigin` makes the intent explicit and self-documenting. It remains unambiguous when future origin types are added.
+**Why this is not a nullable FK check:** `Session.OriginatingBlockId` is `null` for Spontaneous sessions, but reading nullness as "origin type" is a leaky boolean. `SessionOrigin` makes the intent explicit and self-documenting. It remains unambiguous when future origin types are added.
 
 **Technical mapping:**
 
 | Layer | Artifact | Role |
 |-------|----------|------|
-| Domain | `SessionOrigin` enum (`Enums/SessionOrigin.cs`) | Values: `Impromptu`, `Planned` |
+| Domain | `SessionOrigin` enum (`Enums/SessionOrigin.cs`) | Values: `Spontaneous`, `Planned` |
 | Domain | `Session.Origin` | Set at session creation; never changed after the session starts |
-| Application | `StartSessionCommandHandler` | Sets `Origin = Planned` when `OriginatingBlockId` is provided; `Origin = Impromptu` when null |
-| Application | `GetInsightsCalendarQuery` | Filters `Origin == Impromptu` to identify sessions with no associated block for the Calendar view |
+| Application | `StartSessionCommandHandler` | Sets `Origin = Planned` when `OriginatingBlockId` is provided; `Origin = Spontaneous` when null |
+| Application | `GetInsightsCalendarQuery` | Filters `Origin == Spontaneous` to identify sessions with no associated block for the Calendar view |
 
 ---
 
@@ -445,13 +445,13 @@ ActivePolicySlice ComputeSlice(
 
 ## GetInsightsCalendarQuery
 
-**Definition:** A single query that unifies three data sources — `BackgroundBlock` rows, `FocusBlock` rows, and `Session` rows where `Origin = Impromptu` — into a single `InsightsEntryDto` list for the Insights Calendar view. The Insights ViewModel never queries these sources directly.
+**Definition:** A single query that unifies three data sources — `BackgroundBlock` rows, `FocusBlock` rows, and `Session` rows where `Origin = Spontaneous` — into a single `InsightsEntryDto` list for the Insights Calendar view. The Insights ViewModel never queries these sources directly.
 
 **Why it is a Deep Module:** The three-source complexity (different entities, different table shapes, different "missed" detection logic) is hidden behind a single `IQueryHandler<GetInsightsCalendarQuery, IReadOnlyList<InsightsEntryDto>>` interface. Adding a fourth source requires a change to the handler only — the ViewModel and its bindings are untouched.
 
 **Status:** Stub defined. Implementation deferred until the Insights page is built.
 
-**Insights page will also include:** session history, blocked attempt analytics (most-attempted sites, per-session breakdown), block profile usage stats, total focus time for configurable periods (last week, since January, etc.), calendar view of past Focus Blocks, Background Blocks, and Impromptu Sessions, and graphs for usage trends.
+**Insights page will also include:** session history, blocked attempt analytics (most-attempted sites, per-session breakdown), block profile usage stats, total focus time for configurable periods (last week, since January, etc.), calendar view of past Focus Blocks, Background Blocks, and Spontaneous Sessions, and graphs for usage trends.
 
 **Technical mapping:**
 

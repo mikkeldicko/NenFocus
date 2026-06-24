@@ -12,7 +12,7 @@ public sealed class StartSessionValidator : AbstractValidator<StartSessionComman
         RuleFor(x => x.ProfileId).NotEmpty().WithMessage("A block profile must be selected.");
         RuleFor(x => x.DurationMinutes).InclusiveBetween(1, 480);
 
-        // Only impromptu sessions carry a ProfileId chosen by the user — planned sessions
+        // Only spontaneous sessions carry a ProfileId chosen by the user — planned sessions
         // derive the profile from the FocusBlock, which was already validated at scheduling time.
         When(x => x.ProfileId.HasValue && x.OriginatingBlockId is null, () =>
         {

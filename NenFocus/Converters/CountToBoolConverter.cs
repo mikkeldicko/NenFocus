@@ -9,9 +9,10 @@ namespace NenFocus.Converters;
 /// </summary>
 public class CountToBoolConverter : IValueConverter
 {
-    public static readonly CountToBoolConverter IsZero = new() { _mode = Mode.IsZero };
+    public static readonly CountToBoolConverter IsZero    = new() { _mode = Mode.IsZero };
+    public static readonly CountToBoolConverter IsNonZero = new() { _mode = Mode.IsNonZero };
 
-    private enum Mode { IsZero }
+    private enum Mode { IsZero, IsNonZero }
     private Mode _mode = Mode.IsZero;
 
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
@@ -24,7 +25,8 @@ public class CountToBoolConverter : IValueConverter
         };
         return _mode switch
         {
-            Mode.IsZero => count == 0,
+            Mode.IsZero    => count == 0,
+            Mode.IsNonZero => count > 0,
             _ => false
         };
     }

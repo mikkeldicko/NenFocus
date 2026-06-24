@@ -54,82 +54,121 @@
                            HorizontalAlignment="Center"
                            Margin="0,12,0,44"/>
 
-				<!-- Hours -->
-				<StackPanel Spacing="10" Margin="0,0,0,24">
-					<TextBlock Text="HOURS"
+				<!-- PLANNED MODE — fixed duration display -->
+				<StackPanel IsVisible="{Binding IsPlannedMode}" Spacing="8" Margin="0,0,0,24">
+					<TextBlock Text="SESSION DURATION"
                                FontSize="9"
                                FontWeight="Medium"
                                Foreground="#AAAABC"
                                LetterSpacing="3"/>
-					<WrapPanel Orientation="Horizontal">
-						<Button Classes="chip" Content="0 h"
-														Classes.active="{Binding SelectedHours, Converter={x:Static conv:IntEqualConverter.Instance}, ConverterParameter=0}"
-														Command="{Binding SelectHoursCommand}" CommandParameter="0"/>
-						<Button Classes="chip" Content="1 h"
-                                Classes.active="{Binding SelectedHours, Converter={x:Static conv:IntEqualConverter.Instance}, ConverterParameter=1}"
-                                Command="{Binding SelectHoursCommand}" CommandParameter="1"/>
-						<Button Classes="chip" Content="2 h"
-                                Classes.active="{Binding SelectedHours, Converter={x:Static conv:IntEqualConverter.Instance}, ConverterParameter=2}"
-                                Command="{Binding SelectHoursCommand}" CommandParameter="2"/>
-						<Button Classes="chip" Content="3 h"
-                                Classes.active="{Binding SelectedHours, Converter={x:Static conv:IntEqualConverter.Instance}, ConverterParameter=3}"
-                                Command="{Binding SelectHoursCommand}" CommandParameter="3"/>
-						<Button Classes="chip" Content="4 h"
-                                Classes.active="{Binding SelectedHours, Converter={x:Static conv:IntEqualConverter.Instance}, ConverterParameter=4}"
-                                Command="{Binding SelectHoursCommand}" CommandParameter="4"/>
-						<Button Classes="chip" Content="5 h"
-                                Classes.active="{Binding SelectedHours, Converter={x:Static conv:IntEqualConverter.Instance}, ConverterParameter=5}"
-                                Command="{Binding SelectHoursCommand}" CommandParameter="5"/>
-						<Button Classes="chip" Content="6 h"
-                                Classes.active="{Binding SelectedHours, Converter={x:Static conv:IntEqualConverter.Instance}, ConverterParameter=6}"
-                                Command="{Binding SelectHoursCommand}" CommandParameter="6"/>
-						<Button Classes="chip" Content="7 h"
-                                Classes.active="{Binding SelectedHours, Converter={x:Static conv:IntEqualConverter.Instance}, ConverterParameter=7}"
-                                Command="{Binding SelectHoursCommand}" CommandParameter="7"/>
-						<Button Classes="chip" Content="8 h"
-                                Classes.active="{Binding SelectedHours, Converter={x:Static conv:IntEqualConverter.Instance}, ConverterParameter=8}"
-                                Command="{Binding SelectHoursCommand}" CommandParameter="8"/>
-					</WrapPanel>
+					<Border Background="#F8F8FC"
+                            BorderBrush="#DDDDE8"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Padding="16,14">
+						<StackPanel Spacing="6">
+							<TextBlock Text="{Binding PlannedTimeRangeLabel}"
+                                       FontSize="22"
+                                       FontWeight="Light"
+                                       Foreground="#1A1A2E"/>
+							<StackPanel Orientation="Horizontal" Spacing="8">
+								<Border Background="#E8E8F4"
+                                        CornerRadius="4"
+                                        Padding="8,3">
+									<TextBlock Text="{Binding PlannedDurationLabel}"
+                                               FontSize="11"
+                                               Foreground="#555566"/>
+								</Border>
+								<TextBlock Text="Duration is fixed by your planned block."
+                                           FontSize="11"
+                                           Foreground="#AAAABC"
+                                           VerticalAlignment="Center"/>
+							</StackPanel>
+						</StackPanel>
+					</Border>
 				</StackPanel>
 
-				<!-- Minutes -->
-				<StackPanel Spacing="10" Margin="0,0,0,12">
-					<TextBlock Text="MINUTES"
-                               FontSize="9"
-                               FontWeight="Medium"
-                               Foreground="#AAAABC"
-                               LetterSpacing="3"/>
-					<WrapPanel Orientation="Horizontal">
-						<Button Classes="chip" Content="0 min"
-                                Classes.active="{Binding SelectedMinutes, Converter={x:Static conv:IntEqualConverter.Instance}, ConverterParameter=0}"
-                                Command="{Binding SelectMinutesCommand}" CommandParameter="0"/>
-						<Button Classes="chip" Content="5 min"
-                                Classes.active="{Binding SelectedMinutes, Converter={x:Static conv:IntEqualConverter.Instance}, ConverterParameter=5}"
-                                Command="{Binding SelectMinutesCommand}" CommandParameter="5"/>
-						<Button Classes="chip" Content="10 min"
-                                Classes.active="{Binding SelectedMinutes, Converter={x:Static conv:IntEqualConverter.Instance}, ConverterParameter=10}"
-                                Command="{Binding SelectMinutesCommand}" CommandParameter="10"/>
-						<Button Classes="chip" Content="15 min"
-                                Classes.active="{Binding SelectedMinutes, Converter={x:Static conv:IntEqualConverter.Instance}, ConverterParameter=15}"
-                                Command="{Binding SelectMinutesCommand}" CommandParameter="15"/>
-						<Button Classes="chip" Content="20 min"
-                                Classes.active="{Binding SelectedMinutes, Converter={x:Static conv:IntEqualConverter.Instance}, ConverterParameter=20}"
-                                Command="{Binding SelectMinutesCommand}" CommandParameter="20"/>
-						<Button Classes="chip" Content="30 min"
-                                Classes.active="{Binding SelectedMinutes, Converter={x:Static conv:IntEqualConverter.Instance}, ConverterParameter=30}"
-                                Command="{Binding SelectMinutesCommand}" CommandParameter="30"/>
-						<Button Classes="chip" Content="45 min"
-                                Classes.active="{Binding SelectedMinutes, Converter={x:Static conv:IntEqualConverter.Instance}, ConverterParameter=45}"
-                                Command="{Binding SelectMinutesCommand}" CommandParameter="45"/>
-					</WrapPanel>
-				</StackPanel>
+				<!-- SPONTANEOUS MODE — hours/minutes picker -->
+				<StackPanel IsVisible="{Binding !IsPlannedMode}" Spacing="0">
 
-				<!-- Zero error -->
-				<TextBlock IsVisible="{Binding ShowZeroError}"
-                           Text="Please select a duration greater than zero."
-                           FontSize="12"
-                           Foreground="#C0392B"
-                           Margin="0,0,0,16"/>
+					<!-- Hours -->
+					<StackPanel Spacing="10" Margin="0,0,0,24">
+						<TextBlock Text="HOURS"
+                                   FontSize="9"
+                                   FontWeight="Medium"
+                                   Foreground="#AAAABC"
+                                   LetterSpacing="3"/>
+						<WrapPanel Orientation="Horizontal">
+							<Button Classes="chip" Content="0 h"
+                                    Classes.active="{Binding SelectedHours, Converter={x:Static conv:IntEqualConverter.Instance}, ConverterParameter=0}"
+                                    Command="{Binding SelectHoursCommand}" CommandParameter="0"/>
+							<Button Classes="chip" Content="1 h"
+                                    Classes.active="{Binding SelectedHours, Converter={x:Static conv:IntEqualConverter.Instance}, ConverterParameter=1}"
+                                    Command="{Binding SelectHoursCommand}" CommandParameter="1"/>
+							<Button Classes="chip" Content="2 h"
+                                    Classes.active="{Binding SelectedHours, Converter={x:Static conv:IntEqualConverter.Instance}, ConverterParameter=2}"
+                                    Command="{Binding SelectHoursCommand}" CommandParameter="2"/>
+							<Button Classes="chip" Content="3 h"
+                                    Classes.active="{Binding SelectedHours, Converter={x:Static conv:IntEqualConverter.Instance}, ConverterParameter=3}"
+                                    Command="{Binding SelectHoursCommand}" CommandParameter="3"/>
+							<Button Classes="chip" Content="4 h"
+                                    Classes.active="{Binding SelectedHours, Converter={x:Static conv:IntEqualConverter.Instance}, ConverterParameter=4}"
+                                    Command="{Binding SelectHoursCommand}" CommandParameter="4"/>
+							<Button Classes="chip" Content="5 h"
+                                    Classes.active="{Binding SelectedHours, Converter={x:Static conv:IntEqualConverter.Instance}, ConverterParameter=5}"
+                                    Command="{Binding SelectHoursCommand}" CommandParameter="5"/>
+							<Button Classes="chip" Content="6 h"
+                                    Classes.active="{Binding SelectedHours, Converter={x:Static conv:IntEqualConverter.Instance}, ConverterParameter=6}"
+                                    Command="{Binding SelectHoursCommand}" CommandParameter="6"/>
+							<Button Classes="chip" Content="7 h"
+                                    Classes.active="{Binding SelectedHours, Converter={x:Static conv:IntEqualConverter.Instance}, ConverterParameter=7}"
+                                    Command="{Binding SelectHoursCommand}" CommandParameter="7"/>
+							<Button Classes="chip" Content="8 h"
+                                    Classes.active="{Binding SelectedHours, Converter={x:Static conv:IntEqualConverter.Instance}, ConverterParameter=8}"
+                                    Command="{Binding SelectHoursCommand}" CommandParameter="8"/>
+						</WrapPanel>
+					</StackPanel>
+
+					<!-- Minutes -->
+					<StackPanel Spacing="10" Margin="0,0,0,12">
+						<TextBlock Text="MINUTES"
+                                   FontSize="9"
+                                   FontWeight="Medium"
+                                   Foreground="#AAAABC"
+                                   LetterSpacing="3"/>
+						<WrapPanel Orientation="Horizontal">
+							<Button Classes="chip" Content="0 min"
+                                    Classes.active="{Binding SelectedMinutes, Converter={x:Static conv:IntEqualConverter.Instance}, ConverterParameter=0}"
+                                    Command="{Binding SelectMinutesCommand}" CommandParameter="0"/>
+							<Button Classes="chip" Content="5 min"
+                                    Classes.active="{Binding SelectedMinutes, Converter={x:Static conv:IntEqualConverter.Instance}, ConverterParameter=5}"
+                                    Command="{Binding SelectMinutesCommand}" CommandParameter="5"/>
+							<Button Classes="chip" Content="10 min"
+                                    Classes.active="{Binding SelectedMinutes, Converter={x:Static conv:IntEqualConverter.Instance}, ConverterParameter=10}"
+                                    Command="{Binding SelectMinutesCommand}" CommandParameter="10"/>
+							<Button Classes="chip" Content="15 min"
+                                    Classes.active="{Binding SelectedMinutes, Converter={x:Static conv:IntEqualConverter.Instance}, ConverterParameter=15}"
+                                    Command="{Binding SelectMinutesCommand}" CommandParameter="15"/>
+							<Button Classes="chip" Content="20 min"
+                                    Classes.active="{Binding SelectedMinutes, Converter={x:Static conv:IntEqualConverter.Instance}, ConverterParameter=20}"
+                                    Command="{Binding SelectMinutesCommand}" CommandParameter="20"/>
+							<Button Classes="chip" Content="30 min"
+                                    Classes.active="{Binding SelectedMinutes, Converter={x:Static conv:IntEqualConverter.Instance}, ConverterParameter=30}"
+                                    Command="{Binding SelectMinutesCommand}" CommandParameter="30"/>
+							<Button Classes="chip" Content="45 min"
+                                    Classes.active="{Binding SelectedMinutes, Converter={x:Static conv:IntEqualConverter.Instance}, ConverterParameter=45}"
+                                    Command="{Binding SelectMinutesCommand}" CommandParameter="45"/>
+						</WrapPanel>
+					</StackPanel>
+
+					<!-- Zero error -->
+					<TextBlock IsVisible="{Binding ShowZeroError}"
+                               Text="Please select a duration greater than zero."
+                               FontSize="12"
+                               Foreground="#C0392B"
+                               Margin="0,0,0,16"/>
+
+				</StackPanel>
 
 				<!-- Divider -->
 				<Border Height="1" Background="#E4E4EE" Margin="0,12,0,28"/>

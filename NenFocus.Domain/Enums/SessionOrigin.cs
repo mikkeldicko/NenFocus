@@ -2,6 +2,6 @@
 
 public enum SessionOrigin
 {
-    Impromptu,
+    Spontaneous,
     Planned
 }

@@ -20,8 +20,12 @@ public sealed class PolicyEngine : IPolicyEngine
         if (activeProfiles.Count == 0 && activeSessions.Count == 0)
             return new ActivePolicySlice { SliceStart = at, SliceEnd = at.AddMinutes(1) };
 
+        var tempApps = activeSessions
+            .SelectMany(s => s.TemporaryBlockedApps.Select(ProcessUtils.NormalizeProcessName));
+
         var blockedApps = activeProfiles
             .SelectMany(p => p.BlockedApps.Select(a => ProcessUtils.NormalizeProcessName(a.ProcessName)))
+            .Concat(tempApps)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         var effectivePolicy = activeProfiles.Any(p => p.WebsitePolicy == WebsitePolicy.Allowlist)
@@ -30,6 +34,10 @@ public sealed class PolicyEngine : IPolicyEngine
 
         HashSet<string> allowedSites = new();
         HashSet<string> blockedSites = new();
+
+        var tempSites = activeSessions
+            .SelectMany(s => s.TemporaryBlockedSites)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         if (effectivePolicy == WebsitePolicy.Allowlist)
         {
@@ -44,13 +52,17 @@ public sealed class PolicyEngine : IPolicyEngine
                 .SelectMany(p => p.Websites.Select(s => s.Url))
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
+            // Temporary sites are always blocked — remove them from the allowed set.
             intersectList.ExceptWith(unionOfBlocklists);
+            intersectList.ExceptWith(tempSites);
             allowedSites = intersectList;
             blockedSites = unionOfBlocklists;
+            blockedSites.UnionWith(tempSites);
         }
         else
         {
             blockedSites = activeProfiles.SelectMany(p => p.Websites.Select(s => s.Url)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            blockedSites.UnionWith(tempSites);
         }
 
         var activePlannedBlock = activeBlocks.OrderByDescending(b => b is FocusBlock).FirstOrDefault();

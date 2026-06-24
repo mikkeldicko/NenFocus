@@ -24,7 +24,7 @@ public class BlockProfile : IHasDomainEvents
     public IReadOnlyList<DomainEvent> DomainEvents => _domainEvents.AsReadOnly();
     public void ClearDomainEvents() => _domainEvents.Clear();
 
-    private BlockProfile() { } // EF Core
+    private BlockProfile() { }
 
     public static BlockProfile Create(
         Guid id,

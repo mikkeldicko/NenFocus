@@ -23,6 +23,8 @@ public class Session : IHasDomainEvents
     public DateTime? BreakStartedAt { get; private set; }
     public string? Reflection { get; private set; }
     public int? Rating { get; private set; }
+    public IReadOnlyList<string> TemporaryBlockedApps { get; private set; } = [];
+    public IReadOnlyList<string> TemporaryBlockedSites { get; private set; } = [];
 
     public IReadOnlyList<DomainEvent> DomainEvents => _domainEvents.AsReadOnly();
     public void ClearDomainEvents() => _domainEvents.Clear();
@@ -36,15 +38,17 @@ public class Session : IHasDomainEvents
         Guid blockProfileId,
         SessionOrigin origin,
         Guid? originatingBlockId = null,
-        BreakSettings? breakSettings = null)
+        BreakSettings? breakSettings = null,
+        IReadOnlyList<string>? temporaryBlockedApps = null,
+        IReadOnlyList<string>? temporaryBlockedSites = null)
     {
         if (origin == SessionOrigin.Planned && originatingBlockId is null)
             throw new ArgumentException(
                 "A planned session must have an originating block id.");
 
-        if (origin == SessionOrigin.Impromptu && originatingBlockId is not null)
+        if (origin == SessionOrigin.Spontaneous && originatingBlockId is not null)
             throw new ArgumentException(
-                "An impromptu session cannot have an originating block id.");
+                "A spontaneous session cannot have an originating block id.");
 
         return new Session
         {
@@ -55,7 +59,9 @@ public class Session : IHasDomainEvents
             Origin = origin,
             OriginatingBlockId = originatingBlockId,
             BreakSettings = breakSettings,
-            Status = SessionStatus.NotStarted
+            Status = SessionStatus.NotStarted,
+            TemporaryBlockedApps = temporaryBlockedApps ?? [],
+            TemporaryBlockedSites = temporaryBlockedSites ?? []
         };
     }
 
