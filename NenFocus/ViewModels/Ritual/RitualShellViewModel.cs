@@ -33,6 +33,7 @@ public partial class RitualShellViewModel : ViewModelBase
     public bool IsDot2Active => StepIndex == 2;
     public bool IsDot3Active => StepIndex == 3;
 
+    private readonly Guid? _originatingBlockId;
     private string _goal = string.Empty;
     private Guid? _selectedProfileId;
 
@@ -42,11 +43,13 @@ public partial class RitualShellViewModel : ViewModelBase
     public RitualShellViewModel(
         IQueryHandler<GetAllBlockProfilesQuery, IReadOnlyList<BlockProfileDto>> profilesQuery,
         ICommandHandler<StartSessionCommand, StartSessionResult> startSession,
+        Guid? originatingBlockId,
         Action onComplete,
         Action onCancel)
     {
         _profilesQuery = profilesQuery;
         _startSession = startSession;
+        _originatingBlockId = originatingBlockId;
         _onComplete = onComplete;
         _onCancel = onCancel;
 
@@ -102,7 +105,8 @@ public partial class RitualShellViewModel : ViewModelBase
             getData: () => new HatsuData
             {
                 Goal = _goal,
-                ProfileId = _selectedProfileId
+                ProfileId = _selectedProfileId,
+                OriginatingBlockId = _originatingBlockId
             },
             onSessionStarted: _onComplete,
             onBack: NavigateToRen);

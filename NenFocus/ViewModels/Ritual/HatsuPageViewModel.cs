@@ -142,7 +142,8 @@ public partial class HatsuPageViewModel : ViewModelBase
             Goal = data.Goal,
             ProfileId = data.ProfileId,
             DurationMinutes = TotalMinutes,
-            BreakSettings = breakSettings
+            BreakSettings = breakSettings,
+            OriginatingBlockId = data.OriginatingBlockId
         };
 
         IsStarting = true;
@@ -162,4 +163,5 @@ public sealed record HatsuData
 {
     public string Goal { get; init; } = string.Empty;
     public Guid? ProfileId { get; init; }
+    public Guid? OriginatingBlockId { get; init; }
 }

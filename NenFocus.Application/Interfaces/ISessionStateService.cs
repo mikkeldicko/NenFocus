@@ -7,12 +7,13 @@ public interface ISessionStateService
 {
     SessionDto? ActiveSession { get; }
     bool IsRitualRequired { get; }
+    Guid? PendingFocusBlockId { get; }
 
     event EventHandler<SessionDto?>? SessionChanged;
     event EventHandler<bool>? RitualRequirementChanged;
 
     void SetActive(SessionDto session);
-    void SetRitualRequired(bool required);
+    void SetRitualRequired(bool required, Guid? focusBlockId = null);
     void Clear();
     Task InitializeAsync();
 }

@@ -13,6 +13,7 @@ public sealed record ActivePolicySlice
     public IReadOnlySet<string> BlockedSites { get; init; } = new HashSet<string>();
     public IReadOnlySet<string> BlockedApps  { get; init; } = new HashSet<string>();
     public BlockType? ActiveBlockType { get; init; }
+    public Guid? ActiveFocusBlockId { get; init; }
 
     // True when a Focus Block is still within its scheduled window but its session has
     // already ended — prevents enforcement from being re-applied mid-window.

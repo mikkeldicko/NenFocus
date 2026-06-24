@@ -11,9 +11,11 @@ public sealed class SessionStateService : ISessionStateService
     private readonly IBlockProfileRepository _profileRepository;
     private SessionDto? _activeSession;
     private bool _isRitualRequired;
+    private Guid? _pendingFocusBlockId;
 
     public SessionDto? ActiveSession => _activeSession;
     public bool IsRitualRequired => _isRitualRequired;
+    public Guid? PendingFocusBlockId => _pendingFocusBlockId;
 
     public event EventHandler<SessionDto?>? SessionChanged;
     public event EventHandler<bool>? RitualRequirementChanged;
@@ -47,12 +49,14 @@ public sealed class SessionStateService : ISessionStateService
     {
         _activeSession = session;
         _isRitualRequired = false;
+        _pendingFocusBlockId = null;
         SessionChanged?.Invoke(this, session);
         RitualRequirementChanged?.Invoke(this, false);
     }
 
-    public void SetRitualRequired(bool required)
+    public void SetRitualRequired(bool required, Guid? focusBlockId = null)
     {
+        _pendingFocusBlockId = required ? focusBlockId : null;
         if (_isRitualRequired == required) return;
         _isRitualRequired = required;
         RitualRequirementChanged?.Invoke(this, required);
@@ -62,6 +66,7 @@ public sealed class SessionStateService : ISessionStateService
     {
         _activeSession = null;
         _isRitualRequired = false;
+        _pendingFocusBlockId = null;
         SessionChanged?.Invoke(this, null);
         RitualRequirementChanged?.Invoke(this, false);
     }

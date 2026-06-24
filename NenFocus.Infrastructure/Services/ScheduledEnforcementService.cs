@@ -64,7 +64,7 @@ public sealed class ScheduledEnforcementService : BackgroundService
                         await _enforcement.ApplyPolicyAsync(policy, stoppingToken);
 
                         if (policy.ActiveBlockType == BlockType.Focus && _sessionState.ActiveSession == null)
-                            _sessionState.SetRitualRequired(true);
+                            _sessionState.SetRitualRequired(true, policy.ActiveFocusBlockId);
                         else
                             _sessionState.SetRitualRequired(false);
                     }

@@ -76,6 +76,7 @@ public sealed class PolicyEngine : IPolicyEngine
             BlockedSites = blockedSites,
             BlockedApps = blockedApps,
             ActiveBlockType = activeBlockType,
+            ActiveFocusBlockId = focusBlock?.Id,
             FocusSessionCompleted = focusSessionCompleted
         };
     }

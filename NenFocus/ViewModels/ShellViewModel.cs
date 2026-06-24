@@ -128,6 +128,7 @@ public partial class ShellViewModel : ViewModelBase
         RitualViewModel = new RitualShellViewModel(
             profilesQuery: _profilesQuery,
             startSession: _startSession,
+            originatingBlockId: _sessionState.PendingFocusBlockId,
             onComplete: ExitRitual,
             onCancel: ExitRitual);
         IsRitualActive = true;
