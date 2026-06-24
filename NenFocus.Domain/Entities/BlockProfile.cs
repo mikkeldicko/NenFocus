@@ -1,16 +1,14 @@
 using NenFocus.Domain.Enums;
 using NenFocus.Domain.Events;
-using NenFocus.Domain.Interfaces;
 using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Domain.Entities;
 
-public class BlockProfile : IHasDomainEvents
+public class BlockProfile : AggregateRoot
 {
     private readonly List<BlockedApp> _blockedApps = [];
     private readonly List<BlockedSite> _websites = [];
     private readonly List<string> _tags = [];
-    private readonly List<DomainEvent> _domainEvents = [];
 
     public Guid Id { get; private set; }
     public string Name { get; private set; } = null!;
@@ -20,8 +18,6 @@ public class BlockProfile : IHasDomainEvents
     public IReadOnlyList<BlockedApp> BlockedApps => _blockedApps.AsReadOnly();
     public IReadOnlyList<BlockedSite> Websites => _websites.AsReadOnly();
     public IReadOnlyList<string> Tags => _tags.AsReadOnly();
-    public IReadOnlyList<DomainEvent> DomainEvents => _domainEvents.AsReadOnly();
-    public void ClearDomainEvents() => _domainEvents.Clear();
 
     private BlockProfile() { }
 
@@ -49,7 +45,7 @@ public class BlockProfile : IHasDomainEvents
             foreach (var tag in tags)
                 profile._tags.Add(tag.Trim());
 
-        profile._domainEvents.Add(new BlockProfileCreatedEvent(id, name.Trim(), createdAt));
+        profile.Raise(new BlockProfileCreatedEvent(id, name.Trim(), createdAt));
 
         return profile;
     }

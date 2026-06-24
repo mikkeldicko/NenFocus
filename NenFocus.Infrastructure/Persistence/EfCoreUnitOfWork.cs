@@ -1,5 +1,5 @@
 using NenFocus.Application.Interfaces;
-using NenFocus.Domain.Interfaces;
+using NenFocus.Domain.Entities;
 
 namespace NenFocus.Infrastructure.Persistence;
 
@@ -17,7 +17,7 @@ public sealed class EfCoreUnitOfWork : IUnitOfWork
     public async Task CommitAsync(CancellationToken ct = default)
     {
         var aggregates = _context.ChangeTracker
-            .Entries<IHasDomainEvents>()
+            .Entries<AggregateRoot>()
             .Where(e => e.Entity.DomainEvents.Count > 0)
             .Select(e => e.Entity)
             .ToList();

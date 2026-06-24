@@ -1,14 +1,11 @@
 using NenFocus.Domain.Enums;
 using NenFocus.Domain.Events;
-using NenFocus.Domain.Interfaces;
 using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Domain.Entities;
 
-public class Session : IHasDomainEvents
+public class Session : AggregateRoot
 {
-    private readonly List<DomainEvent> _domainEvents = [];
-
     public Guid Id { get; private set; }
     public SessionGoal Goal { get; private set; } = null!;
     public SessionDuration Duration { get; private set; } = null!;
@@ -25,9 +22,6 @@ public class Session : IHasDomainEvents
     public int? Rating { get; private set; }
     public IReadOnlyList<string> TemporaryBlockedApps { get; private set; } = [];
     public IReadOnlyList<string> TemporaryBlockedSites { get; private set; } = [];
-
-    public IReadOnlyList<DomainEvent> DomainEvents => _domainEvents.AsReadOnly();
-    public void ClearDomainEvents() => _domainEvents.Clear();
 
     private Session() { } // EF Core
 
@@ -73,7 +67,7 @@ public class Session : IHasDomainEvents
 
         Status = SessionStatus.Active;
         StartedAt = startedAt;
-        _domainEvents.Add(new SessionStartedEvent(Id, BlockProfileId, Goal.Value, startedAt));
+        Raise(new SessionStartedEvent(Id, BlockProfileId, Goal.Value, startedAt));
     }
 
     public void StartBreak(DateTime breakStartedAt)
@@ -89,7 +83,7 @@ public class Session : IHasDomainEvents
         Status = SessionStatus.OnBreak;
         BreakStartedAt = breakStartedAt;
         BreaksTaken++;
-        _domainEvents.Add(new BreakStartedEvent(Id, BreaksTaken, breakStartedAt));
+        Raise(new BreakStartedEvent(Id, BreaksTaken, breakStartedAt));
     }
 
     public void ResumeFromBreak()
@@ -111,7 +105,7 @@ public class Session : IHasDomainEvents
         Status = SessionStatus.Completed;
         EndedAt = endedAt;
         BreakStartedAt = null;
-        _domainEvents.Add(new SessionEndedEvent(Id, endedAt));
+        Raise(new SessionEndedEvent(Id, endedAt));
     }
 
     public void SetReflection(string? reflection, int rating)
