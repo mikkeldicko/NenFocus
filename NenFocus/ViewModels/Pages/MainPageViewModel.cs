@@ -111,8 +111,6 @@ public partial class MainPageViewModel : ViewModelBase
     private async Task InitializeAsync()
     {
         await _sessionState.InitializeAsync();
-        if (_sessionState.ActiveSession is not null)
-            ApplySession(_sessionState.ActiveSession);
     }
 
     private void OnSessionChanged(object? sender, SessionDto? session)
@@ -139,7 +137,11 @@ public partial class MainPageViewModel : ViewModelBase
 
     private void OnSessionAutoEnded(object? sender, PostSessionDto postSession)
     {
-        Dispatcher.UIThread.Post(() => _onShowPostSession(postSession));
+        Dispatcher.UIThread.Post(() =>
+        {
+            ClearSession();
+            _onShowPostSession(postSession);
+        });
     }
 
     private void ApplySession(SessionDto session)
