@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using NenFocus.Domain.Enums;
@@ -208,7 +209,14 @@ public partial class PlannerPageView : UserControl
 
         // Press captures the OWNER CANVAS (not the button), so all subsequent
         // PointerMoved/PointerReleased route straight to the canvas handlers.
-        btn.PointerPressed += (s, e) => OnTilePointerPressed(s, e, tile, ownerCanvas);
+        // Avalonia's Button marks PointerPressed as handled internally (that's what
+        // drives its built-in ":pressed" dim effect), so a plain `+=` subscription
+        // here would never run. handledEventsToo:true forces ours to run anyway.
+        btn.AddHandler(
+            InputElement.PointerPressedEvent,
+            (s, e) => OnTilePointerPressed(s, e, tile, ownerCanvas),
+            RoutingStrategies.Bubble,
+            handledEventsToo: true);
         // PointerMoved on the button is cursor-feedback ONLY (hover state, no drag logic).
         btn.PointerMoved   += (s, e) => OnTileButtonPointerMoved(s, e, tile);
 
