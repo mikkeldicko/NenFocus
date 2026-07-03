@@ -39,7 +39,8 @@ public sealed class GetPlannedBlocksForDayQueryHandler
                 BlockType = b is FocusBlock ? BlockType.Focus : BlockType.Background,
                 Start = b.Start,
                 End = b.End,
-                WebsitePolicy = profile?.WebsitePolicy ?? WebsitePolicy.Blocklist
+                WebsitePolicy = profile?.WebsitePolicy ?? WebsitePolicy.Blocklist,
+                IsCompleted = b is FocusBlock fb && fb.RitualCompletedAt.HasValue
             };
         }).ToList();
     }

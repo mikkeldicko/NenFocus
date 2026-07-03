@@ -8,15 +8,18 @@ public sealed class UpdatePlannedBlockCommandHandler : ICommandHandler<UpdatePla
 {
     private readonly IPlannedBlockRepository _blocks;
     private readonly IBlockProfileRepository _profiles;
+    private readonly ISessionRepository _sessions;
     private readonly IValidator<UpdatePlannedBlockCommand> _validator;
 
     public UpdatePlannedBlockCommandHandler(
         IPlannedBlockRepository blocks,
         IBlockProfileRepository profiles,
+        ISessionRepository sessions,
         IValidator<UpdatePlannedBlockCommand> validator)
     {
         _blocks = blocks;
         _profiles = profiles;
+        _sessions = sessions;
         _validator = validator;
     }
 
@@ -48,6 +51,20 @@ public sealed class UpdatePlannedBlockCommandHandler : ICommandHandler<UpdatePla
 
             if (overlapping.Count > 0)
                 return UpdatePlannedBlockResult.Fail("A Focus block already exists in this time window.");
+
+            var activeSession = await _sessions.GetActiveAsync(cancellationToken);
+            if (activeSession?.StartedAt is not null)
+            {
+                var sessionStart = activeSession.StartedAt.Value;
+                var sessionEnd = sessionStart + activeSession.Duration.Value;
+                if (sessionStart < endTime && sessionEnd > startTime)
+                {
+                    var localStart = sessionStart.ToLocalTime();
+                    var localEnd = sessionEnd.ToLocalTime();
+                    return UpdatePlannedBlockResult.Fail(
+                        $"There is already an active focus session running from {localStart:HH:mm} to {localEnd:HH:mm} — please plan your session after {localEnd:HH:mm}.");
+                }
+            }
         }
 
         existing.Reschedule(startTime, endTime);

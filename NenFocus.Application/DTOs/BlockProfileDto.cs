@@ -10,9 +10,7 @@ public sealed record BlockProfileDto
 
     public BlockType ProfileType { get; init; }
     public WebsitePolicy WebsitePolicy { get; init; }
-
     public IReadOnlyList<string> BlockedApps { get; init; } = [];
-
     public IReadOnlyList<string> Websites { get; init; } = [];
 
     public int AppCount => BlockedApps.Count;

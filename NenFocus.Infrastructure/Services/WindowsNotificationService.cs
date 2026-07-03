@@ -12,10 +12,14 @@ public sealed class WindowsNotificationService : INotificationService, IDisposab
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        new ToastContentBuilder()
-            .AddText(title)
-            .AddText(body)
-            .Show(toast => { toast.ExpirationTime = DateTime.Now.AddDays(1); });
+        try
+        {
+            new ToastContentBuilder()
+                .AddText(title)
+                .AddText(body)
+                .Show(toast => { toast.ExpirationTime = DateTime.Now.AddDays(1); });
+        }
+        catch { /* Toast notifications are best-effort; COM/registration failures must not break callers. */ }
 
         return Task.CompletedTask;
     }

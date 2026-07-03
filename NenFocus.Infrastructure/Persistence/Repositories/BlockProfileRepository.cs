@@ -58,7 +58,10 @@ public sealed class BlockProfileRepository : IBlockProfileRepository
         BlockProfile profile,
         CancellationToken cancellationToken = default)
     {
-        _context.BlockProfiles.Update(profile);
+        // Entity was loaded by this same context instance, so the change tracker
+        // already has a snapshot. EF Core detects scalar and OwnsMany changes
+        // automatically — calling Update() here would force all owned entities to
+        // Modified state, turning inserts for new BlockedApps into silent no-ops.
     }
 
     public async Task DeleteAsync(

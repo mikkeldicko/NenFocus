@@ -19,7 +19,6 @@ public class Session : AggregateRoot
     public int BreaksTaken { get; private set; }
     public DateTime? BreakStartedAt { get; private set; }
     public string? Reflection { get; private set; }
-    public int? Rating { get; private set; }
     public IReadOnlyList<string> TemporaryBlockedApps { get; private set; } = [];
     public IReadOnlyList<string> TemporaryBlockedSites { get; private set; } = [];
 
@@ -108,7 +107,7 @@ public class Session : AggregateRoot
         Raise(new SessionEndedEvent(Id, endedAt));
     }
 
-    public void SetReflection(string? reflection, int rating)
+    public void SetReflection(string? reflection)
     {
         if (Status != SessionStatus.Completed)
             throw new InvalidOperationException(
@@ -117,7 +116,6 @@ public class Session : AggregateRoot
         Reflection = string.IsNullOrWhiteSpace(reflection)
             ? null
             : reflection.Trim();
-        Rating = rating;
     }
 
     public TimeSpan? GetElapsedTime(DateTime asOf)

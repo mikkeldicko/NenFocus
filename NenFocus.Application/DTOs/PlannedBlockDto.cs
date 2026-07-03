@@ -9,11 +9,12 @@ public sealed record PlannedBlockDto
     public string ProfileName { get; init; } = string.Empty;
 
     public BlockType BlockType { get; init; }
+    public WebsitePolicy WebsitePolicy { get; init; }
 
     public DateTime Start { get; init; }
     public DateTime End { get; init; }
 
-    public WebsitePolicy WebsitePolicy { get; init; }
+    public bool IsCompleted { get; init; }
 
     public int DurationMinutes => (int)(End - Start).TotalMinutes;
 }

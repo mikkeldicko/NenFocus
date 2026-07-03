@@ -9,15 +9,18 @@ public sealed class CreatePlannedBlockCommandHandler : ICommandHandler<CreatePla
 {
     private readonly IPlannedBlockRepository _blocks;
     private readonly IBlockProfileRepository _profiles;
+    private readonly ISessionRepository _sessions;
     private readonly IValidator<CreatePlannedBlockCommand> _validator;
 
     public CreatePlannedBlockCommandHandler(
         IPlannedBlockRepository blocks,
         IBlockProfileRepository profiles,
+        ISessionRepository sessions,
         IValidator<CreatePlannedBlockCommand> validator)
     {
         _blocks = blocks;
         _profiles = profiles;
+        _sessions = sessions;
         _validator = validator;
     }
 
@@ -37,6 +40,20 @@ public sealed class CreatePlannedBlockCommandHandler : ICommandHandler<CreatePla
         {
             var overlapping = await _blocks.GetOverlappingAsync(startTime, endTime, ritualOnly: true, cancellationToken: cancellationToken);
             if (overlapping.Count > 0) return CreatePlannedBlockResult.Fail("A Focus block already exists here.");
+
+            var activeSession = await _sessions.GetActiveAsync(cancellationToken);
+            if (activeSession?.StartedAt is not null)
+            {
+                var sessionStart = activeSession.StartedAt.Value;
+                var sessionEnd = sessionStart + activeSession.Duration.Value;
+                if (sessionStart < endTime && sessionEnd > startTime)
+                {
+                    var localStart = sessionStart.ToLocalTime();
+                    var localEnd = sessionEnd.ToLocalTime();
+                    return CreatePlannedBlockResult.Fail(
+                        $"There is already an active focus session running from {localStart:HH:mm} to {localEnd:HH:mm} — please plan your session after {localEnd:HH:mm}.");
+                }
+            }
         }
 
         PlannedBlock block = command.BlockType == BlockType.Focus

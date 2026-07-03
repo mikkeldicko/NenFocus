@@ -38,7 +38,7 @@
 			<Setter Property="Cursor" Value="Hand"/>
 		</Style>
 		<Style Selector="Button.icon-btn /template/ ContentPresenter">
-			<Setter Property="Transitions">
+			<Setter Property="Transitions">		
 				<Transitions>
 					<BrushTransition Property="Background" Duration="0:0:0.1"/>
 				</Transitions>

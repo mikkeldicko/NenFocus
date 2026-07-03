@@ -178,9 +178,6 @@ namespace NenFocus.Infrastructure.Migrations
                     b.Property<Guid?>("OriginatingBlockId")
                         .HasColumnType("TEXT");
 
-                    b.Property<int?>("Rating")
-                        .HasColumnType("INTEGER");
-
                     b.Property<string>("Reflection")
                         .HasMaxLength(2000)
                         .HasColumnType("TEXT");

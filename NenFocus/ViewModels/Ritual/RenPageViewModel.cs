@@ -21,6 +21,10 @@ public partial class RenProfileCardViewModel : ViewModelBase
 
     public BlockProfileDto Profile { get; }
 
+    public string SitesLabel => Profile.WebsitePolicy == WebsitePolicy.Allowlist
+        ? "ALLOWED SITES"
+        : "BLOCKED SITES";
+
     public RenProfileCardViewModel(BlockProfileDto profile)
     {
         Profile = profile;
@@ -46,7 +50,6 @@ public partial class RenPageViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(SelectedProfile))]
     [NotifyPropertyChangedFor(nameof(HasSelectedProfile))]
     [NotifyPropertyChangedFor(nameof(IsAllowlistMode))]
-    [NotifyPropertyChangedFor(nameof(AllowlistHintVisible))]
     [NotifyPropertyChangedFor(nameof(CanAddSites))]
     [NotifyPropertyChangedFor(nameof(IsProfileSelected))]
     [NotifyPropertyChangedFor(nameof(ShowExtraBlockingPanel))]
@@ -58,7 +61,6 @@ public partial class RenPageViewModel : ViewModelBase
 
     public bool HasSelectedProfile => SelectedProfile is not null;
     public bool IsAllowlistMode => SelectedProfile?.WebsitePolicy == WebsitePolicy.Allowlist;
-    public bool AllowlistHintVisible => IsAllowlistMode;
 
     // True when the user has picked a profile in spontaneous mode.
     public bool IsProfileSelected => !IsPlannedMode && SelectedProfileCard is not null;

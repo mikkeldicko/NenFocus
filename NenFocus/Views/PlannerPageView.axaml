@@ -157,7 +157,7 @@
                     BorderThickness="1"
                     CornerRadius="10"
                     ClipToBounds="True">
-				<Grid RowDefinitions="Auto,*">
+				<Grid RowDefinitions="Auto,Auto,*">
 
 					<Grid Grid.Row="0" ColumnDefinitions="64,*,*,*,*,*,*,*">
 						<Border Grid.Column="0" Classes="dayHeader"/>
@@ -180,7 +180,16 @@
 						</ItemsControl>
 					</Grid>
 
-					<ScrollViewer Grid.Row="1" Name="GridScroller" VerticalScrollBarVisibility="Auto">
+					<Border Grid.Row="1"
+                            Background="#FFF0F0"
+                            BorderBrush="#E8C0BA"
+                            BorderThickness="0,0,0,1"
+                            Padding="12,8"
+                            IsVisible="{Binding DragError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+						<TextBlock Text="{Binding DragError}" FontSize="12" Foreground="#C03A2B" TextWrapping="Wrap"/>
+					</Border>
+
+					<ScrollViewer Grid.Row="2" Name="GridScroller" VerticalScrollBarVisibility="Auto">
 						<Grid ColumnDefinitions="64,*,*,*,*,*,*,*">
 							<ItemsControl Grid.Column="0" ItemsSource="{Binding HourLabels}">
 								<ItemsControl.ItemTemplate>
@@ -215,6 +224,7 @@
 					</ScrollViewer>
 				</Grid>
 			</Border>
+
 		</Grid>
 
 		<Border Background="#80FFFFFF"
@@ -246,19 +256,12 @@
 
 							<StackPanel Spacing="4">
 								<TextBlock Text="Date" FontSize="12" Foreground="#7A7A8C"/>
-								<DatePicker SelectedDate="{Binding FormDate}"/>
+								<DatePicker SelectedDate="{Binding FormDate}" IsEnabled="{Binding !IsBlockLocked}"/>
 							</StackPanel>
 
 							<Grid ColumnDefinitions="*,12,*">
 								<StackPanel Grid.Column="0" Spacing="4">
-									<StackPanel Orientation="Horizontal" Spacing="6">
-										<TextBlock Text="Start" FontSize="12" Foreground="#7A7A8C"/>
-										<TextBlock Text="(in progress)"
-										           FontSize="11"
-										           Foreground="#BBBBCC"
-										           FontStyle="Italic"
-										           IsVisible="{Binding IsStartLocked}"/>
-									</StackPanel>
+									<TextBlock Text="Start" FontSize="12" Foreground="#7A7A8C"/>
 									<AutoCompleteBox ItemsSource="{Binding TimeOptions}"
                                                      Text="{Binding FormStartTime, Mode=TwoWay}"
                                                      FilterMode="Contains"
@@ -270,7 +273,8 @@
 									<AutoCompleteBox ItemsSource="{Binding TimeOptions}"
                                                      Text="{Binding FormEndTime, Mode=TwoWay}"
                                                      FilterMode="Contains"
-                                                     Watermark="HH:mm" />
+                                                     Watermark="HH:mm"
+                                                     IsEnabled="{Binding !IsBlockLocked}"/>
 								</StackPanel>
 							</Grid>
 
@@ -278,7 +282,8 @@
 								<TextBlock Text="Block Profile" FontSize="12" Foreground="#7A7A8C"/>
 								<ComboBox ItemsSource="{Binding AvailableProfiles}"
                                           SelectedItem="{Binding SelectedProfile}"
-                                          HorizontalAlignment="Stretch">
+                                          HorizontalAlignment="Stretch"
+                                          IsEnabled="{Binding !IsBlockLocked}">
 									<ComboBox.ItemTemplate>
 										<DataTemplate DataType="dto:BlockProfileDto">
 											<TextBlock Text="{Binding Name}"/>
@@ -296,7 +301,7 @@
 					<Grid Grid.Row="2" ColumnDefinitions="Auto,*,Auto,Auto" Margin="0,16,0,0">
 						<Button Grid.Column="0" Classes="danger" Content="Delete" Command="{Binding DeleteCommand}" IsVisible="{Binding CanDeleteFromForm}"/>
 						<Button Grid.Column="2" Classes="secondary" Content="Cancel" Command="{Binding CloseFormCommand}"/>
-						<Button Grid.Column="3" Classes="primary" Content="{Binding SaveButtonLabel}" Command="{Binding SaveCommand}" Margin="8,0,0,0"/>
+						<Button Grid.Column="3" Classes="primary" Content="{Binding SaveButtonLabel}" Command="{Binding SaveCommand}" Margin="8,0,0,0" IsVisible="{Binding CanSaveBlock}"/>
 					</Grid>
 				</Grid>
 			</Border>

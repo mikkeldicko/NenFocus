@@ -77,14 +77,31 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     [ObservableProperty] private bool _isFocusBlock = true;
     [ObservableProperty] private BlockProfileDto? _selectedProfile;
     [ObservableProperty] private bool _isStartLocked;
+    [ObservableProperty] private bool _isEditingCompleted;
+    [ObservableProperty] private string? _dragError;
 
     public string SaveButtonLabel => IsEditing ? "Save Changes" : "Create Block";
     public bool CanDeleteFromForm => IsEditing;
+
+    // True when the editing block is either currently running (active session) or already completed.
+    // Controls visibility of the Save button and disables form inputs.
+    public bool IsBlockLocked =>
+        IsEditing && (_isEditingCompleted || _sessionState.ActiveSession?.OriginatingBlockId == _editingBlockId);
+
+    public bool CanSaveBlock => !IsBlockLocked;
 
     partial void OnIsEditingChanged(bool value)
     {
         OnPropertyChanged(nameof(SaveButtonLabel));
         OnPropertyChanged(nameof(CanDeleteFromForm));
+        OnPropertyChanged(nameof(IsBlockLocked));
+        OnPropertyChanged(nameof(CanSaveBlock));
+    }
+
+    partial void OnIsEditingCompletedChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsBlockLocked));
+        OnPropertyChanged(nameof(CanSaveBlock));
     }
 
     public PlannerPageViewModel(
@@ -126,8 +143,13 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
     private void OnSessionChanged(object? sender, SessionDto? session)
     {
-        if (session is null)
-            Dispatcher.UIThread.Post(() => _ = LoadWeekAsync());
+        Dispatcher.UIThread.Post(() =>
+        {
+            OnPropertyChanged(nameof(IsBlockLocked));
+            OnPropertyChanged(nameof(CanSaveBlock));
+            if (session is null)
+                _ = LoadWeekAsync();
+        });
     }
 
     private void UpdateCurrentTimePosition()
@@ -286,11 +308,13 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private async Task EditBlockAsync(PlannedBlockTileViewModel tile)
     {
+        if (_sessionState.ActiveSession?.OriginatingBlockId == tile.Id) return;
         if (!_blocksInWeek.TryGetValue(tile.Id, out var dto)) return;
         await EnsureProfilesLoadedAsync();
         _editingBlockId = dto.Id;
         IsEditing = true;
         IsStartLocked = dto.Start <= DateTime.UtcNow;
+        IsEditingCompleted = dto.IsCompleted;
         FormTitle = "Edit Block";
         ResetForm();
 
@@ -327,7 +351,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     {
         FormError = null;
         if (SelectedProfile is null) { FormError = "Please select a block profile."; return; }
-        if (!TimeSpan.TryParse(FormStartTime, out var startTime) || !TimeSpan.TryParse(FormEndTime, out var endTime))
+        if (!TryParseFormTime(FormStartTime, out var startTime) || !TryParseFormTime(FormEndTime, out var endTime))
         {
             FormError = "Invalid time format. Use HH:mm.";
             return;
@@ -383,7 +407,95 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         IsFormVisible = false;
         FormError = null;
         IsStartLocked = false;
+        IsEditingCompleted = false;
         _editingBlockId = null;
+    }
+
+    // ── Time parsing ─────────────────────────────────────────────────────────────
+    // TimeSpan.TryParse rejects hours > 23, but "24:00" is a valid end-of-day value.
+    private static bool TryParseFormTime(string s, out TimeSpan result)
+    {
+        if (s == "24:00") { result = TimeSpan.FromHours(24); return true; }
+        return TimeSpan.TryParse(s, out result);
+    }
+
+    // ── Drag lock checks (called from code-behind before starting a drag) ──────
+
+    /// <summary>
+    /// True when the tile must not be dragged at all — it is either completed
+    /// or the active session's originating block.
+    /// </summary>
+    public bool IsTileFullyLocked(Guid blockId)
+    {
+        if (!_blocksInWeek.TryGetValue(blockId, out var dto)) return true;
+        return dto.IsCompleted || _sessionState.ActiveSession?.OriginatingBlockId == blockId;
+    }
+
+    /// <summary>
+    /// True when the block's start time is in the past — move and top-resize
+    /// are disallowed; bottom-resize on a past-start block is also disallowed.
+    /// </summary>
+    public bool IsTileStartLocked(Guid blockId)
+    {
+        if (!_blocksInWeek.TryGetValue(blockId, out var dto)) return true;
+        return dto.Start <= DateTime.UtcNow;
+    }
+
+    // ── Drag-create: open the form pre-filled with the dragged range ──────────
+
+    [RelayCommand]
+    private async Task OpenNewBlockFormWithRangeAsync(DragCreatedRange range)
+    {
+        await EnsureProfilesLoadedAsync();
+        _editingBlockId = null;
+        IsEditing = false;
+        IsStartLocked = false;
+        FormTitle = "New Block";
+        ResetForm();
+
+        var blockDate = DateTime.SpecifyKind(WeekStart.AddDays(range.ColumnIndex).Date, DateTimeKind.Utc);
+        FormDate = new DateTimeOffset(blockDate, TimeSpan.Zero);
+
+        FormStartTime = $"{(int)range.LocalStart.TotalHours:D2}:{range.LocalStart.Minutes:D2}";
+        FormEndTime   = $"{(int)range.LocalEnd.TotalHours:D2}:{range.LocalEnd.Minutes:D2}";
+        SelectedProfile = AvailableProfiles.FirstOrDefault();
+        IsFormVisible = true;
+    }
+
+    // ── Drag-move / drag-resize: commit via UpdatePlannedBlockCommand ─────────
+
+    [RelayCommand]
+    private async Task MoveOrResizeBlockAsync(DragMoveResult result)
+    {
+        DragError = null;
+
+        if (!_blocksInWeek.TryGetValue(result.BlockId, out var dto))
+        {
+            DragError = "Block not found — please refresh.";
+            return;
+        }
+
+        if (IsTileFullyLocked(result.BlockId))
+        {
+            DragError = "This block is locked and cannot be moved.";
+            return;
+        }
+
+        var updateResult = await _updateBlock.HandleAsync(new UpdatePlannedBlockCommand
+        {
+            BlockId   = result.BlockId,
+            ProfileId = dto.ProfileId,
+            Start     = result.NewStartUtc,
+            End       = result.NewEndUtc
+        });
+
+        if (!updateResult.Success)
+        {
+            DragError = updateResult.ErrorMessage;
+            return;
+        }
+
+        await LoadWeekAsync();
     }
 
     public void Dispose()

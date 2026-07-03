@@ -182,13 +182,23 @@ public partial class HatsuPageViewModel : ViewModelBase
         };
 
         IsStarting = true;
-        var result = await _startSession.HandleAsync(command);
-        IsStarting = false;
+        try
+        {
+            var result = await _startSession.HandleAsync(command);
 
-        if (result.Success)
-            _onSessionStarted();
-        else
-            ErrorMessage = result.ErrorMessage ?? "Failed to start session.";
+            if (result.Success)
+                _onSessionStarted();
+            else
+                ErrorMessage = result.ErrorMessage ?? "Failed to start session.";
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsStarting = false;
+        }
     }
 
     [RelayCommand]

@@ -20,7 +20,7 @@ This file is the canonical reference for every domain concept in NenFocus. It ex
 | **Planned Session** | A Session created via the Ritual triggered by a scheduled Focus Block; `Origin = Planned` |
 | **SessionOrigin** | Enum (`Spontaneous` \| `Planned`) that tags every Session with how it was initiated |
 | **Blocked Attempt** | An append-only fact recording a user's attempt to access a blocked app or site during a Session |
-| **Contract** | *(Future)* A time-bounded commitment (day/week/month) with user-defined strictness rules governing block schedule changes |
+| **Nen Contract** | *(Future)* A time-bounded commitment (day/week/month) with user-defined strictness rules governing block schedule changes |
 | **Enforcement** | OS-level mechanisms (process kill, hosts file, registry, extension) that apply a Policy Slice |
 | **Post-Session** | The mandatory screen shown after a Session ends; displays stats, blocked attempts, and an optional reflection |
 | **Deep Module** | A module with significant functionality hidden behind a narrow, obvious API |
@@ -40,7 +40,7 @@ NenFocus has five pages accessible via the sidebar:
 |------|---------|
 | **Main Page** | Home screen; shows "Use Nen" button when idle, active session timer when a session is running |
 | **Block Profile Page** | CRUD for Block Profiles; Ritual and Background profiles displayed together with filter option |
-| **Planner Page** | Calendar view for scheduling Focus Blocks, Background Blocks, and (future) Contracts |
+| **Planner Page** | Calendar view for scheduling Focus Blocks, Background Blocks, and (future) Nen Contracts |
 | **Insights Page** | Session history, block history, blocked attempt analytics, calendar view of past blocks, usage graphs |
 | **Settings Page** | User preferences: break behaviour, strict mode, plan rules, and other enforcement configuration |
 
@@ -463,22 +463,22 @@ ActivePolicySlice ComputeSlice(
 
 ---
 
-## Contract *(Future — not yet built)*
+## Nen Contract *(Future — not yet built)*
 
 **Definition:** A time-bounded commitment the user makes to a schedule of Focus Blocks and Background Blocks, with self-imposed rules governing how much the schedule can be changed during the commitment period. The name is inspired by the concept of binding agreements — the user is making a contract with themselves.
 
-**Scope:** A Contract covers a fixed period: one day, three days, one week, or one month.
+**Scope:** A Nen Contract covers a fixed period: one day, three days, one week, or one month.
 
-**Creation flow:** In the Planner page, the user selects a Contract period → places Focus Blocks and Background Blocks throughout the period using existing Block Profiles → at the end, specifies the strictness rules for the Contract.
+**Creation flow:** In the Planner page, the user selects a Nen Contract period → places Focus Blocks and Background Blocks throughout the period using existing Block Profiles → at the end, specifies the strictness rules for the Nen Contract.
 
 **Strictness rules (user-configurable, examples):**
-- **Fully locked:** No changes allowed during the Contract period. Blocks cannot be moved, removed, or shortened. New blocks can still be added.
+- **Fully locked:** No changes allowed during the Nen Contract period. Blocks cannot be moved, removed, or shortened. New blocks can still be added.
 - **Daily flexibility:** Within each day, the user can move blocks around, add or remove them freely, but only for the current or upcoming day.
 - **Time-budget (daily):** Blocks can be rearranged within a day, but the total block time for that day must remain the same (e.g. 4 hours of Focus Blocks planned = 4 hours must remain).
-- **Time-budget (period):** Same as daily, but the budget is tracked across the full Contract period (e.g. user can do 2 fewer hours today if they add 2 hours on another day within the Contract).
+- **Time-budget (period):** Same as daily, but the budget is tracked across the full Nen Contract period (e.g. user can do 2 fewer hours today if they add 2 hours on another day within the Nen Contract).
 - **Custom combinations:** The user picks which constraints apply.
 
-**Settings integration:** In the Settings page, the user can pre-save default strictness rules that are automatically applied when creating a new Contract for a day, week, or month.
+**Settings integration:** In the Settings page, the user can pre-save default strictness rules that are automatically applied when creating a new Nen Contract for a day, week, or month.
 
 **Status:** Domain concept defined. No entities, commands, or UI built yet. To be interrogated via the Design Gap Protocol before implementation begins.
 

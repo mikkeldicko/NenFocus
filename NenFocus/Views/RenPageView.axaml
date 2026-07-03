@@ -20,6 +20,7 @@
         <Style Selector="Button.profile-card.selected /template/ ContentPresenter">
             <Setter Property="Background" Value="#FDF6E8"/>
             <Setter Property="BorderBrush" Value="#B8922A"/>
+            <Setter Property="BorderThickness" Value="2"/>
         </Style>
         <Style Selector="Button.profile-card.locked /template/ ContentPresenter">
             <Setter Property="Background" Value="#F8F8FC"/>
@@ -111,43 +112,56 @@
                                Margin="0,0,0,6"/>
 
                     <!-- Locked profile card — click to expand details + extra blocking -->
-                    <Button Classes="profile-card locked"
+                    <Button Classes="profile-card selected"
                             Command="{Binding ToggleLockedProfileExpandedCommand}">
                         <StackPanel Spacing="0" DataContext="{Binding LockedProfileCard}">
 
-                            <!-- Card header row -->
-                            <Grid ColumnDefinitions="*,Auto">
-                                <StackPanel Grid.Column="0" Spacing="6">
-                                    <TextBlock Text="{Binding Profile.Name}"
-                                               FontSize="14"
-                                               FontWeight="Medium"
-                                               Foreground="#1A1A2E"/>
-                                    <StackPanel Orientation="Horizontal" Spacing="8">
-                                        <Border Background="#F0F0F8"
-                                                CornerRadius="4"
-                                                Padding="6,2">
-                                            <TextBlock Text="{Binding Profile.WebsitePolicy}"
-                                                       FontSize="10"
-                                                       Foreground="#888899"/>
-                                        </Border>
-                                        <TextBlock FontSize="11" Foreground="#AAAABC"
-                                                   VerticalAlignment="Center">
-                                            <Run Text="{Binding Profile.AppCount}"/>
-                                            <Run Text=" apps · "/>
-                                            <Run Text="{Binding Profile.SiteCount}"/>
-                                            <Run Text=" sites"/>
-                                        </TextBlock>
-                                    </StackPanel>
+                            <!-- Card header -->
+                            <StackPanel Spacing="6">
+                                <TextBlock Text="{Binding Profile.Name}"
+                                           FontSize="14"
+                                           FontWeight="Medium"
+                                           Foreground="#1A1A2E"/>
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <Border Background="#F0F0F8"
+                                            CornerRadius="4"
+                                            Padding="6,2">
+                                        <TextBlock Text="{Binding Profile.WebsitePolicy}"
+                                                   FontSize="10"
+                                                   Foreground="#888899"/>
+                                    </Border>
+                                    <TextBlock FontSize="11" Foreground="#AAAABC"
+                                               VerticalAlignment="Center">
+                                        <Run Text="{Binding Profile.AppCount}"/>
+                                        <Run Text=" apps · "/>
+                                        <Run Text="{Binding Profile.SiteCount}"/>
+                                        <Run Text=" sites"/>
+                                    </TextBlock>
                                 </StackPanel>
-                                <TextBlock Grid.Column="1"
-                                           Text="{Binding IsExpanded, Converter={x:Static conv:BoolToChevronConverter.Instance}}"
-                                           FontSize="13"
-                                           Foreground="#AAAABC"
-                                           VerticalAlignment="Center"/>
-                            </Grid>
+                            </StackPanel>
 
                             <!-- Expanded panel -->
                             <StackPanel IsVisible="{Binding IsExpanded}" Margin="0,16,0,4" Spacing="16">
+
+                                <!-- Locked websites (read-only) -->
+                                <StackPanel Spacing="8"
+                                            IsVisible="{Binding Profile.SiteCount, Converter={x:Static conv:CountToBoolConverter.IsNonZero}}">
+                                    <TextBlock Text="{Binding SitesLabel}"
+                                               FontSize="9" FontWeight="Medium"
+                                               Foreground="#AAAABC" LetterSpacing="3"/>
+                                    <ItemsControl ItemsSource="{Binding Profile.Websites}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate><WrapPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate DataType="x:String">
+                                                <Button Classes="chip-locked" Margin="0,0,6,6">
+                                                    <TextBlock Text="{Binding}" Foreground="#444455"/>
+                                                </Button>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
 
                                 <!-- Locked apps (read-only) -->
                                 <StackPanel Spacing="8"
@@ -169,31 +183,10 @@
                                     </ItemsControl>
                                 </StackPanel>
 
-                                <!-- Locked websites (read-only) -->
-                                <StackPanel Spacing="8"
-                                            IsVisible="{Binding Profile.SiteCount, Converter={x:Static conv:CountToBoolConverter.IsNonZero}}">
-                                    <TextBlock Text="BLOCKED SITES"
-                                               FontSize="9" FontWeight="Medium"
-                                               Foreground="#AAAABC" LetterSpacing="3"/>
-                                    <ItemsControl ItemsSource="{Binding Profile.Websites}">
-                                        <ItemsControl.ItemsPanel>
-                                            <ItemsPanelTemplate><WrapPanel Orientation="Horizontal"/></ItemsPanelTemplate>
-                                        </ItemsControl.ItemsPanel>
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate DataType="x:String">
-                                                <Button Classes="chip-locked" Margin="0,0,6,6">
-                                                    <TextBlock Text="{Binding}" Foreground="#444455"/>
-                                                </Button>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                </StackPanel>
-
                                 <!-- Divider -->
                                 <Rectangle Height="1" Fill="#E4E4EE"/>
 
-                                <!-- Extra sites (this session only) -->
-                                <!-- DataContext is LockedProfileCard so we climb to the UserControl's VM for commands -->
+                                <!-- Extra sites (blocklist only) -->
                                 <StackPanel IsVisible="{Binding $parent[UserControl].((vm:RenPageViewModel)DataContext).CanAddSites}"
                                             Spacing="8">
                                     <TextBlock Text="BLOCK EXTRA SITES THIS SESSION"
@@ -234,27 +227,11 @@
                                     </ItemsControl>
                                 </StackPanel>
 
-                                <!-- Allowlist info instead of site input -->
-                                <StackPanel IsVisible="{Binding !$parent[UserControl].((vm:RenPageViewModel)DataContext).CanAddSites}"
-                                            Spacing="4">
-                                    <TextBlock Text="BLOCK EXTRA SITES THIS SESSION"
-                                               FontSize="9" FontWeight="Medium"
-                                               Foreground="#AAAABC" LetterSpacing="3"/>
-                                    <TextBlock Text="Website additions are unavailable in Allowlist mode."
-                                               FontSize="11" Foreground="#BBBBCC" FontStyle="Italic" TextWrapping="Wrap"/>
-                                </StackPanel>
-
                                 <!-- Extra apps (this session only) -->
                                 <StackPanel Spacing="8">
                                     <TextBlock Text="BLOCK EXTRA APPS THIS SESSION"
                                                FontSize="9" FontWeight="Medium"
                                                Foreground="#AAAABC" LetterSpacing="3"/>
-                                    <Button Name="BrowseForAppButton"
-                                            Background="#F0F0F8" BorderBrush="#DDDDE8" BorderThickness="1"
-                                            CornerRadius="6" Padding="14,8" Cursor="Hand"
-                                            HorizontalAlignment="Left">
-                                        <TextBlock Text="+ Add App" FontSize="12" Foreground="#444455"/>
-                                    </Button>
                                     <ItemsControl ItemsSource="{Binding $parent[UserControl].((vm:RenPageViewModel)DataContext).AdditionalBlockedApps}"
                                                   IsVisible="{Binding $parent[UserControl].((vm:RenPageViewModel)DataContext).AdditionalBlockedApps.Count, Converter={x:Static conv:CountToBoolConverter.IsNonZero}}">
                                         <ItemsControl.ItemsPanel>
@@ -274,18 +251,18 @@
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>
+                                    <Button Name="BrowseForAppButton"
+                                            Background="#F0F0F8" BorderBrush="#DDDDE8" BorderThickness="1"
+                                            CornerRadius="6" Padding="14,8" Cursor="Hand"
+                                            HorizontalAlignment="Left">
+                                        <TextBlock Text="+ Add App" FontSize="12" Foreground="#444455"/>
+                                    </Button>
                                 </StackPanel>
 
                             </StackPanel>
                         </StackPanel>
                     </Button>
 
-                    <!-- Allowlist hint -->
-                    <Border IsVisible="{Binding AllowlistHintVisible}"
-                            Background="#FDF6E8" CornerRadius="8" Padding="14,10" Margin="0,12,0,0">
-                        <TextBlock Text="Only listed websites will be accessible. All others will be blocked."
-                                   FontSize="12" Foreground="#B8922A" TextWrapping="Wrap"/>
-                    </Border>
                 </StackPanel>
 
                 <!-- ═══════════════════════════════════════════════ -->
@@ -350,36 +327,51 @@
                     <!-- ── SELECTED: single card + extra blocking ── -->
                     <StackPanel IsVisible="{Binding IsProfileSelected}" Spacing="0">
 
-                        <Button Classes="profile-card"
+                        <Button Classes="profile-card selected"
                                 Command="{Binding ToggleSelectedCardExpandedCommand}">
                             <StackPanel Spacing="0" DataContext="{Binding SelectedProfileCard}">
 
                                 <!-- Card header -->
-                                <Grid ColumnDefinitions="*,Auto">
-                                    <StackPanel Grid.Column="0" Spacing="6">
-                                        <TextBlock Text="{Binding Profile.Name}"
-                                                   FontSize="14" FontWeight="Medium"
-                                                   Foreground="#1A1A2E"/>
-                                        <StackPanel Orientation="Horizontal" Spacing="8">
-                                            <Border Background="#F0F0F8" CornerRadius="4" Padding="6,2">
-                                                <TextBlock Text="{Binding Profile.WebsitePolicy}"
-                                                           FontSize="10" Foreground="#888899"/>
-                                            </Border>
-                                            <TextBlock FontSize="11" Foreground="#AAAABC" VerticalAlignment="Center">
-                                                <Run Text="{Binding Profile.AppCount}"/>
-                                                <Run Text=" apps · "/>
-                                                <Run Text="{Binding Profile.SiteCount}"/>
-                                                <Run Text=" sites"/>
-                                            </TextBlock>
-                                        </StackPanel>
+                                <StackPanel Spacing="6">
+                                    <TextBlock Text="{Binding Profile.Name}"
+                                               FontSize="14" FontWeight="Medium"
+                                               Foreground="#1A1A2E"/>
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <Border Background="#F0F0F8" CornerRadius="4" Padding="6,2">
+                                            <TextBlock Text="{Binding Profile.WebsitePolicy}"
+                                                       FontSize="10" Foreground="#888899"/>
+                                        </Border>
+                                        <TextBlock FontSize="11" Foreground="#AAAABC" VerticalAlignment="Center">
+                                            <Run Text="{Binding Profile.AppCount}"/>
+                                            <Run Text=" apps · "/>
+                                            <Run Text="{Binding Profile.SiteCount}"/>
+                                            <Run Text=" sites"/>
+                                        </TextBlock>
                                     </StackPanel>
-                                    <TextBlock Grid.Column="1"
-                                               Text="{Binding IsExpanded, Converter={x:Static conv:BoolToChevronConverter.Instance}}"
-                                               FontSize="13" Foreground="#AAAABC" VerticalAlignment="Center"/>
-                                </Grid>
+                                </StackPanel>
 
                                 <!-- Expanded panel -->
                                 <StackPanel IsVisible="{Binding IsExpanded}" Margin="0,16,0,4" Spacing="16">
+
+                                    <!-- Locked sites -->
+                                    <StackPanel Spacing="8"
+                                                IsVisible="{Binding Profile.SiteCount, Converter={x:Static conv:CountToBoolConverter.IsNonZero}}">
+                                        <TextBlock Text="{Binding SitesLabel}"
+                                                   FontSize="9" FontWeight="Medium"
+                                                   Foreground="#AAAABC" LetterSpacing="3"/>
+                                        <ItemsControl ItemsSource="{Binding Profile.Websites}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate><WrapPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate DataType="x:String">
+                                                    <Button Classes="chip-locked" Margin="0,0,6,6">
+                                                        <TextBlock Text="{Binding}" Foreground="#444455"/>
+                                                    </Button>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
 
                                     <!-- Locked apps -->
                                     <StackPanel Spacing="8"
@@ -401,29 +393,9 @@
                                         </ItemsControl>
                                     </StackPanel>
 
-                                    <!-- Locked sites -->
-                                    <StackPanel Spacing="8"
-                                                IsVisible="{Binding Profile.SiteCount, Converter={x:Static conv:CountToBoolConverter.IsNonZero}}">
-                                        <TextBlock Text="BLOCKED SITES"
-                                                   FontSize="9" FontWeight="Medium"
-                                                   Foreground="#AAAABC" LetterSpacing="3"/>
-                                        <ItemsControl ItemsSource="{Binding Profile.Websites}">
-                                            <ItemsControl.ItemsPanel>
-                                                <ItemsPanelTemplate><WrapPanel Orientation="Horizontal"/></ItemsPanelTemplate>
-                                            </ItemsControl.ItemsPanel>
-                                            <ItemsControl.ItemTemplate>
-                                                <DataTemplate DataType="x:String">
-                                                    <Button Classes="chip-locked" Margin="0,0,6,6">
-                                                        <TextBlock Text="{Binding}" Foreground="#444455"/>
-                                                    </Button>
-                                                </DataTemplate>
-                                            </ItemsControl.ItemTemplate>
-                                        </ItemsControl>
-                                    </StackPanel>
-
                                     <Rectangle Height="1" Fill="#E4E4EE"/>
 
-                                    <!-- Extra sites -->
+                                    <!-- Extra sites (blocklist only) -->
                                     <StackPanel IsVisible="{Binding $parent[UserControl].((vm:RenPageViewModel)DataContext).CanAddSites}"
                                                 Spacing="8">
                                         <TextBlock Text="BLOCK EXTRA SITES THIS SESSION"
@@ -463,27 +435,11 @@
                                         </ItemsControl>
                                     </StackPanel>
 
-                                    <!-- Allowlist — no extra sites -->
-                                    <StackPanel IsVisible="{Binding !$parent[UserControl].((vm:RenPageViewModel)DataContext).CanAddSites}"
-                                                Spacing="4">
-                                        <TextBlock Text="BLOCK EXTRA SITES THIS SESSION"
-                                                   FontSize="9" FontWeight="Medium"
-                                                   Foreground="#AAAABC" LetterSpacing="3"/>
-                                        <TextBlock Text="Website additions are unavailable in Allowlist mode."
-                                                   FontSize="11" Foreground="#BBBBCC" FontStyle="Italic" TextWrapping="Wrap"/>
-                                    </StackPanel>
-
                                     <!-- Extra apps -->
                                     <StackPanel Spacing="8">
                                         <TextBlock Text="BLOCK EXTRA APPS THIS SESSION"
                                                    FontSize="9" FontWeight="Medium"
                                                    Foreground="#AAAABC" LetterSpacing="3"/>
-                                        <Button Name="BrowseForAppButtonSpontaneous"
-                                                Background="#F0F0F8" BorderBrush="#DDDDE8" BorderThickness="1"
-                                                CornerRadius="6" Padding="14,8" Cursor="Hand"
-                                                HorizontalAlignment="Left">
-                                            <TextBlock Text="+ Add App" FontSize="12" Foreground="#444455"/>
-                                        </Button>
                                         <ItemsControl ItemsSource="{Binding $parent[UserControl].((vm:RenPageViewModel)DataContext).AdditionalBlockedApps}"
                                                       IsVisible="{Binding $parent[UserControl].((vm:RenPageViewModel)DataContext).AdditionalBlockedApps.Count, Converter={x:Static conv:CountToBoolConverter.IsNonZero}}">
                                             <ItemsControl.ItemsPanel>
@@ -503,6 +459,12 @@
                                                 </DataTemplate>
                                             </ItemsControl.ItemTemplate>
                                         </ItemsControl>
+                                        <Button Name="BrowseForAppButtonSpontaneous"
+                                                Background="#F0F0F8" BorderBrush="#DDDDE8" BorderThickness="1"
+                                                CornerRadius="6" Padding="14,8" Cursor="Hand"
+                                                HorizontalAlignment="Left">
+                                            <TextBlock Text="+ Add App" FontSize="12" Foreground="#444455"/>
+                                        </Button>
                                     </StackPanel>
 
                                 </StackPanel>
@@ -517,14 +479,6 @@
                             <TextBlock Text="← Change profile"
                                        FontSize="12" Foreground="#AAAABC"/>
                         </Button>
-
-                        <!-- Allowlist hint -->
-                        <Border IsVisible="{Binding AllowlistHintVisible}"
-                                Background="#FDF6E8" CornerRadius="8"
-                                Padding="14,10" Margin="0,10,0,0">
-                            <TextBlock Text="Only listed websites will be accessible. All others will be blocked."
-                                       FontSize="12" Foreground="#B8922A" TextWrapping="Wrap"/>
-                        </Border>
 
                     </StackPanel>
                 </StackPanel>
