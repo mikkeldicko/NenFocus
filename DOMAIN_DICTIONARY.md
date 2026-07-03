@@ -331,7 +331,7 @@ ActivePolicySlice ComputeSlice(
 | Application | `IPlannedBlockRepository` | Retrieves blocks for overlap validation and active-state queries |
 | Application | `ComputeActivePolicySliceQueryHandler` | Queries blocks covering `DateTime.UtcNow`; merges with active Session |
 | Application | `StartSessionCommandHandler` | Calls `FocusBlock.MarkRitualCompleted(DateTime.UtcNow)` when `OriginatingBlockId` is provided |
-| UI | `PlannerPageViewModel` | (Stub) — will create, update, delete Focus Blocks |
+| UI | `PlannerPageViewModel` | Creates, updates, deletes Focus Blocks; drag interactions and form locking implemented |
 | UI | `ShellViewModel` | (Not yet built) — will detect Focus Block activation and trigger Ritual overlay |
 
 ---
@@ -368,6 +368,49 @@ ActivePolicySlice ComputeSlice(
 | Domain | `BackgroundBlock` entity (`Entities/BackgroundBlock.cs`) | Extends `PlannedBlock`; inherits `Id`, `BlockProfileId`, `Start`, `End`, `Title?`; no additional own fields; block type derived from C# class (`BackgroundBlock` → `BlockType.Background` in query handler — no stored column) |
 | Application | `ComputeActivePolicySliceQueryHandler` | **Includes** Background Blocks when computing the active policy slice |
 | Infrastructure | `ScheduledEnforcementService` | Picks up the Background Block in its 5s heartbeat and applies enforcement |
+
+---
+
+## Planner Page *(implemented)*
+
+**What it is:** The weekly calendar view where the user schedules Focus Blocks and Background Blocks. Each column is a day; rows are hour slots from a configurable `FirstHour` to `LastHour`. Tiles represent blocks and are colour-coded: gold (`#B8922A`) for Focus, light grey (`#E8E8F0`) for Background.
+
+**Drag interactions (built 2026-07-03):**
+
+| Gesture | Behaviour |
+|---------|-----------|
+| Click on empty space | Shows a 1-hour gold ghost at the clicked slot, opens the new-block form pre-filled with that range |
+| Drag on empty space | Paints a live gold ghost; on release opens the new-block form pre-filled with the dragged range |
+| Drag tile body | Moves the tile; ghost overlay follows pixel-smooth, original tile dims to 30% opacity |
+| Drag bottom edge (10 px hot zone) | Resizes end time; ghost overlay extends/shrinks *(commit partially broken — parked)* |
+| Drag top edge (10 px hot zone) | Resizes start time; disabled when start is in the past |
+| Click tile | Opens edit form |
+
+**Ghost overlay:** A `Border` added directly to the Canvas (`#B8922A`, 90% opacity, `IsHitTestVisible = false`). Shows a live time label (`HH:mm – HH:mm`) that snaps to 15-minute increments. The create ghost (`#B8922A`, 70% opacity) persists after drag release until the form closes or a rebuild fires.
+
+**Lock rules:**
+- `IsTileFullyLocked` — tile is completed or is the active session's originating block: no drag at all.
+- `IsTileStartLocked` — block start ≤ now: move and top-resize blocked; bottom-resize allowed (GCal behaviour).
+
+**Drag error banner:** Red `DragError` banner at row 1 of the planner grid, bound to `PlannerPageViewModel.DragError`. Surfaces overlap rejections and lock violations.
+
+**Event routing:** All pointer movement is handled on the owner `Canvas` (captured via `e.Pointer.Capture(ownerCanvas)` in `OnTilePointerPressed`). The tile button handles `PointerPressed` and hover-cursor feedback only; `PointerMoved` and `PointerReleased` route to the canvas handlers for both create and tile drags.
+
+**Technical mapping:**
+
+| Layer | Artifact | Role |
+|-------|----------|------|
+| UI | `PlannerPageView.axaml.cs` | All drag state machine, ghost lifecycle, pointer routing |
+| UI | `PlannerPageViewModel` | `OpenNewBlockFormWithRangeCommand`, `MoveOrResizeBlockCommand`, `IsTileFullyLocked`, `IsTileStartLocked`, `DragError`, `IsBlockLocked`, `CanSaveBlock` |
+| UI | `PlannerDragMath` (`ViewModels/Components/`) | Pure static helper: `YToSnappedTime`, `DeltaYToSnappedMinutes`, `ClampRange`, `WouldCollide` |
+| UI | `DragCreatedRange` | Record struct passed from code-behind → ViewModel on drag-create completion |
+| UI | `DragMoveResult` | Record struct passed from code-behind → ViewModel on drag-move/resize completion |
+| Application | `CreatePlannedBlockCommandHandler` | Rejects Focus Block if it overlaps a running session (in addition to existing Focus-block overlap check) |
+| Application | `UpdatePlannedBlockCommandHandler` | Same active-session overlap guard for move/resize |
+
+**Form locking:** Completed blocks and the active session's originating block open read-only in the form. `IsBlockLocked` (= `IsEditing && (IsEditingCompleted || activeSession.OriginatingBlockId == editingId)`) disables Date, End Time, and Profile fields and hides the Save button. `IsBlockLocked` reacts live to session state changes.
+
+**`TryParseFormTime`:** Static helper on `PlannerPageViewModel` that special-cases `"24:00"` (rejected by `TimeSpan.TryParse`) to support end-of-day block scheduling.
 
 ---
 
