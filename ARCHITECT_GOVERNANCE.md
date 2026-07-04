@@ -140,19 +140,7 @@ Each slice must compile and produce the correct output before the next slice beg
 
 Gaps that have been identified but not yet closed. Each is here because deferring it is a deliberate choice, not because it has been forgotten.
 
-### Open Gap A — Persistence Boundary: Per-Repository SaveChanges vs. Unit of Work
-
-**The gap:** Repositories currently call `SaveChangesAsync` internally on each `SaveAsync`. `StartSessionCommandHandler` therefore performs two separate database round-trips when a Focus Block triggers a session: one to stamp `FocusBlock.RitualCompletedAt`, one to insert the new `Session` row. If the second save fails, the database is left with a Focus Block marked completed but no corresponding Session — violating the invariant in `DOMAIN\\\_DICTIONARY.md` that a completed Focus Block always has an associated Planned Session.
-
-The same fragmentation pushes domain-event dispatching out to every handler: each must remember to call `PublishAllAsync` and `ClearDomainEvents` in the right order relative to `SaveAsync`. The rule "save, then publish, then clear" is repeated in every handler instead of being encapsulated once — a Deep Modules violation.
-
-**Why deferred:** The consistency bug only manifests on the Planned Session path. Per the dictionary, `ShellViewModel` (which detects Focus Block activation and triggers the Ritual overlay) is "not yet built." The fragile path is not yet reachable from the UI.
-
-**Direction (subject to interrogation when closed):** Repositories register changes without calling `SaveChangesAsync`. `NenFocusDbContext.SaveChangesAsync` is overridden to commit the transaction, walk the change tracker for aggregates with pending `DomainEvents`, publish them via `IDomainEventPublisher`, and clear them. Command handlers shrink to: validate → mutate aggregate → `SaveChangesAsync` → return result.
-
-**Must be closed before:** `ShellViewModel` is built and the Focus Block activation path becomes reachable.
-
-### Open Gap B — Time Budget Feature (three-slice implementation)
+### Open Gap A — Time Budget Feature (three-slice implementation)
 
 **The feature:** A `TimeBudget` is an optional daily cap on a `BlockedSite` entry within a `BlockProfile`. A budgeted site is accessible until its daily cap is consumed, at which point it becomes blocked for the rest of the day. Usage is reported by the browser extension via a `/report` endpoint and written through `IBudgetUsageTracker` into `DailyBudgetUsage` rows — it is not inferred from wall-clock time. See `DOMAIN\_DICTIONARY.md` → Time Budget and Budget Window for full definitions and ubiquitous language rules.
 
@@ -192,7 +180,7 @@ The same fragmentation pushes domain-event dispatching out to every handler: eac
 
 **Design decision recorded:** Option B (heartbeat inference — deriving usage from the enforcement heartbeat's wall-clock timing rather than extension-reported events) was explicitly considered and rejected during the Design Gap interrogation. Usage tracking must be accurate: only time the user actively spends on a site counts, which requires the extension to report it directly. Do not reopen this question.
 
-### Open Gap C — Crash Resilience: Session Recovery After Unexpected Shutdown
+### Open Gap B — Crash Resilience: Session Recovery After Unexpected Shutdown
 
 **The gap:** If the app crashes or is force-killed mid-session, the current recovery path relies entirely on `SessionStateService.InitializeAsync()` querying `ISessionRepository.GetActiveAsync()` at startup. This is sufficient for clean restarts (the session was committed to SQLite before the crash), but it does not cover two failure cases:
 
@@ -205,7 +193,7 @@ The same fragmentation pushes domain-event dispatching out to every handler: eac
 
 - Begin each session command in a DB transaction that also records an "enforcement intent" row; `ScheduledEnforcementService` reads this on startup before its first heartbeat to re-apply enforcement immediately rather than waiting up to 5 s.
 - Alternatively, treat the 5-second heartbeat window as acceptable and document it; add a startup check in `HostExtensions` that calls `WindowsEnforcementService.ApplyPolicyAsync` synchronously if `GetActiveAsync` returns a live session, closing the enforcement drift window to zero.
-- Do **not** reintroduce a JSON sidecar — any file-based approach must explain how it stays in sync with the DB on every write, which is the Unit of Work problem (Gap A) in disguise.
+- Do **not** reintroduce a JSON sidecar — any file-based approach must explain how it stays in sync with the DB on every write. `EfCoreUnitOfWork` already solves exactly this problem for in-process command handling (see Gap 5 in `DESIGN_GAP_HISTORY.md`); a sidecar file would have to solve it independently, with no shared transaction boundary.
 
 **Must be closed before:** The app is used in a high-stakes environment (e.g., exam blocking, supervised study) where a crash silently removing enforcement would be a product safety failure. For personal use, the current behavior is acceptable.
 

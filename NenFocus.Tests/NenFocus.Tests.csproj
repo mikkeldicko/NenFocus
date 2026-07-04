@@ -23,6 +23,7 @@
   <ItemGroup>
     <ProjectReference Include="..\NenFocus.Domain\NenFocus.Domain.csproj" />
     <ProjectReference Include="..\NenFocus.Application\NenFocus.Application.csproj" />
+    <ProjectReference Include="..\NenFocus.Infrastructure\NenFocus.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>
