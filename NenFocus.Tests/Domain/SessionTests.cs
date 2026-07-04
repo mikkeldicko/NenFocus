@@ -1,0 +1,349 @@
+using FluentAssertions;
+using NenFocus.Domain.Entities;
+using NenFocus.Domain.Enums;
+using NenFocus.Domain.Events;
+using NenFocus.Domain.ValueObjects;
+
+namespace NenFocus.Tests.Domain;
+
+public class SessionTests
+{
+    private static Session CreateSpontaneousSession(BreakSettings? breakSettings = null)
+        => Session.Create(
+            id: Guid.NewGuid(),
+            goal: new SessionGoal("Write tests"),
+            duration: new SessionDuration(TimeSpan.FromMinutes(30)),
+            blockProfileId: Guid.NewGuid(),
+            origin: SessionOrigin.Spontaneous,
+            breakSettings: breakSettings);
+
+    private static Session CreatePlannedSession(Guid originatingBlockId)
+        => Session.Create(
+            id: Guid.NewGuid(),
+            goal: new SessionGoal("Write tests"),
+            duration: new SessionDuration(TimeSpan.FromMinutes(30)),
+            blockProfileId: Guid.NewGuid(),
+            origin: SessionOrigin.Planned,
+            originatingBlockId: originatingBlockId);
+
+    [Fact]
+    public void Create_Spontaneous_HasNoOriginatingBlock()
+    {
+        var session = CreateSpontaneousSession();
+
+        session.Origin.Should().Be(SessionOrigin.Spontaneous);
+        session.OriginatingBlockId.Should().BeNull();
+        session.Status.Should().Be(SessionStatus.NotStarted);
+        session.TemporaryBlockedApps.Should().BeEmpty();
+        session.TemporaryBlockedSites.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Create_Planned_WithoutOriginatingBlockId_Throws()
+    {
+        var act = () => Session.Create(
+            Guid.NewGuid(),
+            new SessionGoal("Goal"),
+            new SessionDuration(TimeSpan.FromMinutes(30)),
+            Guid.NewGuid(),
+            SessionOrigin.Planned);
+
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
+    public void Create_Spontaneous_WithOriginatingBlockId_Throws()
+    {
+        var act = () => Session.Create(
+            Guid.NewGuid(),
+            new SessionGoal("Goal"),
+            new SessionDuration(TimeSpan.FromMinutes(30)),
+            Guid.NewGuid(),
+            SessionOrigin.Spontaneous,
+            originatingBlockId: Guid.NewGuid());
+
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
+    public void Create_Planned_WithOriginatingBlockId_Succeeds()
+    {
+        var blockId = Guid.NewGuid();
+        var session = CreatePlannedSession(blockId);
+
+        session.Origin.Should().Be(SessionOrigin.Planned);
+        session.OriginatingBlockId.Should().Be(blockId);
+    }
+
+    [Fact]
+    public void Start_FromNotStarted_ActivatesAndRaisesEvent()
+    {
+        var session = CreateSpontaneousSession();
+        var startedAt = new DateTime(2026, 1, 1, 10, 0, 0, DateTimeKind.Utc);
+
+        session.Start(startedAt);
+
+        session.Status.Should().Be(SessionStatus.Active);
+        session.StartedAt.Should().Be(startedAt);
+        session.DomainEvents.Should().ContainSingle()
+            .Which.Should().BeOfType<SessionStartedEvent>();
+
+        var raised = (SessionStartedEvent)session.DomainEvents.Single();
+        raised.SessionId.Should().Be(session.Id);
+        raised.BlockProfileId.Should().Be(session.BlockProfileId);
+        raised.Goal.Should().Be(session.Goal.Value);
+    }
+
+    [Fact]
+    public void Start_AlreadyStarted_Throws()
+    {
+        var session = CreateSpontaneousSession();
+        session.Start(DateTime.UtcNow);
+
+        var act = () => session.Start(DateTime.UtcNow);
+
+        act.Should().Throw<InvalidOperationException>();
+    }
+
+    [Fact]
+    public void StartBreak_ActiveWithBreakSettings_MovesToOnBreakAndRaisesEvent()
+    {
+        var session = CreateSpontaneousSession(new BreakSettings(25, 5));
+        session.Start(DateTime.UtcNow);
+        var breakStartedAt = DateTime.UtcNow;
+
+        session.StartBreak(breakStartedAt);
+
+        session.Status.Should().Be(SessionStatus.OnBreak);
+        session.BreakStartedAt.Should().Be(breakStartedAt);
+        session.BreaksTaken.Should().Be(1);
+
+        var raised = session.DomainEvents.OfType<BreakStartedEvent>().Single();
+        raised.BreakNumber.Should().Be(1);
+    }
+
+    [Fact]
+    public void StartBreak_WithoutBreakSettings_Throws()
+    {
+        var session = CreateSpontaneousSession();
+        session.Start(DateTime.UtcNow);
+
+        var act = () => session.StartBreak(DateTime.UtcNow);
+
+        act.Should().Throw<InvalidOperationException>();
+    }
+
+    [Fact]
+    public void StartBreak_WhenNotActive_Throws()
+    {
+        var session = CreateSpontaneousSession(new BreakSettings(25, 5));
+
+        var act = () => session.StartBreak(DateTime.UtcNow);
+
+        act.Should().Throw<InvalidOperationException>();
+    }
+
+    [Fact]
+    public void StartBreak_Twice_IncrementsBreaksTaken()
+    {
+        var session = CreateSpontaneousSession(new BreakSettings(25, 5));
+        session.Start(DateTime.UtcNow);
+
+        session.StartBreak(DateTime.UtcNow);
+        session.ResumeFromBreak();
+        session.StartBreak(DateTime.UtcNow);
+
+        session.BreaksTaken.Should().Be(2);
+        session.DomainEvents.OfType<BreakStartedEvent>().Select(e => e.BreakNumber)
+            .Should().Equal(1, 2);
+    }
+
+    [Fact]
+    public void ResumeFromBreak_WhenOnBreak_ReturnsToActive()
+    {
+        var session = CreateSpontaneousSession(new BreakSettings(25, 5));
+        session.Start(DateTime.UtcNow);
+        session.StartBreak(DateTime.UtcNow);
+
+        session.ResumeFromBreak();
+
+        session.Status.Should().Be(SessionStatus.Active);
+        session.BreakStartedAt.Should().BeNull();
+    }
+
+    [Fact]
+    public void ResumeFromBreak_WhenNotOnBreak_Throws()
+    {
+        var session = CreateSpontaneousSession();
+        session.Start(DateTime.UtcNow);
+
+        var act = () => session.ResumeFromBreak();
+
+        act.Should().Throw<InvalidOperationException>();
+    }
+
+    [Fact]
+    public void Complete_ActiveSession_CompletesAndRaisesEvent()
+    {
+        var session = CreateSpontaneousSession();
+        session.Start(DateTime.UtcNow);
+        var endedAt = DateTime.UtcNow.AddMinutes(30);
+
+        session.Complete(endedAt);
+
+        session.Status.Should().Be(SessionStatus.Completed);
+        session.EndedAt.Should().Be(endedAt);
+        session.DomainEvents.OfType<SessionEndedEvent>().Should().ContainSingle();
+    }
+
+    [Fact]
+    public void Complete_WhileOnBreak_ClearsBreakStartedAt()
+    {
+        var session = CreateSpontaneousSession(new BreakSettings(25, 5));
+        session.Start(DateTime.UtcNow);
+        session.StartBreak(DateTime.UtcNow);
+
+        session.Complete(DateTime.UtcNow);
+
+        session.BreakStartedAt.Should().BeNull();
+        session.Status.Should().Be(SessionStatus.Completed);
+    }
+
+    [Fact]
+    public void Complete_AlreadyCompleted_Throws()
+    {
+        var session = CreateSpontaneousSession();
+        session.Start(DateTime.UtcNow);
+        session.Complete(DateTime.UtcNow);
+
+        var act = () => session.Complete(DateTime.UtcNow);
+
+        act.Should().Throw<InvalidOperationException>();
+    }
+
+    [Fact]
+    public void SetReflection_OnCompletedSession_TrimsAndStores()
+    {
+        var session = CreateSpontaneousSession();
+        session.Start(DateTime.UtcNow);
+        session.Complete(DateTime.UtcNow);
+
+        session.SetReflection("  Went well  ");
+
+        session.Reflection.Should().Be("Went well");
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void SetReflection_BlankValue_ClearsReflection(string? blank)
+    {
+        var session = CreateSpontaneousSession();
+        session.Start(DateTime.UtcNow);
+        session.Complete(DateTime.UtcNow);
+
+        session.SetReflection(blank);
+
+        session.Reflection.Should().BeNull();
+    }
+
+    [Fact]
+    public void SetReflection_NotCompleted_Throws()
+    {
+        var session = CreateSpontaneousSession();
+        session.Start(DateTime.UtcNow);
+
+        var act = () => session.SetReflection("Too soon");
+
+        act.Should().Throw<InvalidOperationException>();
+    }
+
+    [Fact]
+    public void GetElapsedTime_NotStarted_ReturnsNull()
+    {
+        var session = CreateSpontaneousSession();
+
+        session.GetElapsedTime(DateTime.UtcNow).Should().BeNull();
+    }
+
+    [Fact]
+    public void GetElapsedTime_Active_MeasuresAgainstAsOf()
+    {
+        var startedAt = new DateTime(2026, 1, 1, 10, 0, 0, DateTimeKind.Utc);
+        var session = CreateSpontaneousSession();
+        session.Start(startedAt);
+
+        var elapsed = session.GetElapsedTime(startedAt.AddMinutes(10));
+
+        elapsed.Should().Be(TimeSpan.FromMinutes(10));
+    }
+
+    [Fact]
+    public void GetElapsedTime_Completed_IgnoresAsOfAndUsesEndedAt()
+    {
+        var startedAt = new DateTime(2026, 1, 1, 10, 0, 0, DateTimeKind.Utc);
+        var session = CreateSpontaneousSession();
+        session.Start(startedAt);
+        session.Complete(startedAt.AddMinutes(15));
+
+        var elapsed = session.GetElapsedTime(startedAt.AddHours(5));
+
+        elapsed.Should().Be(TimeSpan.FromMinutes(15));
+    }
+
+    [Fact]
+    public void GetRemainingTime_NotStarted_ReturnsNull()
+    {
+        var session = CreateSpontaneousSession();
+
+        session.GetRemainingTime(DateTime.UtcNow).Should().BeNull();
+    }
+
+    [Fact]
+    public void GetRemainingTime_BeforeDurationElapsed_ReturnsDifference()
+    {
+        var startedAt = new DateTime(2026, 1, 1, 10, 0, 0, DateTimeKind.Utc);
+        var session = CreateSpontaneousSession(); // 30 minute duration
+        session.Start(startedAt);
+
+        var remaining = session.GetRemainingTime(startedAt.AddMinutes(10));
+
+        remaining.Should().Be(TimeSpan.FromMinutes(20));
+    }
+
+    [Fact]
+    public void GetRemainingTime_PastDuration_ClampsToZero()
+    {
+        var startedAt = new DateTime(2026, 1, 1, 10, 0, 0, DateTimeKind.Utc);
+        var session = CreateSpontaneousSession(); // 30 minute duration
+        session.Start(startedAt);
+
+        var remaining = session.GetRemainingTime(startedAt.AddHours(2));
+
+        remaining.Should().Be(TimeSpan.Zero);
+    }
+
+    [Fact]
+    public void SyncState_OverwritesBreakTrackingFields()
+    {
+        var session = CreateSpontaneousSession();
+        var breakStartedAt = DateTime.UtcNow;
+
+        session.SyncState(breaksTaken: 3, breakStartedAt: breakStartedAt);
+
+        session.BreaksTaken.Should().Be(3);
+        session.BreakStartedAt.Should().Be(breakStartedAt);
+    }
+
+    [Fact]
+    public void ClearDomainEvents_RemovesAllRaisedEvents()
+    {
+        var session = CreateSpontaneousSession();
+        session.Start(DateTime.UtcNow);
+
+        session.ClearDomainEvents();
+
+        session.DomainEvents.Should().BeEmpty();
+    }
+}

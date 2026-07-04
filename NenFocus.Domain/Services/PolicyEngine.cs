@@ -17,7 +17,7 @@ public sealed class PolicyEngine : IPolicyEngine
         var activeSessions = sessions.ToList();
         var activeBlocks = blocks.ToList();
 
-        if (activeProfiles.Count == 0 && activeSessions.Count == 0)
+        if (activeProfiles.Count == 0 && activeSessions.Count == 0 && activeBlocks.Count == 0)
             return new ActivePolicySlice { SliceStart = at, SliceEnd = at.AddMinutes(1) };
 
         var tempApps = activeSessions
