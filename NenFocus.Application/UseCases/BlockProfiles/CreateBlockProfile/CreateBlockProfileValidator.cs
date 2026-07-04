@@ -9,9 +9,7 @@ public sealed class CreateBlockProfileValidator : AbstractValidator<CreateBlockP
     public CreateBlockProfileValidator(IBlockProfileRepository profiles)
     {
         RuleFor(x => x.Name)
-            .NotEmpty().WithMessage("Profile name is required.")
-            .WithMessage("A profile with this name already exists.");
-
+            .NotEmpty().WithMessage("Profile name is required.");
 
         RuleFor(x => x)
             .Must(x => x.BlockedApps.Count > 0 || x.Websites.Count > 0)

@@ -49,6 +49,9 @@ public sealed class StartSessionCommandHandler
                 return StartSessionResult.Fail(
                     $"A planned focus block starts in {minutesAvailable} minutes. " +
                     $"Please set your duration to {minutesAvailable} minutes or less.");
+
+            return StartSessionResult.Fail(
+                "A focus block is currently active. Please complete the Ritual instead of starting a spontaneous session.");
         }
 
         BreakSettings? breakSettings = null;

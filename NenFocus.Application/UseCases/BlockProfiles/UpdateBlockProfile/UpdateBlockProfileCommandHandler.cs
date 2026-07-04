@@ -1,4 +1,3 @@
-using FluentValidation;
 using NenFocus.Application.Interfaces;
 using NenFocus.Domain.ValueObjects;
 
@@ -8,24 +7,16 @@ public sealed class UpdateBlockProfileCommandHandler
     : ICommandHandler<UpdateBlockProfileCommand, UpdateBlockProfileResult>
 {
     private readonly IBlockProfileRepository _profiles;
-    private readonly IValidator<UpdateBlockProfileCommand> _validator;
 
-    public UpdateBlockProfileCommandHandler(
-        IBlockProfileRepository profiles,
-        IValidator<UpdateBlockProfileCommand> validator)
+    public UpdateBlockProfileCommandHandler(IBlockProfileRepository profiles)
     {
         _profiles = profiles;
-        _validator = validator;
     }
 
     public async Task<UpdateBlockProfileResult> HandleAsync(
         UpdateBlockProfileCommand command,
         CancellationToken cancellationToken = default)
     {
-        var validationResult = await _validator.ValidateAsync(command, cancellationToken);
-        if (!validationResult.IsValid)
-            return UpdateBlockProfileResult.Fail(validationResult.Errors.First().ErrorMessage);
-
         var profile = await _profiles.GetByIdAsync(command.ProfileId, cancellationToken);
         if (profile is null)
             return UpdateBlockProfileResult.Fail($"Profile '{command.ProfileId}' not found.");

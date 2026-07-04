@@ -31,6 +31,9 @@ public sealed class StartBreakCommandHandler
         if (session.Status != SessionStatus.Active)
             return StartBreakResult.Fail("Can only start a break from an active session.");
 
+        if (session.BreakSettings is null)
+            return StartBreakResult.Fail("Cannot start a break — no break settings configured.");
+
         session.StartBreak(_clock.UtcNow);
 
         await _sessions.SaveAsync(session, ct);
