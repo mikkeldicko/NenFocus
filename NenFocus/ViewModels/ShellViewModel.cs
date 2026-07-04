@@ -2,8 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.GetAllBlockProfiles;
-using NenFocus.Application.Queries.GetFocusBlockProfile;
-using NenFocus.Application.Queries.GetFocusBlockSchedule;
+using NenFocus.Application.Queries.GetFocusBlockRitualContext;
 using NenFocus.Application.Queries.GetPlannedBlocksForDay;
 using NenFocus.Application.UseCases.BlockProfiles.CreateBlockProfile;
 using NenFocus.Application.UseCases.BlockProfiles.DeleteBlockProfile;
@@ -31,8 +30,7 @@ namespace NenFocus.ViewModels;
 public partial class ShellViewModel : ViewModelBase
 {
     private readonly IQueryHandler<GetAllBlockProfilesQuery, IReadOnlyList<BlockProfileDto>> _profilesQuery;
-    private readonly IQueryHandler<GetFocusBlockProfileQuery, BlockProfileDto?> _getFocusBlockProfile;
-    private readonly IQueryHandler<GetFocusBlockScheduleQuery, FocusBlockSchedule?> _getFocusBlockSchedule;
+    private readonly IQueryHandler<GetFocusBlockRitualContextQuery, FocusBlockRitualContext?> _getFocusBlockRitualContext;
     private readonly ICommandHandler<StartSessionCommand, StartSessionResult> _startSession;
     private readonly ICommandHandler<EndSessionCommand, EndSessionResult> _endSession;
     private readonly ICommandHandler<StartBreakCommand, StartBreakResult> _startBreak;
@@ -53,8 +51,7 @@ public partial class ShellViewModel : ViewModelBase
 
     public ShellViewModel(
        IQueryHandler<GetAllBlockProfilesQuery, IReadOnlyList<BlockProfileDto>> profilesQuery,
-       IQueryHandler<GetFocusBlockProfileQuery, BlockProfileDto?> getFocusBlockProfile,
-       IQueryHandler<GetFocusBlockScheduleQuery, FocusBlockSchedule?> getFocusBlockSchedule,
+       IQueryHandler<GetFocusBlockRitualContextQuery, FocusBlockRitualContext?> getFocusBlockRitualContext,
        ICommandHandler<StartSessionCommand, StartSessionResult> startSession,
        ICommandHandler<EndSessionCommand, EndSessionResult> endSession,
        ICommandHandler<StartBreakCommand, StartBreakResult> startBreak,
@@ -74,8 +71,7 @@ public partial class ShellViewModel : ViewModelBase
        ICommandHandler<DeletePlannedBlockCommand, DeletePlannedBlockResult> deletePlannedBlock)
     {
         _profilesQuery = profilesQuery;
-        _getFocusBlockProfile = getFocusBlockProfile;
-        _getFocusBlockSchedule = getFocusBlockSchedule;
+        _getFocusBlockRitualContext = getFocusBlockRitualContext;
         _startSession = startSession;
         _endSession = endSession;
         _startBreak = startBreak;
@@ -142,10 +138,10 @@ public partial class ShellViewModel : ViewModelBase
         if (_sessionState.PendingFocusBlockId.HasValue)
         {
             var blockId = _sessionState.PendingFocusBlockId.Value;
-            lockedProfile = await _getFocusBlockProfile.HandleAsync(
-                new GetFocusBlockProfileQuery { FocusBlockId = blockId });
-            lockedSchedule = await _getFocusBlockSchedule.HandleAsync(
-                new GetFocusBlockScheduleQuery { FocusBlockId = blockId });
+            var context = await _getFocusBlockRitualContext.HandleAsync(
+                new GetFocusBlockRitualContextQuery { FocusBlockId = blockId });
+            lockedProfile = context?.Profile;
+            lockedSchedule = context?.Schedule;
         }
 
         bool isPlanned = lockedProfile is not null;

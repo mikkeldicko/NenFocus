@@ -1,4 +1,4 @@
-namespace NenFocus.Application.Queries.GetFocusBlockSchedule;
+namespace NenFocus.Application.Queries.GetFocusBlockRitualContext;
 
 public sealed record FocusBlockSchedule
 {

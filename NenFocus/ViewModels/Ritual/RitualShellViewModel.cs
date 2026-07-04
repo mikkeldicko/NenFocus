@@ -5,7 +5,7 @@ using CommunityToolkit.Mvvm.Input;
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.GetAllBlockProfiles;
-using NenFocus.Application.Queries.GetFocusBlockSchedule;
+using NenFocus.Application.Queries.GetFocusBlockRitualContext;
 using NenFocus.Application.UseCases.Sessions.StartSession;
 using NenFocus.Domain.Enums;
 

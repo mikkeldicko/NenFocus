@@ -1,3 +1,4 @@
+using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
 
 namespace NenFocus.Application.DTOs;
@@ -15,4 +16,15 @@ public sealed record BlockProfileDto
 
     public int AppCount => BlockedApps.Count;
     public int SiteCount => Websites.Count;
+
+    public static BlockProfileDto FromEntity(BlockProfile profile) => new()
+    {
+        Id = profile.Id,
+        Name = profile.Name,
+        Tags = profile.Tags.ToList(),
+        ProfileType = profile.ProfileType,
+        WebsitePolicy = profile.WebsitePolicy,
+        BlockedApps = profile.BlockedApps.Select(a => a.ProcessName).ToList(),
+        Websites = profile.Websites.Select(s => s.Url).ToList()
+    };
 }

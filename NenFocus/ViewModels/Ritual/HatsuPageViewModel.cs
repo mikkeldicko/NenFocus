@@ -5,7 +5,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
-using NenFocus.Application.Queries.GetFocusBlockSchedule;
+using NenFocus.Application.Queries.GetFocusBlockRitualContext;
 using NenFocus.Application.UseCases.Sessions.StartSession;
 
 namespace NenFocus.ViewModels.Ritual;
