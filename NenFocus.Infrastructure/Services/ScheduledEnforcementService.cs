@@ -1,10 +1,10 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.ComputeActivePolicySlice;
 using NenFocus.Domain.Enums;
 using NenFocus.Domain.ValueObjects;
-using System.Diagnostics;
 
 namespace NenFocus.Infrastructure.Services;
 
@@ -15,6 +15,7 @@ public sealed class ScheduledEnforcementService : BackgroundService
     private readonly IEnforcementService _enforcement;
     private readonly INotificationService _notifications;
     private readonly ISystemClock _clock;
+    private readonly ILogger<ScheduledEnforcementService> _logger;
     private readonly TimeSpan _interval = TimeSpan.FromSeconds(5);
 
     private DateTime? _lastWarningSentAt;
@@ -24,13 +25,15 @@ public sealed class ScheduledEnforcementService : BackgroundService
         ISessionStateService sessionState,
         IEnforcementService enforcement,
         INotificationService notifications,
-        ISystemClock clock)
+        ISystemClock clock,
+        ILogger<ScheduledEnforcementService> logger)
     {
         _scopeFactory = scopeFactory;
         _sessionState = sessionState;
         _enforcement = enforcement;
         _notifications = notifications;
         _clock = clock;
+        _logger = logger;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -81,7 +84,7 @@ public sealed class ScheduledEnforcementService : BackgroundService
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[NenFocus Service] ERROR: {ex.Message}");
+                _logger.LogError(ex, "Enforcement heartbeat failed");
             }
 
             await Task.Delay(_interval, stoppingToken);

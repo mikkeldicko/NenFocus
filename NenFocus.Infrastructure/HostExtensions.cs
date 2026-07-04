@@ -1,6 +1,8 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using NenFocus.Infrastructure.Persistence;
 
 namespace NenFocus.Infrastructure;
@@ -15,21 +17,22 @@ public static class HostExtensions
     {
         using var scope = host.Services.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<NenFocusDbContext>();
+        var logger = scope.ServiceProvider.GetRequiredService<ILogger<NenFocusDbContext>>();
 
         // Clear any stale migration lock left by a previously killed process.
         try { context.Database.ExecuteSqlRaw("DELETE FROM __EFMigrationsLock"); }
-        catch { /* table may not exist yet on first run */ }
+        catch (SqliteException ex) { logger.LogDebug(ex, "Could not clear migration lock — table may not exist yet on first run"); }
 
         // The RemoveTemporaryBlockedColumns migration (20260623123009) had an empty Up(),
         // so it never actually dropped those columns. If they already exist, mark the
         // AddTemporaryBlockedColumnsToSession migration as applied so EF skips adding them.
-        SkipAddColumnsIfAlreadyExist(context);
+        SkipAddColumnsIfAlreadyExist(context, logger);
 
         context.Database.Migrate();
         return host;
     }
 
-    private static void SkipAddColumnsIfAlreadyExist(NenFocusDbContext context)
+    private static void SkipAddColumnsIfAlreadyExist(NenFocusDbContext context, ILogger logger)
     {
         const string migrationId = "20260624185307_AddTemporaryBlockedColumnsToSession";
 
@@ -56,6 +59,9 @@ public static class HostExtensions
                 insertCmd.ExecuteNonQuery();
             }
         }
-        catch { /* Sessions table may not exist yet on a brand-new database */ }
+        catch (SqliteException ex)
+        {
+            logger.LogDebug(ex, "Could not inspect Sessions table — it may not exist yet on a brand-new database");
+        }
     }
 }

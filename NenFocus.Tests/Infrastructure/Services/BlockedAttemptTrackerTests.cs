@@ -80,6 +80,25 @@ public class BlockedAttemptTrackerTests : IDisposable
     }
 
     [Fact]
+    public async Task RecordAppBlockedAsync_ConcurrentCallsWithinDebounceWindow_OnlyPersistsOnce()
+    {
+        // Regression test for the check-then-insert race: the kill loop and the
+        // extension's /report endpoint can call this concurrently in-process. Both
+        // calls must go through the same tracker instance (as they would via the
+        // singleton registration in DI) for the internal SemaphoreSlim to serialize them.
+        var sessionId = Guid.NewGuid();
+        _clock.UtcNow.Returns(DateTime.UtcNow);
+        var tracker = CreateTracker();
+
+        await Task.WhenAll(
+            tracker.RecordAppBlockedAsync(sessionId, "chrome"),
+            tracker.RecordAppBlockedAsync(sessionId, "chrome"));
+
+        var attempts = await tracker.GetAttemptsForSessionAsync(sessionId);
+        attempts.Should().ContainSingle();
+    }
+
+    [Fact]
     public async Task RecordAppBlockedAsync_CalledMoreThanTwoSecondsApart_PersistsBoth()
     {
         var sessionId = Guid.NewGuid();

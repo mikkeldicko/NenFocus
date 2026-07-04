@@ -11,6 +11,12 @@ public sealed class BlockedAttemptTracker : IBlockedAttemptTracker
     private readonly IDbContextFactory<NenFocusDbContext> _dbFactory;
     private readonly ISystemClock _clock;
 
+    // Serializes the debounce check-then-insert below. Attempts are reported from both
+    // the 2-second process-kill loop and the browser extension's /report endpoint, which
+    // can run concurrently in-process; without this, two calls landing inside the same
+    // debounce window could both read "no recent attempt" before either writes.
+    private readonly SemaphoreSlim _writeLock = new(1, 1);
+
     public BlockedAttemptTracker(IDbContextFactory<NenFocusDbContext> dbFactory, ISystemClock clock)
     {
         _dbFactory = dbFactory;
@@ -29,24 +35,32 @@ public sealed class BlockedAttemptTracker : IBlockedAttemptTracker
 
     private async Task SaveAttemptInternal(BlockedAttempt attempt)
     {
-        using var context = await _dbFactory.CreateDbContextAsync();
-
-        var threshold = _clock.UtcNow.AddSeconds(-2);
-
-        // SQLite can't apply the OccurredAt comparison in-query, so fetch the most
-        // recent row only and compare in C#.
-        var latest = await context.BlockedAttempts
-            .Where(a => a.SessionId == attempt.SessionId &&
-                        a.ResourceName == attempt.ResourceName)
-            .OrderByDescending(a => a.OccurredAt)
-            .FirstOrDefaultAsync();
-
-        bool alreadyLoggedRecently = latest is not null && latest.OccurredAt > threshold;
-
-        if (!alreadyLoggedRecently)
+        await _writeLock.WaitAsync();
+        try
         {
-            context.BlockedAttempts.Add(attempt);
-            await context.SaveChangesAsync();
+            using var context = await _dbFactory.CreateDbContextAsync();
+
+            var threshold = _clock.UtcNow.AddSeconds(-2);
+
+            // SQLite can't apply the OccurredAt comparison in-query, so fetch the most
+            // recent row only and compare in C#.
+            var latest = await context.BlockedAttempts
+                .Where(a => a.SessionId == attempt.SessionId &&
+                            a.ResourceName == attempt.ResourceName)
+                .OrderByDescending(a => a.OccurredAt)
+                .FirstOrDefaultAsync();
+
+            bool alreadyLoggedRecently = latest is not null && latest.OccurredAt > threshold;
+
+            if (!alreadyLoggedRecently)
+            {
+                context.BlockedAttempts.Add(attempt);
+                await context.SaveChangesAsync();
+            }
+        }
+        finally
+        {
+            _writeLock.Release();
         }
     }
 
