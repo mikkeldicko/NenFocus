@@ -20,7 +20,13 @@ This file is the canonical reference for every domain concept in NenFocus. It ex
 | **Planned Session** | A Session created via the Ritual triggered by a scheduled Focus Block; `Origin = Planned` |
 | **SessionOrigin** | Enum (`Spontaneous` \| `Planned`) that tags every Session with how it was initiated |
 | **Blocked Attempt** | An append-only fact recording a user's attempt to access a blocked app or site during a Session |
-| **Nen Contract** | *(Future)* A time-bounded commitment (day/week/month) with user-defined strictness rules governing block schedule changes |
+| **Nen Contract** | A sealed, time-bound commitment over a contiguous date range that governs allowed changes to the Focus/Background blocks within it; own aggregate root, does not own `PlannedBlock`s |
+| **Seal** | The act of finalising a Nen Contract; the only way a `NenContract` comes into existence — there is no persisted draft state in the domain |
+| **Strictness Rule** | Enum (`Locked` \| `DailyFlexibility` \| `DailyTimeBudget` \| `PeriodTimeBudget`) — one axis of post-seal mutability; interpretation of the rule against an edit's context is an Application-layer concern |
+| **Daily Floor** | The minimum completed Focus hours required per day within a Nen Contract; Focus-only, hard-checked against planned hours at Seal, soft-tracked (scored, not blocked) thereafter |
+| **Change Window** | An optional daily time-of-day window during which edits to *existing* blocks are permitted, with a configured per-day use limit; the use-count itself is tracked by the Application layer |
+| **Day Met** | A scoring outcome: a Nen Contract day is "met" if the Daily Floor is satisfied by that day's completed Focus hours AND no Focus block that day was missed |
+| **Broken** | A Nen Contract the user cancelled before its end date; only reachable if `AllowCancellation` was set true at Seal |
 | **Enforcement** | OS-level mechanisms (process kill, hosts file, registry, extension) that apply a Policy Slice |
 | **Post-Session** | The mandatory screen shown after a Session ends; displays stats, blocked attempts, and an optional reflection |
 | **Deep Module** | A module with significant functionality hidden behind a narrow, obvious API |
@@ -132,7 +138,7 @@ NenFocus has five pages accessible via the sidebar:
 
 | Layer | Artifact | Role |
 |-------|----------|------|
-| Domain | `BlockProfile` aggregate (`Aggregates/BlockProfile.cs`) | Owns the list of `BlockedApp` and `BlockedSite` value objects, the `WebsitePolicy`, and the profile type (`BlockType.Focus` or `BlockType.Background`) |
+| Domain | `BlockProfile` aggregate (`Entities/BlockProfile.cs`) | Owns the list of `BlockedApp` and `BlockedSite` value objects, the `WebsitePolicy`, and the profile type (`BlockType.Focus` or `BlockType.Background`) |
 | Domain | `BlockedApp`, `BlockedSite` value objects | Immutable; validated at construction. `BlockedSite` optionally carries a `TimeBudget`; a site with no `TimeBudget` is a plain hard block |
 | Domain | `WebsitePolicy` enum | `Blocklist` or `Allowlist` |
 | Application | `IBlockProfileRepository` | CRUD persistence contract |
@@ -506,24 +512,54 @@ ActivePolicySlice ComputeSlice(
 
 ---
 
-## Nen Contract *(Future — not yet built)*
+## Nen Contract *(Domain layer built — Application, Infrastructure, and UI not yet built)*
 
-**Definition:** A time-bounded commitment the user makes to a schedule of Focus Blocks and Background Blocks, with self-imposed rules governing how much the schedule can be changed during the commitment period. The name is inspired by the concept of binding agreements — the user is making a contract with themselves.
+**Definition:** A sealed, time-bound commitment the user makes to a schedule of Focus Blocks and Background Blocks over a contiguous date range, with self-imposed rules governing how much the schedule can be changed during the commitment period. The name is inspired by the concept of binding agreements — the user is making a contract with themselves.
 
-**Scope:** A Nen Contract covers a fixed period: one day, three days, one week, or one month.
+**Aggregate boundary:** `NenContract` is its own aggregate root. It does **not** own `PlannedBlock`s — blocks remain their own aggregate and legally exist outside any contract (uncommitted weeks). The link is a nullable `ContractId` on `PlannedBlock`: `null` means an ordinary, uncommitted block; set means the block is under that contract. Blocks predate contracts, are mutated directly by the existing drag/create/update paths, and the Daily Floor is a **soft, tracked** invariant after seal (flagged and scored as a miss, not hard-blocked) — there is no need for atomic multi-block invariants enforced inside the contract entity. Enforcement of Strictness Rules and Change Window use-limits is applied later by Application-layer guards that load the contract and inspect blocks separately; the domain only provides the rules and pure calculations.
 
-**Creation flow:** In the Planner page, the user selects a Nen Contract period → places Focus Blocks and Background Blocks throughout the period using existing Block Profiles → at the end, specifies the strictness rules for the Nen Contract.
+**Scope:** A Nen Contract covers a single contiguous date range (`StartDate`–`EndDate`, inclusive on both ends, `DateOnly`). Contiguity is structural — a single continuous range has no gaps by construction, so no separate contiguity check exists beyond `StartDate <= EndDate`.
 
-**Strictness rules (user-configurable, examples):**
-- **Fully locked:** No changes allowed during the Nen Contract period. Blocks cannot be moved, removed, or shortened. New blocks can still be added.
-- **Daily flexibility:** Within each day, the user can move blocks around, add or remove them freely, but only for the current or upcoming day.
-- **Time-budget (daily):** Blocks can be rearranged within a day, but the total block time for that day must remain the same (e.g. 4 hours of Focus Blocks planned = 4 hours must remain).
-- **Time-budget (period):** Same as daily, but the budget is tracked across the full Nen Contract period (e.g. user can do 2 fewer hours today if they add 2 hours on another day within the Nen Contract).
-- **Custom combinations:** The user picks which constraints apply.
+**Seal:** The act of finalising a contract. There is no persisted draft state in the domain — a `NenContract` comes into existence only via `NenContract.Seal(...)`, its sole factory method. Seal hard-validates the Daily Floor: it rejects the contract if any day in range is planned below the floor, using a caller-supplied per-day map of **Focus hours only** (Background block hours are never counted toward the floor — this is a Focus-only measure by design). On seal, `Status` becomes `Active` if the caller-supplied `sealedAt` is on or after `StartDate`, otherwise `Scheduled` — the domain never reads the clock itself; `sealedAt` is passed in, exactly like `Session.Start(DateTime startedAt)`.
 
-**Settings integration:** In the Settings page, the user can pre-save default strictness rules that are automatically applied when creating a new Nen Contract for a day, week, or month.
+**Lifecycle:** `Scheduled → Active → Completed`, with `Active → Broken` possible only if `AllowCancellation` was set `true` at seal. A later Infrastructure/Application heartbeat service (mirroring `ScheduledEnforcementService`) reads the clock and calls `Activate()` when the start date arrives and `Complete()` when the end date passes — the domain only exposes the guarded transitions.
 
-**Status:** Domain concept defined. No entities, commands, or UI built yet. To be interrogated via the Design Gap Protocol before implementation begins.
+**Strictness Rule (user-configurable):** Modelled as a single enum, not a value-object hierarchy — the four rules are points on one axis of post-seal mutability, and the logic that *interprets* a rule against an edit's context lives in Application-layer guards, not inside the rule itself. Same reasoning as the existing `BlockType` enum promotion (see `DESIGN_GAP_HISTORY.md` Gap 2).
+- **Locked:** No changes allowed during the contract period. Blocks cannot be moved, removed, or shortened. New blocks can still be added.
+- **DailyFlexibility:** Within each day, the user can move blocks around, add or remove them freely, but only for the current or upcoming day.
+- **DailyTimeBudget:** Blocks can be rearranged within a day, but the total block time for that day must remain the same.
+- **PeriodTimeBudget:** Same as daily, but the budget is tracked across the full contract period.
+
+**Daily Floor:** The minimum completed Focus hours required per day; `0` means disabled. The same pure comparison (`DailyFloor.IsSatisfiedBy(hours)`) serves both the Seal-time check (against *planned* Focus hours) and the later Day Met evaluation (against *completed* Focus hours) — intentionally shared, not duplicated.
+
+**Change Window:** An optional daily time-of-day window (`TimeOnly` start/end) during which edits to *existing* blocks are permitted, plus a configured `UsesPerDay` limit. The domain only answers "is this time inside the window" (`ChangeWindow.Contains(TimeOnly)`) — the use-count itself is stateful and tracked by the Application layer, not the domain.
+
+**Day Met:** A contract day is "met" if the Daily Floor is satisfied by that day's *completed* Focus hours AND no Focus block that day was missed. Evaluated via `NenContract.IsDayMet(DayFocusOutcome)`, where `DayFocusOutcome` carries the day's completed Focus hours and a missed-block flag, supplied by the Application layer.
+
+**Broken:** A contract the user cancelled before its end date. Only reachable if `AllowCancellation` was set `true` at seal; `Break()` throws otherwise.
+
+**Settings integration:** *(future)* In the Settings page, the user will be able to pre-save default strictness rules automatically applied when creating a new Nen Contract.
+
+**Block-profile deletion guard:** A profile cannot be deleted while referenced by a contract, a future planned block, or an active session. Not built in the domain layer — noted for a later Application-layer prompt.
+
+**Status:** Domain layer complete (`NenContract` aggregate, value objects, enums, events, `PlannedBlock.ContractId`). No commands, queries, repository, EF Core config, enforcement guards, use-count tracking, or UI built yet. To be interrogated via the Design Gap Protocol before each subsequent layer begins.
+
+**Technical mapping:**
+
+| Layer | Artifact | Role |
+|-------|----------|------|
+| Domain | `NenContract` aggregate (`Entities/NenContract.cs`) | Owns `Name`, `Goal`, `StartDate`/`EndDate` (`DateOnly`), `StrictnessRule`, `DailyFloor`, `ChangeWindow?`, `AllowCancellation`, `Status`. Factory `Seal(...)`; transitions `Activate(DateTime)`, `Complete(DateTime)`, `Break(DateTime)`; pure calculation `IsDayMet(DayFocusOutcome)` |
+| Domain | `NenContractGoal` value object (`ValueObjects/NenContractGoal.cs`) | Independent of `SessionGoal` by design — a session goal and a contract goal are distinct domain concepts that only coincidentally share validation rules today |
+| Domain | `DailyFloor` value object (`ValueObjects/DailyFloor.cs`) | Wraps required daily Focus hours (`0`–`24`); `IsSatisfiedBy(double)` is the sole pure comparison, reused at Seal and at Day Met evaluation |
+| Domain | `ChangeWindow` value object (`ValueObjects/ChangeWindow.cs`) | Wraps `Start`/`End` (`TimeOnly`) and the configured `UsesPerDay` limit; `Contains(TimeOnly)` is the sole pure containment check |
+| Domain | `DayFocusOutcome` value object (`ValueObjects/DayFocusOutcome.cs`) | Carries a day's completed Focus hours and a missed-Focus-block flag; input to `NenContract.IsDayMet()` |
+| Domain | `StrictnessRule` enum (`Enums/StrictnessRule.cs`) | `Locked`, `DailyFlexibility`, `DailyTimeBudget`, `PeriodTimeBudget` |
+| Domain | `NenContractStatus` enum (`Enums/NenContractStatus.cs`) | `Scheduled`, `Active`, `Completed`, `Broken` |
+| Domain | `NenContractSealedEvent`, `NenContractActivatedEvent`, `NenContractCompletedEvent`, `NenContractBrokenEvent` (`Events/`) | Raised from the corresponding `NenContract` methods, same mechanism as `Session`'s events |
+| Domain | `PlannedBlock.ContractId (Guid?)` | Additive; `null` = uncommitted block, set = block is under that contract; `AssignContract(Guid?)` mirrors `AssignProfile(Guid)`; `FocusBlock.Create`/`BackgroundBlock.Create` gained a trailing optional `contractId` param, default `null` |
+| Application | *(not yet built)* | Commands/queries to seal, activate, complete, break contracts; guards that interpret `StrictnessRule` against an edit's context; Change Window use-count tracking; block-profile deletion guard |
+| Infrastructure | *(not yet built)* | EF Core config/migration; heartbeat service to call `Activate()`/`Complete()` when dates arrive |
+| UI | *(not yet built)* | Planner wizard for creating a contract; banner/indicator for an active contract |
 
 ---
 

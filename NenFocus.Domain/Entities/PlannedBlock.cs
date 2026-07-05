@@ -8,6 +8,9 @@ public abstract class PlannedBlock
     public DateTime End { get; protected set; }
     public string? Title { get; protected set; }
 
+    /// <summary>Null means an ordinary, uncommitted block; set means the block is under that Nen Contract.</summary>
+    public Guid? ContractId { get; protected set; }
+
     protected PlannedBlock() { }
 
     public bool OverlapsWith(PlannedBlock other)
@@ -38,5 +41,10 @@ public abstract class PlannedBlock
     public void AssignProfile(Guid profileId)
     {
         BlockProfileId = profileId;
+    }
+
+    public void AssignContract(Guid? contractId)
+    {
+        ContractId = contractId;
     }
 }

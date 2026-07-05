@@ -184,4 +184,58 @@ public class PlannedBlockTests
 
         block.BlockProfileId.Should().Be(newProfileId);
     }
+
+    [Fact]
+    public void FocusBlock_Create_WithoutContractId_DefaultsToNull()
+    {
+        CreateFocusBlock().ContractId.Should().BeNull();
+    }
+
+    [Fact]
+    public void FocusBlock_Create_WithContractId_SetsIt()
+    {
+        var contractId = Guid.NewGuid();
+
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End, contractId: contractId);
+
+        block.ContractId.Should().Be(contractId);
+    }
+
+    [Fact]
+    public void BackgroundBlock_Create_WithoutContractId_DefaultsToNull()
+    {
+        CreateBackgroundBlock().ContractId.Should().BeNull();
+    }
+
+    [Fact]
+    public void BackgroundBlock_Create_WithContractId_SetsIt()
+    {
+        var contractId = Guid.NewGuid();
+
+        var block = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End, contractId: contractId);
+
+        block.ContractId.Should().Be(contractId);
+    }
+
+    [Fact]
+    public void AssignContract_UpdatesContractId()
+    {
+        var block = CreateFocusBlock();
+        var contractId = Guid.NewGuid();
+
+        block.AssignContract(contractId);
+
+        block.ContractId.Should().Be(contractId);
+    }
+
+    [Fact]
+    public void AssignContract_Null_ClearsContractId()
+    {
+        var block = CreateFocusBlock();
+        block.AssignContract(Guid.NewGuid());
+
+        block.AssignContract(null);
+
+        block.ContractId.Should().BeNull();
+    }
 }

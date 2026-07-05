@@ -9,7 +9,8 @@ public sealed class BackgroundBlock : PlannedBlock
         Guid blockProfileId,
         DateTime start,
         DateTime end,
-        string? title = null)
+        string? title = null,
+        Guid? contractId = null)
     {
         if (end <= start)
             throw new ArgumentException("End time must be after start time.");
@@ -20,7 +21,8 @@ public sealed class BackgroundBlock : PlannedBlock
             BlockProfileId = blockProfileId,
             Start = start,
             End = end,
-            Title = title
+            Title = title,
+            ContractId = contractId
         };
     }
 }
