@@ -73,4 +73,10 @@ public sealed class SessionRepository : ISessionRepository
             .Where(s => s.Status == SessionStatus.Active || s.Status == SessionStatus.OnBreak)
             .ToListAsync(ct);
     }
+
+    public async Task<bool> ExistsForOriginatingBlockAsync(Guid focusBlockId, CancellationToken ct = default)
+    {
+        return await _context.Sessions
+            .AnyAsync(s => s.OriginatingBlockId == focusBlockId, ct);
+    }
 }

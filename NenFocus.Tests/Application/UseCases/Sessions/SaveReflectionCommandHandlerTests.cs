@@ -50,6 +50,24 @@ public class SaveReflectionCommandHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_MissedSession_SetsReflectionAndSaves()
+    {
+        var session = Session.Create(
+            Guid.NewGuid(), new SessionGoal("(missed — no goal set)"), new SessionDuration(TimeSpan.FromMinutes(30)),
+            Guid.NewGuid(), SessionOrigin.Planned, originatingBlockId: Guid.NewGuid());
+        var scheduledStart = DateTime.UtcNow.AddHours(-2);
+        session.Miss(scheduledStart, scheduledStart.AddMinutes(30));
+        _sessions.GetByIdAsync(session.Id, Arg.Any<CancellationToken>()).Returns(session);
+
+        var result = await CreateHandler().HandleAsync(
+            new SaveReflectionCommand { SessionId = session.Id, Reflection = "Got distracted" });
+
+        result.Success.Should().BeTrue();
+        session.Reflection.Should().Be("Got distracted");
+        await _sessions.Received(1).SaveAsync(session, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task HandleAsync_SessionNotCompleted_FailsGracefully()
     {
         var session = Session.Create(

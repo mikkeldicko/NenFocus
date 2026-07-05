@@ -72,6 +72,25 @@ public class GetSessionHistoryQueryHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_MissedSession_ActualDurationIsZero()
+    {
+        var session = Session.Create(
+            Guid.NewGuid(), new SessionGoal("(missed — no goal set)"), new SessionDuration(TimeSpan.FromMinutes(60)),
+            Guid.NewGuid(), SessionOrigin.Planned, originatingBlockId: Guid.NewGuid());
+        var scheduledStart = new DateTime(2026, 1, 5, 10, 0, 0, DateTimeKind.Utc);
+        session.Miss(scheduledStart, scheduledStart.AddHours(1));
+        _sessions.GetHistoryAsync(Arg.Any<DateOnly>(), Arg.Any<DateOnly>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyList<Session>)[session]);
+        _profiles.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockProfile>)[]);
+
+        var result = await CreateHandler().HandleAsync(new GetSessionHistoryQuery { From = From, To = To });
+
+        var dto = result.Should().ContainSingle().Subject;
+        dto.ActualDurationMinutes.Should().Be(0);
+        dto.StartedAt.Should().Be(scheduledStart);
+    }
+
+    [Fact]
     public async Task HandleAsync_SessionNeverStarted_ActualDurationIsZero()
     {
         var session = Session.Create(

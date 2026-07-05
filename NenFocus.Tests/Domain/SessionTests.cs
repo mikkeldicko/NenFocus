@@ -260,6 +260,96 @@ public class SessionTests
     }
 
     [Fact]
+    public void SetReflection_OnMissedSession_Succeeds()
+    {
+        var blockId = Guid.NewGuid();
+        var session = CreatePlannedSession(blockId);
+        var scheduledStart = new DateTime(2026, 1, 1, 9, 0, 0, DateTimeKind.Utc);
+        session.Miss(scheduledStart, scheduledStart.AddHours(1));
+
+        session.SetReflection("Got distracted");
+
+        session.Reflection.Should().Be("Got distracted");
+    }
+
+    [Fact]
+    public void Miss_FromNotStarted_TransitionsAndRaisesEvent()
+    {
+        var blockId = Guid.NewGuid();
+        var session = CreatePlannedSession(blockId);
+        var scheduledStart = new DateTime(2026, 1, 1, 9, 0, 0, DateTimeKind.Utc);
+        var scheduledEnd = scheduledStart.AddHours(1);
+
+        session.Miss(scheduledStart, scheduledEnd);
+
+        session.Status.Should().Be(SessionStatus.Missed);
+        session.StartedAt.Should().Be(scheduledStart);
+        session.EndedAt.Should().Be(scheduledEnd);
+        var raised = session.DomainEvents.OfType<SessionMissedEvent>().Single();
+        raised.SessionId.Should().Be(session.Id);
+        raised.ScheduledStart.Should().Be(scheduledStart);
+        raised.ScheduledEnd.Should().Be(scheduledEnd);
+    }
+
+    [Fact]
+    public void Miss_WhenOriginSpontaneous_Throws()
+    {
+        var session = CreateSpontaneousSession();
+
+        var act = () => session.Miss(DateTime.UtcNow, DateTime.UtcNow.AddHours(1));
+
+        act.Should().Throw<InvalidOperationException>();
+    }
+
+    [Fact]
+    public void Miss_WhenAlreadyActive_Throws()
+    {
+        var session = CreatePlannedSession(Guid.NewGuid());
+        session.Start(DateTime.UtcNow);
+
+        var act = () => session.Miss(DateTime.UtcNow, DateTime.UtcNow.AddHours(1));
+
+        act.Should().Throw<InvalidOperationException>();
+    }
+
+    [Fact]
+    public void Miss_WhenAlreadyMissed_Throws()
+    {
+        var session = CreatePlannedSession(Guid.NewGuid());
+        var scheduledStart = DateTime.UtcNow;
+        session.Miss(scheduledStart, scheduledStart.AddHours(1));
+
+        var act = () => session.Miss(scheduledStart, scheduledStart.AddHours(1));
+
+        act.Should().Throw<InvalidOperationException>();
+    }
+
+    [Fact]
+    public void GetElapsedTime_WhenMissed_ReturnsZero_RegardlessOfStartEnd()
+    {
+        var session = CreatePlannedSession(Guid.NewGuid());
+        var scheduledStart = new DateTime(2026, 1, 1, 9, 0, 0, DateTimeKind.Utc);
+        session.Miss(scheduledStart, scheduledStart.AddHours(2));
+
+        session.GetElapsedTime(scheduledStart.AddHours(10)).Should().Be(TimeSpan.Zero);
+    }
+
+    [Fact]
+    public void GetElapsedTime_WhenCompleted_IsUnaffectedByMissedChange()
+    {
+        // Regression pin: the Missed short-circuit in GetElapsedTime must not
+        // touch the Completed path's existing EndedAt-based calculation.
+        var startedAt = new DateTime(2026, 1, 1, 10, 0, 0, DateTimeKind.Utc);
+        var session = CreateSpontaneousSession();
+        session.Start(startedAt);
+        session.Complete(startedAt.AddMinutes(15));
+
+        var elapsed = session.GetElapsedTime(startedAt.AddHours(5));
+
+        elapsed.Should().Be(TimeSpan.FromMinutes(15));
+    }
+
+    [Fact]
     public void GetElapsedTime_NotStarted_ReturnsNull()
     {
         var session = CreateSpontaneousSession();

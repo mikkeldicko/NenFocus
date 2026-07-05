@@ -20,4 +20,10 @@ public interface ISessionRepository
     Task<bool> HasActiveSessionAsync(CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<Session>> GetActiveSessionsAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Returns true if any session (of any status) already references the given
+    /// Focus block as its origin. Used to make missed-session creation idempotent.
+    /// </summary>
+    Task<bool> ExistsForOriginatingBlockAsync(Guid focusBlockId, CancellationToken ct = default);
 }

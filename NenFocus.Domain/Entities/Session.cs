@@ -107,11 +107,25 @@ public class Session : AggregateRoot
         Raise(new SessionEndedEvent(Id, endedAt));
     }
 
+    public void Miss(DateTime scheduledStart, DateTime scheduledEnd)
+    {
+        if (Origin != SessionOrigin.Planned)
+            throw new InvalidOperationException("Only a planned session can be missed.");
+
+        if (Status != SessionStatus.NotStarted)
+            throw new InvalidOperationException("Only a session that never started can be missed.");
+
+        Status = SessionStatus.Missed;
+        StartedAt = scheduledStart;
+        EndedAt = scheduledEnd;
+        Raise(new SessionMissedEvent(Id, scheduledStart, scheduledEnd));
+    }
+
     public void SetReflection(string? reflection)
     {
-        if (Status != SessionStatus.Completed)
+        if (Status != SessionStatus.Completed && Status != SessionStatus.Missed)
             throw new InvalidOperationException(
-                "Reflection can only be set on a completed session.");
+                "Reflection can only be set on a completed or missed session.");
 
         Reflection = string.IsNullOrWhiteSpace(reflection)
             ? null
@@ -120,6 +134,9 @@ public class Session : AggregateRoot
 
     public TimeSpan? GetElapsedTime(DateTime asOf)
     {
+        // A missed session never ran — its StartedAt/EndedAt hold the scheduled
+        // window (inherited from the originating block), not real elapsed time.
+        if (Status == SessionStatus.Missed) return TimeSpan.Zero;
         if (StartedAt is null) return null;
         return (EndedAt ?? asOf) - StartedAt.Value;
     }

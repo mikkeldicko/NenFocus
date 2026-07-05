@@ -17,8 +17,8 @@ public sealed class SaveReflectionCommandHandler : ICommandHandler<SaveReflectio
         var session = await _sessions.GetByIdAsync(command.SessionId, ct);
         if (session == null) return SaveReflectionResult.Fail("Session not found.");
 
-        if (session.Status != SessionStatus.Completed)
-            return SaveReflectionResult.Fail("Reflection can only be set on a completed session.");
+        if (session.Status != SessionStatus.Completed && session.Status != SessionStatus.Missed)
+            return SaveReflectionResult.Fail("Reflection can only be set on a completed or missed session.");
 
         session.SetReflection(command.Reflection);
 

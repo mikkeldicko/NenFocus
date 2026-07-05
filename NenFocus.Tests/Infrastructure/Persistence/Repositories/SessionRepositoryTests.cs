@@ -158,4 +158,30 @@ public class SessionRepositoryTests : SqliteRepositoryTestBase
 
         result.Should().ContainSingle(s => s.Id == active.Id);
     }
+
+    [Fact]
+    public async Task ExistsForOriginatingBlockAsync_NoSessionReferencesBlock_ReturnsFalse()
+    {
+        var result = await CreateRepository().ExistsForOriginatingBlockAsync(Guid.NewGuid());
+
+        result.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task ExistsForOriginatingBlockAsync_MissedSessionReferencesBlock_ReturnsTrue()
+    {
+        var blockId = Guid.NewGuid();
+        var repo = CreateRepository();
+        var session = Session.Create(
+            Guid.NewGuid(), new SessionGoal("(missed — no goal set)"), new SessionDuration(TimeSpan.FromMinutes(30)),
+            Guid.NewGuid(), SessionOrigin.Planned, originatingBlockId: blockId);
+        var scheduledStart = DateTime.UtcNow.AddHours(-1);
+        session.Miss(scheduledStart, scheduledStart.AddMinutes(30));
+        await repo.SaveAsync(session);
+        await Context.SaveChangesAsync();
+
+        var result = await CreateRepository().ExistsForOriginatingBlockAsync(blockId);
+
+        result.Should().BeTrue();
+    }
 }

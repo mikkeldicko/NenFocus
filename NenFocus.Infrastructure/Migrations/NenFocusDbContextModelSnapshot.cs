@@ -124,6 +124,9 @@ namespace NenFocus.Infrastructure.Migrations
                     b.Property<Guid>("BlockProfileId")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("ContractId")
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime>("End")
                         .HasColumnType("TEXT");
 
