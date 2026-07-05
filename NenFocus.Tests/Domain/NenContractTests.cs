@@ -215,29 +215,33 @@ public class NenContractTests
     }
 
     [Theory]
-    [InlineData(4, false, true)]  // floor met, nothing missed -> met
-    [InlineData(3.9, false, false)] // floor not met -> not met
-    [InlineData(4, true, false)]  // floor met but a block was missed -> not met
-    [InlineData(5, true, false)]
-    public void IsDayMet_EvaluatesFloorAndMissedFlag(double completedHours, bool hasMissed, bool expectedMet)
+    [InlineData(3.9, false)] // below floor -> not met
+    [InlineData(4, true)]    // exactly at floor -> met
+    [InlineData(5, true)]    // above floor -> met
+    public void IsDayMet_ComparesHoursAgainstFloor(double completedHours, bool expectedMet)
     {
         var contract = Seal(dailyFloor: new DailyFloor(4));
 
-        var outcome = new DayFocusOutcome(completedHours, hasMissed);
+        contract.IsDayMet(completedHours).Should().Be(expectedMet);
+    }
 
-        contract.IsDayMet(outcome).Should().Be(expectedMet);
+    [Fact]
+    public void IsDayMet_MetEvenWhenABlockWasMissed_AsLongAsHoursMeetFloor()
+    {
+        // The day verdict is hours-only now — a missed/late block only costs hours
+        // that must be made up elsewhere; it does not fail the day directly.
+        var contract = Seal(dailyFloor: new DailyFloor(4));
+
+        contract.IsDayMet(completedFocusHours: 4).Should().BeTrue();
     }
 
     [Theory]
-    [InlineData(0, false, true)]   // floorless, nothing completed, nothing missed -> met
-    [InlineData(2, false, true)]   // floorless, some completed, nothing missed -> met
-    [InlineData(2, true, false)]   // floorless, but a Focus block was missed -> not met
-    public void IsDayMet_FloorlessContract_MetOnlyWhenNothingMissed(double completedHours, bool hasMissed, bool expectedMet)
+    [InlineData(0)]
+    [InlineData(2)]
+    public void IsDayMet_FloorlessContract_AlwaysMet(double completedHours)
     {
         var contract = Seal(dailyFloor: DailyFloor.None, plannedFocusHoursByDay: new Dictionary<DateOnly, double>());
 
-        var outcome = new DayFocusOutcome(completedHours, hasMissed);
-
-        contract.IsDayMet(outcome).Should().Be(expectedMet);
+        contract.IsDayMet(completedHours).Should().BeTrue();
     }
 }

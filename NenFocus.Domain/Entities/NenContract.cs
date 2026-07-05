@@ -111,9 +111,10 @@ public class NenContract : AggregateRoot
     }
 
     /// <summary>
-    /// A day is met if the daily floor is satisfied by that day's completed
-    /// Focus hours AND no Focus block that day was missed.
+    /// A day is met if the daily floor is satisfied by that day's completed Focus
+    /// hours. Missed or late blocks do not fail the day directly — they only cost
+    /// hours that must be made up elsewhere; if the hours are made up, the day is met.
     /// </summary>
-    public bool IsDayMet(DayFocusOutcome outcome)
-        => DailyFloor.IsSatisfiedBy(outcome.CompletedFocusHours) && !outcome.HasMissedFocusBlock;
+    public bool IsDayMet(double completedFocusHours)
+        => DailyFloor.IsSatisfiedBy(completedFocusHours);
 }

@@ -25,7 +25,8 @@ This file is the canonical reference for every domain concept in NenFocus. It ex
 | **Strictness Rule** | Enum (`Locked` \| `DailyFlexibility` \| `DailyTimeBudget` \| `PeriodTimeBudget`) — one axis of post-seal mutability; interpretation of the rule against an edit's context is an Application-layer concern |
 | **Daily Floor** | The minimum completed Focus hours required per day within a Nen Contract; Focus-only, hard-checked against planned hours at Seal, soft-tracked (scored, not blocked) thereafter |
 | **Change Window** | An optional daily time-of-day window during which edits to *existing* blocks are permitted, with a configured per-day use limit; the use-count itself is tracked by the Application layer |
-| **Day Met** | A scoring outcome: a Nen Contract day is "met" if the Daily Floor is satisfied by that day's completed Focus hours AND no Focus block that day was missed |
+| **Day Met** | A scoring outcome: a Nen Contract day is "met" if that day's completed Focus hours ≥ the Daily Floor — full stop. A missed or late Focus block does not fail the day directly; it only costs hours that must be made up |
+| **FocusBlockOutcome** | Enum (`CompletedOnTime` \| `StartedLate` \| `Missed`) classifying how a single Focus block resolved; a per-block display concept, separate from the day verdict |
 | **Broken** | A Nen Contract the user cancelled before its end date; only reachable if `AllowCancellation` was set true at Seal |
 | **Enforcement** | OS-level mechanisms (process kill, hosts file, registry, extension) that apply a Policy Slice |
 | **Post-Session** | The mandatory screen shown after a Session ends; displays stats, blocked attempts, and an optional reflection |
@@ -534,7 +535,9 @@ ActivePolicySlice ComputeSlice(
 
 **Change Window:** An optional daily time-of-day window (`TimeOnly` start/end) during which edits to *existing* blocks are permitted, plus a configured `UsesPerDay` limit. The domain only answers "is this time inside the window" (`ChangeWindow.Contains(TimeOnly)`) — the use-count itself is stateful and tracked by the Application layer, not the domain.
 
-**Day Met:** A contract day is "met" if the Daily Floor is satisfied by that day's *completed* Focus hours AND no Focus block that day was missed. Evaluated via `NenContract.IsDayMet(DayFocusOutcome)`, where `DayFocusOutcome` carries the day's completed Focus hours and a missed-block flag, supplied by the Application layer.
+**Day Met:** A contract day is "met" if that day's *completed* Focus hours ≥ the Daily Floor — evaluated via `NenContract.IsDayMet(double completedFocusHours)`, a single comparison. A missed or late Focus block does **not** fail the day directly; it only costs hours that must be made up elsewhere (another planned block, a mid-contract addition, or a spontaneous session) — if the hours are made up, the day is met. This was a deliberate correction from an earlier design that also required "no missed block"; the missed/late information didn't disappear, it moved to the per-block `FocusBlockOutcome` classification below, which is a display concern, not a day-verdict concern. Summing a day's actual completed Focus hours (across all contributing sessions) is an Application-layer computation — not part of this amendment.
+
+**FocusBlockOutcome:** How a single Focus block under a contract resolved — `CompletedOnTime`, `StartedLate`, or `Missed` — classified purely from its scheduled window and ritual-completion state via `IFocusBlockOutcomeClassifier.Classify(scheduledStart, scheduledEnd, ritualCompletedAt, asOf)`. Returns `null` when no verdict has been reached yet (the block is still open — in progress or future — and could still be started late right up to its scheduled end). The missed/late boundary is the block's **scheduled end**, not its start: a ritual completed after the start but before the end is `StartedLate`; only once the end has passed with no valid ritual (or the ritual itself lands at/after the end) is it `Missed`. This mirrors the Application layer's later completed-hours formula (`scheduledEnd − ritualCompletedAt`, clamped), which is out of scope for the domain — this classifier only produces the enum, never a duration.
 
 **Broken:** A contract the user cancelled before its end date. Only reachable if `AllowCancellation` was set `true` at seal; `Break()` throws otherwise.
 
@@ -548,16 +551,17 @@ ActivePolicySlice ComputeSlice(
 
 | Layer | Artifact | Role |
 |-------|----------|------|
-| Domain | `NenContract` aggregate (`Entities/NenContract.cs`) | Owns `Name`, `Goal`, `StartDate`/`EndDate` (`DateOnly`), `StrictnessRule`, `DailyFloor`, `ChangeWindow?`, `AllowCancellation`, `Status`. Factory `Seal(...)`; transitions `Activate(DateTime)`, `Complete(DateTime)`, `Break(DateTime)`; pure calculation `IsDayMet(DayFocusOutcome)` |
+| Domain | `NenContract` aggregate (`Entities/NenContract.cs`) | Owns `Name`, `Goal`, `StartDate`/`EndDate` (`DateOnly`), `StrictnessRule`, `DailyFloor`, `ChangeWindow?`, `AllowCancellation`, `Status`. Factory `Seal(...)`; transitions `Activate(DateTime)`, `Complete(DateTime)`, `Break(DateTime)`; pure calculation `IsDayMet(double completedFocusHours)` |
 | Domain | `NenContractGoal` value object (`ValueObjects/NenContractGoal.cs`) | Independent of `SessionGoal` by design — a session goal and a contract goal are distinct domain concepts that only coincidentally share validation rules today |
 | Domain | `DailyFloor` value object (`ValueObjects/DailyFloor.cs`) | Wraps required daily Focus hours (`0`–`24`); `IsSatisfiedBy(double)` is the sole pure comparison, reused at Seal and at Day Met evaluation |
 | Domain | `ChangeWindow` value object (`ValueObjects/ChangeWindow.cs`) | Wraps `Start`/`End` (`TimeOnly`) and the configured `UsesPerDay` limit; `Contains(TimeOnly)` is the sole pure containment check |
-| Domain | `DayFocusOutcome` value object (`ValueObjects/DayFocusOutcome.cs`) | Carries a day's completed Focus hours and a missed-Focus-block flag; input to `NenContract.IsDayMet()` |
+| Domain | `FocusBlockOutcome` enum (`Enums/FocusBlockOutcome.cs`) | `CompletedOnTime`, `StartedLate`, `Missed` — per-block display classification, independent of the day verdict |
+| Domain | `IFocusBlockOutcomeClassifier` / `FocusBlockOutcomeClassifier` (`Services/`) | Stateless domain service, same pattern as `IPolicyEngine`/`PolicyEngine`. `Classify(scheduledStart, scheduledEnd, ritualCompletedAt, asOf)` returns `FocusBlockOutcome?`; `null` means no verdict yet (still open). Missed/late boundary is the block's scheduled **end**, not its start |
 | Domain | `StrictnessRule` enum (`Enums/StrictnessRule.cs`) | `Locked`, `DailyFlexibility`, `DailyTimeBudget`, `PeriodTimeBudget` |
 | Domain | `NenContractStatus` enum (`Enums/NenContractStatus.cs`) | `Scheduled`, `Active`, `Completed`, `Broken` |
 | Domain | `NenContractSealedEvent`, `NenContractActivatedEvent`, `NenContractCompletedEvent`, `NenContractBrokenEvent` (`Events/`) | Raised from the corresponding `NenContract` methods, same mechanism as `Session`'s events |
 | Domain | `PlannedBlock.ContractId (Guid?)` | Additive; `null` = uncommitted block, set = block is under that contract; `AssignContract(Guid?)` mirrors `AssignProfile(Guid)`; `FocusBlock.Create`/`BackgroundBlock.Create` gained a trailing optional `contractId` param, default `null` |
-| Application | *(not yet built)* | Commands/queries to seal, activate, complete, break contracts; guards that interpret `StrictnessRule` against an edit's context; Change Window use-count tracking; block-profile deletion guard |
+| Application | *(not yet built)* | Commands/queries to seal, activate, complete, break contracts; guards that interpret `StrictnessRule` against an edit's context; Change Window use-count tracking; block-profile deletion guard; the completed-hours formula (`scheduledEnd − ritualCompletedAt`, clamped) that sums a day's actual Focus hours for `IsDayMet` and drives the recap's per-block `FocusBlockOutcome` display |
 | Infrastructure | *(not yet built)* | EF Core config/migration; heartbeat service to call `Activate()`/`Complete()` when dates arrive |
 | UI | *(not yet built)* | Planner wizard for creating a contract; banner/indicator for an active contract |
 
