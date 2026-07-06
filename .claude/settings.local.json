@@ -30,7 +30,19 @@
       "Bash(echo \"exit: $?\")",
       "Read(//c/Users/mikke/AppData/Roaming/NenFocus/**)",
       "Bash(tasklist)",
-      "Bash(awk '{print $1}')"
+      "Bash(awk '{print $1}')",
+      "Bash(grep -iE \"\\\\.db$|migration_temp|scratchpad\")",
+      "Bash(sed -i '$d' NenFocus/Views/BlockPresetPageView.axaml)",
+      "Bash(printf '\\\\t<x:Code><![CDATA[\\\\n\\\\t\\\\tusing Avalonia.Controls;\\\\n\\\\t\\\\tusing Avalonia.Interactivity;\\\\n\\\\t\\\\tusing Avalonia.Platform.Storage;\\\\n\\\\t\\\\tusing NenFocus.ViewModels.Pages;\\\\n\\\\t\\\\tusing System.IO;\\\\n\\\\n\\\\t\\\\tprivate async void BrowseForApp_Click\\(object? sender, RoutedEventArgs e\\)\\\\n\\\\t\\\\t{\\\\n\\\\t\\\\t\\\\tvar topLevel = TopLevel.GetTopLevel\\(this\\);\\\\n\\\\t\\\\t\\\\tif \\(topLevel?.StorageProvider is null\\) return;\\\\n\\\\n\\\\t\\\\t\\\\tvar initialFolder = await topLevel.StorageProvider.TryGetFolderFromPathAsync\\(@\"C:\\\\\\\\Program Files\"\\);\\\\n\\\\n\\\\t\\\\t\\\\tvar files = await topLevel.StorageProvider.OpenFilePickerAsync\\(new FilePickerOpenOptions\\\\n\\\\t\\\\t\\\\t{\\\\n\\\\t\\\\t\\\\t\\\\tTitle = \"Select an application\",\\\\n\\\\t\\\\t\\\\t\\\\tAllowMultiple = false,\\\\n\\\\t\\\\t\\\\t\\\\tSuggestedStartLocation = initialFolder,\\\\n\\\\t\\\\t\\\\t\\\\tFileTypeFilter = new[]\\\\n\\\\t\\\\t\\\\t\\\\t{\\\\n\\\\t\\\\t\\\\t\\\\t\\\\tnew FilePickerFileType\\(\"Executable\"\\) { Patterns = new[] { \"*.exe\" } }\\\\n\\\\t\\\\t\\\\t\\\\t}\\\\n\\\\t\\\\t\\\\t}\\);\\\\n\\\\n\\\\t\\\\t\\\\tif \\(files.Count > 0 && DataContext is BlockPresetPageViewModel vm\\)\\\\n\\\\t\\\\t\\\\t{\\\\n\\\\t\\\\t\\\\t\\\\tvar processName = Path.GetFileNameWithoutExtension\\(files[0].Path.LocalPath\\).ToLower\\(\\);\\\\n\\\\t\\\\t\\\\t\\\\tvm.AddAppFromExePath\\(processName\\);\\\\n\\\\t\\\\t\\\\t}\\\\n\\\\t\\\\t}\\\\n\\\\t]]></x:Code>\\\\n</UserControl>\\\\n')",
+      "Bash(sed -i '198s/Margin=\"{Binding TopMargin}\"/Margin=\"0,-6,0,0\"/' NenFocus/Views/PlannerPageView.axaml)",
+      "Bash(sed -i '193s/<Grid ColumnDefinitions/<Grid Padding=\"0,10,0,0\" ColumnDefinitions/' NenFocus/Views/PlannerPageView.axaml)",
+      "Bash(find .claude/skills -maxdepth 1 -type d)",
+      "Bash(grep -Hm1 '^description:' .claude/skills/*/SKILL.md)",
+      "Read(//c/Users/mikke/source/repos/NenFocus/**)",
+      "Read(//c//**)",
+      "PowerShell(Get-ChildItem *)",
+      "Bash(nohup dotnet \"NenFocus/bin/Debug/net9.0-windows10.0.19041.0/NenFocus.dll\")",
+      "Bash(disown)"
     ]
   }
 }
