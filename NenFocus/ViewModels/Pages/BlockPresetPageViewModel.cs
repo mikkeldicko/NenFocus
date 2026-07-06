@@ -1,8 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using Avalonia;
+using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using NenFocus.Application.DTOs;
@@ -331,6 +335,35 @@ public partial class BlockPresetPageViewModel : ViewModelBase
         if (!string.IsNullOrEmpty(processName) &&
             !FormApps.Contains(processName, StringComparer.OrdinalIgnoreCase))
             FormApps.Add(processName);
+    }
+
+    [RelayCommand]
+    private async Task BrowseForApp()
+    {
+        if (Avalonia.Application.Current?.ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime desktop)
+            return;
+        if (desktop.MainWindow?.StorageProvider is not { } storage)
+            return;
+
+        var initialFolder = await storage.TryGetFolderFromPathAsync(
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles));
+
+        var files = await storage.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Select an application",
+            AllowMultiple = false,
+            SuggestedStartLocation = initialFolder,
+            FileTypeFilter = new[]
+            {
+                new FilePickerFileType("Executable") { Patterns = new[] { "*.exe" } }
+            }
+        });
+
+        if (files.Count > 0)
+        {
+            var processName = Path.GetFileNameWithoutExtension(files[0].Path.LocalPath).ToLower();
+            AddAppFromExePath(processName);
+        }
     }
 
     [RelayCommand]

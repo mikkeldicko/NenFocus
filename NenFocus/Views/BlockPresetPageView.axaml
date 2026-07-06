@@ -396,7 +396,7 @@
 								Margin="32,16,32,0" Spacing="12">
 						<Button Classes="policy-btn" Height="36"
 								HorizontalAlignment="Left"
-								Click="BrowseForApp_Click">
+								Command="{Binding BrowseForAppCommand}">
 							<StackPanel Orientation="Horizontal" Spacing="8">
 								<TextBlock Text="📂" FontSize="12" VerticalAlignment="Center"/>
 								<TextBlock Text="Browse for app…" VerticalAlignment="Center"/>

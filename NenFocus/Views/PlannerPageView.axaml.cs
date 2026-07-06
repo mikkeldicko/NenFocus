@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Threading;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using NenFocus.Domain.Enums;
@@ -31,9 +32,12 @@ public partial class PlannerPageView : UserControl
     private Point _dragStartPoint;       // pointer position at press, relative to canvas
     private double _tileOriginalTop;
     private double _tileOriginalHeight;
+    private int _effectiveDragColumn;    // column the pointer is currently over (changes on cross-day drag)
 
     private const double DragThresholdPx = 4.0;
     private const double ResizeHotZonePx = 10.0;
+
+    private bool _scrolledToCurrentTime; // set true after initial scroll; resets on view recreation
 
     // ── Ghost: drag-create visual (persists until form closes or RebuildTiles) ──
     private Border? _createGhost;
@@ -176,6 +180,28 @@ public partial class PlannerPageView : UserControl
             canvas.SizeChanged -= OnCanvasSizeChanged;
             canvas.SizeChanged += OnCanvasSizeChanged;
         }
+
+        if (!_scrolledToCurrentTime)
+            Dispatcher.UIThread.Post(ScrollToCurrentTime, Avalonia.Threading.DispatcherPriority.Loaded);
+    }
+
+    private void ScrollToCurrentTime()
+    {
+        if (_vm is null || !_vm.IsTodayInView) return;
+
+        var scroller = this.FindControl<ScrollViewer>("GridScroller");
+        if (scroller is null) return;
+
+        double contentH = _vm.GridContentHeight;
+        double viewportH = scroller.Viewport.Height;
+        if (viewportH <= 0) return;
+
+        double targetY = _vm.CurrentTimeY - (viewportH / 2.0);
+        double maxY = Math.Max(0, contentH - viewportH);
+        targetY = Math.Clamp(targetY, 0, maxY);
+
+        scroller.Offset = new Vector(scroller.Offset.X, targetY);
+        _scrolledToCurrentTime = true;
     }
 
     private void OnCanvasSizeChanged(object? sender, Avalonia.Controls.SizeChangedEventArgs e)
@@ -338,6 +364,25 @@ public partial class PlannerPageView : UserControl
         double rawDeltaY = delta.Y;
         double totalH    = PlannerPageViewModel.HourRowHeight * PlannerPageViewModel.TotalHours;
 
+        // ── Cross-day: track which column the pointer is over ─────────────
+        // Use the absolute pointer position (pos.X), not the drag delta (delta.X),
+        // so the tile snaps to the next column as soon as the pointer crosses the
+        // boundary, regardless of where inside the tile the drag started.
+        if (_dragKind is DragKind.MovePending or DragKind.Moving)
+        {
+            double canvasWidth = _dragCanvas.Bounds.Width;
+            if (canvasWidth > 0)
+            {
+                int columnOffset = (int)Math.Floor(pos.X / canvasWidth);
+                int targetColumn = Math.Clamp(_dragTile!.ColumnIndex + columnOffset, 0, 6);
+                if (targetColumn != _effectiveDragColumn)
+                {
+                    _effectiveDragColumn = targetColumn;
+                    MoveTileGhostToColumn(targetColumn);
+                }
+            }
+        }
+
         switch (_dragKind)
         {
             case DragKind.Moving:
@@ -447,11 +492,11 @@ public partial class PlannerPageView : UserControl
             var newLocalEnd   = PlannerDragMath.YToSnappedTime(finalBottom, PlannerPageViewModel.FirstHour, PlannerPageViewModel.HourRowHeight);
             (newLocalStart, newLocalEnd) = PlannerDragMath.ClampRange(newLocalStart, newLocalEnd, PlannerPageViewModel.FirstHour);
 
-            var dayDate     = _vm.WeekStart.AddDays(tile.ColumnIndex).Date;
+            var dayDate     = _vm.WeekStart.AddDays(_effectiveDragColumn).Date;
             var newStartUtc = DateTime.SpecifyKind(dayDate.Add(newLocalStart), DateTimeKind.Local).ToUniversalTime();
             var newEndUtc   = DateTime.SpecifyKind(dayDate.Add(newLocalEnd),   DateTimeKind.Local).ToUniversalTime();
 
-            var dayTiles = _vm.Tiles.Where(t => t.ColumnIndex == tile.ColumnIndex);
+            var dayTiles = _vm.Tiles.Where(t => t.ColumnIndex == _effectiveDragColumn);
             if (PlannerDragMath.WouldCollide(tile.Id, tile.IsFocus, newStartUtc, newEndUtc, dayTiles))
             {
                 SnapTileBack();
@@ -484,9 +529,10 @@ public partial class PlannerPageView : UserControl
         _dragStartPoint     = posInCanvas;
         _tileOriginalTop    = Canvas.GetTop(btn);
         _tileOriginalHeight = btn.Height; // explicitly-set property, never 0
-        _dragButton         = btn;
-        _dragCanvas         = ownerCanvas;
-        _dragTile           = tile;
+        _dragButton          = btn;
+        _dragCanvas          = ownerCanvas;
+        _dragTile            = tile;
+        _effectiveDragColumn = tile.ColumnIndex;
 
         bool startLocked = _vm.IsTileStartLocked(tile.Id);
 
@@ -566,6 +612,30 @@ public partial class PlannerPageView : UserControl
         _tileGhostCanvas = canvas;
 
         UpdateTileGhostLabel();
+    }
+
+    /// <summary>
+    /// Moves the tile ghost from its current canvas to the target day column's canvas,
+    /// preserving vertical position. No-op if the ghost is already on the target column.
+    /// </summary>
+    private void MoveTileGhostToColumn(int columnIndex)
+    {
+        if (_tileGhost is null || _tileGhostCanvas is null || _dayColumns.Length != 7) return;
+
+        var newCanvas = _dayColumns[columnIndex].Children.OfType<Canvas>().FirstOrDefault();
+        if (newCanvas is null || newCanvas == _tileGhostCanvas) return;
+
+        double top    = Canvas.GetTop(_tileGhost);
+        double height = _tileGhost.Height;
+
+        _tileGhostCanvas.Children.Remove(_tileGhost);
+        newCanvas.Children.Add(_tileGhost);
+        _tileGhostCanvas = newCanvas;
+
+        Canvas.SetTop(_tileGhost, top);
+        Canvas.SetLeft(_tileGhost, 2);
+        _tileGhost.Height = height;
+        _tileGhost.Width  = Math.Max(0, newCanvas.Bounds.Width - 4);
     }
 
     private void UpdateTileGhostLabel()
@@ -696,10 +766,11 @@ public partial class PlannerPageView : UserControl
     {
         if (_dragButton is not null) _dragButton.Opacity = 1.0;
         RemoveTileGhost();
-        _dragKind   = DragKind.None;
-        _dragTile   = null;
-        _dragButton = null;
-        _dragCanvas = null;
+        _dragKind            = DragKind.None;
+        _dragTile            = null;
+        _dragButton          = null;
+        _dragCanvas          = null;
+        _effectiveDragColumn = 0;
     }
 
     private static string FormatTime(TimeSpan t) =>

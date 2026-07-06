@@ -17,7 +17,7 @@
 		<Style Selector="Border.dayHeader">
 			<Setter Property="Background" Value="#FFFFFF"/>
 			<Setter Property="BorderBrush" Value="#E6E6EE"/>
-			<Setter Property="BorderThickness" Value="0,0,1,1"/>
+			<Setter Property="BorderThickness" Value="0,0,1,0"/>
 			<Setter Property="Padding" Value="0,10"/>
 		</Style>
 		<Style Selector="Border.dayHeader.today">
@@ -27,7 +27,7 @@
 		<Style Selector="Border.hourLabel">
 			<Setter Property="Height" Value="56"/>
 			<Setter Property="BorderBrush" Value="#E6E6EE"/>
-			<Setter Property="BorderThickness" Value="0,0,1,1"/>
+			<Setter Property="BorderThickness" Value="0,0,1,0"/>
 			<Setter Property="Padding" Value="8,0"/>
 		</Style>
 
@@ -193,9 +193,9 @@
 						<Grid ColumnDefinitions="64,*,*,*,*,*,*,*">
 							<ItemsControl Grid.Column="0" ItemsSource="{Binding HourLabels}">
 								<ItemsControl.ItemTemplate>
-									<DataTemplate>
+									<DataTemplate DataType="comp:HourLabelViewModel">
 										<Border Classes="hourLabel">
-											<TextBlock Text="{Binding Label}" FontSize="11" Foreground="#7A7A8C" VerticalAlignment="Top" Margin="0,-6,0,0"/>
+											<TextBlock Text="{Binding Label}" IsVisible="{Binding IsIntermediate}" FontSize="11" Foreground="#7A7A8C" VerticalAlignment="Top" Margin="0,-6,0,0"/>
 										</Border>
 									</DataTemplate>
 								</ItemsControl.ItemTemplate>
