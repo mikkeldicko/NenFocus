@@ -64,9 +64,4 @@
 		<ProjectReference Include="..\NenFocus.Infrastructure\NenFocus.Infrastructure.csproj" />
 	</ItemGroup>
 
-	<ItemGroup>
-		<Compile Update="Views\BlockPresetPageView.axaml.cs">
-			<DependentUpon>BlockPresetPageView.axaml</DependentUpon>
-		</Compile>
-	</ItemGroup>
 </Project>
