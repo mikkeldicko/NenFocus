@@ -129,7 +129,7 @@ public class StartSessionCommandHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_Planned_OriginatingBlockNoLongerExists_StillSucceeds()
+    public async Task HandleAsync_Planned_OriginatingBlockNoLongerExists_Fails()
     {
         var blockId = Guid.NewGuid();
         _plannedBlocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns((PlannedBlock?)null);
@@ -137,7 +137,53 @@ public class StartSessionCommandHandlerTests
         var command = SpontaneousCommand() with { OriginatingBlockId = blockId };
         var result = await CreateHandler().HandleAsync(command, CancellationToken.None);
 
-        result.Success.Should().BeTrue();
+        result.Success.Should().BeFalse();
         await _plannedBlocks.DidNotReceive().SaveAsync(Arg.Any<PlannedBlock>(), Arg.Any<CancellationToken>());
+        await _sessions.DidNotReceive().SaveAsync(Arg.Any<Session>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task HandleAsync_Planned_DoesNotTreatOwnOriginatingBlockAsConflict()
+    {
+        var blockId = Guid.NewGuid();
+        var ownBlock = FocusBlock.Create(blockId, Guid.NewGuid(), Now.AddMinutes(-5), Now.AddMinutes(55));
+        _plannedBlocks.GetForRangeAsync(Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyList<PlannedBlock>)[ownBlock]);
+        _plannedBlocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns(ownBlock);
+
+        var command = SpontaneousCommand() with { OriginatingBlockId = blockId };
+        var result = await CreateHandler().HandleAsync(command, CancellationToken.None);
+
+        result.Success.Should().BeTrue();
+        ownBlock.RitualCompletedAt.Should().Be(Now);
+    }
+
+    [Fact]
+    public async Task HandleAsync_Planned_OriginatingBlockWindowAlreadyClosed_Fails()
+    {
+        var blockId = Guid.NewGuid();
+        var closedBlock = FocusBlock.Create(blockId, Guid.NewGuid(), Now.AddHours(-2), Now.AddHours(-1));
+        _plannedBlocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns(closedBlock);
+
+        var command = SpontaneousCommand() with { OriginatingBlockId = blockId };
+        var result = await CreateHandler().HandleAsync(command, CancellationToken.None);
+
+        result.Success.Should().BeFalse();
+        await _sessions.DidNotReceive().SaveAsync(Arg.Any<Session>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task HandleAsync_Planned_SessionAlreadyExistsForBlock_Fails()
+    {
+        var blockId = Guid.NewGuid();
+        var focusBlock = FocusBlock.Create(blockId, Guid.NewGuid(), Now.AddMinutes(-1), Now.AddHours(1));
+        _plannedBlocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns(focusBlock);
+        _sessions.ExistsForOriginatingBlockAsync(blockId, Arg.Any<CancellationToken>()).Returns(true);
+
+        var command = SpontaneousCommand() with { OriginatingBlockId = blockId };
+        var result = await CreateHandler().HandleAsync(command, CancellationToken.None);
+
+        result.Success.Should().BeFalse();
+        await _sessions.DidNotReceive().SaveAsync(Arg.Any<Session>(), Arg.Any<CancellationToken>());
     }
 }

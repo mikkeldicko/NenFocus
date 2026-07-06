@@ -123,4 +123,15 @@ public sealed class PlannedBlockRepository : IPlannedBlockRepository
             .OfType<FocusBlock>()
             .AnyAsync(b => b.Start <= at && b.End > at, cancellationToken);
     }
+
+    public async Task<IReadOnlyList<FocusBlock>> GetUnresolvedFocusBlocksAsync(
+        DateTime asOf,
+        CancellationToken cancellationToken = default)
+    {
+        return await _context.PlannedBlocks
+            .OfType<FocusBlock>()
+            .Where(b => b.End < asOf && b.RitualCompletedAt == null)
+            .OrderBy(b => b.Start)
+            .ToListAsync(cancellationToken);
+    }
 }

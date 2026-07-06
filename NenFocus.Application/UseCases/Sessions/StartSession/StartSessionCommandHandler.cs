@@ -39,6 +39,7 @@ public sealed class StartSessionCommandHandler
         var upcomingBlocks = await _plannedBlocks.GetForRangeAsync(now, requestedEnd, ct);
         var conflictingBlock = upcomingBlocks
             .OfType<FocusBlock>()
+            .Where(b => b.Id != command.OriginatingBlockId)
             .OrderBy(b => b.Start)
             .FirstOrDefault();
 
@@ -52,6 +53,22 @@ public sealed class StartSessionCommandHandler
 
             return StartSessionResult.Fail(
                 "A focus block is currently active. Please complete the Ritual instead of starting a spontaneous session.");
+        }
+
+        FocusBlock? originatingBlock = null;
+        if (command.OriginatingBlockId.HasValue)
+        {
+            originatingBlock = await _plannedBlocks.GetByIdAsync(command.OriginatingBlockId.Value, ct) as FocusBlock;
+
+            if (originatingBlock is null)
+                return StartSessionResult.Fail("The originating focus block was not found.");
+
+            if (now >= originatingBlock.End)
+                return StartSessionResult.Fail(
+                    "This focus block's window has already closed. It will be recorded as missed instead.");
+
+            if (await _sessions.ExistsForOriginatingBlockAsync(command.OriginatingBlockId.Value, ct))
+                return StartSessionResult.Fail("A session already exists for this focus block.");
         }
 
         BreakSettings? breakSettings = null;
@@ -79,15 +96,10 @@ public sealed class StartSessionCommandHandler
 
         session.Start(now);
 
-        if (command.OriginatingBlockId.HasValue)
+        if (originatingBlock is not null)
         {
-            var focusBlock = await _plannedBlocks.GetByIdAsync(
-                command.OriginatingBlockId.Value, ct) as FocusBlock;
-
-            focusBlock?.MarkRitualCompleted(now);
-
-            if (focusBlock is not null)
-                await _plannedBlocks.SaveAsync(focusBlock, ct);
+            originatingBlock.MarkRitualCompleted(now);
+            await _plannedBlocks.SaveAsync(originatingBlock, ct);
         }
 
         await _sessions.SaveAsync(session, ct);

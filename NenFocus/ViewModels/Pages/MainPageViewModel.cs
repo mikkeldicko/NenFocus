@@ -97,8 +97,8 @@ public partial class MainPageViewModel : ViewModelBase
         _resumeFromBreak = resumeFromBreak;
         _clock = clock;
 
-        _sessionState.RitualRequirementChanged += (_, required) =>
-            Dispatcher.UIThread.Post(() => IsRitualBannerVisible = required);
+        _sessionState.RitualRequirementChanged += (_, change) =>
+            Dispatcher.UIThread.Post(() => IsRitualBannerVisible = change.Required);
 
         _sessionState.SessionChanged += OnSessionChanged;
 

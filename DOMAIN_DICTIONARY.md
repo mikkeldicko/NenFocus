@@ -109,7 +109,18 @@ NenFocus has five pages accessible via the sidebar:
 
 **Idempotent creation:** `MarkFocusBlockMissedCommand` can safely fire more than once for the same block (the expected failure mode for a heartbeat-triggered command, not a hypothetical) — `ISessionRepository.ExistsForOriginatingBlockAsync` guards against creating a second missed session for a block that already has one.
 
-**Not built here:** the ritual-window-closing trigger that *calls* `MarkFocusBlockMissedCommand` (a separate feature — the Shell/overlay release mechanism), and any Insights UI. This amendment only ensures a missed session is modeled correctly and is queryable/representable for when that UI is built.
+**Not built here:** any Insights UI. This amendment ensures a missed session is modeled correctly and is queryable/representable for when that UI is built.
+
+**Two triggers call `MarkFocusBlockMissedCommand` — cold-start and live release.** A block's window can close unfulfilled while the app is closed (discovered on next launch) or while it's running and the Ritual is on screen for that exact block (discovered by the enforcement heartbeat). Both funnel through the same command; only the discovery path differs.
+
+- **Cold-start sweep:** `SessionStateService.InitializeAsync()` calls `SweepMissedFocusBlocksCommand` after existing session rehydration. The handler queries `IPlannedBlockRepository.GetUnresolvedFocusBlocksAsync(asOf)` — Focus blocks with `End < asOf && RitualCompletedAt == null` — and calls `MarkFocusBlockMissedCommand` for each, ordered by `Start` ascending (oldest first). The resulting `PostSessionDto`s are raised via the new `MissedSessionsDiscovered` event.
+- **Live release:** `ScheduledEnforcementService`'s 5-second heartbeat calls `SessionStateService.SetRitualRequired(false)` when a Focus block's window closes without a session starting. `SetRitualRequired` now raises the widened `RitualRequirementChanged` event carrying a `RitualRequirementChange(bool Required, Guid? FocusBlockId)` — on the `false` transition, `FocusBlockId` is the *previously* pending block (captured into a local before `_pendingFocusBlockId` is cleared), since `ScheduledEnforcementService` itself has no memory of what was showing. `ShellViewModel` reacts by hard-closing the open Ritual overlay immediately (it can't wait — the user would be staring at a dead ritual), then calls `MarkFocusBlockMissedCommand` for that block.
+
+**The Shell queues what it can't show immediately.** `ShellViewModel` holds a private `Queue<PendingOverlay>` (`PendingMissedSession(PostSessionDto)` | `PendingRitual(Guid FocusBlockId)`). `TryDrainQueue()` is the single chokepoint — nothing new is shown unless `!IsRitualActive && !IsPostSessionActive && !IsTriageActive`. `ExitRitual`/`ExitRitualAndGoToMain`/`ExitPostSession` all funnel through it, and it lands on the Main page when the queue is empty.
+
+**Triage gates a large backlog.** If `TryDrainQueue()` is about to pop from the queue and finds more than 3 pending `PendingMissedSession` items (checked fresh each call, not just once when discovered — so items enqueued later still trip the gate), it shows `MissedSessionsTriageViewModel` instead: "Skip All" clears every queued missed session and re-drains; "Review Each" sets a `_suppressTriage` flag (so the gate doesn't re-fire mid-review) and re-drains to cycle through them one by one via the normal Post-Session screen. The flag resets once the queue empties.
+
+**The Post-Session screen wears different copy for a miss.** `PostSessionDto.Status` (mirrored from the session) drives two computed `PostSessionViewModel` properties: `HeaderLabel` ("SESSION MISSED" vs "SESSION COMPLETE") and `ReflectionPrompt` ("What got in the way?" vs "How did the session go? What did you accomplish?").
 
 **Technical mapping:**
 
@@ -117,7 +128,14 @@ NenFocus has five pages accessible via the sidebar:
 |-------|----------|------|
 | Domain | `Session.Miss(DateTime scheduledStart, DateTime scheduledEnd)` | `NotStarted → Missed`; throws if `Origin != Planned` or `Status != NotStarted`; sets `StartedAt`/`EndedAt` to the scheduled window; raises `SessionMissedEvent` |
 | Domain | `SessionMissedEvent` (`Events/SessionMissedEvent.cs`) | Carries `SessionId`, `ScheduledStart`, `ScheduledEnd`; `occurredAt = scheduledEnd` |
-| Application | `MarkFocusBlockMissedCommand` / `CommandHandler` / `Result` / `Validator` (`UseCases/Sessions/MarkFocusBlockMissed/`) | Loads the `FocusBlock`, builds the Session via `Create(...)` + `Miss(block.Start, block.End)`, saves. Validator rejects a missing/wrong-type block, an already-completed ritual, or a block that already has a session. No `SessionMissedEventHandler` is registered — this feature is deliberately silent (no toast); the missed post-session screen, built separately, is the acknowledgment. |
+| Application | `MarkFocusBlockMissedCommand` / `CommandHandler` / `Result` / `Validator` (`UseCases/Sessions/MarkFocusBlockMissed/`) | Loads the `FocusBlock`, builds the Session via `Create(...)` + `Miss(block.Start, block.End)`, saves, and builds the `PostSessionDto` (profile name lookup; blocked-attempt dictionaries left empty since a missed session never tracked any). Validator rejects a missing/wrong-type block, an already-completed ritual, or a block that already has a session. No `SessionMissedEventHandler` is registered — this feature is deliberately silent (no toast); the missed post-session screen is the acknowledgment. |
+| Application | `IPlannedBlockRepository.GetUnresolvedFocusBlocksAsync(DateTime asOf)` | Focus blocks with `End < asOf && RitualCompletedAt == null`, ordered by `Start` |
+| Application | `SweepMissedFocusBlocksCommand` / `Result` / `CommandHandler` (`UseCases/Sessions/SweepMissedFocusBlocks/`) | No input (reads "now" via `ISystemClock`, matching `StartSessionCommandHandler`'s own precedent). Queries unresolved blocks, calls `MarkFocusBlockMissedCommand` per block, collects the resulting `PostSessionDto`s |
+| Application | `PostSessionDto.Status` | Mirrors `Session.Status`; drives Post-Session screen copy |
+| Application | `ISessionStateService.RitualRequirementChanged` (widened) / `RitualRequirementChange(bool Required, Guid? FocusBlockId)` (`DTOs/RitualRequirementChange.cs`) | `FocusBlockId` identifies the block on a `false` transition caused by its window closing unfulfilled; `null` for transitions not about a specific block's forced window (session starting/ending) |
+| Application | `ISessionStateService.MissedSessionsDiscovered` | Raised by `InitializeAsync()` after the cold-start sweep, if non-empty |
+| Infrastructure | `SessionStateService.SetRitualRequired` | Captures the outgoing `_pendingFocusBlockId` into a local before clearing it, so the `false` event still carries the right block identity even though the caller (`ScheduledEnforcementService`) never supplies one |
+| UI | `ShellViewModel` queue/drain (`Queue<PendingOverlay>`, `TryDrainQueue`, `MissedSessionsTriageViewModel`) | See prose above |
 
 ---
 

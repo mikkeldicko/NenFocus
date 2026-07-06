@@ -81,4 +81,13 @@ public interface IPlannedBlockRepository
     Task<bool> HasActiveFocusBlockAsync(
         DateTime at,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns Focus blocks whose window has closed (End &lt; asOf) without the
+    /// ritual ever being completed. Used by the missed-session sweep on startup
+    /// and on live enforcement release.
+    /// </summary>
+    Task<IReadOnlyList<FocusBlock>> GetUnresolvedFocusBlocksAsync(
+        DateTime asOf,
+        CancellationToken cancellationToken = default);
 }

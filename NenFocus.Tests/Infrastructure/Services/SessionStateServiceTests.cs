@@ -1,6 +1,7 @@
 using FluentAssertions;
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
+using NenFocus.Application.UseCases.Sessions.SweepMissedFocusBlocks;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
 using NenFocus.Domain.ValueObjects;
@@ -13,8 +14,16 @@ public class SessionStateServiceTests
 {
     private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
     private readonly IBlockProfileRepository _profiles = Substitute.For<IBlockProfileRepository>();
+    private readonly ICommandHandler<SweepMissedFocusBlocksCommand, SweepMissedFocusBlocksResult> _sweep =
+        Substitute.For<ICommandHandler<SweepMissedFocusBlocksCommand, SweepMissedFocusBlocksResult>>();
 
-    private SessionStateService CreateService() => new(_sessions, _profiles);
+    public SessionStateServiceTests()
+    {
+        _sweep.HandleAsync(Arg.Any<SweepMissedFocusBlocksCommand>(), Arg.Any<CancellationToken>())
+            .Returns(new SweepMissedFocusBlocksResult());
+    }
+
+    private SessionStateService CreateService() => new(_sessions, _profiles, _sweep);
 
     private static Session CreateActiveSession(Guid profileId)
     {
@@ -76,9 +85,9 @@ public class SessionStateServiceTests
     {
         var service = CreateService();
         SessionDto? sessionChangedWith = null;
-        bool? ritualChangedWith = null;
+        RitualRequirementChange? ritualChangedWith = null;
         service.SessionChanged += (_, dto) => sessionChangedWith = dto;
-        service.RitualRequirementChanged += (_, required) => ritualChangedWith = required;
+        service.RitualRequirementChanged += (_, change) => ritualChangedWith = change;
         var dto = new SessionDto { Id = Guid.NewGuid(), Status = SessionStatus.Active };
 
         service.SetActive(dto);
@@ -87,7 +96,8 @@ public class SessionStateServiceTests
         service.IsRitualRequired.Should().BeFalse();
         service.PendingFocusBlockId.Should().BeNull();
         sessionChangedWith.Should().Be(dto);
-        ritualChangedWith.Should().BeFalse();
+        ritualChangedWith!.Required.Should().BeFalse();
+        ritualChangedWith.FocusBlockId.Should().BeNull();
     }
 
     [Fact]
@@ -95,27 +105,50 @@ public class SessionStateServiceTests
     {
         var service = CreateService();
         var blockId = Guid.NewGuid();
-        bool? raisedWith = null;
-        service.RitualRequirementChanged += (_, required) => raisedWith = required;
+        RitualRequirementChange? raisedWith = null;
+        service.RitualRequirementChanged += (_, change) => raisedWith = change;
 
         service.SetRitualRequired(true, blockId);
 
         service.IsRitualRequired.Should().BeTrue();
         service.PendingFocusBlockId.Should().Be(blockId);
-        raisedWith.Should().BeTrue();
+        raisedWith!.Required.Should().BeTrue();
+        raisedWith.FocusBlockId.Should().Be(blockId);
+        raisedWith.HandoffFromFocusBlockId.Should().BeNull();
     }
 
     [Fact]
-    public void SetRitualRequired_SameValueTwiceInARow_RaisesEventOnlyOnce()
+    public void SetRitualRequired_SameBlockTwiceInARow_RaisesEventOnlyOnce()
     {
         var service = CreateService();
+        var blockId = Guid.NewGuid();
         var raiseCount = 0;
-        service.SetRitualRequired(true, Guid.NewGuid());
+        service.SetRitualRequired(true, blockId);
         service.RitualRequirementChanged += (_, _) => raiseCount++;
 
-        service.SetRitualRequired(true, Guid.NewGuid());
+        service.SetRitualRequired(true, blockId);
 
         raiseCount.Should().Be(0);
+    }
+
+    [Fact]
+    public void SetRitualRequired_True_DifferentBlockWhileAlreadyRequired_RaisesEventWithHandoffId()
+    {
+        var service = CreateService();
+        var blockA = Guid.NewGuid();
+        var blockB = Guid.NewGuid();
+        service.SetRitualRequired(true, blockA);
+        RitualRequirementChange? raisedWith = null;
+        service.RitualRequirementChanged += (_, change) => raisedWith = change;
+
+        // Back-to-back scheduled blocks: the heartbeat reports B as active in the
+        // same tick A's window closes, with no intervening false transition.
+        service.SetRitualRequired(true, blockB);
+
+        service.PendingFocusBlockId.Should().Be(blockB);
+        raisedWith!.Required.Should().BeTrue();
+        raisedWith.FocusBlockId.Should().Be(blockB);
+        raisedWith.HandoffFromFocusBlockId.Should().Be(blockA);
     }
 
     [Fact]
@@ -131,14 +164,30 @@ public class SessionStateServiceTests
     }
 
     [Fact]
+    public void SetRitualRequired_False_EventCarriesThePreviouslyPendingBlockId()
+    {
+        var service = CreateService();
+        var blockId = Guid.NewGuid();
+        service.SetRitualRequired(true, blockId);
+        RitualRequirementChange? raisedWith = null;
+        service.RitualRequirementChanged += (_, change) => raisedWith = change;
+
+        // Mirrors ScheduledEnforcementService's call shape: no block id supplied on release.
+        service.SetRitualRequired(false);
+
+        raisedWith!.Required.Should().BeFalse();
+        raisedWith.FocusBlockId.Should().Be(blockId);
+    }
+
+    [Fact]
     public void Clear_ResetsEverythingAndRaisesBothEvents()
     {
         var service = CreateService();
         service.SetActive(new SessionDto { Id = Guid.NewGuid() });
         SessionDto? sessionChangedWith = new(); // sentinel, will be overwritten to null
-        bool? ritualChangedWith = null;
+        RitualRequirementChange? ritualChangedWith = null;
         service.SessionChanged += (_, dto) => sessionChangedWith = dto;
-        service.RitualRequirementChanged += (_, required) => ritualChangedWith = required;
+        service.RitualRequirementChanged += (_, change) => ritualChangedWith = change;
 
         service.Clear();
 
@@ -146,6 +195,35 @@ public class SessionStateServiceTests
         service.IsRitualRequired.Should().BeFalse();
         service.PendingFocusBlockId.Should().BeNull();
         sessionChangedWith.Should().BeNull();
-        ritualChangedWith.Should().BeFalse();
+        ritualChangedWith!.Required.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task InitializeAsync_SweepFindsMissedSessions_RaisesMissedSessionsDiscovered()
+    {
+        _sessions.GetActiveAsync().Returns((Session?)null);
+        var missed = new PostSessionDto { SessionId = Guid.NewGuid(), Status = SessionStatus.Missed };
+        _sweep.HandleAsync(Arg.Any<SweepMissedFocusBlocksCommand>(), Arg.Any<CancellationToken>())
+            .Returns(new SweepMissedFocusBlocksResult { MissedSessions = [missed] });
+        var service = CreateService();
+        IReadOnlyList<PostSessionDto>? raisedWith = null;
+        service.MissedSessionsDiscovered += (_, sessions) => raisedWith = sessions;
+
+        await service.InitializeAsync();
+
+        raisedWith.Should().ContainSingle().Which.Should().Be(missed);
+    }
+
+    [Fact]
+    public async Task InitializeAsync_SweepFindsNothing_DoesNotRaiseMissedSessionsDiscovered()
+    {
+        _sessions.GetActiveAsync().Returns((Session?)null);
+        var service = CreateService();
+        var raised = false;
+        service.MissedSessionsDiscovered += (_, _) => raised = true;
+
+        await service.InitializeAsync();
+
+        raised.Should().BeFalse();
     }
 }

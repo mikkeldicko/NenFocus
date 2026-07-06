@@ -64,7 +64,7 @@
                            FontSize="24"
                            Foreground="#B8922A"
                            HorizontalAlignment="Center"/>
-				<TextBlock Text="SESSION COMPLETE"
+				<TextBlock Text="{Binding HeaderLabel}"
                            FontSize="10"
                            FontWeight="Medium"
                            Foreground="#B8922A"
@@ -247,7 +247,7 @@
                                Foreground="#AAAABC"
                                LetterSpacing="2"/>
 
-					<TextBlock Text="How did the session go? What did you accomplish?"
+					<TextBlock Text="{Binding ReflectionPrompt}"
                                FontSize="13"
                                Foreground="#BBBBCC"
                                FontStyle="Italic"/>

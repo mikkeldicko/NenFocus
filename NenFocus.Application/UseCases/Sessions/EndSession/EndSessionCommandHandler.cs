@@ -76,6 +76,7 @@ public sealed class EndSessionCommandHandler
         var postSession = new PostSessionDto
         {
             SessionId = session.Id,
+            Status = session.Status,
             Goal = session.Goal.Value,
             ProfileName = profileName,
             StartedAt = session.StartedAt!.Value,

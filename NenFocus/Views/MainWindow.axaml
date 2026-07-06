@@ -117,5 +117,9 @@
 		<ContentControl Content="{Binding RitualViewModel}"
                         IsVisible="{Binding IsRitualActive}"/>
 
+		<!-- Missed-sessions triage full-screen overlay -->
+		<ContentControl Content="{Binding TriageViewModel}"
+                        IsVisible="{Binding IsTriageActive}"/>
+
 	</Grid>
 </Window>

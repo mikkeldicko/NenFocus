@@ -197,4 +197,54 @@ public class PlannedBlockRepositoryTests : SqliteRepositoryTestBase
 
         result.Should().BeFalse();
     }
+
+    [Fact]
+    public async Task GetUnresolvedFocusBlocksAsync_ClosedWindowRitualNeverCompleted_ReturnsBlock()
+    {
+        var repo = CreateRepository();
+        await repo.AddAsync(FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End));
+        await Context.SaveChangesAsync();
+
+        var result = await CreateRepository().GetUnresolvedFocusBlocksAsync(End.AddMinutes(1));
+
+        result.Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task GetUnresolvedFocusBlocksAsync_RitualCompleted_IsExcluded()
+    {
+        var repo = CreateRepository();
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End);
+        block.MarkRitualCompleted(Start);
+        await repo.AddAsync(block);
+        await Context.SaveChangesAsync();
+
+        var result = await CreateRepository().GetUnresolvedFocusBlocksAsync(End.AddMinutes(1));
+
+        result.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetUnresolvedFocusBlocksAsync_WindowNotYetClosed_IsExcluded()
+    {
+        var repo = CreateRepository();
+        await repo.AddAsync(FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End));
+        await Context.SaveChangesAsync();
+
+        var result = await CreateRepository().GetUnresolvedFocusBlocksAsync(Start.AddMinutes(30));
+
+        result.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetUnresolvedFocusBlocksAsync_BackgroundBlock_IsExcluded()
+    {
+        var repo = CreateRepository();
+        await repo.AddAsync(BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End));
+        await Context.SaveChangesAsync();
+
+        var result = await CreateRepository().GetUnresolvedFocusBlocksAsync(End.AddMinutes(1));
+
+        result.Should().BeEmpty();
+    }
 }

@@ -1,5 +1,6 @@
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
+using NenFocus.Application.UseCases.Sessions.SweepMissedFocusBlocks;
 using NenFocus.Domain.Entities;
 
 
@@ -9,6 +10,7 @@ public sealed class SessionStateService : ISessionStateService
 {
     private readonly ISessionRepository _sessionRepository;
     private readonly IBlockProfileRepository _profileRepository;
+    private readonly ICommandHandler<SweepMissedFocusBlocksCommand, SweepMissedFocusBlocksResult> _sweepMissedFocusBlocks;
     private SessionDto? _activeSession;
     private bool _isRitualRequired;
     private Guid? _pendingFocusBlockId;
@@ -18,14 +20,17 @@ public sealed class SessionStateService : ISessionStateService
     public Guid? PendingFocusBlockId => _pendingFocusBlockId;
 
     public event EventHandler<SessionDto?>? SessionChanged;
-    public event EventHandler<bool>? RitualRequirementChanged;
+    public event EventHandler<RitualRequirementChange>? RitualRequirementChanged;
+    public event EventHandler<IReadOnlyList<PostSessionDto>>? MissedSessionsDiscovered;
 
     public SessionStateService(
         ISessionRepository sessionRepository,
-        IBlockProfileRepository profileRepository)
+        IBlockProfileRepository profileRepository,
+        ICommandHandler<SweepMissedFocusBlocksCommand, SweepMissedFocusBlocksResult> sweepMissedFocusBlocks)
     {
         _sessionRepository = sessionRepository;
         _profileRepository = profileRepository;
+        _sweepMissedFocusBlocks = sweepMissedFocusBlocks;
     }
 
     public async Task InitializeAsync()
@@ -43,6 +48,10 @@ public sealed class SessionStateService : ISessionStateService
             _activeSession = MapToDto(session, profileName);
             SessionChanged?.Invoke(this, _activeSession);
         }
+
+        var sweepResult = await _sweepMissedFocusBlocks.HandleAsync(new SweepMissedFocusBlocksCommand());
+        if (sweepResult.MissedSessions.Count > 0)
+            MissedSessionsDiscovered?.Invoke(this, sweepResult.MissedSessions);
     }
 
     public void SetActive(SessionDto session)
@@ -51,15 +60,31 @@ public sealed class SessionStateService : ISessionStateService
         _isRitualRequired = false;
         _pendingFocusBlockId = null;
         SessionChanged?.Invoke(this, session);
-        RitualRequirementChanged?.Invoke(this, false);
+        RitualRequirementChanged?.Invoke(this, new RitualRequirementChange(false, null));
     }
 
     public void SetRitualRequired(bool required, Guid? focusBlockId = null)
     {
-        _pendingFocusBlockId = required ? focusBlockId : null;
-        if (_isRitualRequired == required) return;
-        _isRitualRequired = required;
-        RitualRequirementChanged?.Invoke(this, required);
+        if (!required)
+        {
+            if (!_isRitualRequired) return; // false -> false: no-op
+
+            var releasedBlockId = _pendingFocusBlockId;
+            _pendingFocusBlockId = null;
+            _isRitualRequired = false;
+            RitualRequirementChanged?.Invoke(this, new RitualRequirementChange(false, releasedBlockId));
+            return;
+        }
+
+        if (_isRitualRequired && _pendingFocusBlockId == focusBlockId)
+            return; // A -> A: same block still pending, nothing changed.
+
+        // A -> B (back-to-back blocks, no gap) carries the displaced block's id as a
+        // handoff so the caller can resolve it — it never gets its own false transition.
+        var handoffFromBlockId = _isRitualRequired ? _pendingFocusBlockId : null;
+        _pendingFocusBlockId = focusBlockId;
+        _isRitualRequired = true;
+        RitualRequirementChanged?.Invoke(this, new RitualRequirementChange(true, focusBlockId, handoffFromBlockId));
     }
 
     public void Clear()
@@ -68,7 +93,7 @@ public sealed class SessionStateService : ISessionStateService
         _isRitualRequired = false;
         _pendingFocusBlockId = null;
         SessionChanged?.Invoke(this, null);
-        RitualRequirementChanged?.Invoke(this, false);
+        RitualRequirementChanged?.Invoke(this, new RitualRequirementChange(false, null));
     }
 
     private static SessionDto MapToDto(Session s, string profileName) => new SessionDto

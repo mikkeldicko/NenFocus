@@ -7,6 +7,7 @@ using CommunityToolkit.Mvvm.Input;
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.UseCases.Sessions.SaveReflection;
+using NenFocus.Domain.Enums;
 
 namespace NenFocus.ViewModels.Pages;
 
@@ -18,6 +19,8 @@ public partial class PostSessionViewModel : ViewModelBase
 
 
     public string Goal { get; }
+    public string HeaderLabel { get; }
+    public string ReflectionPrompt { get; }
     public string ProfileName { get; }
     public DateTime StartedAt { get; }
     public DateTime EndedAt { get; }
@@ -53,6 +56,10 @@ public partial class PostSessionViewModel : ViewModelBase
         _onDone = onDone;
 
         Goal = data.Goal;
+        HeaderLabel = data.Status == SessionStatus.Missed ? "SESSION MISSED" : "SESSION COMPLETE";
+        ReflectionPrompt = data.Status == SessionStatus.Missed
+            ? "What got in the way?"
+            : "How did the session go? What did you accomplish?";
         ProfileName = data.ProfileName;
         StartedAt = data.StartedAt.ToLocalTime();
         EndedAt = data.EndedAt.ToLocalTime();

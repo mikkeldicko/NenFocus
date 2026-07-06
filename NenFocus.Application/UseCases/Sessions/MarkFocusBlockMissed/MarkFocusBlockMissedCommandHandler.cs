@@ -1,3 +1,4 @@
+using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
@@ -10,13 +11,16 @@ public sealed class MarkFocusBlockMissedCommandHandler
 {
     private readonly IPlannedBlockRepository _blocks;
     private readonly ISessionRepository _sessions;
+    private readonly IBlockProfileRepository _profiles;
 
     public MarkFocusBlockMissedCommandHandler(
         IPlannedBlockRepository blocks,
-        ISessionRepository sessions)
+        ISessionRepository sessions,
+        IBlockProfileRepository profiles)
     {
         _blocks = blocks;
         _sessions = sessions;
+        _profiles = profiles;
     }
 
     public async Task<MarkFocusBlockMissedResult> HandleAsync(
@@ -38,6 +42,27 @@ public sealed class MarkFocusBlockMissedCommandHandler
         session.Miss(block.Start, block.End);
 
         await _sessions.SaveAsync(session, ct);
-        return MarkFocusBlockMissedResult.Ok(session.Id);
+
+        var profileName = string.Empty;
+        if (block.BlockProfileId != Guid.Empty)
+        {
+            var profile = await _profiles.GetByIdAsync(block.BlockProfileId, ct);
+            profileName = profile?.Name ?? string.Empty;
+        }
+
+        var postSession = new PostSessionDto
+        {
+            SessionId = session.Id,
+            Status = session.Status,
+            Goal = session.Goal.Value,
+            ProfileName = profileName,
+            StartedAt = session.StartedAt!.Value,
+            EndedAt = session.EndedAt!.Value,
+            PlannedDurationMinutes = (int)session.Duration.Value.TotalMinutes,
+            ActualDurationMinutes = (int)(session.GetElapsedTime(session.EndedAt.Value)?.TotalMinutes ?? 0),
+            BreaksTaken = 0
+        };
+
+        return MarkFocusBlockMissedResult.Ok(session.Id, postSession);
     }
 }
