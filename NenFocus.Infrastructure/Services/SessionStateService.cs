@@ -9,7 +9,7 @@ namespace NenFocus.Infrastructure.Services;
 public sealed class SessionStateService : ISessionStateService
 {
     private readonly ISessionRepository _sessionRepository;
-    private readonly IBlockProfileRepository _profileRepository;
+    private readonly IBlockPresetRepository _presetRepository;
     private readonly ICommandHandler<SweepMissedFocusBlocksCommand, SweepMissedFocusBlocksResult> _sweepMissedFocusBlocks;
     private SessionDto? _activeSession;
     private bool _isRitualRequired;
@@ -25,11 +25,11 @@ public sealed class SessionStateService : ISessionStateService
 
     public SessionStateService(
         ISessionRepository sessionRepository,
-        IBlockProfileRepository profileRepository,
+        IBlockPresetRepository presetRepository,
         ICommandHandler<SweepMissedFocusBlocksCommand, SweepMissedFocusBlocksResult> sweepMissedFocusBlocks)
     {
         _sessionRepository = sessionRepository;
-        _profileRepository = profileRepository;
+        _presetRepository = presetRepository;
         _sweepMissedFocusBlocks = sweepMissedFocusBlocks;
     }
 
@@ -38,14 +38,14 @@ public sealed class SessionStateService : ISessionStateService
         var session = await _sessionRepository.GetActiveAsync();
         if (session != null)
         {
-            var profileName = "Unknown Profile";
-            if (session.BlockProfileId != Guid.Empty)
+            var presetName = "Unknown Preset";
+            if (session.BlockPresetId != Guid.Empty)
             {
-                var profile = await _profileRepository.GetByIdAsync(session.BlockProfileId);
-                profileName = profile?.Name ?? "Unknown Profile";
+                var preset = await _presetRepository.GetByIdAsync(session.BlockPresetId);
+                presetName = preset?.Name ?? "Unknown Preset";
             }
 
-            _activeSession = MapToDto(session, profileName);
+            _activeSession = MapToDto(session, presetName);
             SessionChanged?.Invoke(this, _activeSession);
         }
 
@@ -96,12 +96,12 @@ public sealed class SessionStateService : ISessionStateService
         RitualRequirementChanged?.Invoke(this, new RitualRequirementChange(false, null));
     }
 
-    private static SessionDto MapToDto(Session s, string profileName) => new SessionDto
+    private static SessionDto MapToDto(Session s, string presetName) => new SessionDto
     {
         Id = s.Id,
         Goal = s.Goal?.Value ?? string.Empty,
-        ProfileName = profileName,
-        BlockProfileId = s.BlockProfileId,
+        PresetName = presetName,
+        BlockPresetId = s.BlockPresetId,
         DurationMinutes = (int)s.Duration.Value.TotalMinutes,
         Status = s.Status,
         StartedAt = s.StartedAt ?? DateTime.UtcNow,

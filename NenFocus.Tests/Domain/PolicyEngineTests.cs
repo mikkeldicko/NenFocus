@@ -11,18 +11,18 @@ public class PolicyEngineTests
     private static readonly DateTime At = new(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
     private readonly PolicyEngine _engine = new();
 
-    private static BlockProfile CreateProfile(
-        WebsitePolicy policy,
+    private static BlockPreset CreatePreset(
+        WebsiteFilterType policy,
         IEnumerable<string>? apps = null,
         IEnumerable<string>? sites = null,
-        BlockType type = BlockType.Focus)
+        BlockPresetType type = BlockPresetType.Focus)
     {
-        var profile = BlockProfile.Create(Guid.NewGuid(), "Profile", policy, type, At);
+        var preset = BlockPreset.Create(Guid.NewGuid(), "Preset", policy, type, At);
         foreach (var app in apps ?? [])
-            profile.AddBlockedApp(new BlockedApp(app));
+            preset.AddBlockedApp(new BlockedApp(app));
         foreach (var site in sites ?? [])
-            profile.AddWebsite(new BlockedSite(site));
-        return profile;
+            preset.AddWebsite(new BlockedSite(site));
+        return preset;
     }
 
     private static Session CreateActiveSession(
@@ -42,7 +42,7 @@ public class PolicyEngineTests
     }
 
     [Fact]
-    public void ComputeSlice_NoProfilesAndNoSessions_ReturnsMinimalEmptySlice()
+    public void ComputeSlice_NoPresetsAndNoSessions_ReturnsMinimalEmptySlice()
     {
         var slice = _engine.ComputeSlice(At, [], [], []);
 
@@ -50,23 +50,23 @@ public class PolicyEngineTests
         slice.SliceEnd.Should().Be(At.AddMinutes(1));
         slice.BlockedApps.Should().BeEmpty();
         slice.BlockedSites.Should().BeEmpty();
-        slice.ActiveBlockType.Should().BeNull();
+        slice.ActiveBlockPresetType.Should().BeNull();
         slice.ActiveSessionId.Should().BeNull();
         slice.IsEmpty.Should().BeTrue();
     }
 
     [Fact]
-    public void ComputeSlice_BlockPresentWithNoResolvableProfileOrSession_StillSurfacesActiveBlockType()
+    public void ComputeSlice_BlockPresentWithNoResolvablePresetOrSession_StillSurfacesActiveBlockPresetType()
     {
-        // An orphaned block (its profile could not be resolved, e.g. deleted
-        // out from under it) must still be visible via ActiveBlockType so the
+        // An orphaned block (its preset could not be resolved, e.g. deleted
+        // out from under it) must still be visible via ActiveBlockPresetType so the
         // Ritual trigger and enforcement window aren't silently dropped — even
-        // though there's no profile data left to populate BlockedApps/Sites.
+        // though there's no preset data left to populate BlockedApps/Sites.
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At, At.AddHours(1));
 
         var slice = _engine.ComputeSlice(At, [], [], [block]);
 
-        slice.ActiveBlockType.Should().Be(BlockType.Focus);
+        slice.ActiveBlockPresetType.Should().Be(BlockPresetType.Focus);
         slice.ActiveFocusBlockId.Should().Be(block.Id);
         slice.SliceEnd.Should().Be(block.End);
         slice.BlockedApps.Should().BeEmpty();
@@ -74,13 +74,13 @@ public class PolicyEngineTests
     }
 
     [Fact]
-    public void ComputeSlice_UnionsBlockedAppsAcrossProfilesAndNormalizesNames()
+    public void ComputeSlice_UnionsBlockedAppsAcrossPresetsAndNormalizesNames()
     {
-        var profileA = CreateProfile(WebsitePolicy.Blocklist, apps: ["chrome.exe"]);
-        var profileB = CreateProfile(WebsitePolicy.Blocklist, apps: ["Spotify"]);
+        var presetA = CreatePreset(WebsiteFilterType.Blocklist, apps: ["chrome.exe"]);
+        var presetB = CreatePreset(WebsiteFilterType.Blocklist, apps: ["Spotify"]);
         var session = CreateActiveSession(temporaryBlockedApps: ["notepad.exe"]);
 
-        var slice = _engine.ComputeSlice(At, [profileA, profileB], [session], []);
+        var slice = _engine.ComputeSlice(At, [presetA, presetB], [session], []);
 
         slice.BlockedApps.Should().BeEquivalentTo(["chrome", "spotify", "notepad"]);
     }
@@ -88,23 +88,23 @@ public class PolicyEngineTests
     [Fact]
     public void ComputeSlice_BlockedAppDedupeIsCaseInsensitive()
     {
-        var profileA = CreateProfile(WebsitePolicy.Blocklist, apps: ["Chrome"]);
-        var profileB = CreateProfile(WebsitePolicy.Blocklist, apps: ["chrome.exe"]);
+        var presetA = CreatePreset(WebsiteFilterType.Blocklist, apps: ["Chrome"]);
+        var presetB = CreatePreset(WebsiteFilterType.Blocklist, apps: ["chrome.exe"]);
 
-        var slice = _engine.ComputeSlice(At, [profileA, profileB], [], []);
+        var slice = _engine.ComputeSlice(At, [presetA, presetB], [], []);
 
         slice.BlockedApps.Should().ContainSingle().Which.Should().Be("chrome");
     }
 
     [Fact]
-    public void ComputeSlice_BlocklistMode_UnionsSitesAcrossProfiles()
+    public void ComputeSlice_BlocklistMode_UnionsSitesAcrossPresets()
     {
-        var profileA = CreateProfile(WebsitePolicy.Blocklist, sites: ["facebook.com"]);
-        var profileB = CreateProfile(WebsitePolicy.Blocklist, sites: ["youtube.com"]);
+        var presetA = CreatePreset(WebsiteFilterType.Blocklist, sites: ["facebook.com"]);
+        var presetB = CreatePreset(WebsiteFilterType.Blocklist, sites: ["youtube.com"]);
 
-        var slice = _engine.ComputeSlice(At, [profileA, profileB], [], []);
+        var slice = _engine.ComputeSlice(At, [presetA, presetB], [], []);
 
-        slice.WebsitePolicyMode.Should().Be(WebsitePolicy.Blocklist);
+        slice.WebsiteFilterTypeMode.Should().Be(WebsiteFilterType.Blocklist);
         slice.BlockedSites.Should().BeEquivalentTo(["facebook.com", "youtube.com"]);
         slice.AllowedSites.Should().BeEmpty();
     }
@@ -112,43 +112,43 @@ public class PolicyEngineTests
     [Fact]
     public void ComputeSlice_BlocklistMode_IncludesTemporaryBlockedSites()
     {
-        var profile = CreateProfile(WebsitePolicy.Blocklist, sites: ["facebook.com"]);
+        var preset = CreatePreset(WebsiteFilterType.Blocklist, sites: ["facebook.com"]);
         var session = CreateActiveSession(temporaryBlockedSites: ["reddit.com"]);
 
-        var slice = _engine.ComputeSlice(At, [profile], [session], []);
+        var slice = _engine.ComputeSlice(At, [preset], [session], []);
 
         slice.BlockedSites.Should().BeEquivalentTo(["facebook.com", "reddit.com"]);
     }
 
     [Fact]
-    public void ComputeSlice_AnyAllowlistProfile_SwitchesEffectivePolicyToAllowlist()
+    public void ComputeSlice_AnyAllowlistPreset_SwitchesEffectivePolicyToAllowlist()
     {
-        var profile = CreateProfile(WebsitePolicy.Allowlist, sites: ["work.com"]);
+        var preset = CreatePreset(WebsiteFilterType.Allowlist, sites: ["work.com"]);
 
-        var slice = _engine.ComputeSlice(At, [profile], [], []);
+        var slice = _engine.ComputeSlice(At, [preset], [], []);
 
-        slice.WebsitePolicyMode.Should().Be(WebsitePolicy.Allowlist);
+        slice.WebsiteFilterTypeMode.Should().Be(WebsiteFilterType.Allowlist);
         slice.AllowedSites.Should().BeEquivalentTo(["work.com"]);
     }
 
     [Fact]
-    public void ComputeSlice_AllowlistMode_MultipleAllowlistProfiles_IntersectsAllowedSites()
+    public void ComputeSlice_AllowlistMode_MultipleAllowlistPresets_IntersectsAllowedSites()
     {
-        var profileA = CreateProfile(WebsitePolicy.Allowlist, sites: ["a.com", "b.com"]);
-        var profileB = CreateProfile(WebsitePolicy.Allowlist, sites: ["b.com", "c.com"]);
+        var presetA = CreatePreset(WebsiteFilterType.Allowlist, sites: ["a.com", "b.com"]);
+        var presetB = CreatePreset(WebsiteFilterType.Allowlist, sites: ["b.com", "c.com"]);
 
-        var slice = _engine.ComputeSlice(At, [profileA, profileB], [], []);
+        var slice = _engine.ComputeSlice(At, [presetA, presetB], [], []);
 
         slice.AllowedSites.Should().BeEquivalentTo(["b.com"]);
     }
 
     [Fact]
-    public void ComputeSlice_AllowlistMode_BlocklistProfileSitesAreRemovedFromAllowedAndAdded()
+    public void ComputeSlice_AllowlistMode_BlocklistPresetSitesAreRemovedFromAllowedAndAdded()
     {
-        var allowProfile = CreateProfile(WebsitePolicy.Allowlist, sites: ["a.com", "b.com"]);
-        var blockProfile = CreateProfile(WebsitePolicy.Blocklist, sites: ["b.com"]);
+        var allowPreset = CreatePreset(WebsiteFilterType.Allowlist, sites: ["a.com", "b.com"]);
+        var blockPreset = CreatePreset(WebsiteFilterType.Blocklist, sites: ["b.com"]);
 
-        var slice = _engine.ComputeSlice(At, [allowProfile, blockProfile], [], []);
+        var slice = _engine.ComputeSlice(At, [allowPreset, blockPreset], [], []);
 
         slice.AllowedSites.Should().BeEquivalentTo(["a.com"]);
         slice.BlockedSites.Should().BeEquivalentTo(["b.com"]);
@@ -157,57 +157,57 @@ public class PolicyEngineTests
     [Fact]
     public void ComputeSlice_AllowlistMode_TemporaryBlockedSiteOverridesAllowlistMembership()
     {
-        var allowProfile = CreateProfile(WebsitePolicy.Allowlist, sites: ["a.com", "temp.com"]);
+        var allowPreset = CreatePreset(WebsiteFilterType.Allowlist, sites: ["a.com", "temp.com"]);
         var session = CreateActiveSession(temporaryBlockedSites: ["temp.com"]);
 
-        var slice = _engine.ComputeSlice(At, [allowProfile], [session], []);
+        var slice = _engine.ComputeSlice(At, [allowPreset], [session], []);
 
         slice.AllowedSites.Should().BeEquivalentTo(["a.com"]);
         slice.BlockedSites.Should().BeEquivalentTo(["temp.com"]);
     }
 
     [Fact]
-    public void ComputeSlice_FocusBlockActive_SetsActiveBlockTypeAndFocusBlockId()
+    public void ComputeSlice_FocusBlockActive_SetsActiveBlockPresetTypeAndFocusBlockId()
     {
-        var profile = CreateProfile(WebsitePolicy.Blocklist);
+        var preset = CreatePreset(WebsiteFilterType.Blocklist);
         var focusBlock = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At, At.AddHours(1));
 
-        var slice = _engine.ComputeSlice(At, [profile], [], [focusBlock]);
+        var slice = _engine.ComputeSlice(At, [preset], [], [focusBlock]);
 
-        slice.ActiveBlockType.Should().Be(BlockType.Focus);
+        slice.ActiveBlockPresetType.Should().Be(BlockPresetType.Focus);
         slice.ActiveFocusBlockId.Should().Be(focusBlock.Id);
     }
 
     [Fact]
-    public void ComputeSlice_BackgroundBlockActive_SetsActiveBlockTypeButNoFocusBlockId()
+    public void ComputeSlice_BackgroundBlockActive_SetsActiveBlockPresetTypeButNoFocusBlockId()
     {
-        var profile = CreateProfile(WebsitePolicy.Blocklist);
+        var preset = CreatePreset(WebsiteFilterType.Blocklist);
         var backgroundBlock = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At, At.AddHours(1));
 
-        var slice = _engine.ComputeSlice(At, [profile], [], [backgroundBlock]);
+        var slice = _engine.ComputeSlice(At, [preset], [], [backgroundBlock]);
 
-        slice.ActiveBlockType.Should().Be(BlockType.Background);
+        slice.ActiveBlockPresetType.Should().Be(BlockPresetType.Background);
         slice.ActiveFocusBlockId.Should().BeNull();
     }
 
     [Fact]
     public void ComputeSlice_FocusAndBackgroundBothActive_FocusTakesPrecedence()
     {
-        var profile = CreateProfile(WebsitePolicy.Blocklist);
+        var preset = CreatePreset(WebsiteFilterType.Blocklist);
         var focusBlock = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At, At.AddHours(1));
         var backgroundBlock = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At, At.AddHours(1));
 
-        var slice = _engine.ComputeSlice(At, [profile], [], [backgroundBlock, focusBlock]);
+        var slice = _engine.ComputeSlice(At, [preset], [], [backgroundBlock, focusBlock]);
 
-        slice.ActiveBlockType.Should().Be(BlockType.Focus);
+        slice.ActiveBlockPresetType.Should().Be(BlockPresetType.Focus);
     }
 
     [Fact]
     public void ComputeSlice_NoBlocks_SliceEndIsOneMinuteAfterAt()
     {
-        var profile = CreateProfile(WebsitePolicy.Blocklist);
+        var preset = CreatePreset(WebsiteFilterType.Blocklist);
 
-        var slice = _engine.ComputeSlice(At, [profile], [], []);
+        var slice = _engine.ComputeSlice(At, [preset], [], []);
 
         slice.SliceEnd.Should().Be(At.AddMinutes(1));
     }
@@ -215,11 +215,11 @@ public class PolicyEngineTests
     [Fact]
     public void ComputeSlice_WithBlocks_SliceEndIsLatestBlockEnd()
     {
-        var profile = CreateProfile(WebsitePolicy.Blocklist);
+        var preset = CreatePreset(WebsiteFilterType.Blocklist);
         var earlierBlock = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At, At.AddMinutes(30));
         var laterBlock = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At, At.AddHours(2));
 
-        var slice = _engine.ComputeSlice(At, [profile], [], [earlierBlock, laterBlock]);
+        var slice = _engine.ComputeSlice(At, [preset], [], [earlierBlock, laterBlock]);
 
         slice.SliceEnd.Should().Be(At.AddHours(2));
     }
@@ -227,11 +227,11 @@ public class PolicyEngineTests
     [Fact]
     public void ComputeSlice_FocusBlockRitualCompletedAndNoActiveSessions_FocusSessionCompletedIsTrue()
     {
-        var profile = CreateProfile(WebsitePolicy.Blocklist);
+        var preset = CreatePreset(WebsiteFilterType.Blocklist);
         var focusBlock = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At, At.AddHours(1));
         focusBlock.MarkRitualCompleted(At);
 
-        var slice = _engine.ComputeSlice(At, [profile], [], [focusBlock]);
+        var slice = _engine.ComputeSlice(At, [preset], [], [focusBlock]);
 
         slice.FocusSessionCompleted.Should().BeTrue();
     }
@@ -239,12 +239,12 @@ public class PolicyEngineTests
     [Fact]
     public void ComputeSlice_FocusBlockRitualCompletedButSessionStillActive_FocusSessionCompletedIsFalse()
     {
-        var profile = CreateProfile(WebsitePolicy.Blocklist);
+        var preset = CreatePreset(WebsiteFilterType.Blocklist);
         var focusBlock = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At, At.AddHours(1));
         focusBlock.MarkRitualCompleted(At);
         var session = CreateActiveSession();
 
-        var slice = _engine.ComputeSlice(At, [profile], [session], [focusBlock]);
+        var slice = _engine.ComputeSlice(At, [preset], [session], [focusBlock]);
 
         slice.FocusSessionCompleted.Should().BeFalse();
     }
@@ -252,10 +252,10 @@ public class PolicyEngineTests
     [Fact]
     public void ComputeSlice_FocusBlockRitualNotCompleted_FocusSessionCompletedIsFalse()
     {
-        var profile = CreateProfile(WebsitePolicy.Blocklist);
+        var preset = CreatePreset(WebsiteFilterType.Blocklist);
         var focusBlock = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At, At.AddHours(1));
 
-        var slice = _engine.ComputeSlice(At, [profile], [], [focusBlock]);
+        var slice = _engine.ComputeSlice(At, [preset], [], [focusBlock]);
 
         slice.FocusSessionCompleted.Should().BeFalse();
     }
@@ -263,10 +263,10 @@ public class PolicyEngineTests
     [Fact]
     public void ComputeSlice_ActiveSessionPresent_SetsActiveSessionId()
     {
-        var profile = CreateProfile(WebsitePolicy.Blocklist);
+        var preset = CreatePreset(WebsiteFilterType.Blocklist);
         var session = CreateActiveSession();
 
-        var slice = _engine.ComputeSlice(At, [profile], [session], []);
+        var slice = _engine.ComputeSlice(At, [preset], [session], []);
 
         slice.ActiveSessionId.Should().Be(session.Id);
     }
@@ -274,9 +274,9 @@ public class PolicyEngineTests
     [Fact]
     public void ComputeSlice_BlocklistWithNoBlockedAppsOrSites_IsEmpty()
     {
-        var profile = CreateProfile(WebsitePolicy.Blocklist);
+        var preset = CreatePreset(WebsiteFilterType.Blocklist);
 
-        var slice = _engine.ComputeSlice(At, [profile], [], []);
+        var slice = _engine.ComputeSlice(At, [preset], [], []);
 
         slice.IsEmpty.Should().BeTrue();
     }
@@ -284,9 +284,9 @@ public class PolicyEngineTests
     [Fact]
     public void ComputeSlice_AllowlistMode_IsNeverEmpty()
     {
-        var profile = CreateProfile(WebsitePolicy.Allowlist);
+        var preset = CreatePreset(WebsiteFilterType.Allowlist);
 
-        var slice = _engine.ComputeSlice(At, [profile], [], []);
+        var slice = _engine.ComputeSlice(At, [preset], [], []);
 
         slice.IsEmpty.Should().BeFalse();
     }

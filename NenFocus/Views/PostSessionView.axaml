@@ -154,14 +154,14 @@
                                        Foreground="#1A1A2E"/>
 						</StackPanel>
 
-						<!-- Profile -->
+						<!-- Preset -->
 						<StackPanel Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" Spacing="2">
-							<TextBlock Text="PROFILE"
+							<TextBlock Text="PRESET"
                                        FontSize="9"
                                        FontWeight="Medium"
                                        Foreground="#AAAABC"
                                        LetterSpacing="2"/>
-							<TextBlock Text="{Binding ProfileName}"
+							<TextBlock Text="{Binding PresetName}"
                                        FontSize="14"
                                        Foreground="#555566"/>
 						</StackPanel>

@@ -11,7 +11,7 @@ namespace NenFocus.Infrastructure.Persistence;
 public class NenFocusDbContext : DbContext
 {
     public DbSet<Session> Sessions { get; set; } = null!;
-    public DbSet<BlockProfile> BlockProfiles { get; set; } = null!;
+    public DbSet<BlockPreset> BlockPresets { get; set; } = null!;
     public DbSet<PlannedBlock> PlannedBlocks { get; set; } = null!;
     public DbSet<BlockedAttempt> BlockedAttempts { get; set; } = null!;
 
@@ -96,7 +96,7 @@ public class NenFocusDbContext : DbContext
                 .HasConversion<string>()
                 .IsRequired();
 
-            entity.Property(s => s.BlockProfileId)
+            entity.Property(s => s.BlockPresetId)
                 .IsRequired();
 
             entity.OwnsOne(s => s.BreakSettings, b =>
@@ -123,9 +123,9 @@ public class NenFocusDbContext : DbContext
 
         });
 
-        modelBuilder.Entity<BlockProfile>(entity =>
+        modelBuilder.Entity<BlockPreset>(entity =>
         {
-            entity.ToTable("BlockProfiles");
+            entity.ToTable("BlockPresets");
             entity.HasKey(p => p.Id);
 
             entity.Property(p => p.Id)
@@ -135,14 +135,14 @@ public class NenFocusDbContext : DbContext
                 .IsRequired()
                 .HasMaxLength(60);
 
-            entity.Property(p => p.WebsitePolicy)
+            entity.Property(p => p.WebsiteFilterType)
                 .HasConversion<string>()
                 .IsRequired();
 
-            entity.Property(p => p.ProfileType)
+            entity.Property(p => p.PresetType)
                 .HasConversion<string>()
                 .IsRequired()
-                .HasDefaultValue(BlockType.Focus);
+                .HasDefaultValue(BlockPresetType.Focus);
 
             entity.Property<string>("TagsSerialized")
                 .HasColumnName("Tags")
@@ -151,11 +151,11 @@ public class NenFocusDbContext : DbContext
             entity.OwnsMany(p => p.BlockedApps, a =>
             {
                 a.ToTable("BlockedApps");
-                a.WithOwner().HasForeignKey("BlockProfileId");
+                a.WithOwner().HasForeignKey("BlockPresetId");
                 a.Property(x => x.ProcessName)
                     .IsRequired()
                     .HasMaxLength(200);
-                a.HasKey("BlockProfileId", "ProcessName");
+                a.HasKey("BlockPresetId", "ProcessName");
             });
 
             var focusAllowlistId  = new Guid("a0000001-0000-0000-0000-000000000001");
@@ -164,43 +164,43 @@ public class NenFocusDbContext : DbContext
             var bgAllowlistId     = new Guid("a0000001-0000-0000-0000-000000000004");
 
             entity.HasData(
-                new { Id = focusAllowlistId, Name = "Focus — Allowlist",     WebsitePolicy = WebsitePolicy.Allowlist, ProfileType = BlockType.Focus,      TagsSerialized = "" },
-                new { Id = focusBlocklistId, Name = "Focus — Blocklist",      WebsitePolicy = WebsitePolicy.Blocklist, ProfileType = BlockType.Focus,      TagsSerialized = "" },
-                new { Id = bgBlocklistId,    Name = "Background — Blocklist", WebsitePolicy = WebsitePolicy.Blocklist, ProfileType = BlockType.Background, TagsSerialized = "" },
-                new { Id = bgAllowlistId,    Name = "Background — Allowlist", WebsitePolicy = WebsitePolicy.Allowlist, ProfileType = BlockType.Background, TagsSerialized = "" }
+                new { Id = focusAllowlistId, Name = "Focus — Allowlist",     WebsiteFilterType = WebsiteFilterType.Allowlist, PresetType = BlockPresetType.Focus,      TagsSerialized = "" },
+                new { Id = focusBlocklistId, Name = "Focus — Blocklist",      WebsiteFilterType = WebsiteFilterType.Blocklist, PresetType = BlockPresetType.Focus,      TagsSerialized = "" },
+                new { Id = bgBlocklistId,    Name = "Background — Blocklist", WebsiteFilterType = WebsiteFilterType.Blocklist, PresetType = BlockPresetType.Background, TagsSerialized = "" },
+                new { Id = bgAllowlistId,    Name = "Background — Allowlist", WebsiteFilterType = WebsiteFilterType.Allowlist, PresetType = BlockPresetType.Background, TagsSerialized = "" }
             );
 
             entity.OwnsMany(p => p.Websites, s =>
             {
                 s.ToTable("BlockedSites");
-                s.WithOwner().HasForeignKey("BlockProfileId");
+                s.WithOwner().HasForeignKey("BlockPresetId");
                 s.Property(x => x.Url)
                     .IsRequired()
                     .HasMaxLength(500);
-                s.HasKey("BlockProfileId", "Url");
+                s.HasKey("BlockPresetId", "Url");
                 s.HasData(
-                    new { BlockProfileId = focusAllowlistId, Url = "gemini.google.com" },
-                    new { BlockProfileId = focusAllowlistId, Url = "claude.ai" },
-                    new { BlockProfileId = focusAllowlistId, Url = "github.com" },
+                    new { BlockPresetId = focusAllowlistId, Url = "gemini.google.com" },
+                    new { BlockPresetId = focusAllowlistId, Url = "claude.ai" },
+                    new { BlockPresetId = focusAllowlistId, Url = "github.com" },
 
-                    new { BlockProfileId = focusBlocklistId, Url = "youtube.com" },
-                    new { BlockProfileId = focusBlocklistId, Url = "twitter.com" },
-                    new { BlockProfileId = focusBlocklistId, Url = "instagram.com" },
-                    new { BlockProfileId = focusBlocklistId, Url = "reddit.com" },
-                    new { BlockProfileId = focusBlocklistId, Url = "facebook.com" },
+                    new { BlockPresetId = focusBlocklistId, Url = "youtube.com" },
+                    new { BlockPresetId = focusBlocklistId, Url = "twitter.com" },
+                    new { BlockPresetId = focusBlocklistId, Url = "instagram.com" },
+                    new { BlockPresetId = focusBlocklistId, Url = "reddit.com" },
+                    new { BlockPresetId = focusBlocklistId, Url = "facebook.com" },
 
-                    new { BlockProfileId = bgBlocklistId, Url = "youtube.com" },
-                    new { BlockProfileId = bgBlocklistId, Url = "twitter.com" },
-                    new { BlockProfileId = bgBlocklistId, Url = "instagram.com" },
-                    new { BlockProfileId = bgBlocklistId, Url = "reddit.com" },
-                    new { BlockProfileId = bgBlocklistId, Url = "facebook.com" },
+                    new { BlockPresetId = bgBlocklistId, Url = "youtube.com" },
+                    new { BlockPresetId = bgBlocklistId, Url = "twitter.com" },
+                    new { BlockPresetId = bgBlocklistId, Url = "instagram.com" },
+                    new { BlockPresetId = bgBlocklistId, Url = "reddit.com" },
+                    new { BlockPresetId = bgBlocklistId, Url = "facebook.com" },
 
-                    new { BlockProfileId = bgAllowlistId, Url = "google.com" },
-                    new { BlockProfileId = bgAllowlistId, Url = "soundcloud.com" },
-                    new { BlockProfileId = bgAllowlistId, Url = "mail.google.com" },
-                    new { BlockProfileId = bgAllowlistId, Url = "gemini.google.com" },
-                    new { BlockProfileId = bgAllowlistId, Url = "claude.ai" },
-                    new { BlockProfileId = bgAllowlistId, Url = "github.com" }
+                    new { BlockPresetId = bgAllowlistId, Url = "google.com" },
+                    new { BlockPresetId = bgAllowlistId, Url = "soundcloud.com" },
+                    new { BlockPresetId = bgAllowlistId, Url = "mail.google.com" },
+                    new { BlockPresetId = bgAllowlistId, Url = "gemini.google.com" },
+                    new { BlockPresetId = bgAllowlistId, Url = "claude.ai" },
+                    new { BlockPresetId = bgAllowlistId, Url = "github.com" }
                 );
             });
         });
@@ -214,7 +214,7 @@ public class NenFocusDbContext : DbContext
             entity.Property(b => b.Id)
                 .ValueGeneratedNever();
 
-            entity.Property(b => b.BlockProfileId)
+            entity.Property(b => b.BlockPresetId)
                 .IsRequired();
 
             entity.Property(b => b.Start)

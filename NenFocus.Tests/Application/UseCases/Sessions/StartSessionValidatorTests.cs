@@ -10,25 +10,25 @@ namespace NenFocus.Tests.Application.UseCases.Sessions;
 
 public class StartSessionValidatorTests
 {
-    private readonly IBlockProfileRepository _profiles = Substitute.For<IBlockProfileRepository>();
+    private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
 
-    private StartSessionValidator CreateValidator() => new(_profiles);
+    private StartSessionValidator CreateValidator() => new(_presets);
 
-    private static StartSessionCommand ValidCommand(Guid profileId) => new()
+    private static StartSessionCommand ValidCommand(Guid presetId) => new()
     {
         Goal = "Deep work",
-        ProfileId = profileId,
+        PresetId = presetId,
         DurationMinutes = 30
     };
 
     [Fact]
-    public async Task Validate_ValidSpontaneousCommandWithFocusProfile_IsValid()
+    public async Task Validate_ValidSpontaneousCommandWithFocusPreset_IsValid()
     {
-        var profileId = Guid.NewGuid();
-        _profiles.GetByIdAsync(profileId, Arg.Any<CancellationToken>())
-            .Returns(BlockProfile.Create(profileId, "Deep Work", WebsitePolicy.Blocklist, BlockType.Focus, DateTime.UtcNow));
+        var presetId = Guid.NewGuid();
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, DateTime.UtcNow));
 
-        var result = await CreateValidator().ValidateAsync(ValidCommand(profileId));
+        var result = await CreateValidator().ValidateAsync(ValidCommand(presetId));
 
         result.IsValid.Should().BeTrue();
     }
@@ -54,9 +54,9 @@ public class StartSessionValidatorTests
     }
 
     [Fact]
-    public async Task Validate_NullProfileId_IsInvalid()
+    public async Task Validate_NullPresetId_IsInvalid()
     {
-        var command = ValidCommand(Guid.NewGuid()) with { ProfileId = null };
+        var command = ValidCommand(Guid.NewGuid()) with { PresetId = null };
 
         var result = await CreateValidator().ValidateAsync(command);
 
@@ -80,10 +80,10 @@ public class StartSessionValidatorTests
     [InlineData(480)]
     public async Task Validate_DurationAtBoundary_IsValid(int minutes)
     {
-        var profileId = Guid.NewGuid();
-        _profiles.GetByIdAsync(profileId, Arg.Any<CancellationToken>())
-            .Returns(BlockProfile.Create(profileId, "Deep Work", WebsitePolicy.Blocklist, BlockType.Focus, DateTime.UtcNow));
-        var command = ValidCommand(profileId) with { DurationMinutes = minutes };
+        var presetId = Guid.NewGuid();
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, DateTime.UtcNow));
+        var command = ValidCommand(presetId) with { DurationMinutes = minutes };
 
         var result = await CreateValidator().ValidateAsync(command);
 
@@ -91,26 +91,26 @@ public class StartSessionValidatorTests
     }
 
     [Fact]
-    public async Task Validate_Spontaneous_WithBackgroundProfile_IsInvalid()
+    public async Task Validate_Spontaneous_WithBackgroundPreset_IsInvalid()
     {
-        var profileId = Guid.NewGuid();
-        _profiles.GetByIdAsync(profileId, Arg.Any<CancellationToken>())
-            .Returns(BlockProfile.Create(profileId, "Background", WebsitePolicy.Blocklist, BlockType.Background, DateTime.UtcNow));
+        var presetId = Guid.NewGuid();
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
+            .Returns(BlockPreset.Create(presetId, "Background", WebsiteFilterType.Blocklist, BlockPresetType.Background, DateTime.UtcNow));
 
-        var result = await CreateValidator().ValidateAsync(ValidCommand(profileId));
+        var result = await CreateValidator().ValidateAsync(ValidCommand(presetId));
 
         result.IsValid.Should().BeFalse();
     }
 
     [Fact]
-    public async Task Validate_Planned_WithBackgroundProfile_SkipsProfileTypeCheck()
+    public async Task Validate_Planned_WithBackgroundPreset_SkipsPresetTypeCheck()
     {
-        // When OriginatingBlockId is set, the profile was already validated at
+        // When OriginatingBlockId is set, the preset was already validated at
         // scheduling time, so the Focus-only check is intentionally skipped.
-        var profileId = Guid.NewGuid();
-        _profiles.GetByIdAsync(profileId, Arg.Any<CancellationToken>())
-            .Returns(BlockProfile.Create(profileId, "Background", WebsitePolicy.Blocklist, BlockType.Background, DateTime.UtcNow));
-        var command = ValidCommand(profileId) with { OriginatingBlockId = Guid.NewGuid() };
+        var presetId = Guid.NewGuid();
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
+            .Returns(BlockPreset.Create(presetId, "Background", WebsiteFilterType.Blocklist, BlockPresetType.Background, DateTime.UtcNow));
+        var command = ValidCommand(presetId) with { OriginatingBlockId = Guid.NewGuid() };
 
         var result = await CreateValidator().ValidateAsync(command);
 
@@ -120,10 +120,10 @@ public class StartSessionValidatorTests
     [Fact]
     public async Task Validate_InvalidBreakInterval_IsInvalid()
     {
-        var profileId = Guid.NewGuid();
-        _profiles.GetByIdAsync(profileId, Arg.Any<CancellationToken>())
-            .Returns(BlockProfile.Create(profileId, "Deep Work", WebsitePolicy.Blocklist, BlockType.Focus, DateTime.UtcNow));
-        var command = ValidCommand(profileId) with
+        var presetId = Guid.NewGuid();
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, DateTime.UtcNow));
+        var command = ValidCommand(presetId) with
         {
             BreakSettings = new BreakSettingsDto { IntervalMinutes = 20, BreakDurationMinutes = 5 }
         };
@@ -136,10 +136,10 @@ public class StartSessionValidatorTests
     [Fact]
     public async Task Validate_InvalidBreakDuration_IsInvalid()
     {
-        var profileId = Guid.NewGuid();
-        _profiles.GetByIdAsync(profileId, Arg.Any<CancellationToken>())
-            .Returns(BlockProfile.Create(profileId, "Deep Work", WebsitePolicy.Blocklist, BlockType.Focus, DateTime.UtcNow));
-        var command = ValidCommand(profileId) with
+        var presetId = Guid.NewGuid();
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, DateTime.UtcNow));
+        var command = ValidCommand(presetId) with
         {
             BreakSettings = new BreakSettingsDto { IntervalMinutes = 25, BreakDurationMinutes = 7 }
         };

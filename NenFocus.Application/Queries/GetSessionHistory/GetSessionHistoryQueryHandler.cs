@@ -8,14 +8,14 @@ public sealed class GetSessionHistoryQueryHandler
     : IQueryHandler<GetSessionHistoryQuery, IReadOnlyList<SessionSummaryDto>>
 {
     private readonly ISessionRepository _sessions;
-    private readonly IBlockProfileRepository _profiles;
+    private readonly IBlockPresetRepository _presets;
 
     public GetSessionHistoryQueryHandler(
         ISessionRepository sessions,
-        IBlockProfileRepository profiles)
+        IBlockPresetRepository presets)
     {
         _sessions = sessions;
-        _profiles = profiles;
+        _presets = presets;
     }
 
     public async Task<IReadOnlyList<SessionSummaryDto>> HandleAsync(
@@ -25,11 +25,11 @@ public sealed class GetSessionHistoryQueryHandler
         var sessions = await _sessions.GetHistoryAsync(
             query.From,
             query.To,
-            query.ProfileId,
+            query.PresetId,
             cancellationToken);
 
-        var allProfiles = await _profiles.GetAllAsync(cancellationToken);
-        var profileMap = allProfiles.ToDictionary(p => p.Id, p => p.Name);
+        var allPresets = await _presets.GetAllAsync(cancellationToken);
+        var presetMap = allPresets.ToDictionary(p => p.Id, p => p.Name);
 
         return sessions.Select(s =>
         {
@@ -38,7 +38,7 @@ public sealed class GetSessionHistoryQueryHandler
             {
                 Id = s.Id,
                 Goal = s.Goal.Value,
-                ProfileName = profileMap.TryGetValue(s.BlockProfileId, out var name)
+                PresetName = presetMap.TryGetValue(s.BlockPresetId, out var name)
                     ? name : "Unknown",
                 PlannedDurationMinutes = (int)s.Duration.Value.TotalMinutes,
                 ActualDurationMinutes = elapsed.HasValue

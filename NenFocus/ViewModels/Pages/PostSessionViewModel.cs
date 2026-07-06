@@ -21,7 +21,7 @@ public partial class PostSessionViewModel : ViewModelBase
     public string Goal { get; }
     public string HeaderLabel { get; }
     public string ReflectionPrompt { get; }
-    public string ProfileName { get; }
+    public string PresetName { get; }
     public DateTime StartedAt { get; }
     public DateTime EndedAt { get; }
     public TimeSpan Duration { get; }
@@ -60,7 +60,7 @@ public partial class PostSessionViewModel : ViewModelBase
         ReflectionPrompt = data.Status == SessionStatus.Missed
             ? "What got in the way?"
             : "How did the session go? What did you accomplish?";
-        ProfileName = data.ProfileName;
+        PresetName = data.PresetName;
         StartedAt = data.StartedAt.ToLocalTime();
         EndedAt = data.EndedAt.ToLocalTime();
         Duration = data.ActualDuration;

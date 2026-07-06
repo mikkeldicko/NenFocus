@@ -12,7 +12,7 @@ public sealed class UpdatePlannedBlockValidator : AbstractValidator<UpdatePlanne
 
     public UpdatePlannedBlockValidator(
         IPlannedBlockRepository blocks,
-        IBlockProfileRepository profiles,
+        IBlockPresetRepository presets,
         ISystemClock clock)
     {
         _blocks = blocks;
@@ -21,20 +21,20 @@ public sealed class UpdatePlannedBlockValidator : AbstractValidator<UpdatePlanne
         RuleFor(x => x.BlockId)
             .NotEmpty().WithMessage("Block ID is required.");
 
-        RuleFor(x => x.ProfileId)
-            .NotEmpty().WithMessage("Profile ID is required.");
+        RuleFor(x => x.PresetId)
+            .NotEmpty().WithMessage("Preset ID is required.");
 
         RuleFor(x => x)
             .MustAsync(async (command, ct) =>
             {
-                if (command.ProfileId == Guid.Empty || command.BlockId == Guid.Empty) return true;
+                if (command.PresetId == Guid.Empty || command.BlockId == Guid.Empty) return true;
                 var block   = await _blocks.GetByIdAsync(command.BlockId, ct);
-                var profile = await profiles.GetByIdAsync(command.ProfileId, ct);
-                if (block is null || profile is null) return true;
-                var required = block is FocusBlock ? BlockType.Focus : BlockType.Background;
-                return profile.ProfileType == required;
+                var preset = await presets.GetByIdAsync(command.PresetId, ct);
+                if (block is null || preset is null) return true;
+                var required = block is FocusBlock ? BlockPresetType.Focus : BlockPresetType.Background;
+                return preset.PresetType == required;
             })
-            .WithMessage("The selected profile type does not match this block type.");
+            .WithMessage("The selected preset type does not match this block preset type.");
 
         // If the block has already started its start time is locked — the UI greys it
         // out and sends the original value. Skip the future check in that case so a

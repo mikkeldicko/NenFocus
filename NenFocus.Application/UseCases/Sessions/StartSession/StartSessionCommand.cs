@@ -6,7 +6,7 @@ namespace NenFocus.Application.UseCases.Sessions.StartSession;
 public sealed record StartSessionCommand : ICommand<StartSessionResult>
 {
     public string Goal { get; init; } = string.Empty;
-    public Guid? ProfileId { get; init; }
+    public Guid? PresetId { get; init; }
     public int DurationMinutes { get; init; }
     public BreakSettingsDto? BreakSettings { get; init; }
     public Guid? OriginatingBlockId { get; init; }

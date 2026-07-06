@@ -7,7 +7,7 @@ public sealed record PostSessionDto
     public Guid SessionId { get; init; }
     public SessionStatus Status { get; init; }
     public string Goal { get; init; } = string.Empty;
-    public string ProfileName { get; init; } = string.Empty;
+    public string PresetName { get; init; } = string.Empty;
     public DateTime StartedAt { get; init; }
     public DateTime EndedAt { get; init; }
     public int PlannedDurationMinutes { get; init; }

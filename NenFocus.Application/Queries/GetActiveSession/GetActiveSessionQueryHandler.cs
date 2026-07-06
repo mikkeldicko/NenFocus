@@ -7,14 +7,14 @@ public sealed class GetActiveSessionQueryHandler
     : IQueryHandler<GetActiveSessionQuery, SessionDto?>
 {
     private readonly ISessionRepository _sessions;
-    private readonly IBlockProfileRepository _profiles;
+    private readonly IBlockPresetRepository _presets;
 
     public GetActiveSessionQueryHandler(
         ISessionRepository sessions,
-        IBlockProfileRepository profiles)
+        IBlockPresetRepository presets)
     {
         _sessions = sessions;
-        _profiles = profiles;
+        _presets = presets;
     }
 
     public async Task<SessionDto?> HandleAsync(
@@ -24,13 +24,13 @@ public sealed class GetActiveSessionQueryHandler
         var session = await _sessions.GetActiveAsync(cancellationToken);
         if (session is null) return null;
 
-        var profile = await _profiles.GetByIdAsync(session.BlockProfileId, cancellationToken);
+        var preset = await _presets.GetByIdAsync(session.BlockPresetId, cancellationToken);
 
         return new SessionDto
         {
             Id = session.Id,
             Goal = session.Goal.Value,
-            ProfileName = profile?.Name ?? "Unknown",
+            PresetName = preset?.Name ?? "Unknown",
             DurationMinutes = (int)session.Duration.Value.TotalMinutes,
             Status = session.Status,
             StartedAt = session.StartedAt ?? DateTime.UtcNow,

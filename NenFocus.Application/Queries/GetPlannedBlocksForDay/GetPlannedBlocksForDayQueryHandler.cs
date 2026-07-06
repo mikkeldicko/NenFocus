@@ -9,14 +9,14 @@ public sealed class GetPlannedBlocksForDayQueryHandler
     : IQueryHandler<GetPlannedBlocksForDayQuery, IReadOnlyList<PlannedBlockDto>>
 {
     private readonly IPlannedBlockRepository _blocks;
-    private readonly IBlockProfileRepository _profiles;
+    private readonly IBlockPresetRepository _presets;
 
     public GetPlannedBlocksForDayQueryHandler(
         IPlannedBlockRepository blocks,
-        IBlockProfileRepository profiles)
+        IBlockPresetRepository presets)
     {
         _blocks = blocks;
-        _profiles = profiles;
+        _presets = presets;
     }
 
     public async Task<IReadOnlyList<PlannedBlockDto>> HandleAsync(
@@ -25,21 +25,21 @@ public sealed class GetPlannedBlocksForDayQueryHandler
     {
         var blocks = await _blocks.GetForDayAsync(query.Date, cancellationToken);
 
-        var allProfiles = await _profiles.GetAllAsync(cancellationToken);
-        var profileMap = allProfiles.ToDictionary(p => p.Id);
+        var allPresets = await _presets.GetAllAsync(cancellationToken);
+        var presetMap = allPresets.ToDictionary(p => p.Id);
 
         return blocks.Select(b =>
         {
-            var profile = profileMap.TryGetValue(b.BlockProfileId, out var p) ? p : null;
+            var preset = presetMap.TryGetValue(b.BlockPresetId, out var p) ? p : null;
             return new PlannedBlockDto
             {
                 Id = b.Id,
-                ProfileId = b.BlockProfileId,
-                ProfileName = profile?.Name ?? "Unknown",
-                BlockType = b is FocusBlock ? BlockType.Focus : BlockType.Background,
+                PresetId = b.BlockPresetId,
+                PresetName = preset?.Name ?? "Unknown",
+                BlockPresetType = b is FocusBlock ? BlockPresetType.Focus : BlockPresetType.Background,
                 Start = b.Start,
                 End = b.End,
-                WebsitePolicy = profile?.WebsitePolicy ?? WebsitePolicy.Blocklist,
+                WebsiteFilterType = preset?.WebsiteFilterType ?? WebsiteFilterType.Blocklist,
                 IsCompleted = b is FocusBlock fb && fb.RitualCompletedAt.HasValue
             };
         }).ToList();

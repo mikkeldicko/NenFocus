@@ -13,7 +13,7 @@ namespace NenFocus.Tests.Infrastructure.Services;
 public class SessionStateServiceTests
 {
     private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
-    private readonly IBlockProfileRepository _profiles = Substitute.For<IBlockProfileRepository>();
+    private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
     private readonly ICommandHandler<SweepMissedFocusBlocksCommand, SweepMissedFocusBlocksResult> _sweep =
         Substitute.For<ICommandHandler<SweepMissedFocusBlocksCommand, SweepMissedFocusBlocksResult>>();
 
@@ -23,13 +23,13 @@ public class SessionStateServiceTests
             .Returns(new SweepMissedFocusBlocksResult());
     }
 
-    private SessionStateService CreateService() => new(_sessions, _profiles, _sweep);
+    private SessionStateService CreateService() => new(_sessions, _presets, _sweep);
 
-    private static Session CreateActiveSession(Guid profileId)
+    private static Session CreateActiveSession(Guid presetId)
     {
         var session = Session.Create(
             Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(30)),
-            profileId, SessionOrigin.Spontaneous);
+            presetId, SessionOrigin.Spontaneous);
         session.Start(DateTime.UtcNow);
         return session;
     }
@@ -49,35 +49,35 @@ public class SessionStateServiceTests
     }
 
     [Fact]
-    public async Task InitializeAsync_ActiveSessionExists_MapsProfileNameAndRaisesSessionChanged()
+    public async Task InitializeAsync_ActiveSessionExists_MapsPresetNameAndRaisesSessionChanged()
     {
-        var profileId = Guid.NewGuid();
-        var session = CreateActiveSession(profileId);
+        var presetId = Guid.NewGuid();
+        var session = CreateActiveSession(presetId);
         _sessions.GetActiveAsync().Returns(session);
-        _profiles.GetByIdAsync(profileId, Arg.Any<CancellationToken>())
-            .Returns(BlockProfile.Create(profileId, "Deep Work", WebsitePolicy.Blocklist, BlockType.Focus, DateTime.UtcNow));
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, DateTime.UtcNow));
         var service = CreateService();
         SessionDto? raisedWith = null;
         service.SessionChanged += (_, dto) => raisedWith = dto;
 
         await service.InitializeAsync();
 
-        service.ActiveSession!.ProfileName.Should().Be("Deep Work");
+        service.ActiveSession!.PresetName.Should().Be("Deep Work");
         raisedWith.Should().BeSameAs(service.ActiveSession);
     }
 
     [Fact]
-    public async Task InitializeAsync_ProfileNotFound_UsesUnknownProfilePlaceholder()
+    public async Task InitializeAsync_PresetNotFound_UsesUnknownPresetPlaceholder()
     {
-        var profileId = Guid.NewGuid();
-        var session = CreateActiveSession(profileId);
+        var presetId = Guid.NewGuid();
+        var session = CreateActiveSession(presetId);
         _sessions.GetActiveAsync().Returns(session);
-        _profiles.GetByIdAsync(profileId, Arg.Any<CancellationToken>()).Returns((BlockProfile?)null);
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>()).Returns((BlockPreset?)null);
         var service = CreateService();
 
         await service.InitializeAsync();
 
-        service.ActiveSession!.ProfileName.Should().Be("Unknown Profile");
+        service.ActiveSession!.PresetName.Should().Be("Unknown Preset");
     }
 
     [Fact]

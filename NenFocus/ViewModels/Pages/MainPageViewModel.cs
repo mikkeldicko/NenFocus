@@ -42,7 +42,7 @@ public partial class MainPageViewModel : ViewModelBase
     private string _sessionGoal = string.Empty;
 
     [ObservableProperty]
-    private string _activeProfileName = string.Empty;
+    private string _activePresetName = string.Empty;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanTakeBreak))]
@@ -148,7 +148,7 @@ public partial class MainPageViewModel : ViewModelBase
     {
         _activeSessionId = session.Id;
         SessionGoal = session.Goal;
-        ActiveProfileName = session.ProfileName;
+        ActivePresetName = session.PresetName;
         HasActiveSession = true;
         HasBreakSettings = session.BreakSettings is not null;
         BreaksTaken = session.BreaksTaken;
@@ -166,7 +166,7 @@ public partial class MainPageViewModel : ViewModelBase
         BreakProgress = 0;
         BreaksTaken = 0;
         SessionGoal = string.Empty;
-        ActiveProfileName = string.Empty;
+        ActivePresetName = string.Empty;
     }
 
     [RelayCommand]

@@ -8,7 +8,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
-using NenFocus.Application.Queries.GetAllBlockProfiles;
+using NenFocus.Application.Queries.GetAllBlockPresets;
 using NenFocus.Application.Queries.GetPlannedBlocksForDay;
 using NenFocus.Application.UseCases.Planner.CreatePlannedBlock;
 using NenFocus.Application.UseCases.Planner.DeletePlannedBlock;
@@ -26,7 +26,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     public const int TotalHours = LastHour - FirstHour;
     public double GridContentHeight => HourRowHeight * TotalHours;
 
-    private readonly IQueryHandler<GetAllBlockProfilesQuery, IReadOnlyList<BlockProfileDto>> _getProfiles;
+    private readonly IQueryHandler<GetAllBlockPresetsQuery, IReadOnlyList<BlockPresetDto>> _getPresets;
     private readonly IQueryHandler<GetPlannedBlocksForDayQuery, IReadOnlyList<PlannedBlockDto>> _getBlocksForDay;
     private readonly ICommandHandler<CreatePlannedBlockCommand, CreatePlannedBlockResult> _createBlock;
     private readonly ICommandHandler<UpdatePlannedBlockCommand, UpdatePlannedBlockResult> _updateBlock;
@@ -35,7 +35,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     private readonly ISessionStateService _sessionState;
 
     private readonly Dictionary<Guid, PlannedBlockDto> _blocksInWeek = new();
-    private readonly List<BlockProfileDto> _allProfiles = new();
+    private readonly List<BlockPresetDto> _allPresets = new();
     private Guid? _editingBlockId;
 
     [ObservableProperty] private DateTime _weekStart;
@@ -57,7 +57,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     public ObservableCollection<WeekDayHeaderViewModel> DayHeaders { get; } = new();
     public ObservableCollection<HourLabelViewModel> HourLabels { get; } = new();
     public ObservableCollection<PlannedBlockTileViewModel> Tiles { get; } = new();
-    public ObservableCollection<BlockProfileDto> AvailableProfiles { get; } = new();
+    public ObservableCollection<BlockPresetDto> AvailablePresets { get; } = new();
     public ObservableCollection<string> TimeOptions { get; } = new();
 
     [ObservableProperty] private bool _isLoading;
@@ -75,7 +75,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     [ObservableProperty] private string _formEndTime = "10:00";
 
     [ObservableProperty] private bool _isFocusBlock = true;
-    [ObservableProperty] private BlockProfileDto? _selectedProfile;
+    [ObservableProperty] private BlockPresetDto? _selectedPreset;
     [ObservableProperty] private bool _isStartLocked;
     [ObservableProperty] private bool _isEditingCompleted;
     [ObservableProperty] private string? _dragError;
@@ -105,7 +105,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     }
 
     public PlannerPageViewModel(
-        IQueryHandler<GetAllBlockProfilesQuery, IReadOnlyList<BlockProfileDto>> getProfiles,
+        IQueryHandler<GetAllBlockPresetsQuery, IReadOnlyList<BlockPresetDto>> getPresets,
         IQueryHandler<GetPlannedBlocksForDayQuery, IReadOnlyList<PlannedBlockDto>> getBlocksForDay,
         ICommandHandler<CreatePlannedBlockCommand, CreatePlannedBlockResult> createBlock,
         ICommandHandler<UpdatePlannedBlockCommand, UpdatePlannedBlockResult> updateBlock,
@@ -113,7 +113,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         IPlannerClockService clockService,
         ISessionStateService sessionState)
     {
-        _getProfiles = getProfiles;
+        _getPresets = getPresets;
         _getBlocksForDay = getBlocksForDay;
         _createBlock = createBlock;
         _updateBlock = updateBlock;
@@ -179,7 +179,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
     private async Task InitAsync()
     {
-        await LoadProfilesAsync();
+        await LoadPresetsAsync();
         await LoadWeekAsync();
     }
 
@@ -226,26 +226,26 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         return date.Date.AddDays(-diff);
     }
 
-    private async Task LoadProfilesAsync()
+    private async Task LoadPresetsAsync()
     {
-        var profiles = await _getProfiles.HandleAsync(new GetAllBlockProfilesQuery());
-        _allProfiles.Clear();
-        _allProfiles.AddRange(profiles);
-        RefreshAvailableProfiles();
+        var presets = await _getPresets.HandleAsync(new GetAllBlockPresetsQuery());
+        _allPresets.Clear();
+        _allPresets.AddRange(presets);
+        RefreshAvailablePresets();
     }
 
-    private void RefreshAvailableProfiles()
+    private void RefreshAvailablePresets()
     {
-        var requiredType = IsFocusBlock ? BlockType.Focus : BlockType.Background;
-        AvailableProfiles.Clear();
-        foreach (var p in _allProfiles.Where(p => p.ProfileType == requiredType))
-            AvailableProfiles.Add(p);
+        var requiredType = IsFocusBlock ? BlockPresetType.Focus : BlockPresetType.Background;
+        AvailablePresets.Clear();
+        foreach (var p in _allPresets.Where(p => p.PresetType == requiredType))
+            AvailablePresets.Add(p);
     }
 
     partial void OnIsFocusBlockChanged(bool value)
     {
-        RefreshAvailableProfiles();
-        SelectedProfile = AvailableProfiles.FirstOrDefault();
+        RefreshAvailablePresets();
+        SelectedPreset = AvailablePresets.FirstOrDefault();
     }
 
     private async Task LoadWeekAsync()
@@ -283,13 +283,13 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         if (position is null) return null;
 
         var localDto = dto with { Start = localStart, End = localEnd };
-        return new PlannedBlockTileViewModel(localDto, dto.BlockType, columnIndex, position.Value.Top, position.Value.Height);
+        return new PlannedBlockTileViewModel(localDto, dto.BlockPresetType, columnIndex, position.Value.Top, position.Value.Height);
     }
 
     [RelayCommand]
     private async Task NewBlockAtAsync(GridSlotPosition slot)
     {
-        await EnsureProfilesLoadedAsync();
+        await EnsurePresetsLoadedAsync();
         _editingBlockId = null;
         IsEditing = false;
         IsStartLocked = false;
@@ -301,7 +301,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
         FormStartTime = $"{slot.Hour:D2}:00";
         FormEndTime = $"{(slot.Hour + 1):D2}:00";
-        SelectedProfile = AvailableProfiles.FirstOrDefault();
+        SelectedPreset = AvailablePresets.FirstOrDefault();
         IsFormVisible = true;
     }
 
@@ -310,7 +310,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     {
         if (_sessionState.ActiveSession?.OriginatingBlockId == tile.Id) return;
         if (!_blocksInWeek.TryGetValue(tile.Id, out var dto)) return;
-        await EnsureProfilesLoadedAsync();
+        await EnsurePresetsLoadedAsync();
         _editingBlockId = dto.Id;
         IsEditing = true;
         IsStartLocked = dto.Start <= DateTime.UtcNow;
@@ -325,22 +325,22 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
         FormStartTime = $"{localStart.Hour:D2}:{localStart.Minute:D2}";
         FormEndTime = $"{localEnd.Hour:D2}:{localEnd.Minute:D2}";
-        IsFocusBlock = dto.BlockType == BlockType.Focus;
-        SelectedProfile = AvailableProfiles.FirstOrDefault(p => p.Id == dto.ProfileId)
-                          ?? AvailableProfiles.FirstOrDefault();
+        IsFocusBlock = dto.BlockPresetType == BlockPresetType.Focus;
+        SelectedPreset = AvailablePresets.FirstOrDefault(p => p.Id == dto.PresetId)
+                          ?? AvailablePresets.FirstOrDefault();
         IsFormVisible = true;
     }
 
-    private async Task EnsureProfilesLoadedAsync()
+    private async Task EnsurePresetsLoadedAsync()
     {
-        if (AvailableProfiles.Count == 0) await LoadProfilesAsync();
+        if (AvailablePresets.Count == 0) await LoadPresetsAsync();
     }
 
     private void ResetForm()
     {
         FormError = null;
         IsFocusBlock = true;
-        SelectedProfile = null;
+        SelectedPreset = null;
     }
 
     [RelayCommand] private void SetFocusBlock() => IsFocusBlock = true;
@@ -350,7 +350,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     private async Task SaveAsync()
     {
         FormError = null;
-        if (SelectedProfile is null) { FormError = "Please select a block profile."; return; }
+        if (SelectedPreset is null) { FormError = "Please select a block preset."; return; }
         if (!TryParseFormTime(FormStartTime, out var startTime) || !TryParseFormTime(FormEndTime, out var endTime))
         {
             FormError = "Invalid time format. Use HH:mm.";
@@ -364,14 +364,14 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         var startUtc = localStart.ToUniversalTime();
         var endUtc = localEnd.ToUniversalTime();
 
-        var blockType = IsFocusBlock ? BlockType.Focus : BlockType.Background;
+        var blockPresetType = IsFocusBlock ? BlockPresetType.Focus : BlockPresetType.Background;
 
         if (IsEditing && _editingBlockId.HasValue)
         {
             var result = await _updateBlock.HandleAsync(new UpdatePlannedBlockCommand
             {
                 BlockId = _editingBlockId.Value,
-                ProfileId = SelectedProfile.Id,
+                PresetId = SelectedPreset.Id,
                 Start = startUtc,
                 End = endUtc
             });
@@ -381,8 +381,8 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         {
             var result = await _createBlock.HandleAsync(new CreatePlannedBlockCommand
             {
-                ProfileId = SelectedProfile.Id,
-                BlockType = blockType,
+                PresetId = SelectedPreset.Id,
+                BlockPresetType = blockPresetType,
                 Start = startUtc,
                 End = endUtc
             });
@@ -446,7 +446,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private async Task OpenNewBlockFormWithRangeAsync(DragCreatedRange range)
     {
-        await EnsureProfilesLoadedAsync();
+        await EnsurePresetsLoadedAsync();
         _editingBlockId = null;
         IsEditing = false;
         IsStartLocked = false;
@@ -458,7 +458,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
         FormStartTime = $"{(int)range.LocalStart.TotalHours:D2}:{range.LocalStart.Minutes:D2}";
         FormEndTime   = $"{(int)range.LocalEnd.TotalHours:D2}:{range.LocalEnd.Minutes:D2}";
-        SelectedProfile = AvailableProfiles.FirstOrDefault();
+        SelectedPreset = AvailablePresets.FirstOrDefault();
         IsFormVisible = true;
     }
 
@@ -484,7 +484,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         var updateResult = await _updateBlock.HandleAsync(new UpdatePlannedBlockCommand
         {
             BlockId   = result.BlockId,
-            ProfileId = dto.ProfileId,
+            PresetId = dto.PresetId,
             Start     = result.NewStartUtc,
             End       = result.NewEndUtc
         });

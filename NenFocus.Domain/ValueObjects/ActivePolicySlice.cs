@@ -7,12 +7,12 @@ public sealed record ActivePolicySlice
     public Guid? ActiveSessionId { get; init; }
     public DateTime SliceStart { get; init; }
     public DateTime SliceEnd { get; init; }
-    public WebsitePolicy WebsitePolicyMode { get; init; } = WebsitePolicy.Blocklist;
+    public WebsiteFilterType WebsiteFilterTypeMode { get; init; } = WebsiteFilterType.Blocklist;
 
     public IReadOnlySet<string> AllowedSites { get; init; } = new HashSet<string>();
     public IReadOnlySet<string> BlockedSites { get; init; } = new HashSet<string>();
     public IReadOnlySet<string> BlockedApps  { get; init; } = new HashSet<string>();
-    public BlockType? ActiveBlockType { get; init; }
+    public BlockPresetType? ActiveBlockPresetType { get; init; }
     public Guid? ActiveFocusBlockId { get; init; }
 
     // True when a Focus Block is still within its scheduled window but its session has
@@ -20,7 +20,7 @@ public sealed record ActivePolicySlice
     public bool FocusSessionCompleted { get; init; }
 
     public bool IsEmpty =>
-        WebsitePolicyMode == WebsitePolicy.Blocklist &&
+        WebsiteFilterTypeMode == WebsiteFilterType.Blocklist &&
         BlockedSites.Count == 0 &&
         BlockedApps.Count == 0;
 }

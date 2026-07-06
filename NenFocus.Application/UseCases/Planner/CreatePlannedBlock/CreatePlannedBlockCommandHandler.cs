@@ -7,16 +7,16 @@ namespace NenFocus.Application.UseCases.Planner.CreatePlannedBlock;
 public sealed class CreatePlannedBlockCommandHandler : ICommandHandler<CreatePlannedBlockCommand, CreatePlannedBlockResult>
 {
     private readonly IPlannedBlockRepository _blocks;
-    private readonly IBlockProfileRepository _profiles;
+    private readonly IBlockPresetRepository _presets;
     private readonly ISessionRepository _sessions;
 
     public CreatePlannedBlockCommandHandler(
         IPlannedBlockRepository blocks,
-        IBlockProfileRepository profiles,
+        IBlockPresetRepository presets,
         ISessionRepository sessions)
     {
         _blocks = blocks;
-        _profiles = profiles;
+        _presets = presets;
         _sessions = sessions;
     }
 
@@ -25,10 +25,10 @@ public sealed class CreatePlannedBlockCommandHandler : ICommandHandler<CreatePla
         var startTime = command.Start.ToUniversalTime();
         var endTime = command.End.ToUniversalTime();
 
-        var profile = await _profiles.GetByIdAsync(command.ProfileId, cancellationToken);
-        if (profile is null) return CreatePlannedBlockResult.Fail("Profile not found.");
+        var preset = await _presets.GetByIdAsync(command.PresetId, cancellationToken);
+        if (preset is null) return CreatePlannedBlockResult.Fail("Preset not found.");
 
-        if (command.BlockType == BlockType.Focus)
+        if (command.BlockPresetType == BlockPresetType.Focus)
         {
             var overlapping = await _blocks.GetOverlappingAsync(startTime, endTime, ritualOnly: true, cancellationToken: cancellationToken);
             if (overlapping.Count > 0) return CreatePlannedBlockResult.Fail("A Focus block already exists here.");
@@ -48,9 +48,9 @@ public sealed class CreatePlannedBlockCommandHandler : ICommandHandler<CreatePla
             }
         }
 
-        PlannedBlock block = command.BlockType == BlockType.Focus
-            ? FocusBlock.Create(Guid.NewGuid(), command.ProfileId, startTime, endTime)
-            : BackgroundBlock.Create(Guid.NewGuid(), command.ProfileId, startTime, endTime);
+        PlannedBlock block = command.BlockPresetType == BlockPresetType.Focus
+            ? FocusBlock.Create(Guid.NewGuid(), command.PresetId, startTime, endTime)
+            : BackgroundBlock.Create(Guid.NewGuid(), command.PresetId, startTime, endTime);
 
         await _blocks.AddAsync(block, cancellationToken);
         return CreatePlannedBlockResult.Ok(block.Id);

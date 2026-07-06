@@ -8,14 +8,14 @@ public sealed class GetFocusBlockRitualContextQueryHandler
     : IQueryHandler<GetFocusBlockRitualContextQuery, FocusBlockRitualContext?>
 {
     private readonly IPlannedBlockRepository _blocks;
-    private readonly IBlockProfileRepository _profiles;
+    private readonly IBlockPresetRepository _presets;
 
     public GetFocusBlockRitualContextQueryHandler(
         IPlannedBlockRepository blocks,
-        IBlockProfileRepository profiles)
+        IBlockPresetRepository presets)
     {
         _blocks = blocks;
-        _profiles = profiles;
+        _presets = presets;
     }
 
     public async Task<FocusBlockRitualContext?> HandleAsync(GetFocusBlockRitualContextQuery query, CancellationToken ct)
@@ -23,12 +23,12 @@ public sealed class GetFocusBlockRitualContextQueryHandler
         var block = await _blocks.GetByIdAsync(query.FocusBlockId, ct) as FocusBlock;
         if (block is null) return null;
 
-        var profile = await _profiles.GetByIdAsync(block.BlockProfileId, ct);
-        if (profile is null) return null;
+        var preset = await _presets.GetByIdAsync(block.BlockPresetId, ct);
+        if (preset is null) return null;
 
         return new FocusBlockRitualContext
         {
-            Profile = BlockProfileDto.FromEntity(profile),
+            Preset = BlockPresetDto.FromEntity(preset),
             Schedule = new FocusBlockSchedule { Start = block.Start, End = block.End }
         };
     }

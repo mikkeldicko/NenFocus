@@ -223,7 +223,7 @@ public partial class PlannerPageView : UserControl
         var stack = new StackPanel { Spacing = 2 };
 
         var titleRow = new DockPanel { LastChildFill = true };
-        if (tile.WebsitePolicy == WebsitePolicy.Allowlist)
+        if (tile.WebsiteFilterType == WebsiteFilterType.Allowlist)
         {
             var chip = new Border
             {
@@ -247,7 +247,7 @@ public partial class PlannerPageView : UserControl
         }
         titleRow.Children.Add(new TextBlock
         {
-            Text              = tile.ProfileName,
+            Text              = tile.PresetName,
             FontSize          = 12,
             FontWeight        = FontWeight.SemiBold,
             TextTrimming      = TextTrimming.CharacterEllipsis,

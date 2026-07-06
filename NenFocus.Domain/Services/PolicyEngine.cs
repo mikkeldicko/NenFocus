@@ -9,28 +9,28 @@ public sealed class PolicyEngine : IPolicyEngine
 {
     public ActivePolicySlice ComputeSlice(
         DateTime at,
-        IEnumerable<BlockProfile> profiles,
+        IEnumerable<BlockPreset> presets,
         IEnumerable<Session> sessions,
         IEnumerable<PlannedBlock> blocks)
     {
-        var activeProfiles = profiles.ToList();
+        var activePresets = presets.ToList();
         var activeSessions = sessions.ToList();
         var activeBlocks = blocks.ToList();
 
-        if (activeProfiles.Count == 0 && activeSessions.Count == 0 && activeBlocks.Count == 0)
+        if (activePresets.Count == 0 && activeSessions.Count == 0 && activeBlocks.Count == 0)
             return new ActivePolicySlice { SliceStart = at, SliceEnd = at.AddMinutes(1) };
 
         var tempApps = activeSessions
             .SelectMany(s => s.TemporaryBlockedApps.Select(ProcessUtils.NormalizeProcessName));
 
-        var blockedApps = activeProfiles
+        var blockedApps = activePresets
             .SelectMany(p => p.BlockedApps.Select(a => ProcessUtils.NormalizeProcessName(a.ProcessName)))
             .Concat(tempApps)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        var effectivePolicy = activeProfiles.Any(p => p.WebsitePolicy == WebsitePolicy.Allowlist)
-            ? WebsitePolicy.Allowlist
-            : WebsitePolicy.Blocklist;
+        var effectivePolicy = activePresets.Any(p => p.WebsiteFilterType == WebsiteFilterType.Allowlist)
+            ? WebsiteFilterType.Allowlist
+            : WebsiteFilterType.Blocklist;
 
         HashSet<string> allowedSites = new();
         HashSet<string> blockedSites = new();
@@ -39,16 +39,16 @@ public sealed class PolicyEngine : IPolicyEngine
             .SelectMany(s => s.TemporaryBlockedSites)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        if (effectivePolicy == WebsitePolicy.Allowlist)
+        if (effectivePolicy == WebsiteFilterType.Allowlist)
         {
-            var allowlistProfiles = activeProfiles.Where(p => p.WebsitePolicy == WebsitePolicy.Allowlist).ToList();
+            var allowlistPresets = activePresets.Where(p => p.WebsiteFilterType == WebsiteFilterType.Allowlist).ToList();
 
-            var intersectList = allowlistProfiles[0].Websites.Select(s => s.Url).ToHashSet(StringComparer.OrdinalIgnoreCase);
-            foreach (var profile in allowlistProfiles.Skip(1))
-                intersectList.IntersectWith(profile.Websites.Select(s => s.Url));
+            var intersectList = allowlistPresets[0].Websites.Select(s => s.Url).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            foreach (var preset in allowlistPresets.Skip(1))
+                intersectList.IntersectWith(preset.Websites.Select(s => s.Url));
 
-            var unionOfBlocklists = activeProfiles
-                .Where(p => p.WebsitePolicy == WebsitePolicy.Blocklist)
+            var unionOfBlocklists = activePresets
+                .Where(p => p.WebsiteFilterType == WebsiteFilterType.Blocklist)
                 .SelectMany(p => p.Websites.Select(s => s.Url))
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
@@ -61,15 +61,15 @@ public sealed class PolicyEngine : IPolicyEngine
         }
         else
         {
-            blockedSites = activeProfiles.SelectMany(p => p.Websites.Select(s => s.Url)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            blockedSites = activePresets.SelectMany(p => p.Websites.Select(s => s.Url)).ToHashSet(StringComparer.OrdinalIgnoreCase);
             blockedSites.UnionWith(tempSites);
         }
 
         var activePlannedBlock = activeBlocks.OrderByDescending(b => b is FocusBlock).FirstOrDefault();
-        BlockType? activeBlockType = activePlannedBlock switch
+        BlockPresetType? activeBlockPresetType = activePlannedBlock switch
         {
-            FocusBlock => BlockType.Focus,
-            BackgroundBlock => BlockType.Background,
+            FocusBlock => BlockPresetType.Focus,
+            BackgroundBlock => BlockPresetType.Background,
             _ => null
         };
 
@@ -83,11 +83,11 @@ public sealed class PolicyEngine : IPolicyEngine
             ActiveSessionId = activeSessions.FirstOrDefault()?.Id,
             SliceStart = at,
             SliceEnd = activeBlocks.Any() ? activeBlocks.Max(b => b.End) : at.AddMinutes(1),
-            WebsitePolicyMode = effectivePolicy,
+            WebsiteFilterTypeMode = effectivePolicy,
             AllowedSites = allowedSites,
             BlockedSites = blockedSites,
             BlockedApps = blockedApps,
-            ActiveBlockType = activeBlockType,
+            ActiveBlockPresetType = activeBlockPresetType,
             ActiveFocusBlockId = focusBlock?.Id,
             FocusSessionCompleted = focusSessionCompleted
         };

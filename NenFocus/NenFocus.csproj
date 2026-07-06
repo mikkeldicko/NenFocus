@@ -65,8 +65,8 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<Compile Update="Views\BlockProfilePageView.axaml.cs">
-			<DependentUpon>BlockProfilePageView.axaml</DependentUpon>
+		<Compile Update="Views\BlockPresetPageView.axaml.cs">
+			<DependentUpon>BlockPresetPageView.axaml</DependentUpon>
 		</Compile>
 	</ItemGroup>
 </Project>

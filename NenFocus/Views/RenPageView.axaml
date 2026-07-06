@@ -7,7 +7,7 @@
              Background="Transparent">
 
     <UserControl.Styles>
-        <Style Selector="Button.profile-card">
+        <Style Selector="Button.preset-card">
             <Setter Property="Background" Value="#FFFFFF"/>
             <Setter Property="BorderBrush" Value="#E4E4EE"/>
             <Setter Property="BorderThickness" Value="1"/>
@@ -17,16 +17,16 @@
             <Setter Property="HorizontalAlignment" Value="Stretch"/>
             <Setter Property="HorizontalContentAlignment" Value="Left"/>
         </Style>
-        <Style Selector="Button.profile-card.selected /template/ ContentPresenter">
+        <Style Selector="Button.preset-card.selected /template/ ContentPresenter">
             <Setter Property="Background" Value="#FDF6E8"/>
             <Setter Property="BorderBrush" Value="#B8922A"/>
             <Setter Property="BorderThickness" Value="2"/>
         </Style>
-        <Style Selector="Button.profile-card.locked /template/ ContentPresenter">
+        <Style Selector="Button.preset-card.locked /template/ ContentPresenter">
             <Setter Property="Background" Value="#F8F8FC"/>
             <Setter Property="BorderBrush" Value="#AAAABC"/>
         </Style>
-        <Style Selector="Button.profile-card /template/ ContentPresenter">
+        <Style Selector="Button.preset-card /template/ ContentPresenter">
             <Setter Property="Background" Value="#FFFFFF"/>
         </Style>
         <Style Selector="Button.chip">
@@ -100,25 +100,25 @@
                            Margin="0,12,0,40"/>
 
                 <!-- ═══════════════════════════════════════════════ -->
-                <!-- PLANNED MODE — single locked profile card       -->
+                <!-- PLANNED MODE — single locked preset card       -->
                 <!-- ═══════════════════════════════════════════════ -->
                 <StackPanel IsVisible="{Binding IsPlannedMode}" Spacing="0" Margin="0,0,0,28">
 
-                    <TextBlock Text="BLOCK PROFILE"
+                    <TextBlock Text="BLOCK PRESET"
                                FontSize="9"
                                FontWeight="Medium"
                                Foreground="#AAAABC"
                                LetterSpacing="3"
                                Margin="0,0,0,6"/>
 
-                    <!-- Locked profile card — click to expand details + extra blocking -->
-                    <Button Classes="profile-card selected"
-                            Command="{Binding ToggleLockedProfileExpandedCommand}">
-                        <StackPanel Spacing="0" DataContext="{Binding LockedProfileCard}">
+                    <!-- Locked preset card — click to expand details + extra blocking -->
+                    <Button Classes="preset-card selected"
+                            Command="{Binding ToggleLockedPresetExpandedCommand}">
+                        <StackPanel Spacing="0" DataContext="{Binding LockedPresetCard}">
 
                             <!-- Card header -->
                             <StackPanel Spacing="6">
-                                <TextBlock Text="{Binding Profile.Name}"
+                                <TextBlock Text="{Binding Preset.Name}"
                                            FontSize="14"
                                            FontWeight="Medium"
                                            Foreground="#1A1A2E"/>
@@ -126,15 +126,15 @@
                                     <Border Background="#F0F0F8"
                                             CornerRadius="4"
                                             Padding="6,2">
-                                        <TextBlock Text="{Binding Profile.WebsitePolicy}"
+                                        <TextBlock Text="{Binding Preset.WebsiteFilterType}"
                                                    FontSize="10"
                                                    Foreground="#888899"/>
                                     </Border>
                                     <TextBlock FontSize="11" Foreground="#AAAABC"
                                                VerticalAlignment="Center">
-                                        <Run Text="{Binding Profile.AppCount}"/>
+                                        <Run Text="{Binding Preset.AppCount}"/>
                                         <Run Text=" apps · "/>
-                                        <Run Text="{Binding Profile.SiteCount}"/>
+                                        <Run Text="{Binding Preset.SiteCount}"/>
                                         <Run Text=" sites"/>
                                     </TextBlock>
                                 </StackPanel>
@@ -145,11 +145,11 @@
 
                                 <!-- Locked websites (read-only) -->
                                 <StackPanel Spacing="8"
-                                            IsVisible="{Binding Profile.SiteCount, Converter={x:Static conv:CountToBoolConverter.IsNonZero}}">
+                                            IsVisible="{Binding Preset.SiteCount, Converter={x:Static conv:CountToBoolConverter.IsNonZero}}">
                                     <TextBlock Text="{Binding SitesLabel}"
                                                FontSize="9" FontWeight="Medium"
                                                Foreground="#AAAABC" LetterSpacing="3"/>
-                                    <ItemsControl ItemsSource="{Binding Profile.Websites}">
+                                    <ItemsControl ItemsSource="{Binding Preset.Websites}">
                                         <ItemsControl.ItemsPanel>
                                             <ItemsPanelTemplate><WrapPanel Orientation="Horizontal"/></ItemsPanelTemplate>
                                         </ItemsControl.ItemsPanel>
@@ -165,11 +165,11 @@
 
                                 <!-- Locked apps (read-only) -->
                                 <StackPanel Spacing="8"
-                                            IsVisible="{Binding Profile.AppCount, Converter={x:Static conv:CountToBoolConverter.IsNonZero}}">
+                                            IsVisible="{Binding Preset.AppCount, Converter={x:Static conv:CountToBoolConverter.IsNonZero}}">
                                     <TextBlock Text="BLOCKED APPS"
                                                FontSize="9" FontWeight="Medium"
                                                Foreground="#AAAABC" LetterSpacing="3"/>
-                                    <ItemsControl ItemsSource="{Binding Profile.BlockedApps}">
+                                    <ItemsControl ItemsSource="{Binding Preset.BlockedApps}">
                                         <ItemsControl.ItemsPanel>
                                             <ItemsPanelTemplate><WrapPanel Orientation="Horizontal"/></ItemsPanelTemplate>
                                         </ItemsControl.ItemsPanel>
@@ -270,47 +270,47 @@
                 <!-- ═══════════════════════════════════════════════ -->
                 <StackPanel IsVisible="{Binding !IsPlannedMode}" Spacing="0" Margin="0,0,0,28">
 
-                    <TextBlock Text="BLOCK PROFILE"
+                    <TextBlock Text="BLOCK PRESET"
                                FontSize="9" FontWeight="Medium"
                                Foreground="#AAAABC" LetterSpacing="3"
                                Margin="0,0,0,6"/>
 
-                    <!-- ── BROWSING: pick a profile ── -->
-                    <StackPanel IsVisible="{Binding !IsProfileSelected}" Spacing="0">
+                    <!-- ── BROWSING: pick a preset ── -->
+                    <StackPanel IsVisible="{Binding !IsPresetSelected}" Spacing="0">
 
                         <TextBlock IsVisible="{Binding IsLoading}"
-                                   Text="Loading profiles…"
+                                   Text="Loading presets…"
                                    FontSize="13" Foreground="#AAAABC"
                                    HorizontalAlignment="Center" Margin="0,0,0,24"/>
 
                         <StackPanel IsVisible="{Binding !IsLoading}" Spacing="0">
 
-                            <TextBlock IsVisible="{Binding Profiles.Count, Converter={x:Static conv:CountToVisibilityConverter.IsZero}}"
-                                       Text="No focus profiles saved. Create one on the Block Profiles page."
+                            <TextBlock IsVisible="{Binding Presets.Count, Converter={x:Static conv:CountToVisibilityConverter.IsZero}}"
+                                       Text="No focus presets saved. Create one on the Block Presets page."
                                        FontSize="13" Foreground="#BBBBCC"
                                        FontStyle="Italic" TextWrapping="Wrap"/>
 
-                            <ItemsControl ItemsSource="{Binding Profiles}">
+                            <ItemsControl ItemsSource="{Binding Presets}">
                                 <ItemsControl.ItemTemplate>
-                                    <DataTemplate DataType="vm:RenProfileCardViewModel">
-                                        <Button Classes="profile-card"
-                                                Command="{Binding $parent[UserControl].((vm:RenPageViewModel)DataContext).SelectProfileCommand}"
+                                    <DataTemplate DataType="vm:RenPresetCardViewModel">
+                                        <Button Classes="preset-card"
+                                                Command="{Binding $parent[UserControl].((vm:RenPageViewModel)DataContext).SelectPresetCommand}"
                                                 CommandParameter="{Binding}"
                                                 Margin="0,0,0,8">
                                             <Grid ColumnDefinitions="*,Auto">
                                                 <StackPanel Grid.Column="0" Spacing="6">
-                                                    <TextBlock Text="{Binding Profile.Name}"
+                                                    <TextBlock Text="{Binding Preset.Name}"
                                                                FontSize="14" FontWeight="Medium"
                                                                Foreground="#1A1A2E"/>
                                                     <StackPanel Orientation="Horizontal" Spacing="8">
                                                         <Border Background="#F0F0F8" CornerRadius="4" Padding="6,2">
-                                                            <TextBlock Text="{Binding Profile.WebsitePolicy}"
+                                                            <TextBlock Text="{Binding Preset.WebsiteFilterType}"
                                                                        FontSize="10" Foreground="#888899"/>
                                                         </Border>
                                                         <TextBlock FontSize="11" Foreground="#AAAABC" VerticalAlignment="Center">
-                                                            <Run Text="{Binding Profile.AppCount}"/>
+                                                            <Run Text="{Binding Preset.AppCount}"/>
                                                             <Run Text=" apps · "/>
-                                                            <Run Text="{Binding Profile.SiteCount}"/>
+                                                            <Run Text="{Binding Preset.SiteCount}"/>
                                                             <Run Text=" sites"/>
                                                         </TextBlock>
                                                     </StackPanel>
@@ -325,26 +325,26 @@
                     </StackPanel>
 
                     <!-- ── SELECTED: single card + extra blocking ── -->
-                    <StackPanel IsVisible="{Binding IsProfileSelected}" Spacing="0">
+                    <StackPanel IsVisible="{Binding IsPresetSelected}" Spacing="0">
 
-                        <Button Classes="profile-card selected"
+                        <Button Classes="preset-card selected"
                                 Command="{Binding ToggleSelectedCardExpandedCommand}">
-                            <StackPanel Spacing="0" DataContext="{Binding SelectedProfileCard}">
+                            <StackPanel Spacing="0" DataContext="{Binding SelectedPresetCard}">
 
                                 <!-- Card header -->
                                 <StackPanel Spacing="6">
-                                    <TextBlock Text="{Binding Profile.Name}"
+                                    <TextBlock Text="{Binding Preset.Name}"
                                                FontSize="14" FontWeight="Medium"
                                                Foreground="#1A1A2E"/>
                                     <StackPanel Orientation="Horizontal" Spacing="8">
                                         <Border Background="#F0F0F8" CornerRadius="4" Padding="6,2">
-                                            <TextBlock Text="{Binding Profile.WebsitePolicy}"
+                                            <TextBlock Text="{Binding Preset.WebsiteFilterType}"
                                                        FontSize="10" Foreground="#888899"/>
                                         </Border>
                                         <TextBlock FontSize="11" Foreground="#AAAABC" VerticalAlignment="Center">
-                                            <Run Text="{Binding Profile.AppCount}"/>
+                                            <Run Text="{Binding Preset.AppCount}"/>
                                             <Run Text=" apps · "/>
-                                            <Run Text="{Binding Profile.SiteCount}"/>
+                                            <Run Text="{Binding Preset.SiteCount}"/>
                                             <Run Text=" sites"/>
                                         </TextBlock>
                                     </StackPanel>
@@ -355,11 +355,11 @@
 
                                     <!-- Locked sites -->
                                     <StackPanel Spacing="8"
-                                                IsVisible="{Binding Profile.SiteCount, Converter={x:Static conv:CountToBoolConverter.IsNonZero}}">
+                                                IsVisible="{Binding Preset.SiteCount, Converter={x:Static conv:CountToBoolConverter.IsNonZero}}">
                                         <TextBlock Text="{Binding SitesLabel}"
                                                    FontSize="9" FontWeight="Medium"
                                                    Foreground="#AAAABC" LetterSpacing="3"/>
-                                        <ItemsControl ItemsSource="{Binding Profile.Websites}">
+                                        <ItemsControl ItemsSource="{Binding Preset.Websites}">
                                             <ItemsControl.ItemsPanel>
                                                 <ItemsPanelTemplate><WrapPanel Orientation="Horizontal"/></ItemsPanelTemplate>
                                             </ItemsControl.ItemsPanel>
@@ -375,11 +375,11 @@
 
                                     <!-- Locked apps -->
                                     <StackPanel Spacing="8"
-                                                IsVisible="{Binding Profile.AppCount, Converter={x:Static conv:CountToBoolConverter.IsNonZero}}">
+                                                IsVisible="{Binding Preset.AppCount, Converter={x:Static conv:CountToBoolConverter.IsNonZero}}">
                                         <TextBlock Text="BLOCKED APPS"
                                                    FontSize="9" FontWeight="Medium"
                                                    Foreground="#AAAABC" LetterSpacing="3"/>
-                                        <ItemsControl ItemsSource="{Binding Profile.BlockedApps}">
+                                        <ItemsControl ItemsSource="{Binding Preset.BlockedApps}">
                                             <ItemsControl.ItemsPanel>
                                                 <ItemsPanelTemplate><WrapPanel Orientation="Horizontal"/></ItemsPanelTemplate>
                                             </ItemsControl.ItemsPanel>
@@ -471,12 +471,12 @@
                             </StackPanel>
                         </Button>
 
-                        <!-- Change profile -->
-                        <Button Command="{Binding ChangeProfileCommand}"
+                        <!-- Change preset -->
+                        <Button Command="{Binding ChangePresetCommand}"
                                 Background="Transparent" BorderThickness="0"
                                 Padding="0,10,0,0" Cursor="Hand"
                                 HorizontalAlignment="Left">
-                            <TextBlock Text="← Change profile"
+                            <TextBlock Text="← Change preset"
                                        FontSize="12" Foreground="#AAAABC"/>
                         </Button>
 

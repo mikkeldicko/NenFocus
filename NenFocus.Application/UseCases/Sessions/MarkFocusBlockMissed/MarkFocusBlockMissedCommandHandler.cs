@@ -11,16 +11,16 @@ public sealed class MarkFocusBlockMissedCommandHandler
 {
     private readonly IPlannedBlockRepository _blocks;
     private readonly ISessionRepository _sessions;
-    private readonly IBlockProfileRepository _profiles;
+    private readonly IBlockPresetRepository _presets;
 
     public MarkFocusBlockMissedCommandHandler(
         IPlannedBlockRepository blocks,
         ISessionRepository sessions,
-        IBlockProfileRepository profiles)
+        IBlockPresetRepository presets)
     {
         _blocks = blocks;
         _sessions = sessions;
-        _profiles = profiles;
+        _presets = presets;
     }
 
     public async Task<MarkFocusBlockMissedResult> HandleAsync(
@@ -35,7 +35,7 @@ public sealed class MarkFocusBlockMissedCommandHandler
             id: Guid.NewGuid(),
             goal: new SessionGoal("(missed — no goal set)"),
             duration: new SessionDuration(block.GetDuration()),
-            blockProfileId: block.BlockProfileId,
+            blockPresetId: block.BlockPresetId,
             origin: SessionOrigin.Planned,
             originatingBlockId: block.Id);
 
@@ -43,11 +43,11 @@ public sealed class MarkFocusBlockMissedCommandHandler
 
         await _sessions.SaveAsync(session, ct);
 
-        var profileName = string.Empty;
-        if (block.BlockProfileId != Guid.Empty)
+        var presetName = string.Empty;
+        if (block.BlockPresetId != Guid.Empty)
         {
-            var profile = await _profiles.GetByIdAsync(block.BlockProfileId, ct);
-            profileName = profile?.Name ?? string.Empty;
+            var preset = await _presets.GetByIdAsync(block.BlockPresetId, ct);
+            presetName = preset?.Name ?? string.Empty;
         }
 
         var postSession = new PostSessionDto
@@ -55,7 +55,7 @@ public sealed class MarkFocusBlockMissedCommandHandler
             SessionId = session.Id,
             Status = session.Status,
             Goal = session.Goal.Value,
-            ProfileName = profileName,
+            PresetName = presetName,
             StartedAt = session.StartedAt!.Value,
             EndedAt = session.EndedAt!.Value,
             PlannedDurationMinutes = (int)session.Duration.Value.TotalMinutes,

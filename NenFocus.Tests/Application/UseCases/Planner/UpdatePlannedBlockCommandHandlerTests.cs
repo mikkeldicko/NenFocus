@@ -14,7 +14,7 @@ public class UpdatePlannedBlockCommandHandlerTests
     private static readonly DateTime End = new(2026, 1, 2, 11, 0, 0, DateTimeKind.Utc);
 
     private readonly IPlannedBlockRepository _blocks = Substitute.For<IPlannedBlockRepository>();
-    private readonly IBlockProfileRepository _profiles = Substitute.For<IBlockProfileRepository>();
+    private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
     private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
 
     public UpdatePlannedBlockCommandHandlerTests()
@@ -24,18 +24,18 @@ public class UpdatePlannedBlockCommandHandlerTests
         _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns((Session?)null);
     }
 
-    private UpdatePlannedBlockCommandHandler CreateHandler() => new(_blocks, _profiles, _sessions);
+    private UpdatePlannedBlockCommandHandler CreateHandler() => new(_blocks, _presets, _sessions);
 
-    private static UpdatePlannedBlockCommand ValidCommand(Guid blockId, Guid profileId) => new()
+    private static UpdatePlannedBlockCommand ValidCommand(Guid blockId, Guid presetId) => new()
     {
         BlockId = blockId,
-        ProfileId = profileId,
+        PresetId = presetId,
         Start = Start,
         End = End
     };
 
-    private static BlockProfile FocusProfile(Guid id)
-        => BlockProfile.Create(id, "Deep Work", WebsitePolicy.Blocklist, BlockType.Focus, DateTime.UtcNow);
+    private static BlockPreset FocusPreset(Guid id)
+        => BlockPreset.Create(id, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, DateTime.UtcNow);
 
     [Fact]
     public async Task HandleAsync_BlockNotFound_Fails()
@@ -48,12 +48,12 @@ public class UpdatePlannedBlockCommandHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_ProfileNotFound_Fails()
+    public async Task HandleAsync_PresetNotFound_Fails()
     {
         var blockId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
             .Returns(BackgroundBlock.Create(blockId, Guid.NewGuid(), Start, End));
-        _profiles.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((BlockProfile?)null);
+        _presets.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((BlockPreset?)null);
 
         var result = await CreateHandler().HandleAsync(ValidCommand(blockId, Guid.NewGuid()));
 
@@ -64,14 +64,14 @@ public class UpdatePlannedBlockCommandHandlerTests
     public async Task HandleAsync_FocusBlock_OverlapsAnotherFocusBlock_Fails()
     {
         var blockId = Guid.NewGuid();
-        var profileId = Guid.NewGuid();
+        var presetId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, profileId, Start, End));
-        _profiles.GetByIdAsync(profileId, Arg.Any<CancellationToken>()).Returns(FocusProfile(profileId));
+            .Returns(FocusBlock.Create(blockId, presetId, Start, End));
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>()).Returns(FocusPreset(presetId));
         _blocks.GetOverlappingAsync(Start, End, true, blockId, Arg.Any<CancellationToken>())
-            .Returns((IReadOnlyList<PlannedBlock>)[FocusBlock.Create(Guid.NewGuid(), profileId, Start, End)]);
+            .Returns((IReadOnlyList<PlannedBlock>)[FocusBlock.Create(Guid.NewGuid(), presetId, Start, End)]);
 
-        var result = await CreateHandler().HandleAsync(ValidCommand(blockId, profileId));
+        var result = await CreateHandler().HandleAsync(ValidCommand(blockId, presetId));
 
         result.Success.Should().BeFalse();
         await _blocks.DidNotReceive().UpdateAsync(Arg.Any<PlannedBlock>(), Arg.Any<CancellationToken>());
@@ -81,17 +81,17 @@ public class UpdatePlannedBlockCommandHandlerTests
     public async Task HandleAsync_FocusBlock_OverlapsActiveSession_Fails()
     {
         var blockId = Guid.NewGuid();
-        var profileId = Guid.NewGuid();
+        var presetId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, profileId, Start, End));
-        _profiles.GetByIdAsync(profileId, Arg.Any<CancellationToken>()).Returns(FocusProfile(profileId));
+            .Returns(FocusBlock.Create(blockId, presetId, Start, End));
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>()).Returns(FocusPreset(presetId));
         var activeSession = Session.Create(
             Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromHours(2)),
             Guid.NewGuid(), SessionOrigin.Spontaneous);
         activeSession.Start(Start.AddMinutes(-30));
         _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns(activeSession);
 
-        var result = await CreateHandler().HandleAsync(ValidCommand(blockId, profileId));
+        var result = await CreateHandler().HandleAsync(ValidCommand(blockId, presetId));
 
         result.Success.Should().BeFalse();
         result.ErrorMessage.Should().Contain("already an active focus session");
@@ -101,13 +101,13 @@ public class UpdatePlannedBlockCommandHandlerTests
     public async Task HandleAsync_BackgroundBlock_SkipsOverlapAndSessionChecks()
     {
         var blockId = Guid.NewGuid();
-        var profileId = Guid.NewGuid();
+        var presetId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(BackgroundBlock.Create(blockId, profileId, Start, End));
-        _profiles.GetByIdAsync(profileId, Arg.Any<CancellationToken>())
-            .Returns(BlockProfile.Create(profileId, "Background", WebsitePolicy.Blocklist, BlockType.Background, DateTime.UtcNow));
+            .Returns(BackgroundBlock.Create(blockId, presetId, Start, End));
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
+            .Returns(BlockPreset.Create(presetId, "Background", WebsiteFilterType.Blocklist, BlockPresetType.Background, DateTime.UtcNow));
 
-        var result = await CreateHandler().HandleAsync(ValidCommand(blockId, profileId));
+        var result = await CreateHandler().HandleAsync(ValidCommand(blockId, presetId));
 
         result.Success.Should().BeTrue();
         await _blocks.DidNotReceive().GetOverlappingAsync(
@@ -115,21 +115,21 @@ public class UpdatePlannedBlockCommandHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_HappyPath_ReschedulesAndReassignsProfile()
+    public async Task HandleAsync_HappyPath_ReschedulesAndReassignsPreset()
     {
         var blockId = Guid.NewGuid();
-        var oldProfileId = Guid.NewGuid();
-        var newProfileId = Guid.NewGuid();
-        var block = FocusBlock.Create(blockId, oldProfileId, Start.AddDays(-1), End.AddDays(-1));
+        var oldPresetId = Guid.NewGuid();
+        var newPresetId = Guid.NewGuid();
+        var block = FocusBlock.Create(blockId, oldPresetId, Start.AddDays(-1), End.AddDays(-1));
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns(block);
-        _profiles.GetByIdAsync(newProfileId, Arg.Any<CancellationToken>()).Returns(FocusProfile(newProfileId));
+        _presets.GetByIdAsync(newPresetId, Arg.Any<CancellationToken>()).Returns(FocusPreset(newPresetId));
 
-        var result = await CreateHandler().HandleAsync(ValidCommand(blockId, newProfileId));
+        var result = await CreateHandler().HandleAsync(ValidCommand(blockId, newPresetId));
 
         result.Success.Should().BeTrue();
         block.Start.Should().Be(Start);
         block.End.Should().Be(End);
-        block.BlockProfileId.Should().Be(newProfileId);
+        block.BlockPresetId.Should().Be(newPresetId);
         await _blocks.Received(1).UpdateAsync(block, Arg.Any<CancellationToken>());
     }
 }

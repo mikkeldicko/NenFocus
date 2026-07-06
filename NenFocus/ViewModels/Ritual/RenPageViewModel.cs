@@ -6,12 +6,12 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
-using NenFocus.Application.Queries.GetAllBlockProfiles;
+using NenFocus.Application.Queries.GetAllBlockPresets;
 using NenFocus.Domain.Enums;
 
 namespace NenFocus.ViewModels.Ritual;
 
-public partial class RenProfileCardViewModel : ViewModelBase
+public partial class RenPresetCardViewModel : ViewModelBase
 {
     [ObservableProperty]
     private bool _isSelected;
@@ -19,54 +19,54 @@ public partial class RenProfileCardViewModel : ViewModelBase
     [ObservableProperty]
     private bool _isExpanded;
 
-    public BlockProfileDto Profile { get; }
+    public BlockPresetDto Preset { get; }
 
-    public string SitesLabel => Profile.WebsitePolicy == WebsitePolicy.Allowlist
+    public string SitesLabel => Preset.WebsiteFilterType == WebsiteFilterType.Allowlist
         ? "ALLOWED SITES"
         : "BLOCKED SITES";
 
-    public RenProfileCardViewModel(BlockProfileDto profile)
+    public RenPresetCardViewModel(BlockPresetDto preset)
     {
-        Profile = profile;
+        Preset = preset;
     }
 }
 
 public partial class RenPageViewModel : ViewModelBase
 {
-    private readonly IQueryHandler<GetAllBlockProfilesQuery, IReadOnlyList<BlockProfileDto>>? _profilesQuery;
+    private readonly IQueryHandler<GetAllBlockPresetsQuery, IReadOnlyList<BlockPresetDto>>? _presetsQuery;
     private readonly Action _onContinue;
     private readonly Action _onBack;
 
     public SessionOrigin Mode { get; }
     public bool IsPlannedMode => Mode == SessionOrigin.Planned;
 
-    // Spontaneous mode: list of selectable profile cards.
-    public ObservableCollection<RenProfileCardViewModel> Profiles { get; } = new();
+    // Spontaneous mode: list of selectable preset cards.
+    public ObservableCollection<RenPresetCardViewModel> Presets { get; } = new();
 
     // Planned mode: the single locked card.
-    public RenProfileCardViewModel? LockedProfileCard { get; }
+    public RenPresetCardViewModel? LockedPresetCard { get; }
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(SelectedProfile))]
-    [NotifyPropertyChangedFor(nameof(HasSelectedProfile))]
+    [NotifyPropertyChangedFor(nameof(SelectedPreset))]
+    [NotifyPropertyChangedFor(nameof(HasSelectedPreset))]
     [NotifyPropertyChangedFor(nameof(IsAllowlistMode))]
     [NotifyPropertyChangedFor(nameof(CanAddSites))]
-    [NotifyPropertyChangedFor(nameof(IsProfileSelected))]
+    [NotifyPropertyChangedFor(nameof(IsPresetSelected))]
     [NotifyPropertyChangedFor(nameof(ShowExtraBlockingPanel))]
-    private RenProfileCardViewModel? _selectedProfileCard;
+    private RenPresetCardViewModel? _selectedPresetCard;
 
-    public BlockProfileDto? SelectedProfile => IsPlannedMode
-        ? LockedProfileCard?.Profile
-        : SelectedProfileCard?.Profile;
+    public BlockPresetDto? SelectedPreset => IsPlannedMode
+        ? LockedPresetCard?.Preset
+        : SelectedPresetCard?.Preset;
 
-    public bool HasSelectedProfile => SelectedProfile is not null;
-    public bool IsAllowlistMode => SelectedProfile?.WebsitePolicy == WebsitePolicy.Allowlist;
+    public bool HasSelectedPreset => SelectedPreset is not null;
+    public bool IsAllowlistMode => SelectedPreset?.WebsiteFilterType == WebsiteFilterType.Allowlist;
 
-    // True when the user has picked a profile in spontaneous mode.
-    public bool IsProfileSelected => !IsPlannedMode && SelectedProfileCard is not null;
+    // True when the user has picked a preset in spontaneous mode.
+    public bool IsPresetSelected => !IsPlannedMode && SelectedPresetCard is not null;
 
     // Whether the extra-blocking panel (add sites/apps) is available.
-    public bool ShowExtraBlockingPanel => IsPlannedMode || IsProfileSelected;
+    public bool ShowExtraBlockingPanel => IsPlannedMode || IsPresetSelected;
     public bool CanAddSites => ShowExtraBlockingPanel && !IsAllowlistMode;
 
     // Additional session-only blocked items (Planned mode only).
@@ -83,38 +83,38 @@ public partial class RenPageViewModel : ViewModelBase
     private bool _isLoading = true;
 
     public RenPageViewModel(
-        IQueryHandler<GetAllBlockProfilesQuery, IReadOnlyList<BlockProfileDto>>? profilesQuery,
+        IQueryHandler<GetAllBlockPresetsQuery, IReadOnlyList<BlockPresetDto>>? presetsQuery,
         SessionOrigin mode,
-        BlockProfileDto? lockedProfile,
+        BlockPresetDto? lockedPreset,
         Action onContinue,
         Action onBack)
     {
-        _profilesQuery = profilesQuery;
+        _presetsQuery = presetsQuery;
         Mode = mode;
         _onContinue = onContinue;
         _onBack = onBack;
 
-        if (mode == SessionOrigin.Planned && lockedProfile is not null)
+        if (mode == SessionOrigin.Planned && lockedPreset is not null)
         {
-            LockedProfileCard = new RenProfileCardViewModel(lockedProfile);
+            LockedPresetCard = new RenPresetCardViewModel(lockedPreset);
             IsLoading = false;
         }
         else
         {
-            _ = LoadProfilesAsync();
+            _ = LoadPresetsAsync();
         }
     }
 
-    private async Task LoadProfilesAsync()
+    private async Task LoadPresetsAsync()
     {
         IsLoading = true;
         try
         {
-            if (_profilesQuery is null) return;
-            var profiles = await _profilesQuery.HandleAsync(new GetAllBlockProfilesQuery { ProfileType = BlockType.Focus });
-            Profiles.Clear();
-            foreach (var p in profiles)
-                Profiles.Add(new RenProfileCardViewModel(p));
+            if (_presetsQuery is null) return;
+            var presets = await _presetsQuery.HandleAsync(new GetAllBlockPresetsQuery { PresetType = BlockPresetType.Focus });
+            Presets.Clear();
+            foreach (var p in presets)
+                Presets.Add(new RenPresetCardViewModel(p));
         }
         finally
         {
@@ -123,20 +123,20 @@ public partial class RenPageViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void SelectProfile(RenProfileCardViewModel card)
+    private void SelectPreset(RenPresetCardViewModel card)
     {
-        if (SelectedProfileCard is not null)
-            SelectedProfileCard.IsSelected = false;
+        if (SelectedPresetCard is not null)
+            SelectedPresetCard.IsSelected = false;
         card.IsSelected = true;
-        SelectedProfileCard = card;
+        SelectedPresetCard = card;
     }
 
     [RelayCommand]
-    private void ChangeProfile()
+    private void ChangePreset()
     {
-        if (SelectedProfileCard is not null)
-            SelectedProfileCard.IsSelected = false;
-        SelectedProfileCard = null;
+        if (SelectedPresetCard is not null)
+            SelectedPresetCard.IsSelected = false;
+        SelectedPresetCard = null;
         AdditionalBlockedSites.Clear();
         AdditionalBlockedApps.Clear();
         AddSiteInput = string.Empty;
@@ -146,15 +146,15 @@ public partial class RenPageViewModel : ViewModelBase
     [RelayCommand]
     private void ToggleSelectedCardExpanded()
     {
-        if (SelectedProfileCard is not null)
-            SelectedProfileCard.IsExpanded = !SelectedProfileCard.IsExpanded;
+        if (SelectedPresetCard is not null)
+            SelectedPresetCard.IsExpanded = !SelectedPresetCard.IsExpanded;
     }
 
     [RelayCommand]
-    private void ToggleLockedProfileExpanded()
+    private void ToggleLockedPresetExpanded()
     {
-        if (LockedProfileCard is not null)
-            LockedProfileCard.IsExpanded = !LockedProfileCard.IsExpanded;
+        if (LockedPresetCard is not null)
+            LockedPresetCard.IsExpanded = !LockedPresetCard.IsExpanded;
     }
 
     [RelayCommand]
@@ -176,14 +176,14 @@ public partial class RenPageViewModel : ViewModelBase
             return;
         }
 
-        // Duplicate check against the locked profile's existing sites.
-        if (LockedProfileCard is not null)
+        // Duplicate check against the locked preset's existing sites.
+        if (LockedPresetCard is not null)
         {
-            foreach (var s in LockedProfileCard.Profile.Websites)
+            foreach (var s in LockedPresetCard.Preset.Websites)
             {
                 if (string.Equals(s, raw, StringComparison.OrdinalIgnoreCase))
                 {
-                    AddSiteError = $"\"{raw}\" is already in this profile.";
+                    AddSiteError = $"\"{raw}\" is already in this preset.";
                     return;
                 }
             }
@@ -218,9 +218,9 @@ public partial class RenPageViewModel : ViewModelBase
             if (string.Equals(a, name, StringComparison.OrdinalIgnoreCase)) return;
         }
 
-        if (LockedProfileCard is not null)
+        if (LockedPresetCard is not null)
         {
-            foreach (var a in LockedProfileCard.Profile.BlockedApps)
+            foreach (var a in LockedPresetCard.Preset.BlockedApps)
             {
                 if (string.Equals(a, name, StringComparison.OrdinalIgnoreCase)) return;
             }
@@ -238,10 +238,10 @@ public partial class RenPageViewModel : ViewModelBase
     [RelayCommand]
     private void Back()
     {
-        if (!IsPlannedMode && SelectedProfileCard is not null)
+        if (!IsPlannedMode && SelectedPresetCard is not null)
         {
-            SelectedProfileCard.IsSelected = false;
-            SelectedProfileCard = null;
+            SelectedPresetCard.IsSelected = false;
+            SelectedPresetCard = null;
         }
         _onBack();
     }

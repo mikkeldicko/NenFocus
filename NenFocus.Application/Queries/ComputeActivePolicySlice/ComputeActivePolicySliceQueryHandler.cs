@@ -9,18 +9,18 @@ public sealed class ComputeActivePolicySliceQueryHandler
     : IQueryHandler<ComputeActivePolicySliceQuery, ActivePolicySlice>
 {
     private readonly IPlannedBlockRepository _blocks;
-    private readonly IBlockProfileRepository _profiles;
+    private readonly IBlockPresetRepository _presets;
     private readonly ISessionRepository _sessions;
     private readonly IPolicyEngine _policyEngine;
 
     public ComputeActivePolicySliceQueryHandler(
         IPlannedBlockRepository blocks,
-        IBlockProfileRepository profiles,
+        IBlockPresetRepository presets,
         ISessionRepository sessions,
         IPolicyEngine policyEngine)
     {
         _blocks = blocks;
-        _profiles = profiles;
+        _presets = presets;
         _sessions = sessions;
         _policyEngine = policyEngine;
     }
@@ -30,18 +30,18 @@ public sealed class ComputeActivePolicySliceQueryHandler
         var blocks = await _blocks.GetForRangeAsync(query.At.AddSeconds(-1), query.At.AddSeconds(1), ct);
         var sessions = await _sessions.GetActiveSessionsAsync(ct);
 
-        var profileIds = blocks.Select(b => b.BlockProfileId)
-            .Concat(sessions.Select(s => s.BlockProfileId))
+        var presetIds = blocks.Select(b => b.BlockPresetId)
+            .Concat(sessions.Select(s => s.BlockPresetId))
             .Where(id => id != Guid.Empty)
             .Distinct();
 
-        var profiles = new List<BlockProfile>();
-        foreach (var id in profileIds)
+        var presets = new List<BlockPreset>();
+        foreach (var id in presetIds)
         {
-            var profile = await _profiles.GetByIdAsync(id, ct);
-            if (profile != null) profiles.Add(profile);
+            var preset = await _presets.GetByIdAsync(id, ct);
+            if (preset != null) presets.Add(preset);
         }
 
-        return _policyEngine.ComputeSlice(query.At, profiles, sessions, blocks);
+        return _policyEngine.ComputeSlice(query.At, presets, sessions, blocks);
     }
 }

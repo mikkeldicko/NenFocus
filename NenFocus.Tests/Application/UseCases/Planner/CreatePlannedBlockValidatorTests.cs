@@ -11,17 +11,17 @@ public class CreatePlannedBlockValidatorTests
 {
     private static readonly DateTime Now = new(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
 
-    private readonly IBlockProfileRepository _profiles = Substitute.For<IBlockProfileRepository>();
+    private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
     private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
 
     public CreatePlannedBlockValidatorTests() => _clock.UtcNow.Returns(Now);
 
-    private CreatePlannedBlockValidator CreateValidator() => new(_profiles, _clock);
+    private CreatePlannedBlockValidator CreateValidator() => new(_presets, _clock);
 
-    private static CreatePlannedBlockCommand ValidCommand(Guid profileId) => new()
+    private static CreatePlannedBlockCommand ValidCommand(Guid presetId) => new()
     {
-        ProfileId = profileId,
-        BlockType = BlockType.Focus,
+        PresetId = presetId,
+        BlockPresetType = BlockPresetType.Focus,
         Start = Now.AddHours(1),
         End = Now.AddHours(2)
     };
@@ -29,17 +29,17 @@ public class CreatePlannedBlockValidatorTests
     [Fact]
     public async Task Validate_ValidCommand_IsValid()
     {
-        var profileId = Guid.NewGuid();
-        _profiles.GetByIdAsync(profileId, Arg.Any<CancellationToken>())
-            .Returns(BlockProfile.Create(profileId, "Deep Work", WebsitePolicy.Blocklist, BlockType.Focus, Now));
+        var presetId = Guid.NewGuid();
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Now));
 
-        var result = await CreateValidator().ValidateAsync(ValidCommand(profileId));
+        var result = await CreateValidator().ValidateAsync(ValidCommand(presetId));
 
         result.IsValid.Should().BeTrue();
     }
 
     [Fact]
-    public async Task Validate_EmptyProfileId_IsInvalid()
+    public async Task Validate_EmptyPresetId_IsInvalid()
     {
         var result = await CreateValidator().ValidateAsync(ValidCommand(Guid.Empty));
 
@@ -47,13 +47,13 @@ public class CreatePlannedBlockValidatorTests
     }
 
     [Fact]
-    public async Task Validate_ProfileTypeMismatch_IsInvalid()
+    public async Task Validate_PresetTypeMismatch_IsInvalid()
     {
-        var profileId = Guid.NewGuid();
-        _profiles.GetByIdAsync(profileId, Arg.Any<CancellationToken>())
-            .Returns(BlockProfile.Create(profileId, "Background", WebsitePolicy.Blocklist, BlockType.Background, Now));
+        var presetId = Guid.NewGuid();
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
+            .Returns(BlockPreset.Create(presetId, "Background", WebsiteFilterType.Blocklist, BlockPresetType.Background, Now));
 
-        var result = await CreateValidator().ValidateAsync(ValidCommand(profileId));
+        var result = await CreateValidator().ValidateAsync(ValidCommand(presetId));
 
         result.IsValid.Should().BeFalse();
     }
@@ -61,10 +61,10 @@ public class CreatePlannedBlockValidatorTests
     [Fact]
     public async Task Validate_StartInPast_IsInvalid()
     {
-        var profileId = Guid.NewGuid();
-        _profiles.GetByIdAsync(profileId, Arg.Any<CancellationToken>())
-            .Returns(BlockProfile.Create(profileId, "Deep Work", WebsitePolicy.Blocklist, BlockType.Focus, Now));
-        var command = ValidCommand(profileId) with { Start = Now.AddMinutes(-10) };
+        var presetId = Guid.NewGuid();
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Now));
+        var command = ValidCommand(presetId) with { Start = Now.AddMinutes(-10) };
 
         var result = await CreateValidator().ValidateAsync(command);
 
@@ -74,10 +74,10 @@ public class CreatePlannedBlockValidatorTests
     [Fact]
     public async Task Validate_EndBeforeStart_IsInvalid()
     {
-        var profileId = Guid.NewGuid();
-        _profiles.GetByIdAsync(profileId, Arg.Any<CancellationToken>())
-            .Returns(BlockProfile.Create(profileId, "Deep Work", WebsitePolicy.Blocklist, BlockType.Focus, Now));
-        var command = ValidCommand(profileId) with { End = Now.AddMinutes(30) - TimeSpan.FromHours(2) };
+        var presetId = Guid.NewGuid();
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Now));
+        var command = ValidCommand(presetId) with { End = Now.AddMinutes(30) - TimeSpan.FromHours(2) };
 
         var result = await CreateValidator().ValidateAsync(command);
 
@@ -87,10 +87,10 @@ public class CreatePlannedBlockValidatorTests
     [Fact]
     public async Task Validate_ShorterThanOneMinute_IsInvalid()
     {
-        var profileId = Guid.NewGuid();
-        _profiles.GetByIdAsync(profileId, Arg.Any<CancellationToken>())
-            .Returns(BlockProfile.Create(profileId, "Deep Work", WebsitePolicy.Blocklist, BlockType.Focus, Now));
-        var command = ValidCommand(profileId) with { End = ValidCommand(profileId).Start.AddSeconds(30) };
+        var presetId = Guid.NewGuid();
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Now));
+        var command = ValidCommand(presetId) with { End = ValidCommand(presetId).Start.AddSeconds(30) };
 
         var result = await CreateValidator().ValidateAsync(command);
 
@@ -100,10 +100,10 @@ public class CreatePlannedBlockValidatorTests
     [Fact]
     public async Task Validate_ExactlyOneMinute_IsValid()
     {
-        var profileId = Guid.NewGuid();
-        _profiles.GetByIdAsync(profileId, Arg.Any<CancellationToken>())
-            .Returns(BlockProfile.Create(profileId, "Deep Work", WebsitePolicy.Blocklist, BlockType.Focus, Now));
-        var command = ValidCommand(profileId) with { End = ValidCommand(profileId).Start.AddMinutes(1) };
+        var presetId = Guid.NewGuid();
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Now));
+        var command = ValidCommand(presetId) with { End = ValidCommand(presetId).Start.AddMinutes(1) };
 
         var result = await CreateValidator().ValidateAsync(command);
 

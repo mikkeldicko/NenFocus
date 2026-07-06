@@ -224,17 +224,17 @@
                                TextWrapping="Wrap"
                                TextAlignment="Center"/>
 
-					<!-- Profile -->
+					<!-- Preset -->
 					<StackPanel Orientation="Horizontal"
                                 HorizontalAlignment="Center"
                                 Spacing="6">
-						<TextBlock Text="Profile"
+						<TextBlock Text="Preset"
                                    FontSize="11"
                                    Foreground="#BBBBCC"/>
 						<TextBlock Text="·"
                                    FontSize="11"
                                    Foreground="#BBBBCC"/>
-						<TextBlock Text="{Binding ActiveProfileName}"
+						<TextBlock Text="{Binding ActivePresetName}"
                                    FontSize="11"
                                    Foreground="#888899"/>
 					</StackPanel>

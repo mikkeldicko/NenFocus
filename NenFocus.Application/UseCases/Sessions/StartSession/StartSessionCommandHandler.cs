@@ -12,20 +12,20 @@ public sealed class StartSessionCommandHandler
     private readonly ISessionRepository _sessions;
     private readonly IPlannedBlockRepository _plannedBlocks;
     private readonly ISessionStateService _sessionState;
-    private readonly IBlockProfileRepository _profiles;
+    private readonly IBlockPresetRepository _presets;
     private readonly ISystemClock _clock;
 
     public StartSessionCommandHandler(
         ISessionRepository sessions,
         IPlannedBlockRepository plannedBlocks,
         ISessionStateService sessionState,
-        IBlockProfileRepository profiles,
+        IBlockPresetRepository presets,
         ISystemClock clock)
     {
         _sessions = sessions;
         _plannedBlocks = plannedBlocks;
         _sessionState = sessionState;
-        _profiles = profiles;
+        _presets = presets;
         _clock = clock;
     }
 
@@ -87,7 +87,7 @@ public sealed class StartSessionCommandHandler
             id: Guid.NewGuid(),
             goal: new SessionGoal(command.Goal),
             duration: new SessionDuration(TimeSpan.FromMinutes(command.DurationMinutes)),
-            blockProfileId: command.ProfileId ?? Guid.Empty,
+            blockPresetId: command.PresetId ?? Guid.Empty,
             origin: origin,
             originatingBlockId: command.OriginatingBlockId,
             breakSettings: breakSettings,
@@ -104,19 +104,19 @@ public sealed class StartSessionCommandHandler
 
         await _sessions.SaveAsync(session, ct);
 
-        var profileName = string.Empty;
-        if (command.ProfileId is { } pid && pid != Guid.Empty)
+        var presetName = string.Empty;
+        if (command.PresetId is { } pid && pid != Guid.Empty)
         {
-            var profile = await _profiles.GetByIdAsync(pid, ct);
-            profileName = profile?.Name ?? string.Empty;
+            var preset = await _presets.GetByIdAsync(pid, ct);
+            presetName = preset?.Name ?? string.Empty;
         }
 
         _sessionState.SetActive(new SessionDto
         {
             Id = session.Id,
             Goal = session.Goal.Value,
-            ProfileName = profileName,
-            BlockProfileId = session.BlockProfileId,
+            PresetName = presetName,
+            BlockPresetId = session.BlockPresetId,
             DurationMinutes = command.DurationMinutes,
             StartedAt = session.StartedAt ?? now,
             Status = session.Status,

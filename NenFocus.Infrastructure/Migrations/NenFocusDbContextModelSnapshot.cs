@@ -17,7 +17,7 @@ namespace NenFocus.Infrastructure.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "9.0.2");
 
-            modelBuilder.Entity("NenFocus.Domain.Entities.BlockProfile", b =>
+            modelBuilder.Entity("NenFocus.Domain.Entities.BlockPreset", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("TEXT");
@@ -27,7 +27,7 @@ namespace NenFocus.Infrastructure.Migrations
                         .HasMaxLength(60)
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("ProfileType")
+                    b.Property<string>("PresetType")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT")
@@ -39,46 +39,46 @@ namespace NenFocus.Infrastructure.Migrations
                         .HasDefaultValue("")
                         .HasColumnName("Tags");
 
-                    b.Property<string>("WebsitePolicy")
+                    b.Property<string>("WebsiteFilterType")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
-                    b.ToTable("BlockProfiles", (string)null);
+                    b.ToTable("BlockPresets", (string)null);
 
                     b.HasData(
                         new
                         {
                             Id = new Guid("a0000001-0000-0000-0000-000000000001"),
                             Name = "Focus — Allowlist",
-                            ProfileType = "Focus",
+                            PresetType = "Focus",
                             TagsSerialized = "",
-                            WebsitePolicy = "Allowlist"
+                            WebsiteFilterType = "Allowlist"
                         },
                         new
                         {
                             Id = new Guid("a0000001-0000-0000-0000-000000000002"),
                             Name = "Focus — Blocklist",
-                            ProfileType = "Focus",
+                            PresetType = "Focus",
                             TagsSerialized = "",
-                            WebsitePolicy = "Blocklist"
+                            WebsiteFilterType = "Blocklist"
                         },
                         new
                         {
                             Id = new Guid("a0000001-0000-0000-0000-000000000003"),
                             Name = "Background — Blocklist",
-                            ProfileType = "Background",
+                            PresetType = "Background",
                             TagsSerialized = "",
-                            WebsitePolicy = "Blocklist"
+                            WebsiteFilterType = "Blocklist"
                         },
                         new
                         {
                             Id = new Guid("a0000001-0000-0000-0000-000000000004"),
                             Name = "Background — Allowlist",
-                            ProfileType = "Background",
+                            PresetType = "Background",
                             TagsSerialized = "",
-                            WebsitePolicy = "Allowlist"
+                            WebsiteFilterType = "Allowlist"
                         });
                 });
 
@@ -121,7 +121,7 @@ namespace NenFocus.Infrastructure.Migrations
                         .HasMaxLength(13)
                         .HasColumnType("TEXT");
 
-                    b.Property<Guid>("BlockProfileId")
+                    b.Property<Guid>("BlockPresetId")
                         .HasColumnType("TEXT");
 
                     b.Property<Guid?>("ContractId")
@@ -151,7 +151,7 @@ namespace NenFocus.Infrastructure.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("TEXT");
 
-                    b.Property<Guid>("BlockProfileId")
+                    b.Property<Guid>("BlockPresetId")
                         .HasColumnType("TEXT");
 
                     b.Property<DateTime?>("BreakStartedAt")
@@ -228,135 +228,135 @@ namespace NenFocus.Infrastructure.Migrations
                     b.HasDiscriminator().HasValue("Focus");
                 });
 
-            modelBuilder.Entity("NenFocus.Domain.Entities.BlockProfile", b =>
+            modelBuilder.Entity("NenFocus.Domain.Entities.BlockPreset", b =>
                 {
                     b.OwnsMany("NenFocus.Domain.ValueObjects.BlockedApp", "BlockedApps", b1 =>
                         {
-                            b1.Property<Guid>("BlockProfileId")
+                            b1.Property<Guid>("BlockPresetId")
                                 .HasColumnType("TEXT");
 
                             b1.Property<string>("ProcessName")
                                 .HasMaxLength(200)
                                 .HasColumnType("TEXT");
 
-                            b1.HasKey("BlockProfileId", "ProcessName");
+                            b1.HasKey("BlockPresetId", "ProcessName");
 
                             b1.ToTable("BlockedApps", (string)null);
 
                             b1.WithOwner()
-                                .HasForeignKey("BlockProfileId");
+                                .HasForeignKey("BlockPresetId");
                         });
 
                     b.OwnsMany("NenFocus.Domain.ValueObjects.BlockedSite", "Websites", b1 =>
                         {
-                            b1.Property<Guid>("BlockProfileId")
+                            b1.Property<Guid>("BlockPresetId")
                                 .HasColumnType("TEXT");
 
                             b1.Property<string>("Url")
                                 .HasMaxLength(500)
                                 .HasColumnType("TEXT");
 
-                            b1.HasKey("BlockProfileId", "Url");
+                            b1.HasKey("BlockPresetId", "Url");
 
                             b1.ToTable("BlockedSites", (string)null);
 
                             b1.WithOwner()
-                                .HasForeignKey("BlockProfileId");
+                                .HasForeignKey("BlockPresetId");
 
                             b1.HasData(
                                 new
                                 {
-                                    BlockProfileId = new Guid("a0000001-0000-0000-0000-000000000001"),
+                                    BlockPresetId = new Guid("a0000001-0000-0000-0000-000000000001"),
                                     Url = "gemini.google.com"
                                 },
                                 new
                                 {
-                                    BlockProfileId = new Guid("a0000001-0000-0000-0000-000000000001"),
+                                    BlockPresetId = new Guid("a0000001-0000-0000-0000-000000000001"),
                                     Url = "claude.ai"
                                 },
                                 new
                                 {
-                                    BlockProfileId = new Guid("a0000001-0000-0000-0000-000000000001"),
+                                    BlockPresetId = new Guid("a0000001-0000-0000-0000-000000000001"),
                                     Url = "github.com"
                                 },
                                 new
                                 {
-                                    BlockProfileId = new Guid("a0000001-0000-0000-0000-000000000002"),
+                                    BlockPresetId = new Guid("a0000001-0000-0000-0000-000000000002"),
                                     Url = "youtube.com"
                                 },
                                 new
                                 {
-                                    BlockProfileId = new Guid("a0000001-0000-0000-0000-000000000002"),
+                                    BlockPresetId = new Guid("a0000001-0000-0000-0000-000000000002"),
                                     Url = "twitter.com"
                                 },
                                 new
                                 {
-                                    BlockProfileId = new Guid("a0000001-0000-0000-0000-000000000002"),
+                                    BlockPresetId = new Guid("a0000001-0000-0000-0000-000000000002"),
                                     Url = "instagram.com"
                                 },
                                 new
                                 {
-                                    BlockProfileId = new Guid("a0000001-0000-0000-0000-000000000002"),
+                                    BlockPresetId = new Guid("a0000001-0000-0000-0000-000000000002"),
                                     Url = "reddit.com"
                                 },
                                 new
                                 {
-                                    BlockProfileId = new Guid("a0000001-0000-0000-0000-000000000002"),
+                                    BlockPresetId = new Guid("a0000001-0000-0000-0000-000000000002"),
                                     Url = "facebook.com"
                                 },
                                 new
                                 {
-                                    BlockProfileId = new Guid("a0000001-0000-0000-0000-000000000003"),
+                                    BlockPresetId = new Guid("a0000001-0000-0000-0000-000000000003"),
                                     Url = "youtube.com"
                                 },
                                 new
                                 {
-                                    BlockProfileId = new Guid("a0000001-0000-0000-0000-000000000003"),
+                                    BlockPresetId = new Guid("a0000001-0000-0000-0000-000000000003"),
                                     Url = "twitter.com"
                                 },
                                 new
                                 {
-                                    BlockProfileId = new Guid("a0000001-0000-0000-0000-000000000003"),
+                                    BlockPresetId = new Guid("a0000001-0000-0000-0000-000000000003"),
                                     Url = "instagram.com"
                                 },
                                 new
                                 {
-                                    BlockProfileId = new Guid("a0000001-0000-0000-0000-000000000003"),
+                                    BlockPresetId = new Guid("a0000001-0000-0000-0000-000000000003"),
                                     Url = "reddit.com"
                                 },
                                 new
                                 {
-                                    BlockProfileId = new Guid("a0000001-0000-0000-0000-000000000003"),
+                                    BlockPresetId = new Guid("a0000001-0000-0000-0000-000000000003"),
                                     Url = "facebook.com"
                                 },
                                 new
                                 {
-                                    BlockProfileId = new Guid("a0000001-0000-0000-0000-000000000004"),
+                                    BlockPresetId = new Guid("a0000001-0000-0000-0000-000000000004"),
                                     Url = "google.com"
                                 },
                                 new
                                 {
-                                    BlockProfileId = new Guid("a0000001-0000-0000-0000-000000000004"),
+                                    BlockPresetId = new Guid("a0000001-0000-0000-0000-000000000004"),
                                     Url = "soundcloud.com"
                                 },
                                 new
                                 {
-                                    BlockProfileId = new Guid("a0000001-0000-0000-0000-000000000004"),
+                                    BlockPresetId = new Guid("a0000001-0000-0000-0000-000000000004"),
                                     Url = "mail.google.com"
                                 },
                                 new
                                 {
-                                    BlockProfileId = new Guid("a0000001-0000-0000-0000-000000000004"),
+                                    BlockPresetId = new Guid("a0000001-0000-0000-0000-000000000004"),
                                     Url = "gemini.google.com"
                                 },
                                 new
                                 {
-                                    BlockProfileId = new Guid("a0000001-0000-0000-0000-000000000004"),
+                                    BlockPresetId = new Guid("a0000001-0000-0000-0000-000000000004"),
                                     Url = "claude.ai"
                                 },
                                 new
                                 {
-                                    BlockProfileId = new Guid("a0000001-0000-0000-0000-000000000004"),
+                                    BlockPresetId = new Guid("a0000001-0000-0000-0000-000000000004"),
                                     Url = "github.com"
                                 });
                         });

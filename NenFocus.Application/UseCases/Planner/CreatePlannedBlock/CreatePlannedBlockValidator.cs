@@ -6,20 +6,20 @@ namespace NenFocus.Application.UseCases.Planner.CreatePlannedBlock;
 
 public sealed class CreatePlannedBlockValidator : AbstractValidator<CreatePlannedBlockCommand>
 {
-    public CreatePlannedBlockValidator(IBlockProfileRepository profiles, ISystemClock clock)
+    public CreatePlannedBlockValidator(IBlockPresetRepository presets, ISystemClock clock)
     {
-        RuleFor(x => x.ProfileId)
-            .NotEmpty().WithMessage("Profile ID is required.");
+        RuleFor(x => x.PresetId)
+            .NotEmpty().WithMessage("Preset ID is required.");
 
         RuleFor(x => x)
             .MustAsync(async (command, ct) =>
             {
-                if (command.ProfileId == Guid.Empty) return true;
-                var profile = await profiles.GetByIdAsync(command.ProfileId, ct);
-                return profile is null || profile.ProfileType == command.BlockType;
+                if (command.PresetId == Guid.Empty) return true;
+                var preset = await presets.GetByIdAsync(command.PresetId, ct);
+                return preset is null || preset.PresetType == command.BlockPresetType;
             })
             .WithMessage(x =>
-                $"A {x.BlockType.ToString().ToLowerInvariant()} block requires a {x.BlockType.ToString().ToLowerInvariant()} profile.");
+                $"A {x.BlockPresetType.ToString().ToLowerInvariant()} block requires a {x.BlockPresetType.ToString().ToLowerInvariant()} preset.");
 
         RuleFor(x => x.Start)
             .Must(start => start > clock.UtcNow)

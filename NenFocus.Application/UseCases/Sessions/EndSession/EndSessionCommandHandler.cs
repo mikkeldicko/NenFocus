@@ -8,20 +8,20 @@ public sealed class EndSessionCommandHandler
     : ICommandHandler<EndSessionCommand, EndSessionResult>
 {
     private readonly ISessionRepository _sessions;
-    private readonly IBlockProfileRepository _profiles;
+    private readonly IBlockPresetRepository _presets;
     private readonly IPlannedBlockRepository _plannedBlocks;
     private readonly IBlockedAttemptTracker _attemptTracker;
     private readonly ISystemClock _clock;
 
     public EndSessionCommandHandler(
         ISessionRepository sessions,
-        IBlockProfileRepository profiles,
+        IBlockPresetRepository presets,
         IPlannedBlockRepository plannedBlocks,
         IBlockedAttemptTracker attemptTracker,
         ISystemClock clock)
     {
         _sessions = sessions;
-        _profiles = profiles;
+        _presets = presets;
         _plannedBlocks = plannedBlocks;
         _attemptTracker = attemptTracker;
         _clock = clock;
@@ -66,11 +66,11 @@ public sealed class EndSessionCommandHandler
             }
         }
 
-        var profileName = string.Empty;
-        if (session.BlockProfileId != Guid.Empty)
+        var presetName = string.Empty;
+        if (session.BlockPresetId != Guid.Empty)
         {
-            var profile = await _profiles.GetByIdAsync(session.BlockProfileId, ct);
-            profileName = profile?.Name ?? string.Empty;
+            var preset = await _presets.GetByIdAsync(session.BlockPresetId, ct);
+            presetName = preset?.Name ?? string.Empty;
         }
 
         var postSession = new PostSessionDto
@@ -78,7 +78,7 @@ public sealed class EndSessionCommandHandler
             SessionId = session.Id,
             Status = session.Status,
             Goal = session.Goal.Value,
-            ProfileName = profileName,
+            PresetName = presetName,
             StartedAt = session.StartedAt!.Value,
             EndedAt = session.EndedAt!.Value,
             PlannedDurationMinutes = (int)session.Duration.Value.TotalMinutes,

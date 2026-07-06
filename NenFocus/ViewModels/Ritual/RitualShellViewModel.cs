@@ -4,7 +4,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
-using NenFocus.Application.Queries.GetAllBlockProfiles;
+using NenFocus.Application.Queries.GetAllBlockPresets;
 using NenFocus.Application.Queries.GetFocusBlockRitualContext;
 using NenFocus.Application.UseCases.Sessions.StartSession;
 using NenFocus.Domain.Enums;
@@ -13,7 +13,7 @@ namespace NenFocus.ViewModels.Ritual;
 
 public partial class RitualShellViewModel : ViewModelBase
 {
-    private readonly IQueryHandler<GetAllBlockProfilesQuery, IReadOnlyList<BlockProfileDto>> _profilesQuery;
+    private readonly IQueryHandler<GetAllBlockPresetsQuery, IReadOnlyList<BlockPresetDto>> _presetsQuery;
     private readonly ICommandHandler<StartSessionCommand, StartSessionResult> _startSession;
     private readonly ISystemClock _clock;
     private readonly Action _onComplete;
@@ -40,33 +40,33 @@ public partial class RitualShellViewModel : ViewModelBase
     public bool IsDot3Active => StepIndex == 3;
 
     private readonly Guid? _originatingBlockId;
-    private readonly BlockProfileDto? _lockedProfile;
+    private readonly BlockPresetDto? _lockedPreset;
     private readonly FocusBlockSchedule? _lockedSchedule;
     private readonly SessionOrigin _mode;
 
     private string _goal = string.Empty;
-    private Guid? _selectedProfileId;
+    private Guid? _selectedPresetId;
 
     private ZetsuPageViewModel? _zetsuVm;
     private RenPageViewModel? _renVm;
 
     public RitualShellViewModel(
-        IQueryHandler<GetAllBlockProfilesQuery, IReadOnlyList<BlockProfileDto>> profilesQuery,
+        IQueryHandler<GetAllBlockPresetsQuery, IReadOnlyList<BlockPresetDto>> presetsQuery,
         ICommandHandler<StartSessionCommand, StartSessionResult> startSession,
         ISystemClock clock,
         Guid? originatingBlockId,
-        BlockProfileDto? lockedProfile,
+        BlockPresetDto? lockedPreset,
         FocusBlockSchedule? lockedSchedule,
         Action onComplete,
         Action onCancel)
     {
-        _profilesQuery = profilesQuery;
+        _presetsQuery = presetsQuery;
         _startSession = startSession;
         _clock = clock;
         _originatingBlockId = originatingBlockId;
-        _lockedProfile = lockedProfile;
+        _lockedPreset = lockedPreset;
         _lockedSchedule = lockedSchedule;
-        _mode = lockedProfile is not null ? SessionOrigin.Planned : SessionOrigin.Spontaneous;
+        _mode = lockedPreset is not null ? SessionOrigin.Planned : SessionOrigin.Spontaneous;
         _onComplete = onComplete;
         _onCancel = onCancel;
 
@@ -106,9 +106,9 @@ public partial class RitualShellViewModel : ViewModelBase
 
         StepIndex = 2;
         _renVm = new RenPageViewModel(
-            profilesQuery: _mode == SessionOrigin.Spontaneous ? _profilesQuery : null,
+            presetsQuery: _mode == SessionOrigin.Spontaneous ? _presetsQuery : null,
             mode: _mode,
-            lockedProfile: _lockedProfile,
+            lockedPreset: _lockedPreset,
             onContinue: NavigateToHatsu,
             onBack: NavigateToZetsu);
         _currentBackAction = NavigateToZetsu;
@@ -118,9 +118,9 @@ public partial class RitualShellViewModel : ViewModelBase
     private void NavigateToHatsu()
     {
         if (_renVm is not null && _mode == SessionOrigin.Spontaneous)
-            _selectedProfileId = _renVm.SelectedProfile?.Id;
+            _selectedPresetId = _renVm.SelectedPreset?.Id;
         else if (_mode == SessionOrigin.Planned)
-            _selectedProfileId = _lockedProfile?.Id;
+            _selectedPresetId = _lockedPreset?.Id;
 
         StepIndex = 3;
         _currentBackAction = NavigateToRen;
@@ -130,7 +130,7 @@ public partial class RitualShellViewModel : ViewModelBase
             getData: () => new HatsuData
             {
                 Goal = _goal,
-                ProfileId = _selectedProfileId,
+                PresetId = _selectedPresetId,
                 OriginatingBlockId = _originatingBlockId,
                 AdditionalBlockedSites = _renVm?.AdditionalBlockedSites ?? (IReadOnlyList<string>)[],
                 AdditionalBlockedApps = _renVm?.AdditionalBlockedApps ?? (IReadOnlyList<string>)[]

@@ -112,9 +112,9 @@ ViewModels must never hold a reference to any `IRepository` interface or call on
 > **Why:** Direct repository access in a ViewModel bypasses validation, event publication, and audit trail. It also makes the ViewModel impossible to unit-test without a real database.
 
 #### No Domain Entity References
-ViewModels must never hold or navigate a Domain entity (`Session`, `BlockProfile`, etc.) directly.
+ViewModels must never hold or navigate a Domain entity (`Session`, `BlockPreset`, etc.) directly.
 
-> **Rule:** Data flows from the Application layer through DTOs (`SessionDto`, `BlockProfileDto`, etc.). The ViewModel binds to DTOs and their properties.
+> **Rule:** Data flows from the Application layer through DTOs (`SessionDto`, `BlockPresetDto`, etc.). The ViewModel binds to DTOs and their properties.
 
 ---
 

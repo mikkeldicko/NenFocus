@@ -14,9 +14,9 @@ public class MarkFocusBlockMissedCommandHandlerTests
 
     private readonly IPlannedBlockRepository _blocks = Substitute.For<IPlannedBlockRepository>();
     private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
-    private readonly IBlockProfileRepository _profiles = Substitute.For<IBlockProfileRepository>();
+    private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
 
-    private MarkFocusBlockMissedCommandHandler CreateHandler() => new(_blocks, _sessions, _profiles);
+    private MarkFocusBlockMissedCommandHandler CreateHandler() => new(_blocks, _sessions, _presets);
 
     [Fact]
     public async Task HandleAsync_BlockNotFound_Fails()
@@ -33,11 +33,11 @@ public class MarkFocusBlockMissedCommandHandlerTests
     [Fact]
     public async Task HandleAsync_HappyPath_CreatesMissedSessionFromBlockSchedule()
     {
-        var profileId = Guid.NewGuid();
-        var block = FocusBlock.Create(Guid.NewGuid(), profileId, Start, End);
+        var presetId = Guid.NewGuid();
+        var block = FocusBlock.Create(Guid.NewGuid(), presetId, Start, End);
         _blocks.GetByIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns(block);
-        _profiles.GetByIdAsync(profileId, Arg.Any<CancellationToken>())
-            .Returns(BlockProfile.Create(profileId, "Deep Work", WebsitePolicy.Blocklist, BlockType.Focus, Start));
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Start));
 
         var result = await CreateHandler().HandleAsync(new MarkFocusBlockMissedCommand { FocusBlockId = block.Id });
 
@@ -48,7 +48,7 @@ public class MarkFocusBlockMissedCommandHandlerTests
             Arg.Is<Session>(s =>
                 s.Origin == SessionOrigin.Planned &&
                 s.OriginatingBlockId == block.Id &&
-                s.BlockProfileId == profileId &&
+                s.BlockPresetId == presetId &&
                 s.Status == SessionStatus.Missed &&
                 s.StartedAt == Start &&
                 s.EndedAt == End &&
@@ -58,7 +58,7 @@ public class MarkFocusBlockMissedCommandHandlerTests
 
         result.PostSession.Should().NotBeNull();
         result.PostSession!.Status.Should().Be(SessionStatus.Missed);
-        result.PostSession.ProfileName.Should().Be("Deep Work");
+        result.PostSession.PresetName.Should().Be("Deep Work");
         result.PostSession.StartedAt.Should().Be(Start);
         result.PostSession.EndedAt.Should().Be(End);
         result.PostSession.PlannedDurationMinutes.Should().Be(60);
@@ -67,16 +67,16 @@ public class MarkFocusBlockMissedCommandHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_ProfileNotFound_PostSessionHasBlankProfileName()
+    public async Task HandleAsync_PresetNotFound_PostSessionHasBlankPresetName()
     {
-        var profileId = Guid.NewGuid();
-        var block = FocusBlock.Create(Guid.NewGuid(), profileId, Start, End);
+        var presetId = Guid.NewGuid();
+        var block = FocusBlock.Create(Guid.NewGuid(), presetId, Start, End);
         _blocks.GetByIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns(block);
-        _profiles.GetByIdAsync(profileId, Arg.Any<CancellationToken>())
-            .Returns((BlockProfile?)null);
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
+            .Returns((BlockPreset?)null);
 
         var result = await CreateHandler().HandleAsync(new MarkFocusBlockMissedCommand { FocusBlockId = block.Id });
 
-        result.PostSession!.ProfileName.Should().Be(string.Empty);
+        result.PostSession!.PresetName.Should().Be(string.Empty);
     }
 }

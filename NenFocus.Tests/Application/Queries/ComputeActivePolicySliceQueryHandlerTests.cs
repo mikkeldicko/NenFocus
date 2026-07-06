@@ -14,7 +14,7 @@ public class ComputeActivePolicySliceQueryHandlerTests
     private static readonly DateTime At = new(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
 
     private readonly IPlannedBlockRepository _blocks = Substitute.For<IPlannedBlockRepository>();
-    private readonly IBlockProfileRepository _profiles = Substitute.For<IBlockProfileRepository>();
+    private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
     private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
     private readonly IPolicyEngine _policyEngine = Substitute.For<IPolicyEngine>();
 
@@ -25,7 +25,7 @@ public class ComputeActivePolicySliceQueryHandlerTests
         _sessions.GetActiveSessionsAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<Session>)[]);
     }
 
-    private ComputeActivePolicySliceQueryHandler CreateHandler() => new(_blocks, _profiles, _sessions, _policyEngine);
+    private ComputeActivePolicySliceQueryHandler CreateHandler() => new(_blocks, _presets, _sessions, _policyEngine);
 
     [Fact]
     public async Task HandleAsync_FetchesBlocksForOneSecondWindowAroundAt()
@@ -38,8 +38,8 @@ public class ComputeActivePolicySliceQueryHandlerTests
     [Fact]
     public async Task HandleAsync_ReturnsWhateverThePolicyEngineComputes()
     {
-        var expectedSlice = new ActivePolicySlice { SliceStart = At, ActiveBlockType = BlockType.Focus };
-        _policyEngine.ComputeSlice(At, Arg.Any<IEnumerable<BlockProfile>>(), Arg.Any<IEnumerable<Session>>(), Arg.Any<IEnumerable<PlannedBlock>>())
+        var expectedSlice = new ActivePolicySlice { SliceStart = At, ActiveBlockPresetType = BlockPresetType.Focus };
+        _policyEngine.ComputeSlice(At, Arg.Any<IEnumerable<BlockPreset>>(), Arg.Any<IEnumerable<Session>>(), Arg.Any<IEnumerable<PlannedBlock>>())
             .Returns(expectedSlice);
 
         var result = await CreateHandler().HandleAsync(new ComputeActivePolicySliceQuery(At), CancellationToken.None);
@@ -48,46 +48,46 @@ public class ComputeActivePolicySliceQueryHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_ResolvesDistinctProfilesReferencedByBlocksAndSessions()
+    public async Task HandleAsync_ResolvesDistinctPresetsReferencedByBlocksAndSessions()
     {
-        var sharedProfileId = Guid.NewGuid();
-        var sessionOnlyProfileId = Guid.NewGuid();
-        var block = FocusBlock.Create(Guid.NewGuid(), sharedProfileId, At, At.AddHours(1));
+        var sharedPresetId = Guid.NewGuid();
+        var sessionOnlyPresetId = Guid.NewGuid();
+        var block = FocusBlock.Create(Guid.NewGuid(), sharedPresetId, At, At.AddHours(1));
         var session = Session.Create(
             Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(30)),
-            sessionOnlyProfileId, SessionOrigin.Spontaneous);
+            sessionOnlyPresetId, SessionOrigin.Spontaneous);
         session.Start(At);
 
         _blocks.GetForRangeAsync(Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[block]);
         _sessions.GetActiveSessionsAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<Session>)[session]);
 
-        var sharedProfile = BlockProfile.Create(sharedProfileId, "Shared", WebsitePolicy.Blocklist, BlockType.Focus, At);
-        var sessionProfile = BlockProfile.Create(sessionOnlyProfileId, "SessionOnly", WebsitePolicy.Blocklist, BlockType.Focus, At);
-        _profiles.GetByIdAsync(sharedProfileId, Arg.Any<CancellationToken>()).Returns(sharedProfile);
-        _profiles.GetByIdAsync(sessionOnlyProfileId, Arg.Any<CancellationToken>()).Returns(sessionProfile);
+        var sharedPreset = BlockPreset.Create(sharedPresetId, "Shared", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At);
+        var sessionPreset = BlockPreset.Create(sessionOnlyPresetId, "SessionOnly", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At);
+        _presets.GetByIdAsync(sharedPresetId, Arg.Any<CancellationToken>()).Returns(sharedPreset);
+        _presets.GetByIdAsync(sessionOnlyPresetId, Arg.Any<CancellationToken>()).Returns(sessionPreset);
 
         await CreateHandler().HandleAsync(new ComputeActivePolicySliceQuery(At), CancellationToken.None);
 
         _policyEngine.Received(1).ComputeSlice(
             At,
-            Arg.Is<IEnumerable<BlockProfile>>(p => p.Count() == 2 && p.Contains(sharedProfile) && p.Contains(sessionProfile)),
+            Arg.Is<IEnumerable<BlockPreset>>(p => p.Count() == 2 && p.Contains(sharedPreset) && p.Contains(sessionPreset)),
             Arg.Is<IEnumerable<Session>>(s => s.Contains(session)),
             Arg.Is<IEnumerable<PlannedBlock>>(b => b.Contains(block)));
     }
 
     [Fact]
-    public async Task HandleAsync_UnresolvableProfile_IsOmittedNotThrown()
+    public async Task HandleAsync_UnresolvablePreset_IsOmittedNotThrown()
     {
-        var profileId = Guid.NewGuid();
-        var block = FocusBlock.Create(Guid.NewGuid(), profileId, At, At.AddHours(1));
+        var presetId = Guid.NewGuid();
+        var block = FocusBlock.Create(Guid.NewGuid(), presetId, At, At.AddHours(1));
         _blocks.GetForRangeAsync(Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[block]);
-        _profiles.GetByIdAsync(profileId, Arg.Any<CancellationToken>()).Returns((BlockProfile?)null);
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>()).Returns((BlockPreset?)null);
 
         await CreateHandler().HandleAsync(new ComputeActivePolicySliceQuery(At), CancellationToken.None);
 
         _policyEngine.Received(1).ComputeSlice(
-            At, Arg.Is<IEnumerable<BlockProfile>>(p => !p.Any()), Arg.Any<IEnumerable<Session>>(), Arg.Any<IEnumerable<PlannedBlock>>());
+            At, Arg.Is<IEnumerable<BlockPreset>>(p => !p.Any()), Arg.Any<IEnumerable<Session>>(), Arg.Any<IEnumerable<PlannedBlock>>());
     }
 }

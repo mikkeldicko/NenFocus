@@ -165,7 +165,7 @@ public async Task HandleAsync_ValidDurations_AllSucceed(int durationMinutes)
 
 | Target | Why |
 |--------|-----|
-| Domain entity state machines (`Session`, `BlockProfile`) | Zero dependencies; pure logic; high value |
+| Domain entity state machines (`Session`, `BlockPreset`) | Zero dependencies; pure logic; high value |
 | Command handler happy paths | Verify the correct sequence of repository calls and state updates |
 | Command handler failure paths | Verify validation gates work (session not found, wrong status, etc.) |
 | Value object construction | Verify invalid inputs throw `ArgumentException` |

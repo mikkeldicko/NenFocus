@@ -17,7 +17,20 @@
       "Bash(git *)",
       "PowerShell(dotnet build *)",
       "PowerShell(Get-Process *)",
-      "PowerShell(Stop-Process *)"
+      "PowerShell(Stop-Process *)",
+      "Bash(powershell -NoProfile -Command \"Get-Process -Name NenFocus -ErrorAction SilentlyContinue | Select-Object Id,ProcessName\")",
+      "Bash(echo \"exit:$?\")",
+      "Read(//tmp/**)",
+      "Bash(awk '{ print length\\($0\\), $0 }')",
+      "Bash(dotnet ef *)",
+      "Bash(dotnet run *)",
+      "Bash(xargs grep -liE \"blockprofile|blocktype|websitepolicy\")",
+      "Bash(unix2dos \"NenFocus.Infrastructure/Migrations/20260706114534_RenameBlockProfileToBlockPreset.cs\")",
+      "Bash(xxd)",
+      "Bash(echo \"exit: $?\")",
+      "Read(//c/Users/mikke/AppData/Roaming/NenFocus/**)",
+      "Bash(tasklist)",
+      "Bash(awk '{print $1}')"
     ]
   }
 }

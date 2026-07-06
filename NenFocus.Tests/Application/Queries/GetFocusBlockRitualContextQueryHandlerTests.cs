@@ -13,9 +13,9 @@ public class GetFocusBlockRitualContextQueryHandlerTests
     private static readonly DateTime End = new(2026, 1, 2, 15, 0, 0, DateTimeKind.Utc);
 
     private readonly IPlannedBlockRepository _blocks = Substitute.For<IPlannedBlockRepository>();
-    private readonly IBlockProfileRepository _profiles = Substitute.For<IBlockProfileRepository>();
+    private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
 
-    private GetFocusBlockRitualContextQueryHandler CreateHandler() => new(_blocks, _profiles);
+    private GetFocusBlockRitualContextQueryHandler CreateHandler() => new(_blocks, _presets);
 
     [Fact]
     public async Task HandleAsync_BlockNotFound_ReturnsNull()
@@ -42,13 +42,13 @@ public class GetFocusBlockRitualContextQueryHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_ProfileNotFound_ReturnsNull()
+    public async Task HandleAsync_PresetNotFound_ReturnsNull()
     {
         var blockId = Guid.NewGuid();
-        var profileId = Guid.NewGuid();
+        var presetId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, profileId, Start, End));
-        _profiles.GetByIdAsync(profileId, Arg.Any<CancellationToken>()).Returns((BlockProfile?)null);
+            .Returns(FocusBlock.Create(blockId, presetId, Start, End));
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>()).Returns((BlockPreset?)null);
 
         var result = await CreateHandler().HandleAsync(
             new GetFocusBlockRitualContextQuery { FocusBlockId = blockId }, CancellationToken.None);
@@ -57,20 +57,20 @@ public class GetFocusBlockRitualContextQueryHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_HappyPath_ReturnsProfileAndSchedule()
+    public async Task HandleAsync_HappyPath_ReturnsPresetAndSchedule()
     {
         var blockId = Guid.NewGuid();
-        var profileId = Guid.NewGuid();
+        var presetId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, profileId, Start, End));
-        _profiles.GetByIdAsync(profileId, Arg.Any<CancellationToken>())
-            .Returns(BlockProfile.Create(profileId, "Deep Work", WebsitePolicy.Blocklist, BlockType.Focus, Start));
+            .Returns(FocusBlock.Create(blockId, presetId, Start, End));
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Start));
 
         var result = await CreateHandler().HandleAsync(
             new GetFocusBlockRitualContextQuery { FocusBlockId = blockId }, CancellationToken.None);
 
         result.Should().NotBeNull();
-        result!.Profile.Name.Should().Be("Deep Work");
+        result!.Preset.Name.Should().Be("Deep Work");
         result.Schedule.Start.Should().Be(Start);
         result.Schedule.End.Should().Be(End);
     }

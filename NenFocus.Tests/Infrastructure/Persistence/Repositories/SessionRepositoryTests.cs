@@ -10,11 +10,11 @@ public class SessionRepositoryTests : SqliteRepositoryTestBase
 {
     private SessionRepository CreateRepository() => new(Context);
 
-    private static Session CreateSession(Guid? profileId = null, DateTime? startedAt = null)
+    private static Session CreateSession(Guid? presetId = null, DateTime? startedAt = null)
     {
         var session = Session.Create(
             Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(30)),
-            profileId ?? Guid.NewGuid(), SessionOrigin.Spontaneous);
+            presetId ?? Guid.NewGuid(), SessionOrigin.Spontaneous);
         session.Start(startedAt ?? DateTime.UtcNow);
         return session;
     }
@@ -112,18 +112,18 @@ public class SessionRepositoryTests : SqliteRepositoryTestBase
     }
 
     [Fact]
-    public async Task GetHistoryAsync_FiltersByProfileIdWhenProvided()
+    public async Task GetHistoryAsync_FiltersByPresetIdWhenProvided()
     {
-        var profileId = Guid.NewGuid();
+        var presetId = Guid.NewGuid();
         var repo = CreateRepository();
-        var matching = CreateSession(profileId, new DateTime(2026, 1, 15, 10, 0, 0, DateTimeKind.Utc));
+        var matching = CreateSession(presetId, new DateTime(2026, 1, 15, 10, 0, 0, DateTimeKind.Utc));
         var other = CreateSession(Guid.NewGuid(), new DateTime(2026, 1, 16, 10, 0, 0, DateTimeKind.Utc));
         await repo.SaveAsync(matching);
         await repo.SaveAsync(other);
         await Context.SaveChangesAsync();
 
         var result = await CreateRepository().GetHistoryAsync(
-            new DateOnly(2026, 1, 1), new DateOnly(2026, 1, 31), profileId);
+            new DateOnly(2026, 1, 1), new DateOnly(2026, 1, 31), presetId);
 
         result.Should().ContainSingle(s => s.Id == matching.Id);
     }

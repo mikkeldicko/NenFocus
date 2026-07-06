@@ -6,7 +6,7 @@ public sealed record SessionSummaryDto
 {
     public Guid Id { get; init; }
     public string Goal { get; init; } = string.Empty;
-    public string ProfileName { get; init; } = string.Empty;
+    public string PresetName { get; init; } = string.Empty;
     public int PlannedDurationMinutes { get; init; }
     public int ActualDurationMinutes { get; init; }
     public DateTime StartedAt { get; init; }

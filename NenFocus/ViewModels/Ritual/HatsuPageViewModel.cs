@@ -173,7 +173,7 @@ public partial class HatsuPageViewModel : ViewModelBase
         var command = new StartSessionCommand
         {
             Goal = data.Goal,
-            ProfileId = data.ProfileId,
+            PresetId = data.PresetId,
             DurationMinutes = TotalMinutes,
             BreakSettings = breakSettings,
             OriginatingBlockId = data.OriginatingBlockId,
@@ -207,7 +207,7 @@ public partial class HatsuPageViewModel : ViewModelBase
 public sealed record HatsuData
 {
     public string Goal { get; init; } = string.Empty;
-    public Guid? ProfileId { get; init; }
+    public Guid? PresetId { get; init; }
     public Guid? OriginatingBlockId { get; init; }
     public IReadOnlyList<string> AdditionalBlockedSites { get; init; } = [];
     public IReadOnlyList<string> AdditionalBlockedApps { get; init; } = [];

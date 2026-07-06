@@ -15,7 +15,7 @@ public class StartSessionCommandHandlerTests
     private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
     private readonly IPlannedBlockRepository _plannedBlocks = Substitute.For<IPlannedBlockRepository>();
     private readonly ISessionStateService _sessionState = Substitute.For<ISessionStateService>();
-    private readonly IBlockProfileRepository _profiles = Substitute.For<IBlockProfileRepository>();
+    private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
     private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
 
     public StartSessionCommandHandlerTests()
@@ -26,23 +26,23 @@ public class StartSessionCommandHandlerTests
     }
 
     private StartSessionCommandHandler CreateHandler()
-        => new(_sessions, _plannedBlocks, _sessionState, _profiles, _clock);
+        => new(_sessions, _plannedBlocks, _sessionState, _presets, _clock);
 
-    private static StartSessionCommand SpontaneousCommand(Guid? profileId = null) => new()
+    private static StartSessionCommand SpontaneousCommand(Guid? presetId = null) => new()
     {
         Goal = "Deep work",
-        ProfileId = profileId ?? Guid.NewGuid(),
+        PresetId = presetId ?? Guid.NewGuid(),
         DurationMinutes = 30
     };
 
     [Fact]
     public async Task HandleAsync_Spontaneous_SavesSessionAndSetsActiveState()
     {
-        var profileId = Guid.NewGuid();
-        _profiles.GetByIdAsync(profileId, Arg.Any<CancellationToken>())
-            .Returns(BlockProfile.Create(profileId, "Deep Work", WebsitePolicy.Blocklist, BlockType.Focus, Now));
+        var presetId = Guid.NewGuid();
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Now));
 
-        var result = await CreateHandler().HandleAsync(SpontaneousCommand(profileId), CancellationToken.None);
+        var result = await CreateHandler().HandleAsync(SpontaneousCommand(presetId), CancellationToken.None);
 
         result.Success.Should().BeTrue();
         result.SessionId.Should().NotBeNull();
@@ -50,19 +50,19 @@ public class StartSessionCommandHandlerTests
             Arg.Is<Session>(s => s.Origin == SessionOrigin.Spontaneous && s.Status == SessionStatus.Active),
             Arg.Any<CancellationToken>());
         _sessionState.Received(1).SetActive(Arg.Is<SessionDto>(d =>
-            d.ProfileName == "Deep Work" && d.Origin == SessionOrigin.Spontaneous));
+            d.PresetName == "Deep Work" && d.Origin == SessionOrigin.Spontaneous));
     }
 
     [Fact]
-    public async Task HandleAsync_ProfileNotFound_StillSucceedsWithBlankProfileName()
+    public async Task HandleAsync_PresetNotFound_StillSucceedsWithBlankPresetName()
     {
-        var profileId = Guid.NewGuid();
-        _profiles.GetByIdAsync(profileId, Arg.Any<CancellationToken>()).Returns((BlockProfile?)null);
+        var presetId = Guid.NewGuid();
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>()).Returns((BlockPreset?)null);
 
-        var result = await CreateHandler().HandleAsync(SpontaneousCommand(profileId), CancellationToken.None);
+        var result = await CreateHandler().HandleAsync(SpontaneousCommand(presetId), CancellationToken.None);
 
         result.Success.Should().BeTrue();
-        _sessionState.Received(1).SetActive(Arg.Is<SessionDto>(d => d.ProfileName == string.Empty));
+        _sessionState.Received(1).SetActive(Arg.Is<SessionDto>(d => d.PresetName == string.Empty));
     }
 
     [Fact]

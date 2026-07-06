@@ -3,7 +3,7 @@ namespace NenFocus.Domain.Entities;
 public abstract class PlannedBlock
 {
     public Guid Id { get; protected set; }
-    public Guid BlockProfileId { get; protected set; }
+    public Guid BlockPresetId { get; protected set; }
     public DateTime Start { get; protected set; }
     public DateTime End { get; protected set; }
     public string? Title { get; protected set; }
@@ -38,9 +38,9 @@ public abstract class PlannedBlock
         End = newEnd;
     }
 
-    public void AssignProfile(Guid profileId)
+    public void AssignPreset(Guid presetId)
     {
-        BlockProfileId = profileId;
+        BlockPresetId = presetId;
     }
 
     public void AssignContract(Guid? contractId)

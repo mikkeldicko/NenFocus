@@ -7,5 +7,5 @@ public sealed record GetSessionHistoryQuery : IQuery<IReadOnlyList<SessionSummar
 {
     public DateOnly From { get; init; }
     public DateOnly To { get; init; }
-    public Guid? ProfileId { get; init; }
+    public Guid? PresetId { get; init; }
 }

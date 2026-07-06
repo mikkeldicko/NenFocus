@@ -67,11 +67,11 @@ public interface IPlannedBlockRepository
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Returns true if any planned block after <paramref name="after"/> references the given profile.
+    /// Returns true if any planned block after <paramref name="after"/> references the given preset.
     /// Used to guard delete/update operations.
     /// </summary>
-    Task<bool> HasFutureBlocksForProfileAsync(
-        Guid profileId,
+    Task<bool> HasFutureBlocksForPresetAsync(
+        Guid presetId,
         DateTime after,
         CancellationToken cancellationToken = default);
 

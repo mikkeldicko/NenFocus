@@ -13,7 +13,7 @@ public class SessionTests
             id: Guid.NewGuid(),
             goal: new SessionGoal("Write tests"),
             duration: new SessionDuration(TimeSpan.FromMinutes(30)),
-            blockProfileId: Guid.NewGuid(),
+            blockPresetId: Guid.NewGuid(),
             origin: SessionOrigin.Spontaneous,
             breakSettings: breakSettings);
 
@@ -22,7 +22,7 @@ public class SessionTests
             id: Guid.NewGuid(),
             goal: new SessionGoal("Write tests"),
             duration: new SessionDuration(TimeSpan.FromMinutes(30)),
-            blockProfileId: Guid.NewGuid(),
+            blockPresetId: Guid.NewGuid(),
             origin: SessionOrigin.Planned,
             originatingBlockId: originatingBlockId);
 
@@ -90,7 +90,7 @@ public class SessionTests
 
         var raised = (SessionStartedEvent)session.DomainEvents.Single();
         raised.SessionId.Should().Be(session.Id);
-        raised.BlockProfileId.Should().Be(session.BlockProfileId);
+        raised.BlockPresetId.Should().Be(session.BlockPresetId);
         raised.Goal.Should().Be(session.Goal.Value);
     }
 

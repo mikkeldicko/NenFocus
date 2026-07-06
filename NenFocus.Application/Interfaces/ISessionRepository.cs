@@ -12,7 +12,7 @@ public interface ISessionRepository
     Task<IReadOnlyList<Session>> GetHistoryAsync(
         DateOnly from,
         DateOnly to,
-        Guid? profileId = null,
+        Guid? presetId = null,
         CancellationToken cancellationToken = default);
 
     Task SaveAsync(Session session, CancellationToken cancellationToken = default);

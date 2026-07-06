@@ -175,14 +175,14 @@ public class PlannedBlockTests
     }
 
     [Fact]
-    public void AssignProfile_UpdatesBlockProfileId()
+    public void AssignPreset_UpdatesBlockPresetId()
     {
         var block = CreateFocusBlock();
-        var newProfileId = Guid.NewGuid();
+        var newPresetId = Guid.NewGuid();
 
-        block.AssignProfile(newProfileId);
+        block.AssignPreset(newPresetId);
 
-        block.BlockProfileId.Should().Be(newProfileId);
+        block.BlockPresetId.Should().Be(newPresetId);
     }
 
     [Fact]

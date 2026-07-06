@@ -11,9 +11,9 @@ namespace NenFocus.Tests.Application.Queries;
 public class GetActiveSessionQueryHandlerTests
 {
     private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
-    private readonly IBlockProfileRepository _profiles = Substitute.For<IBlockProfileRepository>();
+    private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
 
-    private GetActiveSessionQueryHandler CreateHandler() => new(_sessions, _profiles);
+    private GetActiveSessionQueryHandler CreateHandler() => new(_sessions, _presets);
 
     [Fact]
     public async Task HandleAsync_NoActiveSession_ReturnsNull()
@@ -26,21 +26,21 @@ public class GetActiveSessionQueryHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_ActiveSession_MapsProfileNameAndFields()
+    public async Task HandleAsync_ActiveSession_MapsPresetNameAndFields()
     {
-        var profileId = Guid.NewGuid();
+        var presetId = Guid.NewGuid();
         var session = Session.Create(
             Guid.NewGuid(), new SessionGoal("Deep work"), new SessionDuration(TimeSpan.FromMinutes(45)),
-            profileId, SessionOrigin.Spontaneous);
+            presetId, SessionOrigin.Spontaneous);
         session.Start(DateTime.UtcNow);
         _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns(session);
-        _profiles.GetByIdAsync(profileId, Arg.Any<CancellationToken>())
-            .Returns(BlockProfile.Create(profileId, "Deep Work", WebsitePolicy.Blocklist, BlockType.Focus, DateTime.UtcNow));
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, DateTime.UtcNow));
 
         var result = await CreateHandler().HandleAsync(new GetActiveSessionQuery());
 
         result.Should().NotBeNull();
-        result!.ProfileName.Should().Be("Deep Work");
+        result!.PresetName.Should().Be("Deep Work");
         result.Goal.Should().Be("Deep work");
         result.DurationMinutes.Should().Be(45);
         result.Status.Should().Be(SessionStatus.Active);
@@ -48,18 +48,18 @@ public class GetActiveSessionQueryHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_ProfileNotFound_ReturnsUnknownProfileName()
+    public async Task HandleAsync_PresetNotFound_ReturnsUnknownPresetName()
     {
         var session = Session.Create(
             Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(30)),
             Guid.NewGuid(), SessionOrigin.Spontaneous);
         session.Start(DateTime.UtcNow);
         _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns(session);
-        _profiles.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((BlockProfile?)null);
+        _presets.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((BlockPreset?)null);
 
         var result = await CreateHandler().HandleAsync(new GetActiveSessionQuery());
 
-        result!.ProfileName.Should().Be("Unknown");
+        result!.PresetName.Should().Be("Unknown");
     }
 
     [Fact]
@@ -70,7 +70,7 @@ public class GetActiveSessionQueryHandlerTests
             Guid.NewGuid(), SessionOrigin.Spontaneous, breakSettings: new BreakSettings(25, 5));
         session.Start(DateTime.UtcNow);
         _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns(session);
-        _profiles.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((BlockProfile?)null);
+        _presets.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((BlockPreset?)null);
 
         var result = await CreateHandler().HandleAsync(new GetActiveSessionQuery());
 

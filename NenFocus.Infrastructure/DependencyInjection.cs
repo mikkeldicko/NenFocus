@@ -27,7 +27,7 @@ public static class DependencyInjection
             options.UseSqlite($"Data Source={dbPath}"));
 
         services.AddScoped<ISessionRepository, SessionRepository>();
-        services.AddScoped<IBlockProfileRepository, BlockProfileRepository>();
+        services.AddScoped<IBlockPresetRepository, BlockPresetRepository>();
         services.AddScoped<IPlannedBlockRepository, PlannedBlockRepository>();
 
         services.AddSingleton<INotificationService, WindowsNotificationService>();

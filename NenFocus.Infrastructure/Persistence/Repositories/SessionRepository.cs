@@ -30,7 +30,7 @@ public sealed class SessionRepository : ISessionRepository
     public async Task<IReadOnlyList<Session>> GetHistoryAsync(
         DateOnly from,
         DateOnly to,
-        Guid? profileId = null,
+        Guid? presetId = null,
         CancellationToken cancellationToken = default)
     {
         var fromDate = from.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
@@ -39,8 +39,8 @@ public sealed class SessionRepository : ISessionRepository
         var query = _context.Sessions
             .Where(s => s.StartedAt >= fromDate && s.StartedAt <= toDate);
 
-        if (profileId.HasValue)
-            query = query.Where(s => s.BlockProfileId == profileId.Value);
+        if (presetId.HasValue)
+            query = query.Where(s => s.BlockPresetId == presetId.Value);
 
         return await query
             .OrderByDescending(s => s.StartedAt)

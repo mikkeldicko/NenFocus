@@ -8,11 +8,11 @@ namespace NenFocus.ViewModels.Components;
 public partial class PlannedBlockTileViewModel : ViewModelBase
 {
     public Guid Id { get; }
-    public string ProfileName { get; }
-    public BlockType BlockType { get; }
+    public string PresetName { get; }
+    public BlockPresetType BlockPresetType { get; }
     public DateTime Start { get; }
     public DateTime End { get; }
-    public WebsitePolicy WebsitePolicy { get; }
+    public WebsiteFilterType WebsiteFilterType { get; }
 
     /// <summary>0 = Monday, 6 = Sunday.</summary>
     public int ColumnIndex { get; }
@@ -23,22 +23,22 @@ public partial class PlannedBlockTileViewModel : ViewModelBase
     /// <summary>Tile height in pixels.</summary>
     public double Height { get; }
 
-    public bool IsFocus => BlockType == BlockType.Focus;
-    public bool IsBackground => BlockType == BlockType.Background;
+    public bool IsFocus => BlockPresetType == BlockPresetType.Focus;
+    public bool IsBackground => BlockPresetType == BlockPresetType.Background;
 
     public PlannedBlockTileViewModel(
         PlannedBlockDto dto,
-        BlockType blockType,
+        BlockPresetType blockPresetType,
         int columnIndex,
         double top,
         double height)
     {
         Id = dto.Id;
-        ProfileName = dto.ProfileName;
-        BlockType = blockType;
+        PresetName = dto.PresetName;
+        BlockPresetType = blockPresetType;
         Start = dto.Start;
         End = dto.End;
-        WebsitePolicy = dto.WebsitePolicy;
+        WebsiteFilterType = dto.WebsiteFilterType;
         ColumnIndex = columnIndex;
         Top = top;
         Height = height;

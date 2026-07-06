@@ -6,16 +6,16 @@ namespace NenFocus.Application.UseCases.Planner.UpdatePlannedBlock;
 public sealed class UpdatePlannedBlockCommandHandler : ICommandHandler<UpdatePlannedBlockCommand, UpdatePlannedBlockResult>
 {
     private readonly IPlannedBlockRepository _blocks;
-    private readonly IBlockProfileRepository _profiles;
+    private readonly IBlockPresetRepository _presets;
     private readonly ISessionRepository _sessions;
 
     public UpdatePlannedBlockCommandHandler(
         IPlannedBlockRepository blocks,
-        IBlockProfileRepository profiles,
+        IBlockPresetRepository presets,
         ISessionRepository sessions)
     {
         _blocks = blocks;
-        _profiles = profiles;
+        _presets = presets;
         _sessions = sessions;
     }
 
@@ -28,9 +28,9 @@ public sealed class UpdatePlannedBlockCommandHandler : ICommandHandler<UpdatePla
         if (existing is null)
             return UpdatePlannedBlockResult.Fail($"Planned block '{command.BlockId}' not found.");
 
-        var profile = await _profiles.GetByIdAsync(command.ProfileId, cancellationToken);
-        if (profile is null)
-            return UpdatePlannedBlockResult.Fail($"Profile '{command.ProfileId}' not found.");
+        var preset = await _presets.GetByIdAsync(command.PresetId, cancellationToken);
+        if (preset is null)
+            return UpdatePlannedBlockResult.Fail($"Preset '{command.PresetId}' not found.");
 
         if (existing is FocusBlock)
         {
@@ -60,7 +60,7 @@ public sealed class UpdatePlannedBlockCommandHandler : ICommandHandler<UpdatePla
         }
 
         existing.Reschedule(startTime, endTime);
-        existing.AssignProfile(command.ProfileId);
+        existing.AssignPreset(command.PresetId);
 
         await _blocks.UpdateAsync(existing, cancellationToken);
         return UpdatePlannedBlockResult.Ok();

@@ -142,7 +142,7 @@ Gaps that have been identified but not yet closed. Each is here because deferrin
 
 ### Open Gap A — Time Budget Feature (three-slice implementation)
 
-**The feature:** A `TimeBudget` is an optional daily cap on a `BlockedSite` entry within a `BlockProfile`. A budgeted site is accessible until its daily cap is consumed, at which point it becomes blocked for the rest of the day. Usage is reported by the browser extension via a `/report` endpoint and written through `IBudgetUsageTracker` into `DailyBudgetUsage` rows — it is not inferred from wall-clock time. See `DOMAIN\_DICTIONARY.md` → Time Budget and Budget Window for full definitions and ubiquitous language rules.
+**The feature:** A `TimeBudget` is an optional daily cap on a `BlockedSite` entry within a `BlockPreset`. A budgeted site is accessible until its daily cap is consumed, at which point it becomes blocked for the rest of the day. Usage is reported by the browser extension via a `/report` endpoint and written through `IBudgetUsageTracker` into `DailyBudgetUsage` rows — it is not inferred from wall-clock time. See `DOMAIN\_DICTIONARY.md` → Time Budget and Budget Window for full definitions and ubiquitous language rules.
 
 **Why three slices:** The feature crosses three independent implementation layers: the domain model and UI (Slice 1), the extension and HTTP reporting path (Slice 2), and the enforcement wiring (Slice 3). Slice 2 must complete before Slice 3 begins because the enforcement engine cannot read usage data until the reporting pipeline exists. Slice 1 has no prerequisite and can be built immediately.
 
@@ -151,7 +151,7 @@ Gaps that have been identified but not yet closed. Each is here because deferrin
 - `BlockedSite` gains an optional `TimeBudget` field
 - Add `DailyBudgetUsage` entity to `NenFocus.Domain/Entities/`
 - Add `IBudgetUsageTracker` interface to `NenFocus.Application/Interfaces/`
-- Block Profile editor UI: add per-site budget cap input
+- Block Preset editor UI: add per-site budget cap input
 
 **Slice 2 — Extension + `/report` endpoint** *(no prerequisite; must complete before Slice 3)*
 - `background.js` gains tab focus tracking (active tab time accumulation)
@@ -161,11 +161,11 @@ Gaps that have been identified but not yet closed. Each is here because deferrin
 **Slice 3 — Enforcement wiring** *(requires Slice 2 complete)*
 - `PolicyEngine.ComputeSlice()` reads `DailyBudgetUsage`; exhausted sites are added to the blocked set
 - `ScheduledEnforcementService` triggers re-evaluation when a budget is exhausted mid-block
-- Warning notification fires N minutes before exhaustion (N is a user-wide preference in Settings, not per-profile)
+- Warning notification fires N minutes before exhaustion (N is a user-wide preference in Settings, not per-preset)
 
 **New artifacts introduced:**
 - `TimeBudget` — value object (Domain); carries the daily cap only
-- `DailyBudgetUsage` — append-only entity (Domain); source of truth for consumed time per site per calendar day per profile entry
+- `DailyBudgetUsage` — append-only entity (Domain); source of truth for consumed time per site per calendar day per preset entry
 - `IBudgetUsageTracker` — interface (Application); the write contract for usage events; analogous to `IBlockedAttemptTracker`
 - Budget Window — derived concept only; `[PlannedBlock.Start, PlannedBlock.End)` while `IsActive()` is `true`; no stored field, no migration
 

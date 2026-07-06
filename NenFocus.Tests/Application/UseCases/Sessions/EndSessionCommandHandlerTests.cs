@@ -13,7 +13,7 @@ public class EndSessionCommandHandlerTests
     private static readonly DateTime Now = new(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
 
     private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
-    private readonly IBlockProfileRepository _profiles = Substitute.For<IBlockProfileRepository>();
+    private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
     private readonly IPlannedBlockRepository _plannedBlocks = Substitute.For<IPlannedBlockRepository>();
     private readonly IBlockedAttemptTracker _attemptTracker = Substitute.For<IBlockedAttemptTracker>();
     private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
@@ -25,7 +25,7 @@ public class EndSessionCommandHandlerTests
     }
 
     private EndSessionCommandHandler CreateHandler()
-        => new(_sessions, _profiles, _plannedBlocks, _attemptTracker, _clock);
+        => new(_sessions, _presets, _plannedBlocks, _attemptTracker, _clock);
 
     private static Session CreateActiveSession(Guid? originatingBlockId = null)
     {
@@ -93,17 +93,17 @@ public class EndSessionCommandHandlerTests
     [Fact]
     public async Task HandleAsync_HappyPath_CompletesSessionAndReturnsPostSessionSummary()
     {
-        var profileId = Guid.NewGuid();
+        var presetId = Guid.NewGuid();
         var session = CreateActiveSession();
         _sessions.GetByIdAsync(session.Id, Arg.Any<CancellationToken>()).Returns(session);
-        _profiles.GetByIdAsync(session.BlockProfileId, Arg.Any<CancellationToken>())
-            .Returns(BlockProfile.Create(session.BlockProfileId, "Deep Work", WebsitePolicy.Blocklist, BlockType.Focus, Now));
+        _presets.GetByIdAsync(session.BlockPresetId, Arg.Any<CancellationToken>())
+            .Returns(BlockPreset.Create(session.BlockPresetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Now));
 
         var result = await CreateHandler().HandleAsync(new EndSessionCommand { SessionId = session.Id });
 
         result.Success.Should().BeTrue();
         result.PostSession.Should().NotBeNull();
-        result.PostSession!.ProfileName.Should().Be("Deep Work");
+        result.PostSession!.PresetName.Should().Be("Deep Work");
         result.PostSession.Goal.Should().Be("Deep work");
         session.Status.Should().Be(SessionStatus.Completed);
         await _sessions.Received(1).SaveAsync(session, Arg.Any<CancellationToken>());
@@ -134,7 +134,7 @@ public class EndSessionCommandHandlerTests
         var blockId = Guid.NewGuid();
         var session = CreateActiveSession(blockId);
         _sessions.GetByIdAsync(session.Id, Arg.Any<CancellationToken>()).Returns(session);
-        var block = FocusBlock.Create(blockId, session.BlockProfileId, Now.AddMinutes(-10), Now.AddHours(1));
+        var block = FocusBlock.Create(blockId, session.BlockPresetId, Now.AddMinutes(-10), Now.AddHours(1));
         _plannedBlocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns(block);
 
         await CreateHandler().HandleAsync(new EndSessionCommand { SessionId = session.Id });
@@ -149,7 +149,7 @@ public class EndSessionCommandHandlerTests
         var blockId = Guid.NewGuid();
         var session = CreateActiveSession(blockId);
         _sessions.GetByIdAsync(session.Id, Arg.Any<CancellationToken>()).Returns(session);
-        var block = FocusBlock.Create(blockId, session.BlockProfileId, Now.AddMinutes(-10), Now);
+        var block = FocusBlock.Create(blockId, session.BlockPresetId, Now.AddMinutes(-10), Now);
         _plannedBlocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns(block);
 
         await CreateHandler().HandleAsync(new EndSessionCommand { SessionId = session.Id });
@@ -158,14 +158,14 @@ public class EndSessionCommandHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_ProfileNotFound_ReturnsBlankProfileName()
+    public async Task HandleAsync_PresetNotFound_ReturnsBlankPresetName()
     {
         var session = CreateActiveSession();
         _sessions.GetByIdAsync(session.Id, Arg.Any<CancellationToken>()).Returns(session);
-        _profiles.GetByIdAsync(session.BlockProfileId, Arg.Any<CancellationToken>()).Returns((BlockProfile?)null);
+        _presets.GetByIdAsync(session.BlockPresetId, Arg.Any<CancellationToken>()).Returns((BlockPreset?)null);
 
         var result = await CreateHandler().HandleAsync(new EndSessionCommand { SessionId = session.Id });
 
-        result.PostSession!.ProfileName.Should().BeEmpty();
+        result.PostSession!.PresetName.Should().BeEmpty();
     }
 }

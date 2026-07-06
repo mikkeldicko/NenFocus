@@ -106,13 +106,13 @@ public sealed class PlannedBlockRepository : IPlannedBlockRepository
         _context.PlannedBlocks.Remove(block);
     }
 
-    public Task<bool> HasFutureBlocksForProfileAsync(
-        Guid profileId,
+    public Task<bool> HasFutureBlocksForPresetAsync(
+        Guid presetId,
         DateTime after,
         CancellationToken cancellationToken = default)
     {
         return _context.PlannedBlocks
-            .AnyAsync(b => b.BlockProfileId == profileId && b.End > after, cancellationToken);
+            .AnyAsync(b => b.BlockPresetId == presetId && b.End > after, cancellationToken);
     }
 
     public Task<bool> HasActiveFocusBlockAsync(

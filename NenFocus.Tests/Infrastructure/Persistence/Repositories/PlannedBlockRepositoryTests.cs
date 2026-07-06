@@ -149,27 +149,27 @@ public class PlannedBlockRepositoryTests : SqliteRepositoryTestBase
     }
 
     [Fact]
-    public async Task HasFutureBlocksForProfileAsync_BlockEndingAfterCutoff_ReturnsTrue()
+    public async Task HasFutureBlocksForPresetAsync_BlockEndingAfterCutoff_ReturnsTrue()
     {
-        var profileId = Guid.NewGuid();
+        var presetId = Guid.NewGuid();
         var repo = CreateRepository();
-        await repo.AddAsync(FocusBlock.Create(Guid.NewGuid(), profileId, Start, End));
+        await repo.AddAsync(FocusBlock.Create(Guid.NewGuid(), presetId, Start, End));
         await Context.SaveChangesAsync();
 
-        var result = await CreateRepository().HasFutureBlocksForProfileAsync(profileId, Start.AddMinutes(-1));
+        var result = await CreateRepository().HasFutureBlocksForPresetAsync(presetId, Start.AddMinutes(-1));
 
         result.Should().BeTrue();
     }
 
     [Fact]
-    public async Task HasFutureBlocksForProfileAsync_BlockEndingBeforeCutoff_ReturnsFalse()
+    public async Task HasFutureBlocksForPresetAsync_BlockEndingBeforeCutoff_ReturnsFalse()
     {
-        var profileId = Guid.NewGuid();
+        var presetId = Guid.NewGuid();
         var repo = CreateRepository();
-        await repo.AddAsync(FocusBlock.Create(Guid.NewGuid(), profileId, Start, End));
+        await repo.AddAsync(FocusBlock.Create(Guid.NewGuid(), presetId, Start, End));
         await Context.SaveChangesAsync();
 
-        var result = await CreateRepository().HasFutureBlocksForProfileAsync(profileId, End.AddMinutes(1));
+        var result = await CreateRepository().HasFutureBlocksForPresetAsync(presetId, End.AddMinutes(1));
 
         result.Should().BeFalse();
     }

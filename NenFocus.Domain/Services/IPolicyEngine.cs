@@ -7,7 +7,7 @@ public interface IPolicyEngine
 {
     ActivePolicySlice ComputeSlice(
         DateTime at,
-        IEnumerable<BlockProfile> profiles,
+        IEnumerable<BlockPreset> presets,
         IEnumerable<Session> sessions,
         IEnumerable<PlannedBlock> blocks);
 }

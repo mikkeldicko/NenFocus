@@ -11,7 +11,7 @@ public class Session : AggregateRoot
     public SessionDuration Duration { get; private set; } = null!;
     public SessionStatus Status { get; private set; }
     public SessionOrigin Origin { get; private set; }
-    public Guid BlockProfileId { get; private set; }
+    public Guid BlockPresetId { get; private set; }
     public Guid? OriginatingBlockId { get; private set; }
     public DateTime? StartedAt { get; private set; }
     public DateTime? EndedAt { get; private set; }
@@ -28,7 +28,7 @@ public class Session : AggregateRoot
         Guid id,
         SessionGoal goal,
         SessionDuration duration,
-        Guid blockProfileId,
+        Guid blockPresetId,
         SessionOrigin origin,
         Guid? originatingBlockId = null,
         BreakSettings? breakSettings = null,
@@ -48,7 +48,7 @@ public class Session : AggregateRoot
             Id = id,
             Goal = goal,
             Duration = duration,
-            BlockProfileId = blockProfileId,
+            BlockPresetId = blockPresetId,
             Origin = origin,
             OriginatingBlockId = originatingBlockId,
             BreakSettings = breakSettings,
@@ -66,7 +66,7 @@ public class Session : AggregateRoot
 
         Status = SessionStatus.Active;
         StartedAt = startedAt;
-        Raise(new SessionStartedEvent(Id, BlockProfileId, Goal.Value, startedAt));
+        Raise(new SessionStartedEvent(Id, BlockPresetId, Goal.Value, startedAt));
     }
 
     public void StartBreak(DateTime breakStartedAt)

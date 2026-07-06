@@ -10,8 +10,8 @@ This file is the canonical reference for every domain concept in NenFocus. It ex
 |------|---------------------|
 | **Session** | A bounded focus period; lifecycle `NotStarted → Active → (OnBreak ↔ Active) → Completed` |
 | **Ritual** | The four-step wizard (Ten → Zetsu → Ren → Hatsu) that creates a Session |
-| **Block Profile** | A reusable template of blocked apps + website policy; typed as Focus or Background at creation |
-| **Planned Block** | Abstract base for `FocusBlock` and `BackgroundBlock`; carries `Start`, `End`, `BlockProfileId`, `IsActive()`, `OverlapsWith()` |
+| **Block Preset** | A reusable template of blocked apps + website filter type; typed as Focus or Background at creation |
+| **Planned Block** | Abstract base for `FocusBlock` and `BackgroundBlock`; carries `Start`, `End`, `BlockPresetId`, `IsActive()`, `OverlapsWith()` |
 | **Focus Block** | A planned calendar entry that activates enforcement AND triggers the Nen Ritual at the designated time |
 | **Background Block** | A planned calendar entry that activates enforcement at the designated time without triggering the Ritual |
 | **Policy Slice** | The merged, computed enforcement state at a given instant; represented as `ActivePolicySlice` (Domain Value Object), produced by `PolicyEngine` |
@@ -34,7 +34,7 @@ This file is the canonical reference for every domain concept in NenFocus. It ex
 | **Design Gap** | The distance between visible code and what is needed to implement a feature correctly |
 | **TimeBudget** | An optional daily cap on a `BlockedSite` entry; limits cumulative access time per day; enforced by blocking the site once the cap is exhausted |
 | **BudgetWindow** | The time range within which a site's Time Budget may tick down; derived from the owning Planned Block's start and end times; not a stored field |
-| **DailyBudgetUsage** | Append-only entity recording actual seconds spent on a budgeted site per calendar day and profile entry; written by `IBudgetUsageTracker` |
+| **DailyBudgetUsage** | Append-only entity recording actual seconds spent on a budgeted site per calendar day and preset entry; written by `IBudgetUsageTracker` |
 | **IBudgetUsageTracker** | Application-layer interface through which infrastructure records usage events; analogous in pattern to `IBlockedAttemptTracker` |
 
 ---
@@ -46,7 +46,7 @@ NenFocus has five pages accessible via the sidebar:
 | Page | Purpose |
 |------|---------|
 | **Main Page** | Home screen; shows "Use Nen" button when idle, active session timer when a session is running |
-| **Block Profile Page** | CRUD for Block Profiles; Ritual and Background profiles displayed together with filter option |
+| **Block Preset Page** | CRUD for Block Presets; Ritual and Background presets displayed together with filter option |
 | **Planner Page** | Calendar view for scheduling Focus Blocks, Background Blocks, and (future) Nen Contracts |
 | **Insights Page** | Session history, block history, blocked attempt analytics, calendar view of past blocks, usage graphs |
 | **Settings Page** | User preferences: break behaviour, strict mode, plan rules, and other enforcement configuration |
@@ -95,7 +95,7 @@ NenFocus has five pages accessible via the sidebar:
 
 **Only a Planned session can be missed.** A Spontaneous session is user-initiated with no scheduled commitment behind it — there is nothing to miss. `Session.Miss()` throws if `Origin != SessionOrigin.Planned`; this is defense-in-depth rather than a reachable case, since the creation path for a missed session (`MarkFocusBlockMissedCommand`) only ever originates from a `FocusBlockId`, never from an existing Spontaneous session.
 
-**What it HAS**, inherited from the originating `FocusBlock`: a `BlockProfileId`, a `SessionDuration` (the block's scheduled length), and a scheduled `Start`/`End` — populated onto `StartedAt`/`EndedAt` at miss-time so it appears in date-range history queries exactly like a real session (`ISessionRepository.GetHistoryAsync` filters on `StartedAt`; a session that never populated it would be silently invisible to history).
+**What it HAS**, inherited from the originating `FocusBlock`: a `BlockPresetId`, a `SessionDuration` (the block's scheduled length), and a scheduled `Start`/`End` — populated onto `StartedAt`/`EndedAt` at miss-time so it appears in date-range history queries exactly like a real session (`ISessionRepository.GetHistoryAsync` filters on `StartedAt`; a session that never populated it would be silently invisible to history).
 
 **What it LACKS**, because it never ran: break settings, temporary blocked apps/sites (both simply omitted at creation — `Session.Create`'s existing optional parameters already default to `null`/`[]`), and any real elapsed runtime. Its `Goal` is the fixed placeholder `"(missed — no goal set)"` — a normal, valid `SessionGoal` (no user ever reached Zetsu to write one; validation is not loosened for this path).
 
@@ -128,7 +128,7 @@ NenFocus has five pages accessible via the sidebar:
 |-------|----------|------|
 | Domain | `Session.Miss(DateTime scheduledStart, DateTime scheduledEnd)` | `NotStarted → Missed`; throws if `Origin != Planned` or `Status != NotStarted`; sets `StartedAt`/`EndedAt` to the scheduled window; raises `SessionMissedEvent` |
 | Domain | `SessionMissedEvent` (`Events/SessionMissedEvent.cs`) | Carries `SessionId`, `ScheduledStart`, `ScheduledEnd`; `occurredAt = scheduledEnd` |
-| Application | `MarkFocusBlockMissedCommand` / `CommandHandler` / `Result` / `Validator` (`UseCases/Sessions/MarkFocusBlockMissed/`) | Loads the `FocusBlock`, builds the Session via `Create(...)` + `Miss(block.Start, block.End)`, saves, and builds the `PostSessionDto` (profile name lookup; blocked-attempt dictionaries left empty since a missed session never tracked any). Validator rejects a missing/wrong-type block, an already-completed ritual, or a block that already has a session. No `SessionMissedEventHandler` is registered — this feature is deliberately silent (no toast); the missed post-session screen is the acknowledgment. |
+| Application | `MarkFocusBlockMissedCommand` / `CommandHandler` / `Result` / `Validator` (`UseCases/Sessions/MarkFocusBlockMissed/`) | Loads the `FocusBlock`, builds the Session via `Create(...)` + `Miss(block.Start, block.End)`, saves, and builds the `PostSessionDto` (preset name lookup; blocked-attempt dictionaries left empty since a missed session never tracked any). Validator rejects a missing/wrong-type block, an already-completed ritual, or a block that already has a session. No `SessionMissedEventHandler` is registered — this feature is deliberately silent (no toast); the missed post-session screen is the acknowledgment. |
 | Application | `IPlannedBlockRepository.GetUnresolvedFocusBlocksAsync(DateTime asOf)` | Focus blocks with `End < asOf && RitualCompletedAt == null`, ordered by `Start` |
 | Application | `SweepMissedFocusBlocksCommand` / `Result` / `CommandHandler` (`UseCases/Sessions/SweepMissedFocusBlocks/`) | No input (reads "now" via `ISystemClock`, matching `StartSessionCommandHandler`'s own precedent). Queries unresolved blocks, calls `MarkFocusBlockMissedCommand` per block, collects the resulting `PostSessionDto`s |
 | Application | `PostSessionDto.Status` | Mirrors `Session.Status`; drives Post-Session screen copy |
@@ -155,7 +155,7 @@ NenFocus has five pages accessible via the sidebar:
 |------|-------|-------------|---------------|
 | **Ten** | Awareness | "Focus the mind, reflect upon the self, and determine the goal" | Greet the user; prompt internal reflection before continuing. Same for both Spontaneous and Planned. |
 | **Zetsu** | Silence | "Put it into words" | User writes their session goal into a text box. Same for both Spontaneous and Planned. |
-| **Ren** | Persistence | "Intensify your will" | **Spontaneous:** User selects a Focus-type Block Profile from their existing profiles. **Planned:** Block Profile is pre-selected and locked (chosen when the Focus Block was scheduled); user cannot change it. User may add additional sites (Blocklist profiles only) and apps for this session only — these are not saved to the profile. |
+| **Ren** | Persistence | "Intensify your will" | **Spontaneous:** User selects a Focus-type Block Preset from their existing presets. **Planned:** Block Preset is pre-selected and locked (chosen when the Focus Block was scheduled); user cannot change it. User may add additional sites (Blocklist presets only) and apps for this session only — these are not saved to the preset. |
 | **Hatsu** | Output | "Put it into action" | **Spontaneous:** User selects session duration (5 min – 8 hours) and optionally configures break reminders. **Planned:** Duration is pre-determined by the Focus Block's scheduled end time (displayed as "active until [time]"); user can only configure break reminders. User clicks "Start Session." |
 
 **Technical mapping:**
@@ -169,50 +169,50 @@ NenFocus has five pages accessible via the sidebar:
 
 ---
 
-## Block Profile
+## Block Preset
 
-**Definition:** A reusable, named configuration of blocked applications and a website policy. A Block Profile is typed as either **Focus** or **Background** at creation time. The type can be changed later provided the profile is not currently attached to any scheduled block or active session. The type acts as a filter: Focus profiles only appear during the Ren step and when scheduling a Focus Block (Planner); Background profiles only appear when scheduling a Background Block (Planner).
+**Definition:** A reusable, named configuration of blocked applications and a website filter type. A Block Preset is typed as either **Focus** or **Background** at creation time. The type can be changed later provided the preset is not currently attached to any scheduled block or active session. The type acts as a filter: Focus presets only appear during the Ren step and when scheduling a Focus Block (Planner); Background presets only appear when scheduling a Background Block (Planner).
 
-**Lifecycle:** Created in Block Profiles page (type chosen via picker at creation) → (optionally duplicated or edited; type may be changed if no active blocks reference it) → attached to Session at Ritual (Ren step, Focus-type only) or to a Planned Block in the Planner → locked for duration of Session or active Block.
+**Lifecycle:** Created in Block Presets page (type chosen via picker at creation) → (optionally duplicated or edited; type may be changed if no active blocks reference it) → attached to Session at Ritual (Ren step, Focus-type only) or to a Planned Block in the Planner → locked for duration of Session or active Block.
 
-**Website policy:** Each profile carries a `WebsitePolicy` of either `Blocklist` (block specific sites, allow everything else) or `Allowlist` (allow specific sites, block everything else). Both Ritual and Background profiles can use either mode. Both can also specify blocked apps.
+**Website filter type:** Each preset carries a `WebsiteFilterType` of either `Blocklist` (block specific sites, allow everything else) or `Allowlist` (allow specific sites, block everything else). Both Ritual and Background presets can use either mode. Both can also specify blocked apps.
 
-**Time-agnosticism:** A Block Profile is time-agnostic — it carries no schedule, no window, and no knowledge of when it is active. The Budget Window within which a `BlockedSite`'s `TimeBudget` may tick down is derived from the owning `PlannedBlock`'s `Start` and `End` times and is not stored on the profile. This allows the same profile to be reused across multiple planned blocks at different times. `BlockedSite` may optionally carry a `TimeBudget`; a site with no budget is a plain hard block.
+**Time-agnosticism:** A Block Preset is time-agnostic — it carries no schedule, no window, and no knowledge of when it is active. The Budget Window within which a `BlockedSite`'s `TimeBudget` may tick down is derived from the owning `PlannedBlock`'s `Start` and `End` times and is not stored on the preset. This allows the same preset to be reused across multiple planned blocks at different times. `BlockedSite` may optionally carry a `TimeBudget`; a site with no budget is a plain hard block.
 
 **Ubiquitous language rules:**
-- A profile is *attached* to a session or block, not *assigned* or *applied*.
-- A profile is *locked* when a Focus Block activates — no edits are permitted from the block's designated start time through the end of the session, including the period before the Ritual is completed.
-- A profile is *locked* during a session — no edits are permitted while a session using it is active.
+- A preset is *attached* to a session or block, not *assigned* or *applied*.
+- A preset is *locked* when a Focus Block activates — no edits are permitted from the block's designated start time through the end of the session, including the period before the Ritual is completed.
+- A preset is *locked* during a session — no edits are permitted while a session using it is active.
 
-**UI display:** On the Block Profile page, Focus and Background profiles are displayed together in a single list with a type badge (blue = Focus, green = Background). A filter bar lets the user show All, Focus only, or Background only.
+**UI display:** On the Block Preset page, Focus and Background presets are displayed together in a single list with a type badge (blue = Focus, green = Background). A filter bar lets the user show All, Focus only, or Background only.
 
 **Technical mapping:**
 
 | Layer | Artifact | Role |
 |-------|----------|------|
-| Domain | `BlockProfile` aggregate (`Entities/BlockProfile.cs`) | Owns the list of `BlockedApp` and `BlockedSite` value objects, the `WebsitePolicy`, and the profile type (`BlockType.Focus` or `BlockType.Background`) |
+| Domain | `BlockPreset` aggregate (`Entities/BlockPreset.cs`) | Owns the list of `BlockedApp` and `BlockedSite` value objects, the `WebsiteFilterType`, and the preset type (`BlockPresetType.Focus` or `BlockPresetType.Background`) |
 | Domain | `BlockedApp`, `BlockedSite` value objects | Immutable; validated at construction. `BlockedSite` optionally carries a `TimeBudget`; a site with no `TimeBudget` is a plain hard block |
-| Domain | `WebsitePolicy` enum | `Blocklist` or `Allowlist` |
-| Application | `IBlockProfileRepository` | CRUD persistence contract |
-| Application | `CreateBlockProfileCommandHandler`, `UpdateBlockProfileCommandHandler`, etc. | One handler per mutation |
-| UI | `BlockProfilePageViewModel` | Full CRUD UI; file picker for app selection; type filter |
+| Domain | `WebsiteFilterType` enum | `Blocklist` or `Allowlist` |
+| Application | `IBlockPresetRepository` | CRUD persistence contract |
+| Application | `CreateBlockPresetCommandHandler`, `UpdateBlockPresetCommandHandler`, etc. | One handler per mutation |
+| UI | `BlockPresetPageViewModel` | Full CRUD UI; file picker for app selection; type filter |
 
 ---
 
 ## Time Budget
 
-**Definition:** An optional daily cap on a `BlockedSite` entry within a `BlockProfile`. A `TimeBudget` limits how much cumulative time per day the user may access a given site while a Planned Block referencing the profile is active. A site with a `TimeBudget` is accessible until the budget is exhausted, at which point it becomes blocked for the rest of the day. A `BlockedSite` with no `TimeBudget` is a plain hard block — the default and current behaviour.
+**Definition:** An optional daily cap on a `BlockedSite` entry within a `BlockPreset`. A `TimeBudget` limits how much cumulative time per day the user may access a given site while a Planned Block referencing the preset is active. A site with a `TimeBudget` is accessible until the budget is exhausted, at which point it becomes blocked for the rest of the day. A `BlockedSite` with no `TimeBudget` is a plain hard block — the default and current behaviour.
 
 **What a `TimeBudget` carries:** The daily cap only (e.g., 3 600 seconds). Nothing else.
 
 **What a `TimeBudget` does not carry:**
-- The Budget Window (when the budget may tick down) — derived from the owning `PlannedBlock`'s `Start` and `End` times; a Planner concern, not stored on the profile.
+- The Budget Window (when the budget may tick down) — derived from the owning `PlannedBlock`'s `Start` and `End` times; a Planner concern, not stored on the preset.
 - The reset time (when the daily budget resets to full) — a user-wide preference in Settings; default midnight.
-- The warning threshold (how many minutes before exhaustion to notify the user) — a user-wide preference in Settings; not per-profile.
+- The warning threshold (how many minutes before exhaustion to notify the user) — a user-wide preference in Settings; not per-preset.
 
-**Profile type scope:** Time Budgets can be configured on both Focus-type and Background-type Block Profiles. They are expected to be more commonly used on Background profiles.
+**Preset type scope:** Time Budgets can be configured on both Focus-type and Background-type Block Presets. They are expected to be more commonly used on Background presets.
 
-**Hard block interaction:** If a site has a `TimeBudget` but is also covered by a separate active hard-block profile (for example, a Background Block that hard-blocks it with no budget), the hard block wins and the budget is not consumed during that period. The budget is only consumed while the site is genuinely accessible — that is, no overlapping profile hard-blocks it.
+**Hard block interaction:** If a site has a `TimeBudget` but is also covered by a separate active hard-block preset (for example, a Background Block that hard-blocks it with no budget), the hard block wins and the budget is not consumed during that period. The budget is only consumed while the site is genuinely accessible — that is, no overlapping preset hard-blocks it.
 
 **Ubiquitous language rules:**
 - A budget is *consumed*, not decremented or used up.
@@ -224,7 +224,7 @@ NenFocus has five pages accessible via the sidebar:
 | Layer | Artifact | Role |
 |-------|----------|------|
 | Domain | `TimeBudget` value object | Carries the daily cap; lives on `BlockedSite`; optional — absence means plain hard block |
-| Domain | `DailyBudgetUsage` entity | Append-only record of actual seconds consumed per site, per profile entry, per calendar day; source of truth for remaining budget |
+| Domain | `DailyBudgetUsage` entity | Append-only record of actual seconds consumed per site, per preset entry, per calendar day; source of truth for remaining budget |
 | Application | `IBudgetUsageTracker` interface | Contract through which infrastructure writes usage events; defined in `NenFocus.Application/Interfaces/`; analogous to `IBlockedAttemptTracker` |
 | Infrastructure | `IBudgetUsageTracker` implementation | Persists `DailyBudgetUsage` rows; written by `WindowsEnforcementService`'s `/report` handler when the extension reports tab time; **not yet built** |
 | Domain | `PolicyEngine` changes | Will read `DailyBudgetUsage` to determine remaining budget; adds exhausted sites to the blocked set in `ComputeSlice()`; **not yet built** |
@@ -234,7 +234,7 @@ NenFocus has five pages accessible via the sidebar:
 
 ## Budget Window *(defined — enforcement not yet built)*
 
-**Definition:** The time range within which a site's `TimeBudget` is permitted to tick down. A Budget Window is derived from the owning `PlannedBlock`'s `Start` and `End` times — it is not a stored field on `BlockProfile`, `BlockedSite`, or any other entity. A site's budget can only be consumed while a Planned Block that references the profile is active via `IsActive()`. Outside that block's scheduled window, the site is blocked regardless of remaining budget.
+**Definition:** The time range within which a site's `TimeBudget` is permitted to tick down. A Budget Window is derived from the owning `PlannedBlock`'s `Start` and `End` times — it is not a stored field on `BlockPreset`, `BlockedSite`, or any other entity. A site's budget can only be consumed while a Planned Block that references the preset is active via `IsActive()`. Outside that block's scheduled window, the site is blocked regardless of remaining budget.
 
 **Not stored:** The Budget Window has no migration, no database column, and no persistent property. It is a computed concept: when a `PlannedBlock` with known `Start` and `End` is currently active, the Budget Window is that block's `[Start, End)` range.
 
@@ -276,7 +276,7 @@ NenFocus has five pages accessible via the sidebar:
 | Domain | `IPolicyEngine` / `PolicyEngine` (`Services/`) | Computes `ActivePolicySlice` from raw domain entities; sole owner of all merge logic |
 | Application | `ComputeActivePolicySliceQueryHandler` | Orchestrates data fetching across three repositories; delegates computation to `IPolicyEngine` |
 | Infrastructure | `WindowsEnforcementService` | Consumes `ActivePolicySlice` directly; owns hosts file, process kill loop, registry writes, local HTTP API (`localhost:5005`). Only handles `/check` endpoint currently. |
-| Infrastructure | `ScheduledEnforcementService` | `BackgroundService` heartbeat (5s); calls `ComputeActivePolicySliceQuery`, reads `ActiveBlockType`, calls `IEnforcementService` |
+| Infrastructure | `ScheduledEnforcementService` | `BackgroundService` heartbeat (5s); calls `ComputeActivePolicySliceQuery`, reads `ActiveBlockPresetType`, calls `IEnforcementService` |
 | Extension | `background.js` | Intercepts browser navigation; queries `/check`; calls `/report` (not yet handled server-side) |
 
 ---
@@ -286,18 +286,18 @@ NenFocus has five pages accessible via the sidebar:
 **Definition:** The computed, merged enforcement state at a given instant in time. It is the *answer* to the question "what should be blocked right now?" — derived from all currently active Sessions and Planned Blocks. Represented as `ActivePolicySlice`, a **Domain Value Object** in `NenFocus.Domain/ValueObjects/`, not a DTO.
 
 **Computation rules** (all logic lives in `PolicyEngine.ComputeSlice()`):
-- **Apps:** union of all blocked apps across all active block profiles, always a blocklist. Includes `TemporaryBlockedApps` from the active `Session` entity.
-- **Websites:** if *any* active profile uses `Allowlist` mode → default-deny, allowed = intersection of all allowlists minus any blocklist entries. Otherwise → block the union of all blocklisted sites. Includes `TemporaryBlockedSites` from the active `Session` entity.
-- **Time Budgets *(not yet implemented)*:** In a future slice, `PolicyEngine.ComputeSlice()` will read `DailyBudgetUsage` to determine remaining budget per site. Sites whose `TimeBudget` has been fully consumed for the current calendar day will be added to the blocked set regardless of `WebsitePolicy` mode.
+- **Apps:** union of all blocked apps across all active block presets, always a blocklist. Includes `TemporaryBlockedApps` from the active `Session` entity.
+- **Websites:** if *any* active preset uses `Allowlist` mode → default-deny, allowed = intersection of all allowlists minus any blocklist entries. Otherwise → block the union of all blocklisted sites. Includes `TemporaryBlockedSites` from the active `Session` entity.
+- **Time Budgets *(not yet implemented)*:** In a future slice, `PolicyEngine.ComputeSlice()` will read `DailyBudgetUsage` to determine remaining budget per site. Sites whose `TimeBudget` has been fully consumed for the current calendar day will be added to the blocked set regardless of `WebsiteFilterType` mode.
 - An `ActivePolicySlice` is considered "empty" only in `Blocklist` mode with no blocked apps or sites. It is *never* empty in `Allowlist` mode.
-- **`ActiveBlockType`:** set to `BlockType.Focus` if any Focus Block is currently active, `BlockType.Background` if only Background Blocks are active, `null` if enforcement is driven solely by an active Session with no planned block. Ritual always takes precedence over Background when both overlap.
+- **`ActiveBlockPresetType`:** set to `BlockPresetType.Focus` if any Focus Block is currently active, `BlockPresetType.Background` if only Background Blocks are active, `null` if enforcement is driven solely by an active Session with no planned block. Ritual always takes precedence over Background when both overlap.
 
 **Overlap rules:**
-- Multiple Background Blocks can overlap freely. The net enforcement is the union of all their profiles.
-- A Focus Block can overlap with Background Blocks. The net enforcement is the union of all active profiles. The Ritual is still triggered.
+- Multiple Background Blocks can overlap freely. The net enforcement is the union of all their presets.
+- A Focus Block can overlap with Background Blocks. The net enforcement is the union of all active presets. The Ritual is still triggered.
 - Two Focus Blocks cannot overlap. The Planner prevents scheduling conflicts. A Spontaneous session cannot be started if it would overlap with an upcoming Focus Block.
 
-**Why `ActiveBlockType` matters:** `ScheduledEnforcementService` reads this field each heartbeat cycle. If `ActiveBlockType == Ritual` and no Session is active, it calls `_sessionState.SetRitualRequired(true)` to push the user into the Ritual. If `ActiveBlockType == Background`, enforcement is applied silently with no Ritual prompt. This is the correct application of the Ubiquitous Language principle — the difference between a Focus Block and a Background Block is expressed as a domain enum in the result, not as a boolean flag scattered across callers.
+**Why `ActiveBlockPresetType` matters:** `ScheduledEnforcementService` reads this field each heartbeat cycle. If `ActiveBlockPresetType == Ritual` and no Session is active, it calls `_sessionState.SetRitualRequired(true)` to push the user into the Ritual. If `ActiveBlockPresetType == Background`, enforcement is applied silently with no Ritual prompt. This is the correct application of the Ubiquitous Language principle — the difference between a Focus Block and a Background Block is expressed as a domain enum in the result, not as a boolean flag scattered across callers.
 
 **Source of Truth flow:** `Database → PolicyEngine (Domain) → ActivePolicySlice (VO) → WindowsEnforcementService (OS)`
 
@@ -305,26 +305,26 @@ NenFocus has five pages accessible via the sidebar:
 
 | Layer | Artifact | Role |
 |-------|----------|------|
-| Domain | `ActivePolicySlice` (`ValueObjects/ActivePolicySlice.cs`) | Immutable Domain Value Object; the canonical enforcement contract. Carries `BlockedApps`, `BlockedSites`, `AllowedSites`, `WebsitePolicyMode`, `ActiveBlockType`, `ActiveSessionId`, `IsEmpty`. |
-| Domain | `IPolicyEngine` / `PolicyEngine` (`Services/`) | Stateless domain service; accepts raw `BlockProfile`, `Session`, and `PlannedBlock` collections and produces `ActivePolicySlice`. Owns all merge rules — no merge logic exists anywhere else. |
-| Application | `ComputeActivePolicySliceQueryHandler` (`Queries/ComputeActivePolicySlice/`) | Pure orchestrator: fetches entities from three repositories, loads `BlockProfile` aggregates, delegates to `IPolicyEngine.ComputeSlice()`. Returns the `ActivePolicySlice` to callers. |
+| Domain | `ActivePolicySlice` (`ValueObjects/ActivePolicySlice.cs`) | Immutable Domain Value Object; the canonical enforcement contract. Carries `BlockedApps`, `BlockedSites`, `AllowedSites`, `WebsiteFilterTypeMode`, `ActiveBlockPresetType`, `ActiveSessionId`, `IsEmpty`. |
+| Domain | `IPolicyEngine` / `PolicyEngine` (`Services/`) | Stateless domain service; accepts raw `BlockPreset`, `Session`, and `PlannedBlock` collections and produces `ActivePolicySlice`. Owns all merge rules — no merge logic exists anywhere else. |
+| Application | `ComputeActivePolicySliceQueryHandler` (`Queries/ComputeActivePolicySlice/`) | Pure orchestrator: fetches entities from three repositories, loads `BlockPreset` aggregates, delegates to `IPolicyEngine.ComputeSlice()`. Returns the `ActivePolicySlice` to callers. |
 | Infrastructure | `WindowsEnforcementService` | Consumes `ActivePolicySlice` directly (no DTO) to drive OS-level mechanisms |
-| Infrastructure | `ScheduledEnforcementService` | Reads `ActiveBlockType` from the `ActivePolicySlice` each heartbeat to decide whether to trigger the Ritual |
+| Infrastructure | `ScheduledEnforcementService` | Reads `ActiveBlockPresetType` from the `ActivePolicySlice` each heartbeat to decide whether to trigger the Ritual |
 
 ---
 
 ## PolicyEngine
 
-**Definition:** The sole Domain service responsible for computing the `ActivePolicySlice`. It is a stateless, synchronous function: given a point in time, a list of `BlockProfile` aggregates, a list of active `Session` entities, and a list of active `PlannedBlock` entities, it returns the complete enforcement state for that moment.
+**Definition:** The sole Domain service responsible for computing the `ActivePolicySlice`. It is a stateless, synchronous function: given a point in time, a list of `BlockPreset` aggregates, a list of active `Session` entities, and a list of active `PlannedBlock` entities, it returns the complete enforcement state for that moment.
 
-**Why it is a Domain Service (not an Application service):** Policy merge logic — the rules for unioning blocked apps, resolving allowlist/blocklist precedence, and assigning `ActiveBlockType` — is domain logic. It expresses invariants of the domain ("an allowlist profile beats a blocklist profile", "a Focus Block takes priority over a Background Block") that must be consistent wherever policy is computed. Placing this logic in a Domain service makes it unit-testable without a database and reachable by any future consumer (e.g., a Planner "preview" query).
+**Why it is a Domain Service (not an Application service):** Policy merge logic — the rules for unioning blocked apps, resolving allowlist/blocklist precedence, and assigning `ActiveBlockPresetType` — is domain logic. It expresses invariants of the domain ("an allowlist preset beats a blocklist preset", "a Focus Block takes priority over a Background Block") that must be consistent wherever policy is computed. Placing this logic in a Domain service makes it unit-testable without a database and reachable by any future consumer (e.g., a Planner "preview" query).
 
 **Interface contract:**
 ```csharp
 // NenFocus.Domain/Services/IPolicyEngine.cs
 ActivePolicySlice ComputeSlice(
     DateTime at,
-    IEnumerable<BlockProfile> profiles,
+    IEnumerable<BlockPreset> presets,
     IEnumerable<Session> sessions,
     IEnumerable<PlannedBlock> blocks);
 ```
@@ -342,13 +342,13 @@ ActivePolicySlice ComputeSlice(
 
 ## Planned Block
 
-**Definition:** The abstract base class for all calendar-scheduled enforcement entries. A `PlannedBlock` has a `Start` time, an `End` time, a `BlockProfileId`, and an optional `Title`. It is never instantiated directly — only its two concrete subtypes (`FocusBlock` and `BackgroundBlock`) are created. The C# class type encodes the block type; there is no stored `BlockType` column.
+**Definition:** The abstract base class for all calendar-scheduled enforcement entries. A `PlannedBlock` has a `Start` time, an `End` time, a `BlockPresetId`, and an optional `Title`. It is never instantiated directly — only its two concrete subtypes (`FocusBlock` and `BackgroundBlock`) are created. The C# class type encodes the block preset type; there is no stored `BlockPresetType` column.
 
 **Domain behaviour:** `PlannedBlock` carries two domain methods used by both subtypes and the query layer:
 - `IsActive(DateTime atTime)` — returns `true` if `atTime` falls within `[Start, End)`.
 - `OverlapsWith(PlannedBlock other)` — returns `true` if the two windows intersect; used by the planner to prevent scheduling conflicts.
 
-**Why it exists:** `IPlannedBlockRepository` returns `IReadOnlyList<PlannedBlock>` so that the enforcement pipeline can work with all scheduled blocks polymorphically without knowing their concrete type. `ComputeActivePolicySliceQueryHandler` then pattern-matches on C# type to derive `ActiveBlockType` — the distinction is made exactly once, in the one place that needs it.
+**Why it exists:** `IPlannedBlockRepository` returns `IReadOnlyList<PlannedBlock>` so that the enforcement pipeline can work with all scheduled blocks polymorphically without knowing their concrete type. `ComputeActivePolicySliceQueryHandler` then pattern-matches on C# type to derive `ActiveBlockPresetType` — the distinction is made exactly once, in the one place that needs it.
 
 **Technical mapping:**
 
@@ -356,17 +356,17 @@ ActivePolicySlice ComputeSlice(
 |-------|----------|------|
 | Domain | `PlannedBlock` abstract class (`Entities/PlannedBlock.cs`) | Base for `FocusBlock` and `BackgroundBlock`; exposes `IsActive()` and `OverlapsWith()` |
 | Application | `IPlannedBlockRepository` | Returns `IReadOnlyList<PlannedBlock>`; callers cast to concrete type when subtype behaviour is needed |
-| Application | `ComputeActivePolicySliceQueryHandler` | Pattern-matches on `FocusBlock` / `BackgroundBlock` to set `ActiveBlockType` on the `ActivePolicySlice` value object |
+| Application | `ComputeActivePolicySliceQueryHandler` | Pattern-matches on `FocusBlock` / `BackgroundBlock` to set `ActiveBlockPresetType` on the `ActivePolicySlice` value object |
 
 ---
 
 ## Focus Block
 
-**Definition:** A planned calendar entry that does two things simultaneously at its designated start time: (1) enforcement activates immediately — the block profile's rules are applied before the user has done anything, and (2) the user is pushed to the Nen Ritual page to consciously start the session. The session created via the Ritual is the *Planned Session* associated with this block. Critically, enforcement is already in place from the designated time regardless of whether the user completes the Ritual immediately. If the user never completes the Ritual, the `FocusBlock` row still exists and Insights shows it as "missed" (`RitualCompletedAt` is null). Enforcement still expires at the block's scheduled end time whether the Ritual was completed or not.
+**Definition:** A planned calendar entry that does two things simultaneously at its designated start time: (1) enforcement activates immediately — the block preset's rules are applied before the user has done anything, and (2) the user is pushed to the Nen Ritual page to consciously start the session. The session created via the Ritual is the *Planned Session* associated with this block. Critically, enforcement is already in place from the designated time regardless of whether the user completes the Ritual immediately. If the user never completes the Ritual, the `FocusBlock` row still exists and Insights shows it as "missed" (`RitualCompletedAt` is null). Enforcement still expires at the block's scheduled end time whether the Ritual was completed or not.
 
-**Must use a Focus-type Block Profile.** Only profiles created with the Focus type are available when scheduling a Focus Block in the Planner or selecting a profile during the Ren step.
+**Must use a Focus-type Block Preset.** Only presets created with the Focus type are available when scheduling a Focus Block in the Planner or selecting a preset during the Ren step.
 
-**Overlap rules:** Two Focus Blocks cannot overlap each other. A Focus Block can overlap with one or more Background Blocks — the net enforcement is the union of all active profiles.
+**Overlap rules:** Two Focus Blocks cannot overlap each other. A Focus Block can overlap with one or more Background Blocks — the net enforcement is the union of all active presets.
 
 **Ubiquitous language rules:**
 - A Focus Block is *scheduled*, not *started*.
@@ -385,7 +385,7 @@ ActivePolicySlice ComputeSlice(
 
 | Layer | Artifact | Role |
 |-------|----------|------|
-| Domain | `FocusBlock` entity (`Entities/FocusBlock.cs`) | Extends `PlannedBlock`; inherits `Id`, `BlockProfileId`, `Start`, `End`, `Title?`; own field: `RitualCompletedAt?`; block type derived from C# class (`FocusBlock` → `BlockType.Focus` in query handler — no stored column) |
+| Domain | `FocusBlock` entity (`Entities/FocusBlock.cs`) | Extends `PlannedBlock`; inherits `Id`, `BlockPresetId`, `Start`, `End`, `Title?`; own field: `RitualCompletedAt?`; block preset type derived from C# class (`FocusBlock` → `BlockPresetType.Focus` in query handler — no stored column) |
 | Application | `IPlannedBlockRepository` | Retrieves blocks for overlap validation and active-state queries |
 | Application | `ComputeActivePolicySliceQueryHandler` | Queries blocks covering `DateTime.UtcNow`; merges with active Session |
 | Application | `StartSessionCommandHandler` | Calls `FocusBlock.MarkRitualCompleted(DateTime.UtcNow)` when `OriginatingBlockId` is provided |
@@ -396,11 +396,11 @@ ActivePolicySlice ComputeSlice(
 
 ## Background Block
 
-**Definition:** A planned calendar entry that activates enforcement at its designated start time, exactly like a Focus Block, but does **not** trigger the Nen Ritual. The user is not prompted to start a session — the block profile's rules simply become active. There is no associated Session entity. The block expires at its `End` time and enforcement is removed. The `BackgroundBlock` row itself is the complete Insights record — it appears in the Calendar view regardless of whether the machine was on during the scheduled time.
+**Definition:** A planned calendar entry that activates enforcement at its designated start time, exactly like a Focus Block, but does **not** trigger the Nen Ritual. The user is not prompted to start a session — the block preset's rules simply become active. There is no associated Session entity. The block expires at its `End` time and enforcement is removed. The `BackgroundBlock` row itself is the complete Insights record — it appears in the Calendar view regardless of whether the machine was on during the scheduled time.
 
-**Must use a Background-type Block Profile.** Only profiles created with the Background type are available when scheduling a Background Block in the Planner.
+**Must use a Background-type Block Preset.** Only presets created with the Background type are available when scheduling a Background Block in the Planner.
 
-**Overlap rules:** Multiple Background Blocks can run simultaneously. Their profiles are merged via the PolicyEngine — the net enforcement is the union of all active profiles. Background Blocks can also overlap with Focus Blocks.
+**Overlap rules:** Multiple Background Blocks can run simultaneously. Their presets are merged via the PolicyEngine — the net enforcement is the union of all active presets. Background Blocks can also overlap with Focus Blocks.
 
 **Contrast with Focus Block:**
 
@@ -423,7 +423,7 @@ ActivePolicySlice ComputeSlice(
 
 | Layer | Artifact | Role |
 |-------|----------|------|
-| Domain | `BackgroundBlock` entity (`Entities/BackgroundBlock.cs`) | Extends `PlannedBlock`; inherits `Id`, `BlockProfileId`, `Start`, `End`, `Title?`; no additional own fields; block type derived from C# class (`BackgroundBlock` → `BlockType.Background` in query handler — no stored column) |
+| Domain | `BackgroundBlock` entity (`Entities/BackgroundBlock.cs`) | Extends `PlannedBlock`; inherits `Id`, `BlockPresetId`, `Start`, `End`, `Title?`; no additional own fields; block preset type derived from C# class (`BackgroundBlock` → `BlockPresetType.Background` in query handler — no stored column) |
 | Application | `ComputeActivePolicySliceQueryHandler` | **Includes** Background Blocks when computing the active policy slice |
 | Infrastructure | `ScheduledEnforcementService` | Picks up the Background Block in its 5s heartbeat and applies enforcement |
 
@@ -466,7 +466,7 @@ ActivePolicySlice ComputeSlice(
 | Application | `CreatePlannedBlockCommandHandler` | Rejects Focus Block if it overlaps a running session (in addition to existing Focus-block overlap check) |
 | Application | `UpdatePlannedBlockCommandHandler` | Same active-session overlap guard for move/resize |
 
-**Form locking:** Completed blocks and the active session's originating block open read-only in the form. `IsBlockLocked` (= `IsEditing && (IsEditingCompleted || activeSession.OriginatingBlockId == editingId)`) disables Date, End Time, and Profile fields and hides the Save button. `IsBlockLocked` reacts live to session state changes.
+**Form locking:** Completed blocks and the active session's originating block open read-only in the form. `IsBlockLocked` (= `IsEditing && (IsEditingCompleted || activeSession.OriginatingBlockId == editingId)`) disables Date, End Time, and Preset fields and hides the Save button. `IsBlockLocked` reacts live to session state changes.
 
 **`TryParseFormTime`:** Static helper on `PlannerPageViewModel` that special-cases `"24:00"` (rejected by `TimeSpan.TryParse`) to support end-of-day block scheduling.
 
@@ -474,13 +474,13 @@ ActivePolicySlice ComputeSlice(
 
 ## Spontaneous Session
 
-**Definition:** A Session created by the user clicking "Use Nen" on the Main Page and completing the full Nen Ritual (Ten → Zetsu → Ren → Hatsu), outside of any scheduled Focus Block. The user has full control: they choose the Block Profile (Focus-type only), set the duration, and configure break reminders. The Session is created with `Origin = Spontaneous` and `OriginatingBlockId = null`. No Block entity of any kind is created.
+**Definition:** A Session created by the user clicking "Use Nen" on the Main Page and completing the full Nen Ritual (Ten → Zetsu → Ren → Hatsu), outside of any scheduled Focus Block. The user has full control: they choose the Block Preset (Focus-type only), set the duration, and configure break reminders. The Session is created with `Origin = Spontaneous` and `OriginatingBlockId = null`. No Block entity of any kind is created.
 
 **Product invariant:** A manual enforcement session cannot exist without a completed Ritual. This is a product invariant enforced by design, not by validation code. If the user abandons the Ritual at any step before clicking "Start Session" on the Hatsu page, no record is saved anywhere — no draft, no partial session, no recovery state.
 
 **Conflict rule:** A Spontaneous Session cannot be started if it would overlap with an upcoming Focus Block. For example, if a Focus Block is scheduled at 18:00, the user cannot start a 30-minute session at 17:45.
 
-**Contrast with Planned Session:** A Spontaneous Session is user-initiated and requires no pre-scheduled block. A Planned Session is triggered by a Focus Block at its scheduled start time. In a Spontaneous Session the user freely chooses the Block Profile and duration; in a Planned Session both are pre-determined.
+**Contrast with Planned Session:** A Spontaneous Session is user-initiated and requires no pre-scheduled block. A Planned Session is triggered by a Focus Block at its scheduled start time. In a Spontaneous Session the user freely chooses the Block Preset and duration; in a Planned Session both are pre-determined.
 
 **Technical mapping:** No Block entity — distinguished at the Application layer by `Session.Origin == Spontaneous`. `Session.OriginatingBlockId` is `null`.
 
@@ -488,7 +488,7 @@ ActivePolicySlice ComputeSlice(
 
 ## Planned Session
 
-**Definition:** A Session created by the user completing the Nen Ritual after a scheduled Focus Block activated and pushed them to the Ritual overlay. The Block Profile and duration are pre-determined by the Focus Block — the user cannot change the profile (Ren step) or the end time (Hatsu step), but can configure break reminders. The Session is saved with `Origin = Planned` and `OriginatingBlockId = <the triggering FocusBlock's Id>`. `StartSessionCommandHandler` stamps `FocusBlock.RitualCompletedAt` at this moment. If the user never completes the Ritual, no Session row is created; the `FocusBlock` row remains with `RitualCompletedAt = null` and Insights shows it as "missed." Enforcement still runs until the block's scheduled end time regardless.
+**Definition:** A Session created by the user completing the Nen Ritual after a scheduled Focus Block activated and pushed them to the Ritual overlay. The Block Preset and duration are pre-determined by the Focus Block — the user cannot change the preset (Ren step) or the end time (Hatsu step), but can configure break reminders. The Session is saved with `Origin = Planned` and `OriginatingBlockId = <the triggering FocusBlock's Id>`. `StartSessionCommandHandler` stamps `FocusBlock.RitualCompletedAt` at this moment. If the user never completes the Ritual, no Session row is created; the `FocusBlock` row remains with `RitualCompletedAt = null` and Insights shows it as "missed." Enforcement still runs until the block's scheduled end time regardless.
 
 ---
 
@@ -552,14 +552,14 @@ ActivePolicySlice ComputeSlice(
 
 **Status:** Stub defined. Implementation deferred until the Insights page is built.
 
-**Insights page will also include:** session history, blocked attempt analytics (most-attempted sites, per-session breakdown), block profile usage stats, total focus time for configurable periods (last week, since January, etc.), calendar view of past Focus Blocks, Background Blocks, and Spontaneous Sessions, and graphs for usage trends.
+**Insights page will also include:** session history, blocked attempt analytics (most-attempted sites, per-session breakdown), block preset usage stats, total focus time for configurable periods (last week, since January, etc.), calendar view of past Focus Blocks, Background Blocks, and Spontaneous Sessions, and graphs for usage trends.
 
 **Technical mapping:**
 
 | Layer | Artifact | Role |
 |-------|----------|------|
 | Application | `GetInsightsCalendarQuery` / `GetInsightsCalendarQueryHandler` (`Queries/GetInsightsCalendar/`) | Merges three sources into `IReadOnlyList<InsightsEntryDto>`; stub only |
-| Application | `InsightsEntryDto` | (to be defined) — carries type tag, date, duration, block profile name, completion state |
+| Application | `InsightsEntryDto` | (to be defined) — carries type tag, date, duration, block preset name, completion state |
 | UI | `InsightsPageViewModel` | (Not yet built) — binds to the query result; never touches individual source tables directly |
 
 ---
@@ -576,7 +576,7 @@ ActivePolicySlice ComputeSlice(
 
 **Lifecycle:** `Scheduled → Active → Completed`, with `Active → Broken` possible only if `AllowCancellation` was set `true` at seal. A later Infrastructure/Application heartbeat service (mirroring `ScheduledEnforcementService`) reads the clock and calls `Activate()` when the start date arrives and `Complete()` when the end date passes — the domain only exposes the guarded transitions.
 
-**Strictness Rule (user-configurable):** Modelled as a single enum, not a value-object hierarchy — the four rules are points on one axis of post-seal mutability, and the logic that *interprets* a rule against an edit's context lives in Application-layer guards, not inside the rule itself. Same reasoning as the existing `BlockType` enum promotion (see `DESIGN_GAP_HISTORY.md` Gap 2).
+**Strictness Rule (user-configurable):** Modelled as a single enum, not a value-object hierarchy — the four rules are points on one axis of post-seal mutability, and the logic that *interprets* a rule against an edit's context lives in Application-layer guards, not inside the rule itself. Same reasoning as the existing `BlockPresetType` enum promotion (see `DESIGN_GAP_HISTORY.md` Gap 2).
 - **Locked:** No changes allowed during the contract period. Blocks cannot be moved, removed, or shortened. New blocks can still be added.
 - **DailyFlexibility:** Within each day, the user can move blocks around, add or remove them freely, but only for the current or upcoming day.
 - **DailyTimeBudget:** Blocks can be rearranged within a day, but the total block time for that day must remain the same.
@@ -594,7 +594,7 @@ ActivePolicySlice ComputeSlice(
 
 **Settings integration:** *(future)* In the Settings page, the user will be able to pre-save default strictness rules automatically applied when creating a new Nen Contract.
 
-**Block-profile deletion guard:** A profile cannot be deleted while referenced by a contract, a future planned block, or an active session. Not built in the domain layer — noted for a later Application-layer prompt.
+**Block-preset deletion guard:** A preset cannot be deleted while referenced by a contract, a future planned block, or an active session. Not built in the domain layer — noted for a later Application-layer prompt.
 
 **Status:** Domain layer complete (`NenContract` aggregate, value objects, enums, events, `PlannedBlock.ContractId`). No commands, queries, repository, EF Core config, enforcement guards, use-count tracking, or UI built yet. To be interrogated via the Design Gap Protocol before each subsequent layer begins.
 
@@ -611,8 +611,8 @@ ActivePolicySlice ComputeSlice(
 | Domain | `StrictnessRule` enum (`Enums/StrictnessRule.cs`) | `Locked`, `DailyFlexibility`, `DailyTimeBudget`, `PeriodTimeBudget` |
 | Domain | `NenContractStatus` enum (`Enums/NenContractStatus.cs`) | `Scheduled`, `Active`, `Completed`, `Broken` |
 | Domain | `NenContractSealedEvent`, `NenContractActivatedEvent`, `NenContractCompletedEvent`, `NenContractBrokenEvent` (`Events/`) | Raised from the corresponding `NenContract` methods, same mechanism as `Session`'s events |
-| Domain | `PlannedBlock.ContractId (Guid?)` | Additive; `null` = uncommitted block, set = block is under that contract; `AssignContract(Guid?)` mirrors `AssignProfile(Guid)`; `FocusBlock.Create`/`BackgroundBlock.Create` gained a trailing optional `contractId` param, default `null` |
-| Application | *(not yet built)* | Commands/queries to seal, activate, complete, break contracts; guards that interpret `StrictnessRule` against an edit's context; Change Window use-count tracking; block-profile deletion guard; the completed-hours formula (`scheduledEnd − ritualCompletedAt`, clamped) that sums a day's actual Focus hours for `IsDayMet` and drives the recap's per-block `FocusBlockOutcome` display |
+| Domain | `PlannedBlock.ContractId (Guid?)` | Additive; `null` = uncommitted block, set = block is under that contract; `AssignContract(Guid?)` mirrors `AssignPreset(Guid)`; `FocusBlock.Create`/`BackgroundBlock.Create` gained a trailing optional `contractId` param, default `null` |
+| Application | *(not yet built)* | Commands/queries to seal, activate, complete, break contracts; guards that interpret `StrictnessRule` against an edit's context; Change Window use-count tracking; block-preset deletion guard; the completed-hours formula (`scheduledEnd − ritualCompletedAt`, clamped) that sums a day's actual Focus hours for `IsDayMet` and drives the recap's per-block `FocusBlockOutcome` display |
 | Infrastructure | *(not yet built)* | EF Core config/migration; heartbeat service to call `Activate()`/`Complete()` when dates arrive |
 | UI | *(not yet built)* | Planner wizard for creating a contract; banner/indicator for an active contract |
 
@@ -629,7 +629,7 @@ ActivePolicySlice ComputeSlice(
 | Module | Why it is deep |
 |--------|---------------|
 | `IActiveSessionMonitor` | 4 properties + 2 events; hides a background timer, UTC math, break tracking, and command handler invocation |
-| `ISessionStateService` | 3 methods + 2 events; hides DB rehydration, profile name resolution, and broadcast coordination |
+| `ISessionStateService` | 3 methods + 2 events; hides DB rehydration, preset name resolution, and broadcast coordination |
 | `IEnforcementService` | 2 methods (`ApplyPolicyAsync`, `RemoveEnforcementAsync`); hides process kill loop, hosts file, DNS flush, registry, HTTP API |
 
 ---

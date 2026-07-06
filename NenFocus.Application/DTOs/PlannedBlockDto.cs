@@ -5,11 +5,11 @@ namespace NenFocus.Application.DTOs;
 public sealed record PlannedBlockDto
 {
     public Guid Id { get; init; }
-    public Guid ProfileId { get; init; }
-    public string ProfileName { get; init; } = string.Empty;
+    public Guid PresetId { get; init; }
+    public string PresetName { get; init; } = string.Empty;
 
-    public BlockType BlockType { get; init; }
-    public WebsitePolicy WebsitePolicy { get; init; }
+    public BlockPresetType BlockPresetType { get; init; }
+    public WebsiteFilterType WebsiteFilterType { get; init; }
 
     public DateTime Start { get; init; }
     public DateTime End { get; init; }

@@ -18,19 +18,19 @@ public class EfCoreUnitOfWorkTests : SqliteRepositoryTestBase
     [Fact]
     public async Task CommitAsync_PersistsPendingChanges()
     {
-        var profile = BlockProfile.Create(Guid.NewGuid(), "Deep Work", WebsitePolicy.Blocklist, BlockType.Focus, DateTime.UtcNow);
-        await Context.BlockProfiles.AddAsync(profile);
+        var preset = BlockPreset.Create(Guid.NewGuid(), "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, DateTime.UtcNow);
+        await Context.BlockPresets.AddAsync(preset);
 
         await CreateUnitOfWork().CommitAsync();
 
-        var reloaded = await Context.BlockProfiles.FindAsync(profile.Id);
+        var reloaded = await Context.BlockPresets.FindAsync(preset.Id);
         reloaded.Should().NotBeNull();
     }
 
     [Fact]
     public async Task CommitAsync_PublishesDomainEventsForAggregatesWithPendingEvents()
     {
-        // BlockProfile.Create() raises BlockProfileCreatedEvent internally. The publisher
+        // BlockPreset.Create() raises BlockPresetCreatedEvent internally. The publisher
         // receives a live ReadOnlyCollection view over the aggregate's internal event list,
         // so it must be snapshotted with .ToList() at call time — by the time a NSubstitute
         // assertion re-evaluates the call log, ClearDomainEvents() has already emptied it.
@@ -39,25 +39,25 @@ public class EfCoreUnitOfWorkTests : SqliteRepositoryTestBase
             .Returns(Task.CompletedTask)
             .AndDoes(ci => capturedEvents = ci.Arg<IEnumerable<DomainEvent>>().ToList());
 
-        var profile = BlockProfile.Create(Guid.NewGuid(), "Deep Work", WebsitePolicy.Blocklist, BlockType.Focus, DateTime.UtcNow);
-        await Context.BlockProfiles.AddAsync(profile);
+        var preset = BlockPreset.Create(Guid.NewGuid(), "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, DateTime.UtcNow);
+        await Context.BlockPresets.AddAsync(preset);
 
         await CreateUnitOfWork().CommitAsync();
 
         capturedEvents.Should().ContainSingle()
-            .Which.Should().BeOfType<BlockProfileCreatedEvent>()
-            .Which.ProfileId.Should().Be(profile.Id);
+            .Which.Should().BeOfType<BlockPresetCreatedEvent>()
+            .Which.PresetId.Should().Be(preset.Id);
     }
 
     [Fact]
     public async Task CommitAsync_ClearsDomainEventsAfterPublishing()
     {
-        var profile = BlockProfile.Create(Guid.NewGuid(), "Deep Work", WebsitePolicy.Blocklist, BlockType.Focus, DateTime.UtcNow);
-        await Context.BlockProfiles.AddAsync(profile);
+        var preset = BlockPreset.Create(Guid.NewGuid(), "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, DateTime.UtcNow);
+        await Context.BlockPresets.AddAsync(preset);
 
         await CreateUnitOfWork().CommitAsync();
 
-        profile.DomainEvents.Should().BeEmpty();
+        preset.DomainEvents.Should().BeEmpty();
     }
 
     [Fact]

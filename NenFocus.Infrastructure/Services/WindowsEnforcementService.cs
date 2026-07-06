@@ -267,7 +267,7 @@ public sealed class WindowsEnforcementService : IEnforcementService, IDisposable
             {
                 isBlocked = false;
             }
-            else if (_currentPolicy.WebsitePolicyMode == WebsitePolicy.Allowlist)
+            else if (_currentPolicy.WebsiteFilterTypeMode == WebsiteFilterType.Allowlist)
             {
                 // Default-deny: block everything NOT in the allowed list
                 isBlocked = !_currentPolicy.AllowedSites.Any(s =>

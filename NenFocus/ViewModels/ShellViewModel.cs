@@ -1,13 +1,13 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
-using NenFocus.Application.Queries.GetAllBlockProfiles;
+using NenFocus.Application.Queries.GetAllBlockPresets;
 using NenFocus.Application.Queries.GetFocusBlockRitualContext;
 using NenFocus.Application.Queries.GetPlannedBlocksForDay;
-using NenFocus.Application.UseCases.BlockProfiles.CreateBlockProfile;
-using NenFocus.Application.UseCases.BlockProfiles.DeleteBlockProfile;
-using NenFocus.Application.UseCases.BlockProfiles.DuplicateBlockProfile;
-using NenFocus.Application.UseCases.BlockProfiles.UpdateBlockProfile;
+using NenFocus.Application.UseCases.BlockPresets.CreateBlockPreset;
+using NenFocus.Application.UseCases.BlockPresets.DeleteBlockPreset;
+using NenFocus.Application.UseCases.BlockPresets.DuplicateBlockPreset;
+using NenFocus.Application.UseCases.BlockPresets.UpdateBlockPreset;
 using NenFocus.Application.UseCases.Planner.CreatePlannedBlock;
 using NenFocus.Application.UseCases.Planner.DeletePlannedBlock;
 using NenFocus.Application.UseCases.Planner.UpdatePlannedBlock;
@@ -32,7 +32,7 @@ namespace NenFocus.ViewModels;
 
 public partial class ShellViewModel : ViewModelBase
 {
-    private readonly IQueryHandler<GetAllBlockProfilesQuery, IReadOnlyList<BlockProfileDto>> _profilesQuery;
+    private readonly IQueryHandler<GetAllBlockPresetsQuery, IReadOnlyList<BlockPresetDto>> _presetsQuery;
     private readonly IQueryHandler<GetFocusBlockRitualContextQuery, FocusBlockRitualContext?> _getFocusBlockRitualContext;
     private readonly ICommandHandler<StartSessionCommand, StartSessionResult> _startSession;
     private readonly ICommandHandler<EndSessionCommand, EndSessionResult> _endSession;
@@ -63,7 +63,7 @@ public partial class ShellViewModel : ViewModelBase
     public ObservableCollection<NavItemViewModel> NavItems { get; } = new();
 
     public ShellViewModel(
-       IQueryHandler<GetAllBlockProfilesQuery, IReadOnlyList<BlockProfileDto>> profilesQuery,
+       IQueryHandler<GetAllBlockPresetsQuery, IReadOnlyList<BlockPresetDto>> presetsQuery,
        IQueryHandler<GetFocusBlockRitualContextQuery, FocusBlockRitualContext?> getFocusBlockRitualContext,
        ICommandHandler<StartSessionCommand, StartSessionResult> startSession,
        ICommandHandler<EndSessionCommand, EndSessionResult> endSession,
@@ -75,16 +75,16 @@ public partial class ShellViewModel : ViewModelBase
        IActiveSessionMonitor monitor,
        IPlannerClockService plannerClock,
        ISystemClock clock,
-       ICommandHandler<CreateBlockProfileCommand, CreateBlockProfileResult> createProfile,
-       ICommandHandler<UpdateBlockProfileCommand, UpdateBlockProfileResult> updateProfile,
-       ICommandHandler<DeleteBlockProfileCommand, DeleteBlockProfileResult> deleteProfile,
-       ICommandHandler<DuplicateBlockProfileCommand, DuplicateBlockProfileResult> duplicateProfile,
+       ICommandHandler<CreateBlockPresetCommand, CreateBlockPresetResult> createPreset,
+       ICommandHandler<UpdateBlockPresetCommand, UpdateBlockPresetResult> updatePreset,
+       ICommandHandler<DeleteBlockPresetCommand, DeleteBlockPresetResult> deletePreset,
+       ICommandHandler<DuplicateBlockPresetCommand, DuplicateBlockPresetResult> duplicatePreset,
        IQueryHandler<GetPlannedBlocksForDayQuery, IReadOnlyList<PlannedBlockDto>> getBlocksForDay,
        ICommandHandler<CreatePlannedBlockCommand, CreatePlannedBlockResult> createPlannedBlock,
        ICommandHandler<UpdatePlannedBlockCommand, UpdatePlannedBlockResult> updatePlannedBlock,
        ICommandHandler<DeletePlannedBlockCommand, DeletePlannedBlockResult> deletePlannedBlock)
     {
-        _profilesQuery = profilesQuery;
+        _presetsQuery = presetsQuery;
         _getFocusBlockRitualContext = getFocusBlockRitualContext;
         _startSession = startSession;
         _endSession = endSession;
@@ -111,8 +111,8 @@ public partial class ShellViewModel : ViewModelBase
         }
 
         NavItems.Add(new NavItemViewModel("Main", "⊹", new MainPageViewModel(() => StartRitual(), ShowPostSession, _sessionState, _monitor, _endSession, _startBreak, _resumeFromBreak, _plannerClock), Select));
-        NavItems.Add(new NavItemViewModel("Block Profiles", "◻", new BlockProfilePageViewModel(profilesQuery, createProfile, updateProfile, deleteProfile, duplicateProfile), Select));
-        NavItems.Add(new NavItemViewModel("Planner", "◫", new PlannerPageViewModel(profilesQuery, getBlocksForDay, createPlannedBlock, updatePlannedBlock, deletePlannedBlock, _plannerClock, _sessionState), Select));
+        NavItems.Add(new NavItemViewModel("Block Presets", "◻", new BlockPresetPageViewModel(presetsQuery, createPreset, updatePreset, deletePreset, duplicatePreset), Select));
+        NavItems.Add(new NavItemViewModel("Planner", "◫", new PlannerPageViewModel(presetsQuery, getBlocksForDay, createPlannedBlock, updatePlannedBlock, deletePlannedBlock, _plannerClock, _sessionState), Select));
         NavItems.Add(new NavItemViewModel("Insights", "◈", new InsightsPageViewModel(), Select));
         NavItems.Add(new NavItemViewModel("Settings", "◎", new SettingsPageViewModel(), Select));
 
@@ -141,25 +141,25 @@ public partial class ShellViewModel : ViewModelBase
 
     private async void StartRitual(Guid? focusBlockId = null)
     {
-        BlockProfileDto? lockedProfile = null;
+        BlockPresetDto? lockedPreset = null;
         FocusBlockSchedule? lockedSchedule = null;
 
         if (focusBlockId.HasValue)
         {
             var context = await _getFocusBlockRitualContext.HandleAsync(
                 new GetFocusBlockRitualContextQuery { FocusBlockId = focusBlockId.Value });
-            lockedProfile = context?.Profile;
+            lockedPreset = context?.Preset;
             lockedSchedule = context?.Schedule;
         }
 
-        bool isPlanned = lockedProfile is not null;
+        bool isPlanned = lockedPreset is not null;
 
         RitualViewModel = new RitualShellViewModel(
-            profilesQuery: _profilesQuery,
+            presetsQuery: _presetsQuery,
             startSession: _startSession,
             clock: _clock,
             originatingBlockId: focusBlockId,
-            lockedProfile: lockedProfile,
+            lockedPreset: lockedPreset,
             lockedSchedule: lockedSchedule,
             onComplete: ExitRitualAndGoToMain,
             onCancel: isPlanned ? () => { } : ExitRitual);

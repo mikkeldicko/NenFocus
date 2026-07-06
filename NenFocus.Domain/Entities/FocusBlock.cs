@@ -9,7 +9,7 @@ public sealed class FocusBlock : PlannedBlock
 
     public static FocusBlock Create(
         Guid id,
-        Guid blockProfileId,
+        Guid blockPresetId,
         DateTime start,
         DateTime end,
         string? title = null,
@@ -21,7 +21,7 @@ public sealed class FocusBlock : PlannedBlock
         return new FocusBlock
         {
             Id = id,
-            BlockProfileId = blockProfileId,
+            BlockPresetId = blockPresetId,
             Start = start,
             End = end,
             Title = title,

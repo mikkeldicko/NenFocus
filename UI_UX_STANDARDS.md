@@ -27,7 +27,7 @@ For the *rules* on what ViewModels are forbidden from doing, see `MODULE_STANDAR
 | Card background | `#FFFFFF` | Session panel, modal cards |
 | Card border | `#E8E8F0` | Card outlines |
 | Primary text | `#1A1A2E` | Headings, countdown timer |
-| Secondary text | `#888899` | Session goal, profile name |
+| Secondary text | `#888899` | Session goal, preset name |
 | Muted text | `#AAAABC` | Section labels, date, muted info |
 | Disabled / strikethrough | `#BBBBCC` | Completed checklist items |
 | Session active green | `#3A9E6A` | "SESSION ACTIVE" status chip |

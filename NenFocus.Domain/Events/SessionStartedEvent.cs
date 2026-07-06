@@ -3,14 +3,14 @@
 public class SessionStartedEvent : DomainEvent
 {
     public Guid SessionId { get; }
-    public Guid BlockProfileId { get; }
+    public Guid BlockPresetId { get; }
     public string Goal { get; }
 
-    public SessionStartedEvent(Guid sessionId, Guid blockProfileId, string goal, DateTime occurredAt)
+    public SessionStartedEvent(Guid sessionId, Guid blockPresetId, string goal, DateTime occurredAt)
         : base(occurredAt)
     {
         SessionId = sessionId;
-        BlockProfileId = blockProfileId;
+        BlockPresetId = blockPresetId;
         Goal = goal;
     }
 }
