@@ -129,6 +129,29 @@ public class StartSessionCommandHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_Planned_SessionEndAtMatchesOriginatingBlockEnd_NotDurationDerived()
+    {
+        // Regression pin: a Planned session must end exactly when its originating
+        // block ends, regardless of how much wizard time elapsed before Start was
+        // clicked (which is what DurationMinutes reflects).
+        var blockId = Guid.NewGuid();
+        var blockEnd = Now.AddMinutes(3);
+        var focusBlock = FocusBlock.Create(blockId, Guid.NewGuid(), Now.AddMinutes(-2), blockEnd);
+        _plannedBlocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns(focusBlock);
+
+        // Simulates the Hatsu-computed remaining minutes (rounded, e.g. via the
+        // 1-minute floor) diverging from the block's actual precise end time.
+        var command = SpontaneousCommand() with { OriginatingBlockId = blockId, DurationMinutes = 5 };
+        var result = await CreateHandler().HandleAsync(command, CancellationToken.None);
+
+        result.Success.Should().BeTrue();
+        await _sessions.Received(1).SaveAsync(
+            Arg.Is<Session>(s => s.EndAt == blockEnd),
+            Arg.Any<CancellationToken>());
+        _sessionState.Received(1).SetActive(Arg.Is<SessionDto>(d => d.EndAt == blockEnd));
+    }
+
+    [Fact]
     public async Task HandleAsync_Planned_OriginatingBlockNoLongerExists_Fails()
     {
         var blockId = Guid.NewGuid();

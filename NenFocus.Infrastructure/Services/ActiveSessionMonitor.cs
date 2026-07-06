@@ -45,8 +45,8 @@ public sealed class ActiveSessionMonitor : IActiveSessionMonitor, IDisposable
         if (session is null) return;
 
         _sessionId = session.Id;
-        _sessionEnd = session.StartedAt.AddMinutes(session.DurationMinutes);
-        _sessionDurationSeconds = session.DurationMinutes * 60.0;
+        _sessionEnd = session.EndAt;
+        _sessionDurationSeconds = (session.EndAt - session.StartedAt).TotalSeconds;
 
         if (session.Status == SessionStatus.OnBreak && session.BreakStartedAt.HasValue)
         {

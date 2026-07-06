@@ -166,6 +166,9 @@ namespace NenFocus.Infrastructure.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("DurationMinutes");
 
+                    b.Property<DateTime?>("EndAt")
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime?>("EndedAt")
                         .HasColumnType("TEXT");
 

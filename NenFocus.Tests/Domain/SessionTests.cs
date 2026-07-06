@@ -85,6 +85,7 @@ public class SessionTests
 
         session.Status.Should().Be(SessionStatus.Active);
         session.StartedAt.Should().Be(startedAt);
+        session.EndAt.Should().Be(startedAt + session.Duration.Value);
         session.DomainEvents.Should().ContainSingle()
             .Which.Should().BeOfType<SessionStartedEvent>();
 
@@ -92,6 +93,19 @@ public class SessionTests
         raised.SessionId.Should().Be(session.Id);
         raised.BlockPresetId.Should().Be(session.BlockPresetId);
         raised.Goal.Should().Be(session.Goal.Value);
+    }
+
+    [Fact]
+    public void Start_WithScheduledEnd_OverridesDurationDerivedEndAt()
+    {
+        var blockId = Guid.NewGuid();
+        var session = CreatePlannedSession(blockId); // 30 minute duration
+        var startedAt = new DateTime(2026, 1, 1, 10, 0, 0, DateTimeKind.Utc);
+        var scheduledEnd = startedAt.AddMinutes(3);
+
+        session.Start(startedAt, scheduledEnd);
+
+        session.EndAt.Should().Be(scheduledEnd);
     }
 
     [Fact]
@@ -412,6 +426,22 @@ public class SessionTests
         var remaining = session.GetRemainingTime(startedAt.AddHours(2));
 
         remaining.Should().Be(TimeSpan.Zero);
+    }
+
+    [Fact]
+    public void GetRemainingTime_WithScheduledEndOverride_IgnoresDuration()
+    {
+        // Regression pin: a Planned session's remaining time must track the
+        // originating block's real end, not the (possibly stale) Duration
+        // captured when the Ritual wizard was entered.
+        var blockId = Guid.NewGuid();
+        var session = CreatePlannedSession(blockId); // 30 minute duration
+        var startedAt = new DateTime(2026, 1, 1, 10, 0, 0, DateTimeKind.Utc);
+        session.Start(startedAt, startedAt.AddMinutes(3));
+
+        var remaining = session.GetRemainingTime(startedAt.AddMinutes(1));
+
+        remaining.Should().Be(TimeSpan.FromMinutes(2));
     }
 
     [Fact]

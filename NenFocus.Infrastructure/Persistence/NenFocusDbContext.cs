@@ -70,6 +70,7 @@ public class NenFocusDbContext : DbContext
             entity.Property(s => s.OriginatingBlockId);
 
             entity.Property(s => s.StartedAt);
+            entity.Property(s => s.EndAt);
             entity.Property(s => s.EndedAt);
             entity.Property(s => s.BreaksTaken)
                 .IsRequired()

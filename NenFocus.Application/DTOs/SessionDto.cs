@@ -13,6 +13,7 @@ public sealed record SessionDto
     public Guid BlockPresetId { get; init; }
     public Guid? OriginatingBlockId { get; init; }
     public DateTime StartedAt { get; init; }
+    public DateTime EndAt { get; init; }
     public DateTime? EndedAt { get; init; }
     public BreakSettingsDto? BreakSettings { get; init; }
     public int BreaksTaken { get; init; }

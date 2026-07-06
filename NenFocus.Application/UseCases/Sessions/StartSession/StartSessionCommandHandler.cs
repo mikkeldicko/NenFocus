@@ -94,7 +94,7 @@ public sealed class StartSessionCommandHandler
             temporaryBlockedApps: command.AdditionalBlockedApps.Count > 0 ? command.AdditionalBlockedApps : null,
             temporaryBlockedSites: command.AdditionalBlockedSites.Count > 0 ? command.AdditionalBlockedSites : null);
 
-        session.Start(now);
+        session.Start(now, originatingBlock?.End);
 
         if (originatingBlock is not null)
         {
@@ -119,6 +119,7 @@ public sealed class StartSessionCommandHandler
             BlockPresetId = session.BlockPresetId,
             DurationMinutes = command.DurationMinutes,
             StartedAt = session.StartedAt ?? now,
+            EndAt = session.EndAt ?? now,
             Status = session.Status,
             Origin = session.Origin,
             OriginatingBlockId = session.OriginatingBlockId,

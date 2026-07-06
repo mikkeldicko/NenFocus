@@ -14,6 +14,7 @@ public class Session : AggregateRoot
     public Guid BlockPresetId { get; private set; }
     public Guid? OriginatingBlockId { get; private set; }
     public DateTime? StartedAt { get; private set; }
+    public DateTime? EndAt { get; private set; }
     public DateTime? EndedAt { get; private set; }
     public BreakSettings? BreakSettings { get; private set; }
     public int BreaksTaken { get; private set; }
@@ -58,7 +59,7 @@ public class Session : AggregateRoot
         };
     }
 
-    public void Start(DateTime startedAt)
+    public void Start(DateTime startedAt, DateTime? scheduledEnd = null)
     {
         if (Status != SessionStatus.NotStarted)
             throw new InvalidOperationException(
@@ -66,6 +67,7 @@ public class Session : AggregateRoot
 
         Status = SessionStatus.Active;
         StartedAt = startedAt;
+        EndAt = scheduledEnd ?? startedAt + Duration.Value;
         Raise(new SessionStartedEvent(Id, BlockPresetId, Goal.Value, startedAt));
     }
 
@@ -143,9 +145,8 @@ public class Session : AggregateRoot
 
     public TimeSpan? GetRemainingTime(DateTime asOf)
     {
-        var elapsed = GetElapsedTime(asOf);
-        if (elapsed is null) return null;
-        var remaining = Duration.Value - elapsed.Value;
+        if (EndAt is null) return null;
+        var remaining = EndAt.Value - asOf;
         return remaining < TimeSpan.Zero ? TimeSpan.Zero : remaining;
     }
 

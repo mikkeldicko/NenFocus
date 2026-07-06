@@ -105,6 +105,7 @@ public sealed class SessionStateService : ISessionStateService
         DurationMinutes = (int)s.Duration.Value.TotalMinutes,
         Status = s.Status,
         StartedAt = s.StartedAt ?? DateTime.UtcNow,
+        EndAt = s.EndAt ?? DateTime.UtcNow,
         BreaksTaken = s.BreaksTaken,
         BreakStartedAt = s.BreakStartedAt,
         BreakSettings = s.BreakSettings is not null

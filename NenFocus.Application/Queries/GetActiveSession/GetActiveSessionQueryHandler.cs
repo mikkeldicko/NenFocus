@@ -34,6 +34,7 @@ public sealed class GetActiveSessionQueryHandler
             DurationMinutes = (int)session.Duration.Value.TotalMinutes,
             Status = session.Status,
             StartedAt = session.StartedAt ?? DateTime.UtcNow,
+            EndAt = session.EndAt ?? DateTime.UtcNow,
             EndedAt = session.EndedAt,
             BreakSettings = session.BreakSettings is null ? null : new BreakSettingsDto
             {
