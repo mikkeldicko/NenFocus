@@ -83,4 +83,30 @@ public class CreatePlannedBlockValidatorTests
 
         result.IsValid.Should().BeFalse();
     }
+
+    [Fact]
+    public async Task Validate_ShorterThanOneMinute_IsInvalid()
+    {
+        var profileId = Guid.NewGuid();
+        _profiles.GetByIdAsync(profileId, Arg.Any<CancellationToken>())
+            .Returns(BlockProfile.Create(profileId, "Deep Work", WebsitePolicy.Blocklist, BlockType.Focus, Now));
+        var command = ValidCommand(profileId) with { End = ValidCommand(profileId).Start.AddSeconds(30) };
+
+        var result = await CreateValidator().ValidateAsync(command);
+
+        result.IsValid.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Validate_ExactlyOneMinute_IsValid()
+    {
+        var profileId = Guid.NewGuid();
+        _profiles.GetByIdAsync(profileId, Arg.Any<CancellationToken>())
+            .Returns(BlockProfile.Create(profileId, "Deep Work", WebsitePolicy.Blocklist, BlockType.Focus, Now));
+        var command = ValidCommand(profileId) with { End = ValidCommand(profileId).Start.AddMinutes(1) };
+
+        var result = await CreateValidator().ValidateAsync(command);
+
+        result.IsValid.Should().BeTrue();
+    }
 }

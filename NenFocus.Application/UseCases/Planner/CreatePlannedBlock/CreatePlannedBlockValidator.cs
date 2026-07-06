@@ -27,6 +27,8 @@ public sealed class CreatePlannedBlockValidator : AbstractValidator<CreatePlanne
 
         RuleFor(x => x.End)
             .GreaterThan(x => x.Start)
-            .WithMessage("End time must be after start time.");
+            .WithMessage("End time must be after start time.")
+            .Must((command, end) => (end - command.Start).TotalMinutes >= 1)
+            .WithMessage("Block must be at least 1 minute long.");
     }
 }

@@ -355,7 +355,7 @@ public partial class PlannerPageView : UserControl
             {
                 double newTop = Math.Max(0, _tileOriginalTop + rawDeltaY);
                 double newHeight = Math.Max(
-                    PlannerPageViewModel.HourRowHeight * 0.25,
+                    PlannerLayout.MinimumTileHeightPx,
                     _tileOriginalHeight - (newTop - _tileOriginalTop));
                 if (newTop >= _tileOriginalTop + _tileOriginalHeight) break;
                 Canvas.SetTop(_tileGhost, newTop);
@@ -367,7 +367,7 @@ public partial class PlannerPageView : UserControl
             {
                 double newHeight = Math.Clamp(
                     _tileOriginalHeight + rawDeltaY,
-                    PlannerPageViewModel.HourRowHeight * 0.25,
+                    PlannerLayout.MinimumTileHeightPx,
                     totalH - _tileOriginalTop);
                 _tileGhost.Height = newHeight;
                 UpdateTileGhostLabel();
@@ -661,7 +661,7 @@ public partial class PlannerPageView : UserControl
         double top    = Math.Min(pressY, currentY);
         double bottom = Math.Max(pressY, currentY);
         Canvas.SetTop(_createGhost, top);
-        _createGhost.Height = Math.Max(PlannerPageViewModel.HourRowHeight * 0.25, bottom - top);
+        _createGhost.Height = Math.Max(PlannerLayout.MinimumTileHeightPx, bottom - top);
         _createGhost.Width  = Math.Max(0, canvas.Bounds.Width - 4);
 
         if (_ghostTimeLabel is not null)

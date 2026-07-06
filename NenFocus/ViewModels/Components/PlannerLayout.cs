@@ -4,6 +4,13 @@ namespace NenFocus.ViewModels.Components;
 
 internal static class PlannerLayout
 {
+    /// <summary>
+    /// Floor for a tile's rendered height, in pixels — every block is at least this
+    /// tall regardless of scheduled duration, so a 1-5 minute block still shows as a
+    /// visible, clickable strip (same idea as Google Calendar's thin short-event bars).
+    /// </summary>
+    internal const double MinimumTileHeightPx = 32.0;
+
     internal static (double Top, double Height)? GetTilePosition(
         DateTime localStart,
         DateTime localEnd,
@@ -18,7 +25,7 @@ internal static class PlannerLayout
         var startMinutes    = (clippedStart - visibleStart).TotalMinutes;
         var durationMinutes = (clippedEnd   - clippedStart).TotalMinutes;
         var top    = (startMinutes    / 60.0) * hourRowHeight;
-        var height = Math.Max(hourRowHeight * 0.5, (durationMinutes / 60.0) * hourRowHeight);
+        var height = Math.Max(MinimumTileHeightPx, (durationMinutes / 60.0) * hourRowHeight);
         return (top, height);
     }
 
