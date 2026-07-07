@@ -140,45 +140,51 @@ Each slice must compile and produce the correct output before the next slice beg
 
 Gaps that have been identified but not yet closed. Each is here because deferring it is a deliberate choice, not because it has been forgotten.
 
-### Open Gap A — Time Budget Feature (three-slice implementation)
+### Open Gap A — Usage Ceiling & Universal Usage Tracking (interrogated 2026-07-07; not yet built)
 
-**The feature:** A `TimeBudget` is an optional daily cap on a `BlockedSite` entry within a `BlockPreset`. A budgeted site is accessible until its daily cap is consumed, at which point it becomes blocked for the rest of the day. Usage is reported by the browser extension via a `/report` endpoint and written through `IBudgetUsageTracker` into `DailyBudgetUsage` rows — it is not inferred from wall-clock time. See `DOMAIN\_DICTIONARY.md` → Time Budget and Budget Window for full definitions and ubiquitous language rules.
+**This entirely supersedes the previous "Time Budget" framing of this gap — not a patch, a rewrite.** `BlockedSite` does **not** gain a `TimeBudget` field. `BlockPreset` (Focus and Background alike) remains pure hard-block only, permanently. The budget concept was pulled off `BlockedSite` entirely and rebuilt as an independent feature, for reasons recorded below.
 
-**Why three slices:** The feature crosses three independent implementation layers: the domain model and UI (Slice 1), the extension and HTTP reporting path (Slice 2), and the enforcement wiring (Slice 3). Slice 2 must complete before Slice 3 begins because the enforcement engine cannot read usage data until the reporting pipeline exists. Slice 1 has no prerequisite and can be built immediately.
+**The feature, in two independent parts:**
 
-**Slice 1 — Domain model + UI** *(no prerequisite; can begin immediately)*
-- Add `TimeBudget` value object to `NenFocus.Domain/ValueObjects/`
-- `BlockedSite` gains an optional `TimeBudget` field
-- Add `DailyBudgetUsage` entity to `NenFocus.Domain/Entities/`
-- Add `IBudgetUsageTracker` interface to `NenFocus.Application/Interfaces/`
-- Block Preset editor UI: add per-site budget cap input
+1. **Universal usage tracking (foundation).** Every website visited and every application's foreground time is tracked unconditionally, from day one — not just resources with a configured ceiling. This is deliberately general-purpose: the same substrate feeds both Usage Ceiling enforcement and the future Insights page's time-per-site/time-per-app reporting. Scoping collection down to only configured entries would starve Insights of data for everything else.
+2. **Usage Ceiling (ambient access cap).** A standing, perpetual cap on a specific site or app's access time — created and managed on the **Presets page**, not Settings, not the Planner, and explicitly not part of Nen Contract (rationale below). Always in effect once created; no calendar involvement whatsoever.
 
-**Slice 2 — Extension + `/report` endpoint** *(no prerequisite; must complete before Slice 3)*
-- `background.js` gains tab focus tracking (active tab time accumulation)
-- `WindowsEnforcementService` gains `/report` handler that receives usage events from the extension and writes through `IBudgetUsageTracker`
-- `IBudgetUsageTracker` implementation persists `DailyBudgetUsage` rows
+**Precedence rule (the core design decision):** If any currently-active Focus or Background preset hard-blocks a resource, that hard block always wins — the resource is blocked, full stop, and no usage accrues during that window. Outside of any active hard block, the resource is accessible up to its ceiling; once the ceiling is reached for the current period, the resource is blocked for the rest of that period. This carries forward the one rule that was already correct in the old Time Budget spec (hard block wins, budget doesn't tick during it) — unchanged by the rewrite.
 
-**Slice 3 — Enforcement wiring** *(requires Slice 2 complete)*
-- `PolicyEngine.ComputeSlice()` reads `DailyBudgetUsage`; exhausted sites are added to the blocked set
-- `ScheduledEnforcementService` triggers re-evaluation when a budget is exhausted mid-block
-- Warning notification fires N minutes before exhaustion (N is a user-wide preference in Settings, not per-preset)
+**Why decoupled from `BlockPreset`/`BlockedSite`:** The original design tied a site's budget window to the owning `PlannedBlock`'s schedule, which conflated two unrelated things — a schedule-bound hard block (what presets are for) and an ambient, calendar-independent personal limit (what this is for). That conflation was the source of the original "does a time budget make sense on a Focus Block" doubt — it never did, because it was never really a preset-level concept to begin with.
 
-**New artifacts introduced:**
-- `TimeBudget` — value object (Domain); carries the daily cap only
-- `DailyBudgetUsage` — append-only entity (Domain); source of truth for consumed time per site per calendar day per preset entry
-- `IBudgetUsageTracker` — interface (Application); the write contract for usage events; analogous to `IBlockedAttemptTracker`
-- Budget Window — derived concept only; `[PlannedBlock.Start, PlannedBlock.End)` while `IsActive()` is `true`; no stored field, no migration
+**Why decoupled from Nen Contract:** `NenContract` is sealed and time-bound (`StartDate`–`EndDate`), governing edit permission for a committed block schedule with Daily-Floor scoring. A Usage Ceiling is perpetual, unsealed, and governs passive resource access — coupling them would mean ceilings stop functioning between contracts, or if no contract is ever sealed, which contradicts the point of an *ambient* limit. Sibling concepts, not dependent ones.
 
-**Existing artifacts touched:**
-- `BlockedSite` value object — gains optional `TimeBudget` field (Slice 1)
-- `PolicyEngine` — gains budget exhaustion logic in `ComputeSlice()` (Slice 3)
-- `WindowsEnforcementService` — gains `/report` handler for usage reporting (Slice 2)
-- `ScheduledEnforcementService` — gains re-evaluation trigger on budget exhaustion (Slice 3)
-- `background.js` — gains tab focus tracking (Slice 2)
+**Domain shape (interrogated, not yet built):**
 
-**Must be closed before:** Slice 3 must be closed before Time Budget enforcement is considered complete. Slice 1 may be closed and verified independently.
+| Concept | Shape |
+|---|---|
+| `DailyUsage` (entity) | Append-only fact, keyed by `(Date, ResourceName, UsageResourceType)`, accumulates seconds. Mirrors `BlockedAttempt`'s pattern exactly — no `SessionId`, no `PresetId`, no `BlockPresetId`. Belongs to nothing but the day and the resource. |
+| `UsageResourceType` (enum) | `App` \| `Website` — mirrors `BlockedAttemptType`. |
+| `UsageCeiling` (entity, deliberately not a value object) | `Id`, `ResourceName`, `ResourceType (UsageResourceType)`, `Period (CeilingPeriod)`, cap value(s), `IsPaused`. Entity because it has independent identity, an independent lifecycle (created/edited/paused/deleted via its own CRUD, not nested inside another aggregate), and is looked up by `Id` from `PolicyEngine` on every tick — the same justification that makes `FocusBlock`/`BackgroundBlock` entities rather than value objects. Carries a pure `IsExhausted(...)` comparison method — same justification as `DailyFloor.IsSatisfiedBy` (the rule belongs with its data, reused wherever exhaustion is checked, not duplicated across callers). That's a separate, orthogonal DDD question from the entity/value-object determination — both apply here, for different reasons. No domain events; nothing reacts to a ceiling being created or paused. |
+| `CeilingPeriod` (enum) | `Daily` \| `Weekly` — chosen per entry, mirrors the multi-mode shape of `StrictnessRule`. **Daily** mode's cap is a per-weekday shape (e.g. Monday 3h, Tuesday 1h), mirroring `WorkHoursPolicy`'s `{ Default, PerDayExceptions }` resolution pattern. **Weekly** mode's cap is a single aggregate tracked cumulatively across the week, mirroring the idea behind `StrictnessRule.PeriodTimeBudget` applied to resource access instead of block-editing permission. |
+| `IUsageTracker` (Application interface) | Narrow write contract for usage events, mirrors `IBlockedAttemptTracker` exactly. |
 
-**Design decision recorded:** Option B (heartbeat inference — deriving usage from the enforcement heartbeat's wall-clock timing rather than extension-reported events) was explicitly considered and rejected during the Design Gap interrogation. Usage tracking must be accurate: only time the user actively spends on a site counts, which requires the extension to report it directly. Do not reopen this question.
+**Collection mechanisms (asymmetric cost — both required for "track everything"):**
+
+- **Websites** — cheap; the extension already intercepts every navigation. Needs tab-focus-time accumulation added, idle detection via `chrome.idle`, and a media-playing exception (an audible/playing tab doesn't count as idle) so passive video consumption isn't misread as inactivity. Reports via a new `/report-time` endpoint, distinct from the existing `/report` (which only logs blocked *attempts*).
+- **Apps** — genuinely new capability. Needs a foreground-process polling loop — cheaper than the existing 2-second kill loop, since it targets one process rather than enumerating all of them — plus idle detection via `GetLastInputInfo`. The native equivalent of the media-playing exception would need Windows Core Audio Session APIs (per-process audio output detection) and is materially harder to build than the web side. **Open question:** whether the native audio exception ships in v1, or apps launch with plain idle-timeout only.
+
+**Enforcement wiring — a fork was considered and resolved:** `PolicyEngine.ComputeSlice()` is **extended, not bypassed**. It gains new inputs (active `UsageCeiling` entries plus resolved `DailyUsage` totals for the relevant period) and folds exhausted ceilings directly into `ActivePolicySlice.BlockedSites`/`BlockedApps`. The alternative — a second, parallel "am I blocked" check inside `WindowsEnforcementService`, OR'd together with `PolicyEngine`'s output at the enforcement layer — was explicitly rejected: it would push a domain rule (exhaustion, precedence) into Infrastructure and break "`PolicyEngine` is the sole owner of all merge rules," the same principle Gap 2 and Gap 5 already established. One authority for "what's blocked and why," not two.
+
+**Consequence for the enforcement pipeline:** `ScheduledEnforcementService`'s heartbeat and `WindowsEnforcementService`'s local HTTP API currently start/stop with enforcement bursts. For ambient ceilings to mean anything, both must run for the app's full lifetime, independent of whether any Session or Block is active. Confirmed acceptable during interrogation — the app-side tracking loop is cheaper than the kill loop already running today, and the extension already intercepts navigation regardless of NenFocus's state, so the performance cost of "always on" is negligible.
+
+**UI placement:** Presets page, new tab (working label "Usage Ceilings"). Not a `BlockPreset`/`ContractPreset`-style reusable template — a ceiling isn't consumed to create another object, it's a standing, directly-enforced rule. Not Settings. Not the Planner.
+
+**Not the same feature as recurring hard blocks — do not conflate:** "Always block Reddit" or "block Facebook 9–5 daily" is not a Usage Ceiling. It's a permanent or repeating hard block — the separately-tracked **Recurring Blocks** gap (see `TECHNICAL_SPEC_INFRA.md` → Not Yet Built) applied to ordinary `BackgroundBlock`s, living on the Planner. No relationship between the two features; Recurring Blocks was not interrogated in this session and remains fully open.
+
+**Open questions, not resolved in interrogation:**
+- Whether specific resources (NenFocus's own process, `localhost`, `SystemSafetyConstants.UnkillableProcesses`) are excluded from `DailyUsage`, or truly everything is logged unconditionally.
+- Day/week boundary semantics — reset time, week-start day, timezone handling.
+- Exact CQRS shapes for `UsageCeiling` CRUD and usage-summation queries.
+- Whether the native per-app audio-playing exception ships in v1.
+
+**Must be closed before:** Nothing urgent — deferred until picked up. The domain shape is settled enough to start Slice 1 (entities + interfaces) whenever that happens.
 
 ### Open Gap B — Crash Resilience: Session Recovery After Unexpected Shutdown
 

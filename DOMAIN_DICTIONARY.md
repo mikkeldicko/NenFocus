@@ -39,10 +39,11 @@ This file is the canonical reference for every domain concept in NenFocus. It ex
 | **Post-Session** | The mandatory screen shown after a Session ends; displays stats, blocked attempts, and an optional reflection |
 | **Deep Module** | A module with significant functionality hidden behind a narrow, obvious API |
 | **Design Gap** | The distance between visible code and what is needed to implement a feature correctly |
-| **TimeBudget** | An optional daily cap on a `BlockedSite` entry; limits cumulative access time per day; enforced by blocking the site once the cap is exhausted |
-| **BudgetWindow** | The time range within which a site's Time Budget may tick down; derived from the owning Planned Block's start and end times; not a stored field |
-| **DailyBudgetUsage** | Append-only entity recording actual seconds spent on a budgeted site per calendar day and preset entry; written by `IBudgetUsageTracker` |
-| **IBudgetUsageTracker** | Application-layer interface through which infrastructure records usage events; analogous in pattern to `IBlockedAttemptTracker` |
+| **DailyUsage** | Append-only fact recording actual seconds spent on any site or app, per calendar day; the universal usage-tracking substrate, independent of ceilings, presets, or contracts |
+| **UsageResourceType** | Enum (`App` \| `Website`) tagging a `DailyUsage` or `UsageCeiling` entry |
+| **UsageCeiling** | An ambient, perpetual cap on daily or weekly access time for a specific site or app; created on the Presets page; deliberately independent of `BlockPreset` and `NenContract` |
+| **CeilingPeriod** | Enum (`Daily` \| `Weekly`) — the aggregation window a `UsageCeiling`'s cap is measured against |
+| **IUsageTracker** | Application-layer interface through which infrastructure records usage events; analogous in pattern to `IBlockedAttemptTracker` |
 
 ---
 
@@ -184,7 +185,7 @@ NenFocus has five pages accessible via the sidebar:
 
 **Website filter type:** Each preset carries a `WebsiteFilterType` of either `Blocklist` (block specific sites, allow everything else) or `Allowlist` (allow specific sites, block everything else). Both Ritual and Background presets can use either mode. Both can also specify blocked apps.
 
-**Time-agnosticism:** A Block Preset is time-agnostic — it carries no schedule, no window, and no knowledge of when it is active. The Budget Window within which a `BlockedSite`'s `TimeBudget` may tick down is derived from the owning `PlannedBlock`'s `Start` and `End` times and is not stored on the preset. This allows the same preset to be reused across multiple planned blocks at different times. `BlockedSite` may optionally carry a `TimeBudget`; a site with no budget is a plain hard block.
+**Time-agnosticism:** A Block Preset is time-agnostic — it carries no schedule, no window, and no knowledge of when it is active. This allows the same preset to be reused across multiple planned blocks at different times. `BlockedSite` and `BlockedApp` are always plain hard blocks — access-time limiting is handled by the separate `UsageCeiling` feature (see `ARCHITECT_GOVERNANCE.md` → Open Gap A), which is deliberately decoupled from `BlockPreset` entirely, not a field on it.
 
 **Ubiquitous language rules:**
 - A preset is *attached* to a session or block, not *assigned* or *applied*.
@@ -198,7 +199,7 @@ NenFocus has five pages accessible via the sidebar:
 | Layer | Artifact | Role |
 |-------|----------|------|
 | Domain | `BlockPreset` aggregate (`Entities/BlockPreset.cs`) | Owns the list of `BlockedApp` and `BlockedSite` value objects, the `WebsiteFilterType`, and the preset type (`BlockPresetType.Focus` or `BlockPresetType.Background`) |
-| Domain | `BlockedApp`, `BlockedSite` value objects | Immutable; validated at construction. `BlockedSite` optionally carries a `TimeBudget`; a site with no `TimeBudget` is a plain hard block |
+| Domain | `BlockedApp`, `BlockedSite` value objects | Immutable; validated at construction. Always plain hard blocks — no budget/ceiling concept lives on either; see `UsageCeiling` for ambient access limits |
 | Domain | `WebsiteFilterType` enum | `Blocklist` or `Allowlist` |
 | Application | `IBlockPresetRepository` | CRUD persistence contract |
 | Application | `CreateBlockPresetCommandHandler`, `UpdateBlockPresetCommandHandler`, etc. | One handler per mutation |
@@ -206,53 +207,65 @@ NenFocus has five pages accessible via the sidebar:
 
 ---
 
-## Time Budget
+## Daily Usage *(Domain shape designed — not yet built)*
 
-**Definition:** An optional daily cap on a `BlockedSite` entry within a `BlockPreset`. A `TimeBudget` limits how much cumulative time per day the user may access a given site while a Planned Block referencing the preset is active. A site with a `TimeBudget` is accessible until the budget is exhausted, at which point it becomes blocked for the rest of the day. A `BlockedSite` with no `TimeBudget` is a plain hard block — the default and current behaviour.
+**Definition:** An append-only fact recording actual seconds of active use on a specific website or application, per calendar day. `DailyUsage` is the universal usage-tracking substrate — it records every site visited and every app used, unconditionally, not just resources with a configured `UsageCeiling`. It exists independently of `BlockPreset`, `PlannedBlock`, `Session`, and `NenContract` — it belongs to nothing but the day and the resource.
 
-**What a `TimeBudget` carries:** The daily cap only (e.g., 3 600 seconds). Nothing else.
+**Why it tracks everything, not just ceiling-configured entries:** The same data feeds two consumers — `UsageCeiling` enforcement (which only cares about resources someone has capped) and the future Insights page (which wants total time-per-site and time-per-app regardless of whether a cap exists). Scoping collection down to only configured entries would starve Insights of data for everything else.
 
-**What a `TimeBudget` does not carry:**
-- The Budget Window (when the budget may tick down) — derived from the owning `PlannedBlock`'s `Start` and `End` times; a Planner concern, not stored on the preset.
-- The reset time (when the daily budget resets to full) — a user-wide preference in Settings; default midnight.
-- The warning threshold (how many minutes before exhaustion to notify the user) — a user-wide preference in Settings; not per-preset.
-
-**Preset type scope:** Time Budgets can be configured on both Focus-type and Background-type Block Presets. They are expected to be more commonly used on Background presets.
-
-**Hard block interaction:** If a site has a `TimeBudget` but is also covered by a separate active hard-block preset (for example, a Background Block that hard-blocks it with no budget), the hard block wins and the budget is not consumed during that period. The budget is only consumed while the site is genuinely accessible — that is, no overlapping preset hard-blocks it.
+**Idle detection:** Time only accrues while the user is genuinely active, not merely while a tab/app has focus. Web: `chrome.idle`, with an exception so passive media consumption (an audible or playing tab) isn't miscounted as idle. Native apps: `GetLastInputInfo`; the equivalent per-process audio-playing exception is materially harder to build (would need Windows Core Audio Session APIs) and is an open question for whenever this is built — apps may ship with plain idle-timeout and no media exception initially.
 
 **Ubiquitous language rules:**
-- A budget is *consumed*, not decremented or used up.
-- A site is *exhausted* when its budget reaches zero — it is not *blocked* or *expired*.
-- The budget *resets*, not refreshes or clears.
+- Usage *accrues* on a resource; it is *recorded*, matching the existing `IBlockedAttemptTracker` vocabulary.
 
 **Technical mapping:**
 
 | Layer | Artifact | Role |
 |-------|----------|------|
-| Domain | `TimeBudget` value object | Carries the daily cap; lives on `BlockedSite`; optional — absence means plain hard block |
-| Domain | `DailyBudgetUsage` entity | Append-only record of actual seconds consumed per site, per preset entry, per calendar day; source of truth for remaining budget |
-| Application | `IBudgetUsageTracker` interface | Contract through which infrastructure writes usage events; defined in `NenFocus.Application/Interfaces/`; analogous to `IBlockedAttemptTracker` |
-| Infrastructure | `IBudgetUsageTracker` implementation | Persists `DailyBudgetUsage` rows; written by `WindowsEnforcementService`'s `/report` handler when the extension reports tab time; **not yet built** |
-| Domain | `PolicyEngine` changes | Will read `DailyBudgetUsage` to determine remaining budget; adds exhausted sites to the blocked set in `ComputeSlice()`; **not yet built** |
-| Infrastructure | Enforcement wiring | `ScheduledEnforcementService` re-evaluation trigger on budget exhaustion; warning notification before exhaustion; **not yet built** |
+| Domain | `DailyUsage` entity | Append-only fact, keyed by `(Date, ResourceName, UsageResourceType)`; accumulates seconds. Mirrors `BlockedAttempt`'s shape. |
+| Domain | `UsageResourceType` enum | `App` \| `Website` — mirrors `BlockedAttemptType` |
+| Application | `IUsageTracker` interface | Contract for recording usage events; analogous to `IBlockedAttemptTracker` |
+| Infrastructure | `IUsageTracker` implementation | Persists `DailyUsage` rows, debounced/batched (same pattern as `BlockedAttemptTracker`'s 2-second debounce) rather than written per tick. **Not yet built.** |
+| Infrastructure | Extension tab-focus-time tracking | `background.js` gains focus/idle tracking and calls a new `/report-time` endpoint, distinct from the existing `/report` (which only logs blocked attempts). **Not yet built.** |
+| Infrastructure | Native foreground-app tracking | New polling loop in `WindowsEnforcementService` (or a sibling service), same cost profile as the existing 2-second kill loop. **Not yet built.** |
 
 ---
 
-## Budget Window *(defined — enforcement not yet built)*
+## Usage Ceiling *(Domain shape designed — not yet built)*
 
-**Definition:** The time range within which a site's `TimeBudget` is permitted to tick down. A Budget Window is derived from the owning `PlannedBlock`'s `Start` and `End` times — it is not a stored field on `BlockPreset`, `BlockedSite`, or any other entity. A site's budget can only be consumed while a Planned Block that references the preset is active via `IsActive()`. Outside that block's scheduled window, the site is blocked regardless of remaining budget.
+**Definition:** An ambient, perpetual cap on how much time per day or per week a user may spend on a specific website or application. Unlike `BlockPreset`, it has no calendar involvement, no attachment to any `PlannedBlock` or `Session`, and no relationship to `NenContract` — it is created on the Presets page and stays in effect until edited, paused, or deleted.
 
-**Not stored:** The Budget Window has no migration, no database column, and no persistent property. It is a computed concept: when a `PlannedBlock` with known `Start` and `End` is currently active, the Budget Window is that block's `[Start, End)` range.
+**This supersedes the earlier "Time Budget" concept entirely.** The original design put an optional `TimeBudget` on `BlockedSite`, deriving its active window from the owning `PlannedBlock`. That conflated two unrelated things: a schedule-bound hard block (what `BlockPreset` is for) and an ambient, calendar-independent personal limit (what this is for). `BlockPreset` and `BlockedSite` remain pure hard-block only — no budget concept lives on them anymore.
 
-**Which layer derives it:** The `PolicyEngine` is responsible for applying the Budget Window constraint when computing a slice. When `PolicyEngine.ComputeSlice()` evaluates a site's remaining budget against `DailyBudgetUsage`, it does so only for `PlannedBlock` entries where `IsActive()` returns `true`. Sites whose owning block is inactive are hard-blocked regardless of remaining budget. This logic is not yet implemented.
+**Precedence rule:** If any currently-active Focus or Background preset hard-blocks a resource, the hard block always wins — the resource is blocked regardless of remaining ceiling, and no usage accrues for it during that window. Outside of any active hard block, the resource is accessible up to its ceiling; once reached for the current period, it is blocked for the rest of that period.
+
+**Two modes, chosen per entry (`CeilingPeriod`):**
+- **Daily** — a per-weekday cap shape (e.g. Monday 3h, Tuesday 1h, Wednesday 0h), mirroring `WorkHoursPolicy`'s `{ Default, PerDayExceptions }` resolution pattern.
+- **Weekly** — a single aggregate cap tracked cumulatively across the week, mirroring the idea behind `StrictnessRule.PeriodTimeBudget`, applied to resource access instead of block-editing permission.
+
+**Why it is a Domain entity, not a value object:** `UsageCeiling` has independent identity, an independent lifecycle (created, edited, paused, and deleted through its own CRUD, not nested inside another aggregate), and is looked up and referenced by `Id` from `PolicyEngine` on every enforcement tick. This is the same justification that makes `FocusBlock`/`BackgroundBlock` entities rather than value objects — it is a separate, orthogonal question from *why* it carries a domain rule at all (that reasoning mirrors `DailyFloor.IsSatisfiedBy` — the rule belongs with its data, reused wherever exhaustion needs checking, not duplicated across callers).
+
+**Why it stays out of `NenContract`:** `NenContract` is sealed and time-bound, governing edit permission for a committed block schedule with Daily-Floor scoring. `UsageCeiling` is perpetual, unsealed, and governs passive resource access. Coupling them would mean ceilings stop functioning between contracts or without one ever being sealed, contradicting the point of an *ambient* limit. They are sibling concepts.
+
+**Not the same as recurring hard blocks:** "Always block Reddit" or "block Facebook 9–5 daily" is not a `UsageCeiling` — it's a permanent or repeating hard block, which is the separately-tracked **Recurring Blocks** gap (see `TECHNICAL_SPEC_INFRA.md` → Not Yet Built) applied to ordinary `BackgroundBlock`s on the Planner. No relationship between the two features.
 
 **Technical mapping:**
 
 | Layer | Artifact | Role |
 |-------|----------|------|
-| Domain | `PlannedBlock.IsActive(DateTime)` | The active-window gate; the Budget Window is `[Start, End)` while `IsActive()` returns `true` — no additional field needed |
-| Domain | `PolicyEngine` (future) | Will apply the Budget Window constraint: budget is only consumed for sites in currently-active blocks; **not yet built** |
+| Domain | `UsageCeiling` entity | `Id`, `ResourceName`, `ResourceType (UsageResourceType)`, `Period (CeilingPeriod)`, cap value(s), `IsPaused`. `IsExhausted(...)` — pure comparison against resolved `DailyUsage` totals for the entry's period, mirrors `DailyFloor.IsSatisfiedBy`. `Pause()` / `Resume()`. No domain events. |
+| Domain | `CeilingPeriod` enum | `Daily` \| `Weekly` |
+| Domain | `PolicyEngine` (extended) | `ComputeSlice()` gains inputs for active `UsageCeiling` entries and resolved usage totals; folds exhausted ceilings into `ActivePolicySlice.BlockedSites`/`BlockedApps` directly — chosen over a parallel check in `WindowsEnforcementService` specifically to preserve "`PolicyEngine` is the sole owner of all merge rules" (same principle as Gap 2/Gap 5). **Not yet built.** |
+| Infrastructure | Enforcement pipeline lifecycle | `ScheduledEnforcementService`'s heartbeat and `WindowsEnforcementService`'s local HTTP API must run for the app's full lifetime rather than starting/stopping with enforcement bursts, since ceilings apply independent of any active Session or Block. **Not yet built.** |
+| UI | Presets page, new tab | Working label "Usage Ceilings." Not a `BlockPreset`/`ContractPreset`-style reusable template — a ceiling isn't consumed to create another object, it's a standing, directly-enforced rule. **Not yet built.** |
+
+**Open questions, not resolved in interrogation:**
+- Whether specific resources (NenFocus's own process, `localhost`, `SystemSafetyConstants.UnkillableProcesses`) are excluded from `DailyUsage`, or truly everything is logged unconditionally.
+- Day/week boundary semantics — reset time, week-start day, timezone handling.
+- Exact CQRS shapes for `UsageCeiling` CRUD and usage-summation queries.
+- Whether the native per-app audio-playing exception ships in v1.
+
+See `ARCHITECT_GOVERNANCE.md` → Open Gap A for the full interrogation record.
 
 ---
 
@@ -273,7 +286,7 @@ NenFocus has five pages accessible via the sidebar:
 - The `/report` endpoint is implemented: when the extension reports a blocked navigation, `WindowsEnforcementService` calls `IBlockedAttemptTracker.RecordWebBlockedAsync` if an active session exists. Background Block attempts (no `ActiveSessionId`) are still not tracked.
 - Allowlist mode is handled by the `/check` endpoint: in Allowlist mode the endpoint returns `blocked: true` for any domain NOT in `AllowedSites`. Note that the hosts-file path cannot enforce allowlist mode (you cannot enumerate all domains); the browser extension is the sole allowlist enforcement mechanism.
 - Blocked attempt tracking currently only works for app process kills during Ritual sessions (via `IBlockedAttemptTracker`). Website blocked attempts and Background Block tracking are future work.
-- Time Budget enforcement is not yet implemented. `PolicyEngine` does not yet read `DailyBudgetUsage`. The `/report` endpoint does not yet handle usage reporting from the extension.
+- Usage Ceiling enforcement is not yet implemented. `PolicyEngine` does not yet read `DailyUsage`. The `/report-time` endpoint does not yet exist. See `ARCHITECT_GOVERNANCE.md` → Open Gap A.
 
 **Technical mapping:**
 
@@ -295,7 +308,7 @@ NenFocus has five pages accessible via the sidebar:
 **Computation rules** (all logic lives in `PolicyEngine.ComputeSlice()`):
 - **Apps:** union of all blocked apps across all active block presets, always a blocklist. Includes `TemporaryBlockedApps` from the active `Session` entity.
 - **Websites:** if *any* active preset uses `Allowlist` mode → default-deny, allowed = intersection of all allowlists minus any blocklist entries. Otherwise → block the union of all blocklisted sites. Includes `TemporaryBlockedSites` from the active `Session` entity.
-- **Time Budgets *(not yet implemented)*:** In a future slice, `PolicyEngine.ComputeSlice()` will read `DailyBudgetUsage` to determine remaining budget per site. Sites whose `TimeBudget` has been fully consumed for the current calendar day will be added to the blocked set regardless of `WebsiteFilterType` mode.
+- **Usage Ceilings *(not yet implemented)*:** In a future slice, `PolicyEngine.ComputeSlice()` will read `DailyUsage` against active `UsageCeiling` entries. Sites and apps whose ceiling has been exhausted for the current period (day or week) will be added to the blocked set — unless a hard-blocking preset already covers them, in which case the hard block wins and no usage accrues. See `ARCHITECT_GOVERNANCE.md` → Open Gap A.
 - An `ActivePolicySlice` is considered "empty" only in `Blocklist` mode with no blocked apps or sites. It is *never* empty in `Allowlist` mode.
 - **`ActiveBlockPresetType`:** set to `BlockPresetType.Focus` if any Focus Block is currently active, `BlockPresetType.Background` if only Background Blocks are active, `null` if enforcement is driven solely by an active Session with no planned block. Ritual always takes precedence over Background when both overlap.
 
