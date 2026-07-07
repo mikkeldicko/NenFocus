@@ -227,6 +227,10 @@ public class NenFocusDbContext : DbContext
             entity.Property(b => b.Title)
                 .HasMaxLength(100);
 
+            // Not yet persisted: MakeUpForEntries will map to an owned JSON column once the
+            // Make-Up Block Application/Infrastructure slice is built (see DOMAIN_DICTIONARY.md).
+            entity.Ignore(b => b.MakeUpForEntries);
+
             entity.HasDiscriminator<string>("BlockKind")
                 .HasValue<FocusBlock>("Focus")
                 .HasValue<BackgroundBlock>("Background");

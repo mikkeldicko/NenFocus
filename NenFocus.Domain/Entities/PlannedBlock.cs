@@ -1,3 +1,5 @@
+using NenFocus.Domain.ValueObjects;
+
 namespace NenFocus.Domain.Entities;
 
 public abstract class PlannedBlock
@@ -10,6 +12,13 @@ public abstract class PlannedBlock
 
     /// <summary>Null means an ordinary, uncommitted block; set means the block is under that Nen Contract.</summary>
     public Guid? ContractId { get; protected set; }
+
+    /// <summary>
+    /// Empty means an ordinary block. Populated means this is a make-up block covering
+    /// those specific missed/late blocks' deficits. Only ever populated on a FocusBlock —
+    /// Background Blocks have no sessions and cannot contribute toward a Focus-hours deficit.
+    /// </summary>
+    public IReadOnlyList<MakeUpForEntry> MakeUpForEntries { get; protected set; } = Array.Empty<MakeUpForEntry>();
 
     protected PlannedBlock() { }
 

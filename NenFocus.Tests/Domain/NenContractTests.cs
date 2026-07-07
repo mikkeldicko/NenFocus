@@ -27,7 +27,8 @@ public class NenContractTests
         DateTime? sealedAt = null,
         bool allowCancellation = false,
         ChangeWindow? changeWindow = null,
-        StrictnessRule strictnessRule = StrictnessRule.Locked)
+        StrictnessRule strictnessRule = StrictnessRule.Locked,
+        WorkHoursPolicy? workHoursPolicy = null)
         => NenContract.Seal(
             id: Guid.NewGuid(),
             name: "Focused January",
@@ -39,7 +40,8 @@ public class NenContractTests
             changeWindow: changeWindow,
             allowCancellation: allowCancellation,
             plannedFocusHoursByDay: plannedFocusHoursByDay ?? FullyPlanned(),
-            sealedAt: sealedAt ?? SealedOnStart);
+            sealedAt: sealedAt ?? SealedOnStart,
+            workHoursPolicy: workHoursPolicy);
 
     [Fact]
     public void Seal_EndBeforeStart_Throws()
@@ -243,5 +245,131 @@ public class NenContractTests
         var contract = Seal(dailyFloor: DailyFloor.None, plannedFocusHoursByDay: new Dictionary<DateOnly, double>());
 
         contract.IsDayMet(completedHours).Should().BeTrue();
+    }
+
+    [Fact]
+    public void Seal_NoWorkHoursPolicyGiven_DefaultsToNull()
+    {
+        var contract = Seal();
+
+        contract.WorkHoursPolicy.Should().BeNull();
+    }
+
+    [Fact]
+    public void Seal_WithWorkHoursPolicy_StoresIt()
+    {
+        var policy = new WorkHoursPolicy(new WorkHours(new TimeOnly(9, 0), new TimeOnly(17, 0)));
+
+        var contract = Seal(workHoursPolicy: policy);
+
+        contract.WorkHoursPolicy.Should().Be(policy);
+    }
+
+    private static Dictionary<DateOnly, double> PlannedForNewDays(DateOnly from, DateOnly to, double hoursPerDay = 4)
+    {
+        var map = new Dictionary<DateOnly, double>();
+        for (var date = from; date <= to; date = date.AddDays(1))
+            map[date] = hoursPerDay;
+        return map;
+    }
+
+    [Fact]
+    public void Extend_WhenActive_PushesEndDateForwardAndRaisesEvent()
+    {
+        var contract = Seal(sealedAt: SealedOnStart); // Active
+        contract.ClearDomainEvents();
+        var newEndDate = EndDate.AddDays(3);
+
+        contract.Extend(newEndDate, PlannedForNewDays(EndDate.AddDays(1), newEndDate), SealedOnStart.AddDays(2));
+
+        contract.EndDate.Should().Be(newEndDate);
+        contract.Status.Should().Be(NenContractStatus.Active);
+        contract.DomainEvents.Should().ContainSingle(e => e is NenContractExtendedEvent);
+    }
+
+    [Fact]
+    public void Extend_RaisesEventWithOldAndNewEndDates()
+    {
+        var contract = Seal(sealedAt: SealedOnStart);
+        contract.ClearDomainEvents();
+        var newEndDate = EndDate.AddDays(3);
+
+        contract.Extend(newEndDate, PlannedForNewDays(EndDate.AddDays(1), newEndDate), SealedOnStart.AddDays(2));
+
+        var raised = contract.DomainEvents.OfType<NenContractExtendedEvent>().Single();
+        raised.ContractId.Should().Be(contract.Id);
+        raised.OldEndDate.Should().Be(EndDate);
+        raised.NewEndDate.Should().Be(newEndDate);
+    }
+
+    [Fact]
+    public void Extend_WhenScheduled_Throws()
+    {
+        var contract = Seal(sealedAt: SealedBeforeStart); // Scheduled
+        var newEndDate = EndDate.AddDays(3);
+
+        var act = () => contract.Extend(newEndDate, PlannedForNewDays(EndDate.AddDays(1), newEndDate), SealedOnStart);
+
+        act.Should().Throw<InvalidOperationException>();
+    }
+
+    [Fact]
+    public void Extend_WhenCompleted_Throws()
+    {
+        var contract = Seal(sealedAt: SealedOnStart);
+        contract.Complete(SealedOnStart.AddDays(7));
+        var newEndDate = EndDate.AddDays(3);
+
+        var act = () => contract.Extend(newEndDate, PlannedForNewDays(EndDate.AddDays(1), newEndDate), SealedOnStart.AddDays(8));
+
+        act.Should().Throw<InvalidOperationException>();
+    }
+
+    [Fact]
+    public void Extend_NewEndDateNotAfterCurrentEndDate_Throws()
+    {
+        var contract = Seal(sealedAt: SealedOnStart);
+
+        var act = () => contract.Extend(EndDate, new Dictionary<DateOnly, double>(), SealedOnStart.AddDays(2));
+
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
+    public void Extend_NewDayBelowFloor_Throws()
+    {
+        var contract = Seal(dailyFloor: new DailyFloor(4), sealedAt: SealedOnStart);
+        var newEndDate = EndDate.AddDays(2);
+        var plan = PlannedForNewDays(EndDate.AddDays(1), newEndDate, 4);
+        plan[newEndDate] = 1; // below the floor of 4
+
+        var act = () => contract.Extend(newEndDate, plan, SealedOnStart.AddDays(2));
+
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
+    public void Extend_NewDayMissingFromMap_TreatedAsZeroAndThrows()
+    {
+        var contract = Seal(dailyFloor: new DailyFloor(4), sealedAt: SealedOnStart);
+        var newEndDate = EndDate.AddDays(2);
+        var plan = PlannedForNewDays(EndDate.AddDays(1), newEndDate.AddDays(-1), 4); // missing newEndDate itself
+
+        var act = () => contract.Extend(newEndDate, plan, SealedOnStart.AddDays(2));
+
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
+    public void Extend_DoesNotReCheckExistingDays()
+    {
+        // Existing days were already validated at Seal; Extend only floor-checks the new days.
+        var contract = Seal(dailyFloor: new DailyFloor(4), sealedAt: SealedOnStart);
+        var newEndDate = EndDate.AddDays(2);
+        var plan = PlannedForNewDays(EndDate.AddDays(1), newEndDate, 4);
+
+        var act = () => contract.Extend(newEndDate, plan, SealedOnStart.AddDays(2));
+
+        act.Should().NotThrow();
     }
 }

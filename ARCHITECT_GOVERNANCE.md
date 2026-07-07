@@ -197,6 +197,35 @@ Gaps that have been identified but not yet closed. Each is here because deferrin
 
 **Must be closed before:** The app is used in a high-stakes environment (e.g., exam blocking, supervised study) where a crash silently removing enforcement would be a product safety failure. For personal use, the current behavior is acceptable.
 
+### Open Gap C — Nen Contract Motivation & Scoring Enhancements (three interrogated, unbuilt)
+
+**Why deferred:** All three were fully interrogated in a design session (2026-07-07) and each has a settled interface, but none can be built until the Nen Contract Application/Infrastructure/UI layer exists at all — it is still entirely "not yet built" per `DOMAIN_DICTIONARY.md`. Specifically, all three depend on the **completed-hours-per-day summation query** (planned-block + make-up + matching-spontaneous-session hours, summed per calendar day), which is a prerequisite `IsDayMet` already needs for real use regardless of these additions — so this gap adds no new dependency, it just rides on one already owed to the feature. None of the three affect Planner, Presets, or session-start flows on their own merit; Planner is only touched because C2's streak was chosen to surface live on the already-planned active-contract banner.
+
+**C1 — Weighted Day Met percentage (Insights):**
+- New pure domain method `DailyFloor.PercentComplete(double completedHours) -> double?` — returns `null` when `Hours == 0` (rest day), otherwise `completedHours / Hours`, uncapped (133% displays as 133%, never clamped to 100%).
+- `NenContract` gains a mirroring wrapper `PercentOfFloorMet(double completedFocusHours)` delegating to `DailyFloor.PercentComplete` — mirrors the existing `IsDayMet` → `IsSatisfiedBy` delegation so the Application layer never reaches into the `DailyFloor` value object directly.
+- `IsDayMet` stays the sole authoritative pass/fail for Make-Up deficit logic and lifecycle transitions — this percentage is a purely additive display concern, computed at query time, no new persisted state.
+- UI: Insights contract recap gets a day-strip (one tile per day) shaded by percentage; rest days render as "Rest," not "100%."
+
+**C2 — In-contract streaks:**
+- Consecutive Day-Met days *within a single contract's date range only*. Deliberately does not span across separate contracts or the gap between them — Day Met has no meaning outside an active contract (no floor to compare against), and extending a streak across that gap would require inventing an ungrounded rule for what "counts" on a non-contract day (rejected: a trivial spontaneous session shouldn't be able to prop up a streak meant to reflect honoring a real commitment).
+- Rest days are skipped — they neither extend nor break the streak.
+- Surfaces live on the Planner's active-contract banner (e.g. `"Contract: [Name] — Day X/Y — Z days behind — 5-day streak"`) and as a "best streak achieved" stat in the Insights recap after the contract ends.
+- Exact query shape (bundled with the progress/deficit query vs. a separate dedicated query) deliberately left open — an implementation-time call, not a design gap.
+
+**C3 — Deficit digest notification:**
+- Proactive OS toast (same delivery mechanism as the existing grace-period warning), firing once per calendar day at a **user-configurable time** — a new Settings preference, per-user not per-contract.
+- Skips entirely on days with no deficit — no "on track" toast; silence is the intended good-day behavior.
+- One-shot per day, same "already fired today" guard pattern as the grace-period warning.
+- Content: current deficit + days remaining, e.g. *"You're 1.5h behind on Study Month — 3 days left."*
+- Coexists with, does not replace, the already-designed passive Main Page spontaneous make-up prompt.
+
+**Must be closed before:** Nothing — purely additive once the Nen Contract Application layer and completed-hours summation query exist. No urgency driving closure.
+
+**Parked, not interrogated:** Two related ideas came up in the same session and were deliberately shelved by the architect until there's a better view of the finished program — not designed in depth, listed here only so they aren't forgotten:
+- **Contract templates from Insights** — a "start a new contract like this one" shortcut on a *completed* contract's Insights recap, pre-filling the Advanced wizard from that specific past instance rather than a saved Contract Preset. Distinct from Contract Presets because it copies a real past result, not a deliberately-saved template.
+- **Strictness tightening mid-contract** — already tracked as a parked v2 idea in `DOMAIN_DICTIONARY.md` (Strictness Rule section); re-confirmed parked in this session, no new detail added.
+
 \---
 
 ## Minor Cleanups

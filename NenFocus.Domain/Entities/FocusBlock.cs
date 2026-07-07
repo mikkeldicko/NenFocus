@@ -1,3 +1,5 @@
+using NenFocus.Domain.ValueObjects;
+
 namespace NenFocus.Domain.Entities;
 
 public sealed class FocusBlock : PlannedBlock
@@ -13,7 +15,8 @@ public sealed class FocusBlock : PlannedBlock
         DateTime start,
         DateTime end,
         string? title = null,
-        Guid? contractId = null)
+        Guid? contractId = null,
+        IReadOnlyList<MakeUpForEntry>? makeUpForEntries = null)
     {
         if (end <= start)
             throw new ArgumentException("End time must be after start time.");
@@ -25,7 +28,8 @@ public sealed class FocusBlock : PlannedBlock
             Start = start,
             End = end,
             Title = title,
-            ContractId = contractId
+            ContractId = contractId,
+            MakeUpForEntries = makeUpForEntries ?? Array.Empty<MakeUpForEntry>()
         };
     }
 

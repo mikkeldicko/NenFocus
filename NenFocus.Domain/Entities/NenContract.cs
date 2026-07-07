@@ -23,6 +23,7 @@ public class NenContract : AggregateRoot
     public ChangeWindow? ChangeWindow { get; private set; }
     public bool AllowCancellation { get; private set; }
     public NenContractStatus Status { get; private set; }
+    public WorkHoursPolicy? WorkHoursPolicy { get; private set; }
 
     private NenContract() { } // EF Core
 
@@ -43,7 +44,8 @@ public class NenContract : AggregateRoot
         ChangeWindow? changeWindow,
         bool allowCancellation,
         IReadOnlyDictionary<DateOnly, double> plannedFocusHoursByDay,
-        DateTime sealedAt)
+        DateTime sealedAt,
+        WorkHoursPolicy? workHoursPolicy = null)
     {
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Contract name cannot be empty.", nameof(name));
@@ -70,6 +72,7 @@ public class NenContract : AggregateRoot
             DailyFloor = dailyFloor,
             ChangeWindow = changeWindow,
             AllowCancellation = allowCancellation,
+            WorkHoursPolicy = workHoursPolicy,
             Status = DateOnly.FromDateTime(sealedAt) >= startDate
                 ? NenContractStatus.Active
                 : NenContractStatus.Scheduled
@@ -117,4 +120,30 @@ public class NenContract : AggregateRoot
     /// </summary>
     public bool IsDayMet(double completedFocusHours)
         => DailyFloor.IsSatisfiedBy(completedFocusHours);
+
+    /// <param name="plannedFocusHoursByNewDays">
+    /// Focus block hours only, keyed by calendar day within (current EndDate, newEndDate].
+    /// Only the new days are floor-checked — days already covered by the original Seal
+    /// are not re-validated. Days missing from the map are treated as 0 planned hours.
+    /// </param>
+    public void Extend(DateOnly newEndDate, IReadOnlyDictionary<DateOnly, double> plannedFocusHoursByNewDays, DateTime extendedAt)
+    {
+        if (Status != NenContractStatus.Active)
+            throw new InvalidOperationException("Only an active contract can be extended.");
+
+        if (newEndDate <= EndDate)
+            throw new ArgumentException("New end date must be after the current end date.");
+
+        for (var date = EndDate.AddDays(1); date <= newEndDate; date = date.AddDays(1))
+        {
+            var plannedHours = plannedFocusHoursByNewDays.GetValueOrDefault(date);
+            if (!DailyFloor.IsSatisfiedBy(plannedHours))
+                throw new ArgumentException(
+                    $"Day {date:yyyy-MM-dd} is planned below the daily floor of {DailyFloor.Hours}h (planned: {plannedHours}h).");
+        }
+
+        var oldEndDate = EndDate;
+        EndDate = newEndDate;
+        Raise(new NenContractExtendedEvent(Id, oldEndDate, newEndDate, extendedAt));
+    }
 }

@@ -1,5 +1,6 @@
 using FluentAssertions;
 using NenFocus.Domain.Entities;
+using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Tests.Domain;
 
@@ -237,5 +238,27 @@ public class PlannedBlockTests
         block.AssignContract(null);
 
         block.ContractId.Should().BeNull();
+    }
+
+    [Fact]
+    public void FocusBlock_Create_WithoutMakeUpForEntries_IsEmpty()
+    {
+        CreateFocusBlock().MakeUpForEntries.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void FocusBlock_Create_WithMakeUpForEntries_SetsThem()
+    {
+        var entries = new[] { new MakeUpForEntry(Guid.NewGuid(), 30) };
+
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End, makeUpForEntries: entries);
+
+        block.MakeUpForEntries.Should().BeEquivalentTo(entries);
+    }
+
+    [Fact]
+    public void BackgroundBlock_Create_MakeUpForEntries_AlwaysEmpty()
+    {
+        CreateBackgroundBlock().MakeUpForEntries.Should().BeEmpty();
     }
 }
