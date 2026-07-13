@@ -99,8 +99,7 @@ public partial class ContractRulesStepViewModel : ViewModelBase
 
         SimpleOptions.Add(new SimpleContractOptionViewModel("Lockdown", "This schedule is law. I will not touch it.", StrictnessRule.Locked, false));
         SimpleOptions.Add(new SimpleContractOptionViewModel("Daily Flex", "I can shuffle blocks around within each day.", StrictnessRule.DailyFlexibility, true));
-        SimpleOptions.Add(new SimpleContractOptionViewModel("Week Study", "Hours can move across days, but the total must balance.", StrictnessRule.PeriodTimeBudget, true));
-        SimpleOptions.Add(new SimpleContractOptionViewModel("Light Touch", "Just track my performance. No real restrictions.", StrictnessRule.DailyFlexibility, true));
+        SimpleOptions.Add(new SimpleContractOptionViewModel("Period Study", "Blocks can shift around during the contract, but the total hours I seal stay fixed.", StrictnessRule.PeriodTimeBudget, true));
         SelectedSimpleOption = SimpleOptions[0];
         SelectedSimpleOption.IsSelected = true;
 
@@ -185,7 +184,7 @@ public partial class ContractRulesStepViewModel : ViewModelBase
 
     // ── Resolved values, pulled by the shell after Continue succeeds ─────────
 
-    public string ResolvedSummaryLabel => IsAdvanced ? "Advanced" : $"Simple — {SelectedSimpleOption?.Name}";
+    public string ResolvedSummaryLabel => IsAdvanced ? "Custom" : $"Simple — {SelectedSimpleOption?.Name}";
 
     public StrictnessRule ResolvedStrictnessRule => IsAdvanced
         ? StrictnessRule

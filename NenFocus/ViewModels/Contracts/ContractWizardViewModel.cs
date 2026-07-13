@@ -77,7 +77,7 @@ public partial class ContractWizardViewModel : ViewModelBase
     private void NavigateToBasics()
     {
         StepIndex = 0;
-        IsBackVisible = false;
+        IsBackVisible = true;
         _currentBackAction = _onCancel;
         _basicsVm = new ContractBasicsStepViewModel(
             initialName: _name,
@@ -173,14 +173,24 @@ public partial class ContractWizardViewModel : ViewModelBase
             summaryName: _name,
             summaryDateRange: $"{_startDate:MMM d, yyyy} – {_endDate:MMM d, yyyy}",
             summaryMode: modeLabel,
-            summaryStrictness: strictness.ToString(),
+            summaryStrictness: FriendlyStrictnessLabel(strictness),
             summaryFloor: fixedFloor.HasValue ? $"{fixedFloor.Value:0.##}h / day" : "Derived from scheduled blocks",
             summaryWorkHours: workHoursStart.HasValue && workHoursEnd.HasValue
                 ? $"{workHoursStart:HH:mm} – {workHoursEnd:HH:mm}"
                 : "No constraint",
             summaryRestDays: restDays.Count > 0 ? string.Join(", ", restDays) : "None",
-            summaryCancellation: allowCancellation ? "Allowed" : "Not allowed",
             onReadyToSchedule: _onReadyToSchedule,
             onBack: NavigateToRules);
     }
+
+    // Cosmetic-only display mapping — keeps the Review step's wording aligned with the
+    // renamed Simple presets (StrictnessRule itself is unchanged pending backend follow-up).
+    private static string FriendlyStrictnessLabel(StrictnessRule rule) => rule switch
+    {
+        StrictnessRule.Locked => "Lockdown",
+        StrictnessRule.DailyFlexibility => "Daily Flex",
+        StrictnessRule.DailyTimeBudget => "Daily Time Budget",
+        StrictnessRule.PeriodTimeBudget => "Period Study",
+        _ => rule.ToString()
+    };
 }

@@ -95,8 +95,6 @@
                     <TextBox Text="{Binding DailyFloorHoursText}" Classes="formInput" Watermark="e.g. 3"/>
                 </StackPanel>
 
-                <CheckBox Content="Allow cancellation" IsChecked="{Binding AllowCancellation}"/>
-
                 <StackPanel Spacing="6">
                     <CheckBox Content="Enforce work hours" IsChecked="{Binding IsWorkHoursEnabled}"/>
                     <Grid ColumnDefinitions="*,12,*" IsVisible="{Binding IsWorkHoursEnabled}">
@@ -125,11 +123,6 @@
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
-                </StackPanel>
-
-                <StackPanel Spacing="6">
-                    <CheckBox Content="Save these rules as a preset" IsChecked="{Binding SaveAsPreset}"/>
-                    <TextBox Text="{Binding PresetNameToSave}" Classes="formInput" Watermark="Preset name" IsVisible="{Binding SaveAsPreset}"/>
                 </StackPanel>
             </StackPanel>
 

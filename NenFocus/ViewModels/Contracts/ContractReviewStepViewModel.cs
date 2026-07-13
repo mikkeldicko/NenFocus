@@ -28,7 +28,6 @@ public partial class ContractReviewStepViewModel : ViewModelBase
     public string SummaryFloor { get; }
     public string SummaryWorkHours { get; }
     public string SummaryRestDays { get; }
-    public string SummaryCancellation { get; }
 
     [ObservableProperty] private bool _isSaving;
     [ObservableProperty] private string? _error;
@@ -44,7 +43,6 @@ public partial class ContractReviewStepViewModel : ViewModelBase
         string summaryFloor,
         string summaryWorkHours,
         string summaryRestDays,
-        string summaryCancellation,
         Action<NenContractDraftRules> onReadyToSchedule,
         Action onBack)
     {
@@ -58,7 +56,6 @@ public partial class ContractReviewStepViewModel : ViewModelBase
         SummaryFloor = summaryFloor;
         SummaryWorkHours = summaryWorkHours;
         SummaryRestDays = summaryRestDays;
-        SummaryCancellation = summaryCancellation;
         _onReadyToSchedule = onReadyToSchedule;
         _onBack = onBack;
     }

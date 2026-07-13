@@ -30,8 +30,10 @@
                     VerticalAlignment="Center"
                     Command="{Binding GoBackCommand}">
                 <StackPanel Orientation="Horizontal" Spacing="6">
-                    <TextBlock Text="←" FontSize="14" Foreground="#7A7A8C"/>
-                    <TextBlock Text="Back" FontSize="13" Foreground="#7A7A8C"/>
+                    <TextBlock Text="✕" FontSize="14" Foreground="#7A7A8C" IsVisible="{Binding IsDot0Active}"/>
+                    <TextBlock Text="Cancel" FontSize="13" Foreground="#7A7A8C" IsVisible="{Binding IsDot0Active}"/>
+                    <TextBlock Text="←" FontSize="14" Foreground="#7A7A8C" IsVisible="{Binding !IsDot0Active}"/>
+                    <TextBlock Text="Back" FontSize="13" Foreground="#7A7A8C" IsVisible="{Binding !IsDot0Active}"/>
                 </StackPanel>
             </Button>
 
