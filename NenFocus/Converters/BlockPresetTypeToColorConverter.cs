@@ -10,11 +10,14 @@ public sealed class BlockPresetTypeToColorConverter : IValueConverter
 {
     public static readonly BlockPresetTypeToColorConverter Instance = new();
 
-    private static readonly IBrush FocusBrush      = SolidColorBrush.Parse("#1E3A8A");
-    private static readonly IBrush BackgroundBrush = SolidColorBrush.Parse("#166534");
+    public static readonly IBrush FocusForeground      = SolidColorBrush.Parse("#8B7320");
+    public static readonly IBrush BackgroundForeground = SolidColorBrush.Parse("#4A5568");
+
+    private static readonly IBrush FocusBackground      = SolidColorBrush.Parse("#F5EDD8");
+    private static readonly IBrush BackgroundBackground = SolidColorBrush.Parse("#E8ECF0");
 
     public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
-        => value is BlockPresetType.Background ? BackgroundBrush : FocusBrush;
+        => value is BlockPresetType.Background ? BackgroundBackground : FocusBackground;
 
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
         => throw new NotSupportedException();

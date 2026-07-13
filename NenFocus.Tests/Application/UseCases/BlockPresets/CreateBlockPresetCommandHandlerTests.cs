@@ -54,6 +54,20 @@ public class CreateBlockPresetCommandHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_BlankBlockedAppNameBypassingValidator_FailsCleanlyInsteadOfThrowing()
+    {
+        // The validator doesn't check individual app/site strings for blankness, only
+        // that the collections aren't empty — BlockedApp's own constructor is the only
+        // thing that would reject "" or whitespace. Proves the handler doesn't crash.
+        var command = ValidCommand() with { BlockedApps = ["   "] };
+
+        var result = await CreateHandler().HandleAsync(command);
+
+        result.Success.Should().BeFalse();
+        await _presets.DidNotReceive().AddAsync(Arg.Any<BlockPreset>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task HandleAsync_WithTags_PersistsTags()
     {
         var command = ValidCommand() with { Tags = ["work", "focus"] };

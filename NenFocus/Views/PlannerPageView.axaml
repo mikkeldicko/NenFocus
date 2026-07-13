@@ -136,7 +136,7 @@
 	</UserControl.Styles>
 
 	<Grid>
-		<Grid RowDefinitions="Auto,*" Margin="24">
+		<Grid RowDefinitions="Auto,Auto,*" Margin="24">
 
 			<Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,16">
 				<StackPanel Grid.Column="0" Spacing="2">
@@ -148,10 +148,58 @@
 					<Button Classes="navButton" Content="‹" Command="{Binding PreviousWeekCommand}"/>
 					<Button Classes="todayButton" Content="Today" Command="{Binding GoToTodayCommand}"/>
 					<Button Classes="navButton" Content="›" Command="{Binding NextWeekCommand}"/>
+					<Button Classes="primary" Content="Make Nen Contract"
+                            Command="{Binding OpenContractWizardCommand}"
+                            IsEnabled="{Binding CanOpenContractWizard}"
+                            IsVisible="{Binding !IsDraftingContract}"
+                            Margin="8,0,0,0"/>
 				</StackPanel>
 			</Grid>
 
 			<Border Grid.Row="1"
+                    IsVisible="{Binding IsDraftingContract}"
+                    Background="#FFF8E5"
+                    BorderBrush="#B8922A"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="14,10"
+                    Margin="0,0,0,16">
+				<Grid ColumnDefinitions="*,Auto">
+					<StackPanel Grid.Column="0" Spacing="6">
+						<StackPanel Orientation="Horizontal" Spacing="6">
+							<TextBlock Text="Drafting:" FontSize="13" FontWeight="SemiBold" Foreground="#1A1A2E"/>
+							<TextBlock Text="{Binding DraftContractName}" FontSize="13" FontWeight="SemiBold" Foreground="#1A1A2E"/>
+						</StackPanel>
+						<ItemsControl ItemsSource="{Binding DayFloorPreviews}">
+							<ItemsControl.ItemsPanel>
+								<ItemsPanelTemplate>
+									<WrapPanel/>
+								</ItemsPanelTemplate>
+							</ItemsControl.ItemsPanel>
+							<ItemsControl.ItemTemplate>
+								<DataTemplate DataType="comp:DayFloorPreviewViewModel">
+									<Border Background="{Binding IsMet, Converter={x:Static conv:BoolToFloorStatusBrushConverter.Instance}}"
+                                            CornerRadius="4" Padding="6,3" Margin="0,0,6,4">
+										<StackPanel Orientation="Horizontal" Spacing="4">
+											<TextBlock Text="{Binding Date, StringFormat='ddd d'}" FontSize="10" FontWeight="SemiBold" Foreground="#1A1A2E"/>
+											<TextBlock Text="{Binding Label}" FontSize="10" Foreground="#1A1A2E"/>
+										</StackPanel>
+									</Border>
+								</DataTemplate>
+							</ItemsControl.ItemTemplate>
+						</ItemsControl>
+						<TextBlock Text="{Binding SealErrorMessage}"
+                                   IsVisible="{Binding SealErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                   FontSize="12" Foreground="#C03A2B" TextWrapping="Wrap"/>
+					</StackPanel>
+					<StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+						<Button Classes="secondary" Content="Cancel" Command="{Binding RequestCancelDraftCommand}"/>
+						<Button Classes="primary" Content="Seal Contract" Command="{Binding SealContractCommand}" IsEnabled="{Binding !IsSealing}"/>
+					</StackPanel>
+				</Grid>
+			</Border>
+
+			<Border Grid.Row="2"
                     Background="#FFFFFF"
                     BorderBrush="#E6E6EE"
                     BorderThickness="1"
@@ -248,10 +296,9 @@
 							<StackPanel Spacing="4">
 								<TextBlock Text="Type" FontSize="12" Foreground="#7A7A8C"/>
 								<StackPanel Orientation="Horizontal" Spacing="8">
-									<Button Classes="typePill" Classes.active="{Binding IsFocusBlock}" Content="Focus" Command="{Binding SetFocusBlockCommand}" IsEnabled="{Binding !IsEditing}"/>
-									<Button Classes="typePill" Classes.active="{Binding !IsFocusBlock}" Content="Background" Command="{Binding SetBackgroundBlockCommand}" IsEnabled="{Binding !IsEditing}"/>
+									<Button Classes="typePill" Classes.active="{Binding IsFocusBlock}" Content="Focus" Command="{Binding SetFocusBlockCommand}" IsEnabled="{Binding !IsBlockLocked}"/>
+									<Button Classes="typePill" Classes.active="{Binding !IsFocusBlock}" Content="Background" Command="{Binding SetBackgroundBlockCommand}" IsEnabled="{Binding !IsBlockLocked}"/>
 								</StackPanel>
-								<TextBlock FontSize="11" Foreground="#9A9AAC" Text="Block type can't be changed after creation." IsVisible="{Binding IsEditing}"/>
 							</StackPanel>
 
 							<StackPanel Spacing="4">
@@ -304,6 +351,29 @@
 						<Button Grid.Column="3" Classes="primary" Content="{Binding SaveButtonLabel}" Command="{Binding SaveCommand}" Margin="8,0,0,0" IsVisible="{Binding CanSaveBlock}"/>
 					</Grid>
 				</Grid>
+			</Border>
+		</Border>
+
+		<Border Background="#80000000"
+                IsVisible="{Binding IsWizardVisible}"
+                IsHitTestVisible="{Binding IsWizardVisible}">
+			<Border Background="White" CornerRadius="12" Padding="24" HorizontalAlignment="Center" VerticalAlignment="Center">
+				<ContentControl Content="{Binding WizardViewModel}"/>
+			</Border>
+		</Border>
+
+		<Border IsVisible="{Binding IsConfirmDiscardDraftVisible}" Background="#88000000">
+			<Border Background="#FFFFFF" CornerRadius="14" Width="400" Padding="32,28"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                    BoxShadow="0 12 48 0 #44000000">
+				<StackPanel Spacing="20">
+					<TextBlock Text="Discard Draft" FontSize="18" FontWeight="SemiBold" Foreground="#1A1A2E"/>
+					<TextBlock Text="{Binding ConfirmDiscardDraftMessage}" FontSize="14" Foreground="#888899" TextWrapping="Wrap"/>
+					<StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="12">
+						<Button Classes="secondary" Content="Keep Drafting" Command="{Binding CancelCancelDraftCommand}"/>
+						<Button Classes="danger" Content="Discard" Command="{Binding ConfirmCancelDraftCommand}"/>
+					</StackPanel>
+				</StackPanel>
 			</Border>
 		</Border>
 	</Grid>

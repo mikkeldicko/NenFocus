@@ -1,5 +1,6 @@
 using FluentAssertions;
 using NenFocus.Domain.Entities;
+using NenFocus.Domain.ValueObjects;
 using NenFocus.Infrastructure.Persistence.Repositories;
 
 namespace NenFocus.Tests.Infrastructure.Persistence.Repositories;
@@ -246,5 +247,48 @@ public class PlannedBlockRepositoryTests : SqliteRepositoryTestBase
         var result = await CreateRepository().GetUnresolvedFocusBlocksAsync(End.AddMinutes(1));
 
         result.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task AddAsync_NoMakeUpForEntries_ReloadsAsEmpty()
+    {
+        var repo = CreateRepository();
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End);
+
+        await repo.AddAsync(block);
+        await Context.SaveChangesAsync();
+
+        var reloaded = (FocusBlock)(await CreateRepository().GetByIdAsync(block.Id))!;
+        reloaded.MakeUpForEntries.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task AddAsync_WithMakeUpForEntries_RoundTripsThroughJsonColumn()
+    {
+        var repo = CreateRepository();
+        var missedBlockId = Guid.NewGuid();
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End,
+            makeUpForEntries: [new MakeUpForEntry(missedBlockId, 30)]);
+
+        await repo.AddAsync(block);
+        await Context.SaveChangesAsync();
+
+        var reloaded = (FocusBlock)(await CreateRepository().GetByIdAsync(block.Id))!;
+        reloaded.MakeUpForEntries.Should().ContainSingle(e =>
+            e.MissedBlockId == missedBlockId && e.MinutesCovered == 30);
+    }
+
+    [Fact]
+    public async Task AddAsync_WithContractId_RoundTrips()
+    {
+        var repo = CreateRepository();
+        var contractId = Guid.NewGuid();
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End, contractId: contractId);
+
+        await repo.AddAsync(block);
+        await Context.SaveChangesAsync();
+
+        var reloaded = await CreateRepository().GetByIdAsync(block.Id);
+        reloaded!.ContractId.Should().Be(contractId);
     }
 }

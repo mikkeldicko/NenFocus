@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.UseCases.Sessions.SweepMissedFocusBlocks;
@@ -8,9 +9,7 @@ namespace NenFocus.Infrastructure.Services;
 
 public sealed class SessionStateService : ISessionStateService
 {
-    private readonly ISessionRepository _sessionRepository;
-    private readonly IBlockPresetRepository _presetRepository;
-    private readonly ICommandHandler<SweepMissedFocusBlocksCommand, SweepMissedFocusBlocksResult> _sweepMissedFocusBlocks;
+    private readonly IServiceScopeFactory _scopeFactory;
     private SessionDto? _activeSession;
     private bool _isRitualRequired;
     private Guid? _pendingFocusBlockId;
@@ -23,25 +22,33 @@ public sealed class SessionStateService : ISessionStateService
     public event EventHandler<RitualRequirementChange>? RitualRequirementChanged;
     public event EventHandler<IReadOnlyList<PostSessionDto>>? MissedSessionsDiscovered;
 
-    public SessionStateService(
-        ISessionRepository sessionRepository,
-        IBlockPresetRepository presetRepository,
-        ICommandHandler<SweepMissedFocusBlocksCommand, SweepMissedFocusBlocksResult> sweepMissedFocusBlocks)
+    // Takes IServiceScopeFactory, not the scoped repositories directly — this service is
+    // a Singleton (it must outlive any single operation to hold in-memory session state
+    // and raise events across the app's whole lifetime), so it cannot capture Scoped
+    // dependencies in its own constructor without pinning one EF Core context alive for
+    // the entire app run. Mirrors ActiveSessionMonitor's AutoEndAsync/AutoResumeBreakAsync
+    // and ScheduledEnforcementService's heartbeat — both already resolve their scoped
+    // dependencies from a fresh per-operation scope for exactly this reason.
+    public SessionStateService(IServiceScopeFactory scopeFactory)
     {
-        _sessionRepository = sessionRepository;
-        _presetRepository = presetRepository;
-        _sweepMissedFocusBlocks = sweepMissedFocusBlocks;
+        _scopeFactory = scopeFactory;
     }
 
     public async Task InitializeAsync()
     {
-        var session = await _sessionRepository.GetActiveAsync();
+        using var scope = _scopeFactory.CreateScope();
+        var sessionRepository = scope.ServiceProvider.GetRequiredService<ISessionRepository>();
+        var presetRepository = scope.ServiceProvider.GetRequiredService<IBlockPresetRepository>();
+        var sweepMissedFocusBlocks = scope.ServiceProvider
+            .GetRequiredService<ICommandHandler<SweepMissedFocusBlocksCommand, SweepMissedFocusBlocksResult>>();
+
+        var session = await sessionRepository.GetActiveAsync();
         if (session != null)
         {
             var presetName = "Unknown Preset";
             if (session.BlockPresetId != Guid.Empty)
             {
-                var preset = await _presetRepository.GetByIdAsync(session.BlockPresetId);
+                var preset = await presetRepository.GetByIdAsync(session.BlockPresetId);
                 presetName = preset?.Name ?? "Unknown Preset";
             }
 
@@ -49,7 +56,7 @@ public sealed class SessionStateService : ISessionStateService
             SessionChanged?.Invoke(this, _activeSession);
         }
 
-        var sweepResult = await _sweepMissedFocusBlocks.HandleAsync(new SweepMissedFocusBlocksCommand());
+        var sweepResult = await sweepMissedFocusBlocks.HandleAsync(new SweepMissedFocusBlocksCommand());
         if (sweepResult.MissedSessions.Count > 0)
             MissedSessionsDiscovered?.Invoke(this, sweepResult.MissedSessions);
     }

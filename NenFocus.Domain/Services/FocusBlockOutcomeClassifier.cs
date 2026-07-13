@@ -4,6 +4,14 @@ namespace NenFocus.Domain.Services;
 
 public sealed class FocusBlockOutcomeClassifier : IFocusBlockOutcomeClassifier
 {
+    /// <summary>
+    /// A ritual completed within this many minutes after scheduledStart still counts as
+    /// on time — the Ritual takes a moment, and penalizing a 13:03 completion for a
+    /// 13:00 block is noise. Shared by Classify and CreditedFocusMinutes so the two can
+    /// never disagree about what "within grace" means.
+    /// </summary>
+    public const int GracePeriodMinutes = 5;
+
     public FocusBlockOutcome? Classify(
         DateTime scheduledStart,
         DateTime scheduledEnd,
@@ -12,11 +20,23 @@ public sealed class FocusBlockOutcomeClassifier : IFocusBlockOutcomeClassifier
     {
         if (ritualCompletedAt is { } completedAt)
         {
-            if (completedAt <= scheduledStart) return FocusBlockOutcome.CompletedOnTime;
+            if (completedAt <= scheduledStart.AddMinutes(GracePeriodMinutes)) return FocusBlockOutcome.CompletedOnTime;
             if (completedAt < scheduledEnd) return FocusBlockOutcome.StartedLate;
             return FocusBlockOutcome.Missed;
         }
 
         return asOf >= scheduledEnd ? FocusBlockOutcome.Missed : null;
+    }
+
+    public double CreditedFocusMinutes(
+        DateTime scheduledStart,
+        DateTime scheduledEnd,
+        DateTime? ritualCompletedAt,
+        double actualElapsedMinutes)
+    {
+        if (ritualCompletedAt is { } completedAt && completedAt <= scheduledStart.AddMinutes(GracePeriodMinutes))
+            return (scheduledEnd - scheduledStart).TotalMinutes;
+
+        return actualElapsedMinutes;
     }
 }

@@ -17,6 +17,9 @@ public static class DependencyInjection
         services.AddValidatorsFromAssembly(assembly);
 
         services.AddScoped<IPolicyEngine, PolicyEngine>();
+        services.AddScoped<IPlannedFocusHoursCalculator, PlannedFocusHoursCalculator>();
+        services.AddScoped<IFocusBlockOutcomeClassifier, FocusBlockOutcomeClassifier>();
+        services.AddScoped<IContractBlockBatchPreparer, ContractBlockBatchPreparer>();
 
         return services;
     }

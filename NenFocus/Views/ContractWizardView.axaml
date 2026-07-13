@@ -1,0 +1,57 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:NenFocus.ViewModels.Contracts"
+             xmlns:conv="using:NenFocus.Converters"
+             x:DataType="vm:ContractWizardViewModel"
+             x:Class="NenFocus.Views.ContractWizardView"
+             Background="Transparent">
+
+    <UserControl.Styles>
+        <Style Selector="Button.back-btn">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Padding" Value="4"/>
+        </Style>
+        <Style Selector="Button.back-btn /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="Button.back-btn:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+    </UserControl.Styles>
+
+    <Grid RowDefinitions="40,*" Width="560">
+
+        <Grid Grid.Row="0" ColumnDefinitions="80,*,80">
+            <Button Grid.Column="0"
+                    Classes="back-btn"
+                    IsVisible="{Binding IsBackVisible}"
+                    VerticalAlignment="Center"
+                    Command="{Binding GoBackCommand}">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <TextBlock Text="←" FontSize="14" Foreground="#7A7A8C"/>
+                    <TextBlock Text="Back" FontSize="13" Foreground="#7A7A8C"/>
+                </StackPanel>
+            </Button>
+
+            <StackPanel Grid.Column="1"
+                        Orientation="Horizontal"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Spacing="10">
+                <Ellipse Width="7" Height="7" Fill="{Binding IsDot0Active, Converter={x:Static conv:BoolToDotFillConverter.Instance}}"/>
+                <Ellipse Width="7" Height="7" Fill="{Binding IsDot1Active, Converter={x:Static conv:BoolToDotFillConverter.Instance}}"/>
+                <Ellipse Width="7" Height="7" Fill="{Binding IsDot2Active, Converter={x:Static conv:BoolToDotFillConverter.Instance}}"/>
+                <Ellipse Width="7" Height="7" Fill="{Binding IsDot3Active, Converter={x:Static conv:BoolToDotFillConverter.Instance}}"/>
+            </StackPanel>
+        </Grid>
+
+        <TransitioningContentControl Grid.Row="1" Content="{Binding CurrentStep}">
+            <TransitioningContentControl.PageTransition>
+                <CrossFade Duration="0:0:0.25"/>
+            </TransitioningContentControl.PageTransition>
+        </TransitioningContentControl>
+
+    </Grid>
+</UserControl>

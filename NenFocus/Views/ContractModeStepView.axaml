@@ -1,0 +1,43 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:NenFocus.ViewModels.Contracts"
+             x:DataType="vm:ContractModeStepViewModel"
+             x:Class="NenFocus.Views.ContractModeStepView"
+             Background="Transparent">
+
+    <UserControl.Styles>
+        <Style Selector="Button.modeCard">
+            <Setter Property="Background" Value="#F8F8FB"/>
+            <Setter Property="BorderBrush" Value="#DDDDE8"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="Padding" Value="20"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+        <Style Selector="Button.modeCard:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="#F0F0F8"/>
+        </Style>
+    </UserControl.Styles>
+
+    <StackPanel Spacing="16" Width="480" Margin="0,8,0,0">
+        <StackPanel Spacing="2">
+            <TextBlock Text="Simple or Advanced?" FontSize="18" FontWeight="SemiBold" Foreground="#1A1A2E"/>
+            <TextBlock Text="Choose how much control you want over this contract's rules." FontSize="12" Foreground="#7A7A8C"/>
+        </StackPanel>
+
+        <Button Classes="modeCard" Command="{Binding ChooseSimpleCommand}">
+            <StackPanel Spacing="4">
+                <TextBlock Text="Simple" FontSize="15" FontWeight="SemiBold" Foreground="#1A1A2E"/>
+                <TextBlock Text="Pick a named preset (Lockdown, Daily Flex, Week Study, Light Touch). The daily floor is derived automatically from whatever you schedule." FontSize="12" Foreground="#7A7A8C" TextWrapping="Wrap"/>
+            </StackPanel>
+        </Button>
+
+        <Button Classes="modeCard" Command="{Binding ChooseAdvancedCommand}">
+            <StackPanel Spacing="4">
+                <TextBlock Text="Advanced" FontSize="15" FontWeight="SemiBold" Foreground="#1A1A2E"/>
+                <TextBlock Text="Configure every lever yourself — strictness, daily floor, work hours, rest days, and cancellation. Save your configuration as a preset for reuse." FontSize="12" Foreground="#7A7A8C" TextWrapping="Wrap"/>
+            </StackPanel>
+        </Button>
+    </StackPanel>
+</UserControl>

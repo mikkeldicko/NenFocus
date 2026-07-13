@@ -132,4 +132,37 @@ public class UpdatePlannedBlockCommandHandlerTests
         block.BlockPresetId.Should().Be(newPresetId);
         await _blocks.Received(1).UpdateAsync(block, Arg.Any<CancellationToken>());
     }
+
+    [Fact]
+    public async Task HandleAsync_FocusBlock_ReplacesMakeUpForEntries()
+    {
+        var blockId = Guid.NewGuid();
+        var presetId = Guid.NewGuid();
+        var block = FocusBlock.Create(blockId, presetId, Start, End,
+            makeUpForEntries: [new MakeUpForEntry(Guid.NewGuid(), 20)]);
+        _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns(block);
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>()).Returns(FocusPreset(presetId));
+        var newMissedBlockId = Guid.NewGuid();
+
+        var result = await CreateHandler().HandleAsync(
+            ValidCommand(blockId, presetId) with { MakeUpForEntries = [new(newMissedBlockId, 40)] });
+
+        result.Success.Should().BeTrue();
+        block.MakeUpForEntries.Should().ContainSingle(e => e.MissedBlockId == newMissedBlockId && e.MinutesCovered == 40);
+    }
+
+    [Fact]
+    public async Task HandleAsync_FocusBlock_EmptyMakeUpForEntries_ClearsExisting()
+    {
+        var blockId = Guid.NewGuid();
+        var presetId = Guid.NewGuid();
+        var block = FocusBlock.Create(blockId, presetId, Start, End,
+            makeUpForEntries: [new MakeUpForEntry(Guid.NewGuid(), 20)]);
+        _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns(block);
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>()).Returns(FocusPreset(presetId));
+
+        await CreateHandler().HandleAsync(ValidCommand(blockId, presetId));
+
+        block.MakeUpForEntries.Should().BeEmpty();
+    }
 }

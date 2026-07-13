@@ -26,6 +26,33 @@ public class FocusBlockOutcomeClassifierTests
     }
 
     [Fact]
+    public void RitualCompletedWithinGracePeriod_IsCompletedOnTime()
+    {
+        var ritualAt = ScheduledStart.AddMinutes(3); // within the 5-minute grace period
+
+        _classifier.Classify(ScheduledStart, ScheduledEnd, ritualCompletedAt: ritualAt, asOf: ritualAt)
+            .Should().Be(FocusBlockOutcome.CompletedOnTime);
+    }
+
+    [Fact]
+    public void RitualCompletedExactlyAtGraceBoundary_IsCompletedOnTime()
+    {
+        var ritualAt = ScheduledStart.AddMinutes(FocusBlockOutcomeClassifier.GracePeriodMinutes);
+
+        _classifier.Classify(ScheduledStart, ScheduledEnd, ritualCompletedAt: ritualAt, asOf: ritualAt)
+            .Should().Be(FocusBlockOutcome.CompletedOnTime);
+    }
+
+    [Fact]
+    public void RitualCompletedJustPastGraceBoundary_IsStartedLate()
+    {
+        var ritualAt = ScheduledStart.AddMinutes(FocusBlockOutcomeClassifier.GracePeriodMinutes).AddMinutes(1);
+
+        _classifier.Classify(ScheduledStart, ScheduledEnd, ritualCompletedAt: ritualAt, asOf: ritualAt)
+            .Should().Be(FocusBlockOutcome.StartedLate);
+    }
+
+    [Fact]
     public void RitualCompletedMidWindow_IsStartedLate()
     {
         var ritualAt = ScheduledStart.AddHours(1); // 2:00, between 1:00 and 3:00
@@ -87,5 +114,48 @@ public class FocusBlockOutcomeClassifierTests
 
         _classifier.Classify(ScheduledStart, ScheduledEnd, ritualCompletedAt: null, asOf: asOf)
             .Should().BeNull();
+    }
+
+    [Fact]
+    public void CreditedFocusMinutes_WithinGracePeriod_CreditsFullScheduledDuration()
+    {
+        var ritualAt = ScheduledStart.AddMinutes(3);
+
+        // Real elapsed time is short (started 3 min late), but grace period rounds up.
+        var credited = _classifier.CreditedFocusMinutes(
+            ScheduledStart, ScheduledEnd, ritualCompletedAt: ritualAt, actualElapsedMinutes: 117);
+
+        credited.Should().Be((ScheduledEnd - ScheduledStart).TotalMinutes); // full 120 minutes
+    }
+
+    [Fact]
+    public void CreditedFocusMinutes_AtGraceBoundary_CreditsFullScheduledDuration()
+    {
+        var ritualAt = ScheduledStart.AddMinutes(FocusBlockOutcomeClassifier.GracePeriodMinutes);
+
+        var credited = _classifier.CreditedFocusMinutes(
+            ScheduledStart, ScheduledEnd, ritualCompletedAt: ritualAt, actualElapsedMinutes: 115);
+
+        credited.Should().Be((ScheduledEnd - ScheduledStart).TotalMinutes);
+    }
+
+    [Fact]
+    public void CreditedFocusMinutes_PastGracePeriod_CreditsOnlyActualElapsed()
+    {
+        var ritualAt = ScheduledStart.AddMinutes(FocusBlockOutcomeClassifier.GracePeriodMinutes + 1);
+
+        var credited = _classifier.CreditedFocusMinutes(
+            ScheduledStart, ScheduledEnd, ritualCompletedAt: ritualAt, actualElapsedMinutes: 90);
+
+        credited.Should().Be(90);
+    }
+
+    [Fact]
+    public void CreditedFocusMinutes_Missed_CreditsZero()
+    {
+        var credited = _classifier.CreditedFocusMinutes(
+            ScheduledStart, ScheduledEnd, ritualCompletedAt: null, actualElapsedMinutes: 0);
+
+        credited.Should().Be(0);
     }
 }

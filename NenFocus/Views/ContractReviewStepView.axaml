@@ -1,0 +1,50 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:NenFocus.ViewModels.Contracts"
+             x:DataType="vm:ContractReviewStepViewModel"
+             x:Class="NenFocus.Views.ContractReviewStepView"
+             Background="Transparent">
+
+    <UserControl.Styles>
+        <Style Selector="TextBlock.summaryLabel">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Foreground" Value="#7A7A8C"/>
+        </Style>
+        <Style Selector="TextBlock.summaryValue">
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Foreground" Value="#1A1A2E"/>
+            <Setter Property="FontWeight" Value="Medium"/>
+        </Style>
+    </UserControl.Styles>
+
+    <StackPanel Spacing="16" Width="480" Margin="0,8,0,0">
+        <StackPanel Spacing="2">
+            <TextBlock Text="Review" FontSize="18" FontWeight="SemiBold" Foreground="#1A1A2E"/>
+            <TextBlock Text="Confirm the rules, then schedule the contract's blocks on the calendar." FontSize="12" Foreground="#7A7A8C"/>
+        </StackPanel>
+
+        <Border Background="#F8F8FB" CornerRadius="8" Padding="16">
+            <StackPanel Spacing="10">
+                <Grid ColumnDefinitions="120,*"><TextBlock Grid.Column="0" Classes="summaryLabel" Text="Name"/><TextBlock Grid.Column="1" Classes="summaryValue" Text="{Binding SummaryName}"/></Grid>
+                <Grid ColumnDefinitions="120,*"><TextBlock Grid.Column="0" Classes="summaryLabel" Text="Dates"/><TextBlock Grid.Column="1" Classes="summaryValue" Text="{Binding SummaryDateRange}"/></Grid>
+                <Grid ColumnDefinitions="120,*"><TextBlock Grid.Column="0" Classes="summaryLabel" Text="Mode"/><TextBlock Grid.Column="1" Classes="summaryValue" Text="{Binding SummaryMode}"/></Grid>
+                <Grid ColumnDefinitions="120,*"><TextBlock Grid.Column="0" Classes="summaryLabel" Text="Strictness"/><TextBlock Grid.Column="1" Classes="summaryValue" Text="{Binding SummaryStrictness}"/></Grid>
+                <Grid ColumnDefinitions="120,*"><TextBlock Grid.Column="0" Classes="summaryLabel" Text="Daily floor"/><TextBlock Grid.Column="1" Classes="summaryValue" Text="{Binding SummaryFloor}"/></Grid>
+                <Grid ColumnDefinitions="120,*"><TextBlock Grid.Column="0" Classes="summaryLabel" Text="Work hours"/><TextBlock Grid.Column="1" Classes="summaryValue" Text="{Binding SummaryWorkHours}"/></Grid>
+                <Grid ColumnDefinitions="120,*"><TextBlock Grid.Column="0" Classes="summaryLabel" Text="Rest days"/><TextBlock Grid.Column="1" Classes="summaryValue" Text="{Binding SummaryRestDays}" TextWrapping="Wrap"/></Grid>
+                <Grid ColumnDefinitions="120,*"><TextBlock Grid.Column="0" Classes="summaryLabel" Text="Cancellation"/><TextBlock Grid.Column="1" Classes="summaryValue" Text="{Binding SummaryCancellation}"/></Grid>
+            </StackPanel>
+        </Border>
+
+        <TextBlock Text="You'll drag blocks onto the Planner calendar next. Nothing is saved until you seal the contract."
+                   FontSize="12" Foreground="#7A7A8C" TextWrapping="Wrap"/>
+
+        <TextBlock Text="{Binding Error}"
+                   IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                   FontSize="12" Foreground="#C03A2B" TextWrapping="Wrap"/>
+
+        <Grid ColumnDefinitions="Auto,*,Auto">
+            <Button Grid.Column="2" Classes="primary" Content="Begin Scheduling" Command="{Binding BeginSchedulingCommand}" IsEnabled="{Binding !IsSaving}"/>
+        </Grid>
+    </StackPanel>
+</UserControl>

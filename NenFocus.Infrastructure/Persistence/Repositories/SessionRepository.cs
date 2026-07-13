@@ -79,4 +79,10 @@ public sealed class SessionRepository : ISessionRepository
         return await _context.Sessions
             .AnyAsync(s => s.OriginatingBlockId == focusBlockId, ct);
     }
+
+    public async Task<Session?> GetByOriginatingBlockIdAsync(Guid focusBlockId, CancellationToken ct = default)
+    {
+        return await _context.Sessions
+            .FirstOrDefaultAsync(s => s.OriginatingBlockId == focusBlockId, ct);
+    }
 }

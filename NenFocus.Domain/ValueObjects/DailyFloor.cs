@@ -23,4 +23,10 @@ public record DailyFloor
     /// hours) and during later day-met evaluation (against completed Focus hours).
     /// </summary>
     public bool IsSatisfiedBy(double focusHours) => focusHours >= Hours;
+
+    /// <summary>
+    /// Hours still needed to satisfy the floor, clamped at zero — exceeding the floor
+    /// never reads as a negative "remaining" amount.
+    /// </summary>
+    public double HoursRemaining(double focusHours) => Math.Max(0, Hours - focusHours);
 }

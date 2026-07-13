@@ -1,5 +1,6 @@
 using FluentValidation;
 using NenFocus.Application.Interfaces;
+using NenFocus.Application.Queries.CheckMakeUpForEntry;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
 
@@ -13,7 +14,9 @@ public sealed class UpdatePlannedBlockValidator : AbstractValidator<UpdatePlanne
     public UpdatePlannedBlockValidator(
         IPlannedBlockRepository blocks,
         IBlockPresetRepository presets,
-        ISystemClock clock)
+        INenContractRepository contracts,
+        ISystemClock clock,
+        IQueryHandler<CheckMakeUpForEntryQuery, MakeUpForEntryCheckResult> checkMakeUpForEntry)
     {
         _blocks = blocks;
         _clock = clock;
@@ -52,5 +55,41 @@ public sealed class UpdatePlannedBlockValidator : AbstractValidator<UpdatePlanne
         RuleFor(x => x.End)
             .GreaterThan(x => x.Start)
             .WithMessage("End time must be after start time.");
+
+        RuleFor(x => x)
+            .MustAsync(async (command, ct) =>
+            {
+                if (command.MakeUpForEntries.Count == 0) return true;
+                var block = await _blocks.GetByIdAsync(command.BlockId, ct);
+                return block is FocusBlock;
+            })
+            .WithMessage("Only a Focus block can cover deficit for missed blocks — Background blocks have no sessions.");
+
+        RuleFor(x => x)
+            .MustAsync(async (command, ct) =>
+            {
+                var block = await _blocks.GetByIdAsync(command.BlockId, ct);
+                if (block?.ContractId is not { } contractId) return true;
+                var contract = await contracts.GetByIdAsync(contractId, ct);
+                return contract is null
+                    || contract.AllowsBlockPlacement(DateOnly.FromDateTime(command.Start), command.Start, command.End);
+            })
+            .WithMessage("This block falls outside the contract's configured Work Hours for that day.");
+
+        RuleForEach(x => x.MakeUpForEntries)
+            .CustomAsync(async (entry, context, ct) =>
+            {
+                var command = context.InstanceToValidate;
+                var block = await _blocks.GetByIdAsync(command.BlockId, ct);
+                if (block is not FocusBlock) return; // already reported above
+
+                var result = await checkMakeUpForEntry.HandleAsync(
+                    new CheckMakeUpForEntryQuery(command.PresetId, command.Start, entry.MissedBlockId, entry.MinutesCovered, command.BlockId),
+                    ct);
+
+                var message = MakeUpForEntryMessages.For(result);
+                if (message is not null)
+                    context.AddFailure(nameof(UpdatePlannedBlockCommand.MakeUpForEntries), message);
+            });
     }
 }

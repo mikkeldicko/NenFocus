@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.Extensions.DependencyInjection;
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.UseCases.Sessions.SweepMissedFocusBlocks;
@@ -23,7 +24,19 @@ public class SessionStateServiceTests
             .Returns(new SweepMissedFocusBlocksResult());
     }
 
-    private SessionStateService CreateService() => new(_sessions, _presets, _sweep);
+    // SessionStateService now takes IServiceScopeFactory, not the scoped dependencies
+    // directly (it's a Singleton; see the class's own constructor comment for why). A
+    // real minimal ServiceProvider built from these mocks gives a genuine scope-creation
+    // mechanism without hand-mocking the IServiceScope/IServiceProvider chain.
+    private SessionStateService CreateService()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton(_sessions);
+        services.AddSingleton(_presets);
+        services.AddSingleton(_sweep);
+        var provider = services.BuildServiceProvider();
+        return new SessionStateService(provider.GetRequiredService<IServiceScopeFactory>());
+    }
 
     private static Session CreateActiveSession(Guid presetId)
     {

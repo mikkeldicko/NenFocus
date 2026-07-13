@@ -1,0 +1,145 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:NenFocus.ViewModels.Contracts"
+             xmlns:dto="using:NenFocus.Application.DTOs"
+             x:DataType="vm:ContractRulesStepViewModel"
+             x:Class="NenFocus.Views.ContractRulesStepView"
+             Background="Transparent">
+
+    <UserControl.Styles>
+        <Style Selector="Button.simpleCard">
+            <Setter Property="Background" Value="#F8F8FB"/>
+            <Setter Property="BorderBrush" Value="#DDDDE8"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="14"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+        <Style Selector="Button.simpleCard.active">
+            <Setter Property="Background" Value="#FFF8E5"/>
+            <Setter Property="BorderBrush" Value="#B8922A"/>
+        </Style>
+        <Style Selector="ToggleButton.restDayChip">
+            <Setter Property="Background" Value="#F0F0F8"/>
+            <Setter Property="Foreground" Value="#1A1A2E"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+        <Style Selector="ToggleButton.restDayChip:checked /template/ ContentPresenter">
+            <Setter Property="Background" Value="#B8922A"/>
+        </Style>
+        <Style Selector="ToggleButton.restDayChip:checked">
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+    </UserControl.Styles>
+
+    <ScrollViewer Width="480" MaxHeight="440" Margin="0,8,0,0">
+        <StackPanel Spacing="16">
+            <StackPanel Spacing="2">
+                <TextBlock Text="Set the rules" FontSize="18" FontWeight="SemiBold" Foreground="#1A1A2E"/>
+                <TextBlock Text="These govern how much this contract's schedule can change once sealed." FontSize="12" Foreground="#7A7A8C"/>
+            </StackPanel>
+
+            <!-- ── Simple ─────────────────────────────────────────────────── -->
+            <ItemsControl ItemsSource="{Binding SimpleOptions}" IsVisible="{Binding !IsAdvanced}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Spacing="10"/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="vm:SimpleContractOptionViewModel">
+                        <Button Classes="simpleCard"
+                                Classes.active="{Binding IsSelected}"
+                                Command="{Binding $parent[UserControl].((vm:ContractRulesStepViewModel)DataContext).SelectSimpleOptionCommand}"
+                                CommandParameter="{Binding}">
+                            <StackPanel Spacing="2">
+                                <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" Foreground="#1A1A2E"/>
+                                <TextBlock Text="{Binding MentalModel}" FontSize="11" Foreground="#7A7A8C" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Button>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <!-- ── Advanced ───────────────────────────────────────────────── -->
+            <StackPanel Spacing="14" IsVisible="{Binding IsAdvanced}">
+
+                <StackPanel Spacing="4">
+                    <TextBlock Text="Start from a saved preset (optional)" FontSize="12" Foreground="#7A7A8C"/>
+                    <ComboBox ItemsSource="{Binding SavedPresets}"
+                              SelectedItem="{Binding SelectedStartFromPreset}"
+                              HorizontalAlignment="Stretch"
+                              PlaceholderText="None">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate DataType="dto:ContractPresetDto">
+                                <TextBlock Text="{Binding Name}"/>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                </StackPanel>
+
+                <StackPanel Spacing="4">
+                    <TextBlock Text="Strictness" FontSize="12" Foreground="#7A7A8C"/>
+                    <ComboBox ItemsSource="{Binding StrictnessOptions}"
+                              SelectedItem="{Binding StrictnessRule}"
+                              HorizontalAlignment="Stretch"/>
+                </StackPanel>
+
+                <StackPanel Spacing="4">
+                    <TextBlock Text="Daily floor (hours)" FontSize="12" Foreground="#7A7A8C"/>
+                    <TextBox Text="{Binding DailyFloorHoursText}" Classes="formInput" Watermark="e.g. 3"/>
+                </StackPanel>
+
+                <CheckBox Content="Allow cancellation" IsChecked="{Binding AllowCancellation}"/>
+
+                <StackPanel Spacing="6">
+                    <CheckBox Content="Enforce work hours" IsChecked="{Binding IsWorkHoursEnabled}"/>
+                    <Grid ColumnDefinitions="*,12,*" IsVisible="{Binding IsWorkHoursEnabled}">
+                        <StackPanel Grid.Column="0" Spacing="4">
+                            <TextBlock Text="Start" FontSize="12" Foreground="#7A7A8C"/>
+                            <AutoCompleteBox ItemsSource="{Binding TimeOptions}" Text="{Binding WorkHoursStartText, Mode=TwoWay}" FilterMode="Contains" Watermark="HH:mm"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2" Spacing="4">
+                            <TextBlock Text="End" FontSize="12" Foreground="#7A7A8C"/>
+                            <AutoCompleteBox ItemsSource="{Binding TimeOptions}" Text="{Binding WorkHoursEndText, Mode=TwoWay}" FilterMode="Contains" Watermark="HH:mm"/>
+                        </StackPanel>
+                    </Grid>
+                </StackPanel>
+
+                <StackPanel Spacing="6">
+                    <TextBlock Text="Rest days" FontSize="12" Foreground="#7A7A8C"/>
+                    <ItemsControl ItemsSource="{Binding RestDayChips}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="vm:RestDayChipViewModel">
+                                <ToggleButton Classes="restDayChip" IsChecked="{Binding IsRestDay}" Content="{Binding Date, StringFormat='MMM d'}" Margin="0,0,6,6"/>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+
+                <StackPanel Spacing="6">
+                    <CheckBox Content="Save these rules as a preset" IsChecked="{Binding SaveAsPreset}"/>
+                    <TextBox Text="{Binding PresetNameToSave}" Classes="formInput" Watermark="Preset name" IsVisible="{Binding SaveAsPreset}"/>
+                </StackPanel>
+            </StackPanel>
+
+            <TextBlock Text="{Binding Error}"
+                       IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                       FontSize="12" Foreground="#C03A2B" TextWrapping="Wrap"/>
+
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <Button Grid.Column="2" Classes="primary" Content="Continue" Command="{Binding ContinueCommand}"/>
+            </Grid>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

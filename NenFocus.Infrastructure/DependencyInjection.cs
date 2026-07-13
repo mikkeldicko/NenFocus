@@ -29,6 +29,8 @@ public static class DependencyInjection
         services.AddScoped<ISessionRepository, SessionRepository>();
         services.AddScoped<IBlockPresetRepository, BlockPresetRepository>();
         services.AddScoped<IPlannedBlockRepository, PlannedBlockRepository>();
+        services.AddScoped<INenContractRepository, NenContractRepository>();
+        services.AddScoped<IContractPresetRepository, ContractPresetRepository>();
 
         services.AddSingleton<INotificationService, WindowsNotificationService>();
 
@@ -44,6 +46,7 @@ public static class DependencyInjection
         services.AddScoped<IUnitOfWork, EfCoreUnitOfWork>();
 
         services.AddHostedService<ScheduledEnforcementService>();
+        services.AddHostedService<NenContractHeartbeatService>();
 
         return services;
     }

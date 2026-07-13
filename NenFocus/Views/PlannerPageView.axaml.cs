@@ -1,5 +1,7 @@
 using Avalonia;
+using Avalonia.Collections;
 using Avalonia.Controls;
+using Avalonia.Controls.Shapes;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
@@ -225,6 +227,14 @@ public partial class PlannerPageView : UserControl
             DataContext  = tile
         };
 
+        // Unsealed Nen Contract draft blocks render distinctly — dashed white outline
+        // (via a StrokeDashArray overlay, since Border has no native dash support) plus
+        // a small "Draft" tag — until the contract is sealed and it becomes a real block.
+        if (tile.IsDraft)
+        {
+            btn.Opacity = 0.85;
+        }
+
         // Click → edit. Suppressed when _dragKind is Moving/Resizing because Button's class
         // handler raises Click before our PointerReleased clears the state.
         btn.Click += (_, _) =>
@@ -249,28 +259,6 @@ public partial class PlannerPageView : UserControl
         var stack = new StackPanel { Spacing = 2 };
 
         var titleRow = new DockPanel { LastChildFill = true };
-        if (tile.WebsiteFilterType == WebsiteFilterType.Allowlist)
-        {
-            var chip = new Border
-            {
-                Background        = Brushes.White,
-                CornerRadius      = new CornerRadius(3),
-                Padding           = new Thickness(4, 1),
-                Margin            = new Thickness(6, 0, 0, 0),
-                VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
-                Child = new TextBlock
-                {
-                    Text       = "AL",
-                    FontSize   = 9,
-                    FontWeight = FontWeight.Bold,
-                    Foreground = tile.IsFocus
-                        ? new SolidColorBrush(Color.Parse("#B8922A"))
-                        : new SolidColorBrush(Color.Parse("#1A1A2E"))
-                }
-            };
-            DockPanel.SetDock(chip, Dock.Right);
-            titleRow.Children.Add(chip);
-        }
         titleRow.Children.Add(new TextBlock
         {
             Text              = tile.PresetName,
@@ -286,6 +274,31 @@ public partial class PlannerPageView : UserControl
             FontSize = 10,
             Opacity  = 0.85
         });
+
+        if (tile.IsDraft)
+        {
+            stack.Children.Add(new TextBlock
+            {
+                Text       = "DRAFT",
+                FontSize   = 9,
+                FontWeight = FontWeight.Bold,
+                Opacity    = 0.9
+            });
+
+            var content = new Grid();
+            content.Children.Add(stack);
+            content.Children.Add(new Rectangle
+            {
+                Stroke          = Brushes.White,
+                StrokeThickness = 1.5,
+                StrokeDashArray = new AvaloniaList<double> { 4, 2 },
+                RadiusX         = 6,
+                RadiusY         = 6,
+                IsHitTestVisible = false
+            });
+            btn.Content = content;
+            return btn;
+        }
 
         btn.Content = stack;
         return btn;

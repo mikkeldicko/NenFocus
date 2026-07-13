@@ -25,13 +25,21 @@ public sealed class CreateBlockPresetCommandHandler
         if (await _presets.ExistsWithNameAsync(command.Name, cancellationToken: cancellationToken))
             return CreateBlockPresetResult.Fail($"A preset named '{command.Name}' already exists.");
 
-        var preset = BlockPreset.Create(Guid.NewGuid(), command.Name, command.WebsiteFilterType, command.PresetType, _clock.UtcNow, command.Tags.ToList());
+        BlockPreset preset;
+        try
+        {
+            preset = BlockPreset.Create(Guid.NewGuid(), command.Name, command.WebsiteFilterType, command.PresetType, _clock.UtcNow, command.Tags.ToList());
 
-        foreach (var appName in command.BlockedApps)
-            preset.AddBlockedApp(new BlockedApp(appName));
+            foreach (var appName in command.BlockedApps)
+                preset.AddBlockedApp(new BlockedApp(appName));
 
-        foreach (var url in command.Websites)
-            preset.AddWebsite(new BlockedSite(url));
+            foreach (var url in command.Websites)
+                preset.AddWebsite(new BlockedSite(url));
+        }
+        catch (ArgumentException ex)
+        {
+            return CreateBlockPresetResult.Fail(ex.Message);
+        }
 
         await _presets.AddAsync(preset, cancellationToken);
 

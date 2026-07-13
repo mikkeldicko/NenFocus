@@ -23,4 +23,13 @@ public sealed record WorkHoursPolicy
     /// </summary>
     public WorkHours? For(DateOnly date)
         => PerDayExceptions.TryGetValue(date, out var exception) ? exception : Default;
+
+    /// <summary>
+    /// Builds a PerDayExceptions map with an explicit null (no constraint that day) for
+    /// each given date. Mirrors DailyFloorPolicy.RestDayExceptions exactly — same shape,
+    /// same reason: exposed separately so callers building a fresh policy and callers
+    /// merging into an existing one reuse the identical conversion instead of re-deriving it.
+    /// </summary>
+    public static IReadOnlyDictionary<DateOnly, WorkHours?> NoConstraintExceptions(IReadOnlyCollection<DateOnly> noWorkHoursDays)
+        => noWorkHoursDays.ToDictionary(date => date, _ => (WorkHours?)null);
 }

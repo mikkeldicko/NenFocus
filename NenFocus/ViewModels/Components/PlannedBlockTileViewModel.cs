@@ -26,12 +26,16 @@ public partial class PlannedBlockTileViewModel : ViewModelBase
     public bool IsFocus => BlockPresetType == BlockPresetType.Focus;
     public bool IsBackground => BlockPresetType == BlockPresetType.Background;
 
+    /// <summary>True for an unsealed Nen Contract draft block — never persisted, styled distinctly.</summary>
+    public bool IsDraft { get; }
+
     public PlannedBlockTileViewModel(
         PlannedBlockDto dto,
         BlockPresetType blockPresetType,
         int columnIndex,
         double top,
-        double height)
+        double height,
+        bool isDraft = false)
     {
         Id = dto.Id;
         PresetName = dto.PresetName;
@@ -42,5 +46,6 @@ public partial class PlannedBlockTileViewModel : ViewModelBase
         ColumnIndex = columnIndex;
         Top = top;
         Height = height;
+        IsDraft = isDraft;
     }
 }

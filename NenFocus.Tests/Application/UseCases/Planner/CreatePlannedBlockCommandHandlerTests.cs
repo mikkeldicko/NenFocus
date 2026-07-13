@@ -107,4 +107,40 @@ public class CreatePlannedBlockCommandHandlerTests
         await _blocks.DidNotReceive().GetOverlappingAsync(
             Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<bool>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>());
     }
+
+    [Fact]
+    public async Task HandleAsync_WithContractId_LinksTheCreatedBlock()
+    {
+        var presetId = Guid.NewGuid();
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, DateTime.UtcNow));
+        var contractId = Guid.NewGuid();
+
+        PlannedBlock? saved = null;
+        await _blocks.AddAsync(Arg.Do<PlannedBlock>(b => saved = b), Arg.Any<CancellationToken>());
+
+        await CreateHandler().HandleAsync(FocusCommand(presetId) with { ContractId = contractId });
+
+        saved!.ContractId.Should().Be(contractId);
+    }
+
+    [Fact]
+    public async Task HandleAsync_WithMakeUpForEntries_SetsThemOnTheFocusBlock()
+    {
+        var presetId = Guid.NewGuid();
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, DateTime.UtcNow));
+        var missedBlockId = Guid.NewGuid();
+
+        PlannedBlock? saved = null;
+        await _blocks.AddAsync(Arg.Do<PlannedBlock>(b => saved = b), Arg.Any<CancellationToken>());
+
+        await CreateHandler().HandleAsync(FocusCommand(presetId) with
+        {
+            MakeUpForEntries = [new(missedBlockId, 45)]
+        });
+
+        var focusBlock = saved.Should().BeOfType<FocusBlock>().Subject;
+        focusBlock.MakeUpForEntries.Should().ContainSingle(e => e.MissedBlockId == missedBlockId && e.MinutesCovered == 45);
+    }
 }

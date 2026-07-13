@@ -134,4 +134,14 @@ public sealed class PlannedBlockRepository : IPlannedBlockRepository
             .OrderBy(b => b.Start)
             .ToListAsync(cancellationToken);
     }
+
+    public async Task<IReadOnlyList<PlannedBlock>> GetForContractAsync(
+        Guid contractId,
+        CancellationToken cancellationToken = default)
+    {
+        return await _context.PlannedBlocks
+            .Where(b => b.ContractId == contractId)
+            .OrderBy(b => b.Start)
+            .ToListAsync(cancellationToken);
+    }
 }

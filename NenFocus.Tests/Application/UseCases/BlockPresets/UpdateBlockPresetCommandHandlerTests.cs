@@ -77,6 +77,41 @@ public class UpdateBlockPresetCommandHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_BlankBlockedAppNameBypassingValidator_FailsWithoutMutatingPreset()
+    {
+        // Proves the fix for the partial-mutation risk: TransactionalCommandHandler
+        // commits unconditionally, so if this handler mutated preset before discovering
+        // the bad app name, the partial mutation would still get persisted despite the
+        // Fail result. Asserting the preset is completely untouched is the real test.
+        var presetId = Guid.NewGuid();
+        var preset = CreatePreset(presetId);
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>()).Returns(preset);
+        var command = ValidCommand(presetId) with { BlockedApps = ["   "] };
+
+        var result = await CreateHandler().HandleAsync(command);
+
+        result.Success.Should().BeFalse();
+        preset.Name.Should().Be("Old Name");
+        preset.BlockedApps.Select(a => a.ProcessName).Should().BeEquivalentTo(["spotify"]);
+        await _presets.DidNotReceive().UpdateAsync(Arg.Any<BlockPreset>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task HandleAsync_BlankName_FailsWithoutMutatingPreset()
+    {
+        var presetId = Guid.NewGuid();
+        var preset = CreatePreset(presetId);
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>()).Returns(preset);
+        var command = ValidCommand(presetId) with { Name = "   " };
+
+        var result = await CreateHandler().HandleAsync(command);
+
+        result.Success.Should().BeFalse();
+        preset.Name.Should().Be("Old Name");
+        preset.BlockedApps.Select(a => a.ProcessName).Should().BeEquivalentTo(["spotify"]);
+    }
+
+    [Fact]
     public async Task HandleAsync_PresetTypeChanged_UpdatesPresetType()
     {
         var presetId = Guid.NewGuid();

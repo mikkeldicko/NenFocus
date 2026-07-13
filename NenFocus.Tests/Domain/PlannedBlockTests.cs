@@ -122,6 +122,18 @@ public class PlannedBlockTests
         => CreateFocusBlock().IsActive(Start.AddMinutes(30)).Should().BeTrue();
 
     [Fact]
+    public void HasEnded_BeforeEnd_IsFalse()
+        => CreateFocusBlock().HasEnded(End.AddMinutes(-1)).Should().BeFalse();
+
+    [Fact]
+    public void HasEnded_AtEnd_IsFalse()
+        => CreateFocusBlock().HasEnded(End).Should().BeFalse();
+
+    [Fact]
+    public void HasEnded_AfterEnd_IsTrue()
+        => CreateFocusBlock().HasEnded(End.AddMinutes(1)).Should().BeTrue();
+
+    [Fact]
     public void GetDuration_ReturnsEndMinusStart()
         => CreateFocusBlock().GetDuration().Should().Be(TimeSpan.FromHours(1));
 
@@ -260,5 +272,28 @@ public class PlannedBlockTests
     public void BackgroundBlock_Create_MakeUpForEntries_AlwaysEmpty()
     {
         CreateBackgroundBlock().MakeUpForEntries.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void FocusBlock_AssignMakeUpForEntries_ReplacesExisting()
+    {
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End,
+            makeUpForEntries: [new MakeUpForEntry(Guid.NewGuid(), 30)]);
+        var newEntries = new[] { new MakeUpForEntry(Guid.NewGuid(), 45), new MakeUpForEntry(Guid.NewGuid(), 15) };
+
+        block.AssignMakeUpForEntries(newEntries);
+
+        block.MakeUpForEntries.Should().BeEquivalentTo(newEntries);
+    }
+
+    [Fact]
+    public void FocusBlock_AssignMakeUpForEntries_Empty_ClearsExisting()
+    {
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End,
+            makeUpForEntries: [new MakeUpForEntry(Guid.NewGuid(), 30)]);
+
+        block.AssignMakeUpForEntries([]);
+
+        block.MakeUpForEntries.Should().BeEmpty();
     }
 }

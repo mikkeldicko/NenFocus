@@ -90,4 +90,11 @@ public interface IPlannedBlockRepository
     Task<IReadOnlyList<FocusBlock>> GetUnresolvedFocusBlocksAsync(
         DateTime asOf,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns all planned blocks linked to the given Nen Contract.
+    /// </summary>
+    Task<IReadOnlyList<PlannedBlock>> GetForContractAsync(
+        Guid contractId,
+        CancellationToken cancellationToken = default);
 }

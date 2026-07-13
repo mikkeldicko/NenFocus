@@ -16,5 +16,13 @@ public sealed record PlannedBlockDto
 
     public bool IsCompleted { get; init; }
 
+    /// <summary>
+    /// Mirrors PlannedBlock.HasEnded(now) — the same predicate DeletePlannedBlockValidator
+    /// enforces. The UI binds to this rather than deriving its own notion of "past" from
+    /// Start/End, so the two can never drift apart.
+    /// </summary>
+    public Guid? ContractId { get; init; }
+    public bool HasEnded { get; init; }
+
     public int DurationMinutes => (int)(End - Start).TotalMinutes;
 }

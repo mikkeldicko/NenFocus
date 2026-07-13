@@ -1,13 +1,17 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
+using NenFocus.Application.Queries.ComputePlannedFocusHours;
 using NenFocus.Application.Queries.GetAllBlockPresets;
+using NenFocus.Application.Queries.GetAllContractPresets;
 using NenFocus.Application.Queries.GetFocusBlockRitualContext;
 using NenFocus.Application.Queries.GetPlannedBlocksForDay;
 using NenFocus.Application.UseCases.BlockPresets.CreateBlockPreset;
 using NenFocus.Application.UseCases.BlockPresets.DeleteBlockPreset;
 using NenFocus.Application.UseCases.BlockPresets.DuplicateBlockPreset;
 using NenFocus.Application.UseCases.BlockPresets.UpdateBlockPreset;
+using NenFocus.Application.UseCases.ContractPresets.CreateContractPreset;
+using NenFocus.Application.UseCases.NenContracts.Seal;
 using NenFocus.Application.UseCases.Planner.CreatePlannedBlock;
 using NenFocus.Application.UseCases.Planner.DeletePlannedBlock;
 using NenFocus.Application.UseCases.Planner.UpdatePlannedBlock;
@@ -82,7 +86,11 @@ public partial class ShellViewModel : ViewModelBase
        IQueryHandler<GetPlannedBlocksForDayQuery, IReadOnlyList<PlannedBlockDto>> getBlocksForDay,
        ICommandHandler<CreatePlannedBlockCommand, CreatePlannedBlockResult> createPlannedBlock,
        ICommandHandler<UpdatePlannedBlockCommand, UpdatePlannedBlockResult> updatePlannedBlock,
-       ICommandHandler<DeletePlannedBlockCommand, DeletePlannedBlockResult> deletePlannedBlock)
+       ICommandHandler<DeletePlannedBlockCommand, DeletePlannedBlockResult> deletePlannedBlock,
+       ICommandHandler<SealNenContractCommand, SealNenContractResult> sealContract,
+       IQueryHandler<ComputePlannedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> computePlannedFocusHours,
+       IQueryHandler<GetAllContractPresetsQuery, IReadOnlyList<ContractPresetDto>> getContractPresets,
+       ICommandHandler<CreateContractPresetCommand, CreateContractPresetResult> createContractPreset)
     {
         _presetsQuery = presetsQuery;
         _getFocusBlockRitualContext = getFocusBlockRitualContext;
@@ -112,7 +120,7 @@ public partial class ShellViewModel : ViewModelBase
 
         NavItems.Add(new NavItemViewModel("Main", "⊹", new MainPageViewModel(() => StartRitual(), ShowPostSession, _sessionState, _monitor, _endSession, _startBreak, _resumeFromBreak, _plannerClock), Select));
         NavItems.Add(new NavItemViewModel("Presets", "◻", new BlockPresetPageViewModel(presetsQuery, createPreset, updatePreset, deletePreset, duplicatePreset), Select));
-        NavItems.Add(new NavItemViewModel("Planner", "◫", new PlannerPageViewModel(presetsQuery, getBlocksForDay, createPlannedBlock, updatePlannedBlock, deletePlannedBlock, _plannerClock, _sessionState), Select));
+        NavItems.Add(new NavItemViewModel("Planner", "◫", new PlannerPageViewModel(presetsQuery, getBlocksForDay, createPlannedBlock, updatePlannedBlock, deletePlannedBlock, sealContract, computePlannedFocusHours, getContractPresets, createContractPreset, _plannerClock, _sessionState), Select));
         NavItems.Add(new NavItemViewModel("Insights", "◈", new InsightsPageViewModel(), Select));
         NavItems.Add(new NavItemViewModel("Settings", "◎", new SettingsPageViewModel(), Select));
 

@@ -10,13 +10,16 @@ public sealed class GetPlannedBlocksForDayQueryHandler
 {
     private readonly IPlannedBlockRepository _blocks;
     private readonly IBlockPresetRepository _presets;
+    private readonly ISystemClock _clock;
 
     public GetPlannedBlocksForDayQueryHandler(
         IPlannedBlockRepository blocks,
-        IBlockPresetRepository presets)
+        IBlockPresetRepository presets,
+        ISystemClock clock)
     {
         _blocks = blocks;
         _presets = presets;
+        _clock = clock;
     }
 
     public async Task<IReadOnlyList<PlannedBlockDto>> HandleAsync(
@@ -27,6 +30,7 @@ public sealed class GetPlannedBlocksForDayQueryHandler
 
         var allPresets = await _presets.GetAllAsync(cancellationToken);
         var presetMap = allPresets.ToDictionary(p => p.Id);
+        var now = _clock.UtcNow;
 
         return blocks.Select(b =>
         {
@@ -40,7 +44,9 @@ public sealed class GetPlannedBlocksForDayQueryHandler
                 Start = b.Start,
                 End = b.End,
                 WebsiteFilterType = preset?.WebsiteFilterType ?? WebsiteFilterType.Blocklist,
-                IsCompleted = b is FocusBlock fb && fb.RitualCompletedAt.HasValue
+                ContractId = b.ContractId,
+                IsCompleted = b is FocusBlock fb && fb.RitualCompletedAt.HasValue,
+                HasEnded = b.HasEnded(now)
             };
         }).ToList();
     }

@@ -19,14 +19,20 @@ public class NenContract : AggregateRoot
     public DateOnly StartDate { get; private set; }
     public DateOnly EndDate { get; private set; }
     public StrictnessRule StrictnessRule { get; private set; }
-    public DailyFloor DailyFloor { get; private set; } = null!;
+    public DailyFloorPolicy DailyFloorPolicy { get; private set; } = null!;
     public ChangeWindow? ChangeWindow { get; private set; }
     public bool AllowCancellation { get; private set; }
     public NenContractStatus Status { get; private set; }
     public WorkHoursPolicy? WorkHoursPolicy { get; private set; }
+    public Guid? ContractPresetId { get; private set; }
 
     private NenContract() { } // EF Core
 
+    /// <param name="dailyFloorPolicy">
+    /// Resolves the required daily Focus hours per day. A day whose resolved floor is
+    /// null (no per-day exception and no default) is a rest day — skipped entirely by
+    /// the validation loop below, not checked against zero.
+    /// </param>
     /// <param name="plannedFocusHoursByDay">
     /// Focus block hours only, keyed by calendar day within [startDate, endDate].
     /// Background block hours must never be included — the daily floor is a
@@ -40,12 +46,13 @@ public class NenContract : AggregateRoot
         DateOnly startDate,
         DateOnly endDate,
         StrictnessRule strictnessRule,
-        DailyFloor dailyFloor,
+        DailyFloorPolicy dailyFloorPolicy,
         ChangeWindow? changeWindow,
         bool allowCancellation,
         IReadOnlyDictionary<DateOnly, double> plannedFocusHoursByDay,
         DateTime sealedAt,
-        WorkHoursPolicy? workHoursPolicy = null)
+        WorkHoursPolicy? workHoursPolicy = null,
+        Guid? contractPresetId = null)
     {
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Contract name cannot be empty.", nameof(name));
@@ -55,10 +62,14 @@ public class NenContract : AggregateRoot
 
         for (var date = startDate; date <= endDate; date = date.AddDays(1))
         {
+            var floor = dailyFloorPolicy.For(date);
+            if (floor is null)
+                continue; // rest day — no obligation, skipped entirely
+
             var plannedHours = plannedFocusHoursByDay.GetValueOrDefault(date);
-            if (!dailyFloor.IsSatisfiedBy(plannedHours))
+            if (!floor.IsSatisfiedBy(plannedHours))
                 throw new ArgumentException(
-                    $"Day {date:yyyy-MM-dd} is planned below the daily floor of {dailyFloor.Hours}h (planned: {plannedHours}h).");
+                    $"Day {date:yyyy-MM-dd} is planned below the daily floor of {floor.Hours}h (planned: {plannedHours}h).");
         }
 
         var contract = new NenContract
@@ -69,10 +80,11 @@ public class NenContract : AggregateRoot
             StartDate = startDate,
             EndDate = endDate,
             StrictnessRule = strictnessRule,
-            DailyFloor = dailyFloor,
+            DailyFloorPolicy = dailyFloorPolicy,
             ChangeWindow = changeWindow,
             AllowCancellation = allowCancellation,
             WorkHoursPolicy = workHoursPolicy,
+            ContractPresetId = contractPresetId,
             Status = DateOnly.FromDateTime(sealedAt) >= startDate
                 ? NenContractStatus.Active
                 : NenContractStatus.Scheduled
@@ -82,6 +94,29 @@ public class NenContract : AggregateRoot
 
         return contract;
     }
+
+    /// <summary>
+    /// Canonical definition of "ready to activate" — the repository query behind the
+    /// lifecycle heartbeat must return exactly the contracts this returns true for.
+    /// </summary>
+    public bool IsDueForActivation(DateOnly asOf)
+        => Status == NenContractStatus.Scheduled && asOf >= StartDate;
+
+    /// <summary>
+    /// Canonical definition of "currently a live commitment" — Scheduled (not yet
+    /// started, but will be) or Active. Completed and Broken contracts are not in
+    /// effect. The repository query behind ContractPreset deletion protection must
+    /// match this exactly, same discipline as IsDueForActivation/IsDueForCompletion.
+    /// </summary>
+    public bool IsInEffect
+        => Status is NenContractStatus.Scheduled or NenContractStatus.Active;
+
+    /// <summary>
+    /// Canonical definition of "ready to complete" — EndDate is inclusive, so a contract
+    /// is only due once asOf is strictly after it.
+    /// </summary>
+    public bool IsDueForCompletion(DateOnly asOf)
+        => Status == NenContractStatus.Active && asOf > EndDate;
 
     public void Activate(DateTime activatedAt)
     {
@@ -114,19 +149,65 @@ public class NenContract : AggregateRoot
     }
 
     /// <summary>
-    /// A day is met if the daily floor is satisfied by that day's completed Focus
-    /// hours. Missed or late blocks do not fail the day directly — they only cost
-    /// hours that must be made up elsewhere; if the hours are made up, the day is met.
+    /// A day is met if that day's resolved floor is satisfied by its completed Focus
+    /// hours. A day with no resolved floor (a rest day) is trivially met. Missed or
+    /// late blocks do not fail the day directly — they only cost hours that must be
+    /// made up elsewhere; if the hours are made up, the day is met.
     /// </summary>
-    public bool IsDayMet(double completedFocusHours)
-        => DailyFloor.IsSatisfiedBy(completedFocusHours);
+    public bool IsDayMet(DateOnly date, double completedFocusHours)
+    {
+        var floor = DailyFloorPolicy.For(date);
+        return floor is null || floor.IsSatisfiedBy(completedFocusHours);
+    }
+
+    /// <summary>
+    /// Whether a missed Focus block due on <paramref name="missedBlockDate"/> can be
+    /// covered by a make-up block on <paramref name="proposedDate"/>, per this contract's
+    /// StrictnessRule. Locked never allows it. DailyFlexibility and DailyTimeBudget both
+    /// require same-day coverage — DailyFlexibility's whole model is same-day
+    /// rearrangement, so it gets the same constraint DailyTimeBudget needs structurally.
+    /// PeriodTimeBudget has no day constraint; only the remaining-deficit amount matters,
+    /// which callers check separately.
+    /// </summary>
+    public MakeUpEligibility CheckMakeUpEligibility(DateOnly missedBlockDate, DateOnly proposedDate)
+    {
+        if (StrictnessRule == StrictnessRule.Locked)
+            return MakeUpEligibility.NotAllowed;
+
+        if (StrictnessRule is StrictnessRule.DailyFlexibility or StrictnessRule.DailyTimeBudget)
+            return proposedDate == missedBlockDate ? MakeUpEligibility.Allowed : MakeUpEligibility.WrongDay;
+
+        return MakeUpEligibility.Allowed; // PeriodTimeBudget
+    }
+
+    /// <summary>
+    /// Whether a block spanning [start, end) may be placed under this contract, per its
+    /// Work Hours window for that day. A contract with no WorkHoursPolicy configured
+    /// (Simple contracts, or Advanced contracts that opted out) has no constraint.
+    /// </summary>
+    public bool AllowsBlockPlacement(DateOnly date, DateTime start, DateTime end)
+    {
+        var workHours = WorkHoursPolicy?.For(date);
+        return workHours is null || workHours.ContainsRange(start, end);
+    }
 
     /// <param name="plannedFocusHoursByNewDays">
     /// Focus block hours only, keyed by calendar day within (current EndDate, newEndDate].
     /// Only the new days are floor-checked — days already covered by the original Seal
     /// are not re-validated. Days missing from the map are treated as 0 planned hours.
     /// </param>
-    public void Extend(DateOnly newEndDate, IReadOnlyDictionary<DateOnly, double> plannedFocusHoursByNewDays, DateTime extendedAt)
+    /// <param name="dailyFloorOverridesForNewDays">
+    /// Per-day floor exceptions for the newly added days only, merged into the existing
+    /// DailyFloorPolicy's PerDayExceptions. A day not present here falls back to the
+    /// policy's Default (or is a rest day if there is no Default). Required for Simple
+    /// contracts, whose floor always varies per day; Advanced contracts extending with
+    /// their existing fixed Default typically pass an empty map.
+    /// </param>
+    public void Extend(
+        DateOnly newEndDate,
+        IReadOnlyDictionary<DateOnly, double> plannedFocusHoursByNewDays,
+        DateTime extendedAt,
+        IReadOnlyDictionary<DateOnly, DailyFloor?>? dailyFloorOverridesForNewDays = null)
     {
         if (Status != NenContractStatus.Active)
             throw new InvalidOperationException("Only an active contract can be extended.");
@@ -134,12 +215,27 @@ public class NenContract : AggregateRoot
         if (newEndDate <= EndDate)
             throw new ArgumentException("New end date must be after the current end date.");
 
+        var overrides = dailyFloorOverridesForNewDays ?? new Dictionary<DateOnly, DailyFloor?>();
+
         for (var date = EndDate.AddDays(1); date <= newEndDate; date = date.AddDays(1))
         {
+            var floor = overrides.TryGetValue(date, out var overrideFloor) ? overrideFloor : DailyFloorPolicy.Default;
+            if (floor is null)
+                continue; // rest day — no obligation, skipped entirely
+
             var plannedHours = plannedFocusHoursByNewDays.GetValueOrDefault(date);
-            if (!DailyFloor.IsSatisfiedBy(plannedHours))
+            if (!floor.IsSatisfiedBy(plannedHours))
                 throw new ArgumentException(
-                    $"Day {date:yyyy-MM-dd} is planned below the daily floor of {DailyFloor.Hours}h (planned: {plannedHours}h).");
+                    $"Day {date:yyyy-MM-dd} is planned below the daily floor of {floor.Hours}h (planned: {plannedHours}h).");
+        }
+
+        if (overrides.Count > 0)
+        {
+            var mergedExceptions = new Dictionary<DateOnly, DailyFloor?>(DailyFloorPolicy.PerDayExceptions);
+            foreach (var (date, floor) in overrides)
+                mergedExceptions[date] = floor;
+
+            DailyFloorPolicy = new DailyFloorPolicy(DailyFloorPolicy.Default, mergedExceptions);
         }
 
         var oldEndDate = EndDate;

@@ -15,8 +15,14 @@ public class GetPlannedBlocksForDayQueryHandlerTests
 
     private readonly IPlannedBlockRepository _blocks = Substitute.For<IPlannedBlockRepository>();
     private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
+    private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
 
-    private GetPlannedBlocksForDayQueryHandler CreateHandler() => new(_blocks, _presets);
+    public GetPlannedBlocksForDayQueryHandlerTests()
+    {
+        _clock.UtcNow.Returns(new DateTime(2026, 1, 2, 10, 30, 0, DateTimeKind.Utc)); // mid-window by default
+    }
+
+    private GetPlannedBlocksForDayQueryHandler CreateHandler() => new(_blocks, _presets, _clock);
 
     [Fact]
     public async Task HandleAsync_FocusBlock_MapsPresetNameAndBlockPresetType()
@@ -36,6 +42,20 @@ public class GetPlannedBlocksForDayQueryHandlerTests
         dto.Start.Should().Be(Start);
         dto.End.Should().Be(End);
         dto.IsCompleted.Should().BeFalse();
+        dto.HasEnded.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task HandleAsync_BlockAlreadyEnded_HasEndedIsTrue()
+    {
+        _clock.UtcNow.Returns(End.AddMinutes(1));
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End);
+        _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
+        _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
+
+        var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
+
+        result.Should().ContainSingle().Subject.HasEnded.Should().BeTrue();
     }
 
     [Fact]

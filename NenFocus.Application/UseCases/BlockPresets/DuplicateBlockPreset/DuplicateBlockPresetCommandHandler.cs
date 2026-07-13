@@ -1,4 +1,5 @@
 using NenFocus.Application.Interfaces;
+using NenFocus.Domain.Entities;
 
 namespace NenFocus.Application.UseCases.BlockPresets.DuplicateBlockPreset;
 
@@ -24,7 +25,16 @@ public sealed class DuplicateBlockPresetCommandHandler
         if (await _presets.ExistsWithNameAsync(newName, cancellationToken: cancellationToken))
             newName = $"{newName} ({now:HH:mm})";
 
-        var duplicate = source.Duplicate(newName, Guid.NewGuid(), now);
+        BlockPreset duplicate;
+        try
+        {
+            duplicate = source.Duplicate(newName, Guid.NewGuid(), now);
+        }
+        catch (ArgumentException ex)
+        {
+            return DuplicateBlockPresetResult.Fail(ex.Message);
+        }
+
         await _presets.AddAsync(duplicate, cancellationToken);
 
         return DuplicateBlockPresetResult.Ok(duplicate.Id);

@@ -14,6 +14,8 @@ public class NenFocusDbContext : DbContext
     public DbSet<BlockPreset> BlockPresets { get; set; } = null!;
     public DbSet<PlannedBlock> PlannedBlocks { get; set; } = null!;
     public DbSet<BlockedAttempt> BlockedAttempts { get; set; } = null!;
+    public DbSet<ContractPreset> ContractPresets { get; set; } = null!;
+    public DbSet<NenContract> NenContracts { get; set; } = null!;
 
     public NenFocusDbContext(DbContextOptions<NenFocusDbContext> options)
         : base(options) { }
@@ -49,6 +51,51 @@ public class NenFocusDbContext : DbContext
         {
         }
     }
+
+    // JSON round-tripping DTOs for the value objects below — DateOnly dictionary keys are
+    // serialized as "yyyy-MM-dd" strings rather than relying on System.Text.Json's own
+    // dictionary-key handling, for explicit, provider-independent round-tripping.
+    private sealed record WorkHoursJson(TimeOnly Start, TimeOnly End);
+    private sealed record WorkHoursPolicyJson(WorkHoursJson? Default, Dictionary<string, WorkHoursJson?> PerDayExceptions);
+    private sealed record DailyFloorPolicyJson(double? Default, Dictionary<string, double?> PerDayExceptions);
+    private sealed record MakeUpForEntryJson(Guid MissedBlockId, double MinutesCovered);
+
+    private static string SerializeDailyFloorPolicy(DailyFloorPolicy policy) => JsonSerializer.Serialize(
+        new DailyFloorPolicyJson(
+            policy.Default?.Hours,
+            policy.PerDayExceptions.ToDictionary(kv => kv.Key.ToString("yyyy-MM-dd"), kv => kv.Value?.Hours)),
+        (JsonSerializerOptions?)null);
+
+    private static DailyFloorPolicy DeserializeDailyFloorPolicy(string json)
+    {
+        var dto = JsonSerializer.Deserialize<DailyFloorPolicyJson>(json, (JsonSerializerOptions?)null)!;
+        return new DailyFloorPolicy(
+            dto.Default is { } hours ? new DailyFloor(hours) : null,
+            dto.PerDayExceptions.ToDictionary(kv => DateOnly.Parse(kv.Key), kv => kv.Value is { } v ? (DailyFloor?)new DailyFloor(v) : null));
+    }
+
+    private static string SerializeWorkHoursPolicy(WorkHoursPolicy policy) => JsonSerializer.Serialize(
+        new WorkHoursPolicyJson(
+            policy.Default is { } d ? new WorkHoursJson(d.Start, d.End) : null,
+            policy.PerDayExceptions.ToDictionary(kv => kv.Key.ToString("yyyy-MM-dd"), kv => kv.Value is { } w ? new WorkHoursJson(w.Start, w.End) : null)),
+        (JsonSerializerOptions?)null);
+
+    private static WorkHoursPolicy DeserializeWorkHoursPolicy(string json)
+    {
+        var dto = JsonSerializer.Deserialize<WorkHoursPolicyJson>(json, (JsonSerializerOptions?)null)!;
+        return new WorkHoursPolicy(
+            dto.Default is { } d ? new WorkHours(d.Start, d.End) : null,
+            dto.PerDayExceptions.ToDictionary(kv => DateOnly.Parse(kv.Key), kv => kv.Value is { } w ? (WorkHours?)new WorkHours(w.Start, w.End) : null));
+    }
+
+    private static string SerializeMakeUpForEntries(IReadOnlyList<MakeUpForEntry> entries) => JsonSerializer.Serialize(
+        entries.Select(e => new MakeUpForEntryJson(e.MissedBlockId, e.MinutesCovered)).ToList(),
+        (JsonSerializerOptions?)null);
+
+    private static List<MakeUpForEntry> DeserializeMakeUpForEntries(string json) =>
+        JsonSerializer.Deserialize<List<MakeUpForEntryJson>>(json, (JsonSerializerOptions?)null)!
+            .Select(e => new MakeUpForEntry(e.MissedBlockId, e.MinutesCovered))
+            .ToList();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -227,9 +274,14 @@ public class NenFocusDbContext : DbContext
             entity.Property(b => b.Title)
                 .HasMaxLength(100);
 
-            // Not yet persisted: MakeUpForEntries will map to an owned JSON column once the
-            // Make-Up Block Application/Infrastructure slice is built (see DOMAIN_DICTIONARY.md).
-            entity.Ignore(b => b.MakeUpForEntries);
+            entity.Property(b => b.ContractId);
+
+            entity.Property(b => b.MakeUpForEntries)
+                .HasConversion(
+                    entries => SerializeMakeUpForEntries(entries),
+                    json => (IReadOnlyList<MakeUpForEntry>)DeserializeMakeUpForEntries(json))
+                .HasColumnName("MakeUpForEntries")
+                .HasDefaultValueSql("'[]'");
 
             entity.HasDiscriminator<string>("BlockKind")
                 .HasValue<FocusBlock>("Focus")
@@ -265,6 +317,96 @@ public class NenFocusDbContext : DbContext
 
             entity.HasIndex(a => a.SessionId);
             entity.HasIndex(a => a.OccurredAt);
+        });
+
+        modelBuilder.Entity<ContractPreset>(entity =>
+        {
+            entity.ToTable("ContractPresets");
+            entity.HasKey(p => p.Id);
+
+            entity.Property(p => p.Id)
+                .ValueGeneratedNever();
+
+            entity.Property(p => p.Name)
+                .IsRequired()
+                .HasMaxLength(60);
+
+            entity.Property(p => p.StrictnessRule)
+                .HasConversion<string>()
+                .IsRequired();
+
+            entity.Property(p => p.DailyFloor)
+                .HasConversion(
+                    f => f.Hours,
+                    v => new DailyFloor(v))
+                .HasColumnName("DailyFloorHours")
+                .IsRequired();
+
+            entity.OwnsOne(p => p.WorkHours, w =>
+            {
+                w.Property(x => x.Start).HasColumnName("WorkHoursStart");
+                w.Property(x => x.End).HasColumnName("WorkHoursEnd");
+            });
+
+            entity.Property(p => p.AllowCancellation)
+                .IsRequired();
+        });
+
+        modelBuilder.Entity<NenContract>(entity =>
+        {
+            entity.ToTable("NenContracts");
+            entity.HasKey(c => c.Id);
+
+            entity.Property(c => c.Id)
+                .ValueGeneratedNever();
+
+            entity.Property(c => c.Name)
+                .IsRequired()
+                .HasMaxLength(100);
+
+            entity.Property(c => c.Goal)
+                .HasConversion(
+                    goal => goal.Value,
+                    value => new NenContractGoal(value))
+                .HasColumnName("Goal")
+                .IsRequired();
+
+            entity.Property(c => c.StartDate)
+                .IsRequired();
+
+            entity.Property(c => c.EndDate)
+                .IsRequired();
+
+            entity.Property(c => c.StrictnessRule)
+                .HasConversion<string>()
+                .IsRequired();
+
+            entity.Property(c => c.Status)
+                .HasConversion<string>()
+                .IsRequired();
+
+            entity.Property(c => c.AllowCancellation)
+                .IsRequired();
+
+            entity.Property(c => c.ContractPresetId);
+
+            entity.Property(c => c.DailyFloorPolicy)
+                .HasConversion(
+                    policy => SerializeDailyFloorPolicy(policy),
+                    json => DeserializeDailyFloorPolicy(json))
+                .HasColumnName("DailyFloorPolicy")
+                .IsRequired();
+
+            entity.Property(c => c.WorkHoursPolicy)
+                .HasConversion(
+                    policy => policy == null ? null : SerializeWorkHoursPolicy(policy),
+                    json => json == null ? null : DeserializeWorkHoursPolicy(json))
+                .HasColumnName("WorkHoursPolicy");
+
+            // ChangeWindow stays unmapped — parked for v1, no Application-layer consumer
+            // exists yet (see ARCHITECT_GOVERNANCE.md), unlike WorkHoursPolicy/DailyFloorPolicy
+            // which already have real guards built against them even without wizard UI.
+            entity.Ignore(c => c.ChangeWindow);
         });
     }
 }

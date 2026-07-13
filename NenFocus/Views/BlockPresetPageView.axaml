@@ -251,11 +251,11 @@
 											<TextBlock Text="{Binding Name}"
                                                        FontSize="16" FontWeight="SemiBold" Foreground="#1A1A2E"
                                                        VerticalAlignment="Center"/>
-											<Border CornerRadius="4" Padding="7,2"
+											<Border CornerRadius="10" Padding="8,3"
                                                     Background="{Binding PresetType, Converter={x:Static conv:BlockPresetTypeToColorConverter.Instance}}">
 												<TextBlock Text="{Binding PresetType, Converter={x:Static conv:BlockPresetTypeToLabelConverter.Instance}}"
-                                                           FontSize="10" FontWeight="SemiBold" Foreground="#FFFFFF"
-                                                           LetterSpacing="1"/>
+                                                           FontSize="11" FontWeight="SemiBold"
+                                                           Foreground="{Binding PresetType, Converter={x:Static conv:BlockPresetTypeToForegroundConverter.Instance}}"/>
 											</Border>
 										</StackPanel>
 										<TextBlock Text="{Binding CountText}"

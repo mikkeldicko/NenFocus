@@ -59,4 +59,28 @@ public class WorkHoursPolicyTests
 
         policy.For(Monday).Should().BeNull();
     }
+
+    [Fact]
+    public void NoConstraintExceptions_MapsEachDateToNull()
+    {
+        var exceptions = WorkHoursPolicy.NoConstraintExceptions([Monday, Wednesday]);
+
+        exceptions.Should().ContainKey(Monday).WhoseValue.Should().BeNull();
+        exceptions.Should().ContainKey(Wednesday).WhoseValue.Should().BeNull();
+    }
+
+    [Fact]
+    public void NoConstraintExceptions_Empty_ReturnsEmptyMap()
+    {
+        WorkHoursPolicy.NoConstraintExceptions([]).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void NoConstraintExceptions_MergedIntoPolicy_ResolvesAsNoConstraintOnThatDay()
+    {
+        var policy = new WorkHoursPolicy(NineToFive, WorkHoursPolicy.NoConstraintExceptions([Saturday]));
+
+        policy.For(Saturday).Should().BeNull();
+        policy.For(Monday).Should().Be(NineToFive);
+    }
 }

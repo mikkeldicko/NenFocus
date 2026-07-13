@@ -1,5 +1,6 @@
 using NenFocus.Application.Interfaces;
 using NenFocus.Domain.Entities;
+using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Application.UseCases.Planner.UpdatePlannedBlock;
 
@@ -61,6 +62,14 @@ public sealed class UpdatePlannedBlockCommandHandler : ICommandHandler<UpdatePla
 
         existing.Reschedule(startTime, endTime);
         existing.AssignPreset(command.PresetId);
+
+        if (existing is FocusBlock existingFocusBlock)
+        {
+            var entries = command.MakeUpForEntries
+                .Select(e => new MakeUpForEntry(e.MissedBlockId, e.MinutesCovered))
+                .ToList();
+            existingFocusBlock.AssignMakeUpForEntries(entries);
+        }
 
         await _blocks.UpdateAsync(existing, cancellationToken);
         return UpdatePlannedBlockResult.Ok();

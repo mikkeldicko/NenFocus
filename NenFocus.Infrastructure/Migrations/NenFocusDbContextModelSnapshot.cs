@@ -111,6 +111,81 @@ namespace NenFocus.Infrastructure.Migrations
                     b.ToTable("BlockedAttempts", (string)null);
                 });
 
+            modelBuilder.Entity("NenFocus.Domain.Entities.ContractPreset", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("AllowCancellation")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<double>("DailyFloor")
+                        .HasColumnType("REAL")
+                        .HasColumnName("DailyFloorHours");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("StrictnessRule")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("ContractPresets", (string)null);
+                });
+
+            modelBuilder.Entity("NenFocus.Domain.Entities.NenContract", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("AllowCancellation")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("ContractPresetId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DailyFloorPolicy")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("DailyFloorPolicy");
+
+                    b.Property<DateOnly>("EndDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Goal")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("Goal");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("StartDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("StrictnessRule")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("WorkHoursPolicy")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("WorkHoursPolicy");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("NenContracts", (string)null);
+                });
+
             modelBuilder.Entity("NenFocus.Domain.Entities.PlannedBlock", b =>
                 {
                     b.Property<Guid>("Id")
@@ -129,6 +204,13 @@ namespace NenFocus.Infrastructure.Migrations
 
                     b.Property<DateTime>("End")
                         .HasColumnType("TEXT");
+
+                    b.Property<string>("MakeUpForEntries")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("MakeUpForEntries")
+                        .HasDefaultValueSql("'[]'");
 
                     b.Property<DateTime>("Start")
                         .HasColumnType("TEXT");
@@ -367,6 +449,32 @@ namespace NenFocus.Infrastructure.Migrations
                     b.Navigation("BlockedApps");
 
                     b.Navigation("Websites");
+                });
+
+            modelBuilder.Entity("NenFocus.Domain.Entities.ContractPreset", b =>
+                {
+                    b.OwnsOne("NenFocus.Domain.ValueObjects.WorkHours", "WorkHours", b1 =>
+                        {
+                            b1.Property<Guid>("ContractPresetId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<TimeOnly>("End")
+                                .HasColumnType("TEXT")
+                                .HasColumnName("WorkHoursEnd");
+
+                            b1.Property<TimeOnly>("Start")
+                                .HasColumnType("TEXT")
+                                .HasColumnName("WorkHoursStart");
+
+                            b1.HasKey("ContractPresetId");
+
+                            b1.ToTable("ContractPresets");
+
+                            b1.WithOwner()
+                                .HasForeignKey("ContractPresetId");
+                        });
+
+                    b.Navigation("WorkHours");
                 });
 
             modelBuilder.Entity("NenFocus.Domain.Entities.Session", b =>

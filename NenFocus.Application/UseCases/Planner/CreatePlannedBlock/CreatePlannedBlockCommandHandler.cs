@@ -1,6 +1,7 @@
 using NenFocus.Application.Interfaces;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
+using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Application.UseCases.Planner.CreatePlannedBlock;
 
@@ -49,8 +50,13 @@ public sealed class CreatePlannedBlockCommandHandler : ICommandHandler<CreatePla
         }
 
         PlannedBlock block = command.BlockPresetType == BlockPresetType.Focus
-            ? FocusBlock.Create(Guid.NewGuid(), command.PresetId, startTime, endTime)
-            : BackgroundBlock.Create(Guid.NewGuid(), command.PresetId, startTime, endTime);
+            ? FocusBlock.Create(Guid.NewGuid(), command.PresetId, startTime, endTime,
+                contractId: command.ContractId,
+                makeUpForEntries: command.MakeUpForEntries
+                    .Select(e => new MakeUpForEntry(e.MissedBlockId, e.MinutesCovered))
+                    .ToList())
+            : BackgroundBlock.Create(Guid.NewGuid(), command.PresetId, startTime, endTime,
+                contractId: command.ContractId);
 
         await _blocks.AddAsync(block, cancellationToken);
         return CreatePlannedBlockResult.Ok(block.Id);

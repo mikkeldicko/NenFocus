@@ -26,4 +26,11 @@ public interface ISessionRepository
     /// Focus block as its origin. Used to make missed-session creation idempotent.
     /// </summary>
     Task<bool> ExistsForOriginatingBlockAsync(Guid focusBlockId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Returns the session (of any status) that references the given Focus block as
+    /// its origin, or null if none exists yet. Used to find a resolved block's actual
+    /// elapsed time for deficit and completed-hours computation.
+    /// </summary>
+    Task<Session?> GetByOriginatingBlockIdAsync(Guid focusBlockId, CancellationToken ct = default);
 }

@@ -41,4 +41,14 @@ public sealed class FocusBlock : PlannedBlock
 
         RitualCompletedAt = completedAt;
     }
+
+    /// <summary>
+    /// Replaces which missed/late blocks this make-up block covers. A plain setter, same
+    /// as AssignPreset/AssignContract — same-preset, uncovered-deficit, and same-day
+    /// constraints are Application-layer concerns, not enforced here.
+    /// </summary>
+    public void AssignMakeUpForEntries(IReadOnlyList<MakeUpForEntry> entries)
+    {
+        MakeUpForEntries = entries;
+    }
 }

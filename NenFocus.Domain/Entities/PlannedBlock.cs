@@ -28,6 +28,13 @@ public abstract class PlannedBlock
     public bool IsActive(DateTime atTime)
         => atTime >= Start && atTime < End;
 
+    /// <summary>
+    /// True once this block's window has fully closed. Canonical definition of "past" —
+    /// e.g. a broken Nen Contract's cleanup must only ever touch blocks this returns
+    /// false for; blocks it returns true for stay linked for historical accuracy.
+    /// </summary>
+    public bool HasEnded(DateTime asOf) => End < asOf;
+
     public TimeSpan GetDuration() => End - Start;
 
     public int MinutesUntilStart(DateTime asOf) => (int)(Start - asOf).TotalMinutes;

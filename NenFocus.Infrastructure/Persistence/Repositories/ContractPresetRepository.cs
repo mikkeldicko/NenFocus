@@ -1,0 +1,71 @@
+using Microsoft.EntityFrameworkCore;
+using NenFocus.Application.Interfaces;
+using NenFocus.Domain.Entities;
+
+namespace NenFocus.Infrastructure.Persistence.Repositories;
+
+public sealed class ContractPresetRepository : IContractPresetRepository
+{
+    private readonly NenFocusDbContext _context;
+
+    public ContractPresetRepository(NenFocusDbContext context)
+        => _context = context;
+
+    public async Task<IReadOnlyList<ContractPreset>> GetAllAsync(
+        CancellationToken cancellationToken = default)
+    {
+        return await _context.ContractPresets
+            .OrderBy(p => p.Name)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<ContractPreset?> GetByIdAsync(
+        Guid id,
+        CancellationToken cancellationToken = default)
+    {
+        return await _context.ContractPresets
+            .FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
+    }
+
+    public async Task AddAsync(
+        ContractPreset preset,
+        CancellationToken cancellationToken = default)
+    {
+        await _context.ContractPresets.AddAsync(preset, cancellationToken);
+    }
+
+    public Task UpdateAsync(
+        ContractPreset preset,
+        CancellationToken cancellationToken = default)
+    {
+        // Entity was loaded by this same context instance; EF Core's change tracker
+        // already has a snapshot and detects scalar/owned-type changes automatically.
+        return Task.CompletedTask;
+    }
+
+    public async Task DeleteAsync(
+        Guid id,
+        CancellationToken cancellationToken = default)
+    {
+        var preset = await _context.ContractPresets
+            .FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
+
+        if (preset is null) return;
+
+        _context.ContractPresets.Remove(preset);
+    }
+
+    public async Task<bool> ExistsWithNameAsync(
+        string name,
+        Guid? excludeId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var query = _context.ContractPresets
+            .Where(p => p.Name.ToLower() == name.ToLower().Trim());
+
+        if (excludeId.HasValue)
+            query = query.Where(p => p.Id != excludeId.Value);
+
+        return await query.AnyAsync(cancellationToken);
+    }
+}

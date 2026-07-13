@@ -1,6 +1,7 @@
 using FluentValidation;
 using NenFocus.Application.Interfaces;
 using NenFocus.Domain.Constants;
+using NenFocus.Domain.Entities;
 
 namespace NenFocus.Application.UseCases.BlockPresets.UpdateBlockPreset;
 
@@ -8,23 +9,48 @@ public sealed class UpdateBlockPresetValidator : AbstractValidator<UpdateBlockPr
 {
     public UpdateBlockPresetValidator(
         ISessionRepository sessions,
-        IPlannedBlockRepository plannedBlocks)
+        IPlannedBlockRepository plannedBlocks,
+        IBlockPresetRepository presets)
     {
-        RuleFor(x => x.PresetId)
-            .MustAsync(async (id, ct) =>
+        RuleFor(x => x)
+            .MustAsync(async (command, ct) =>
             {
-                var active = await sessions.GetActiveAsync(ct);
-                return active?.BlockPresetId != id;
-            })
-            .WithMessage("This preset is in use by an active session and cannot be modified.");
+                var lockedByActiveSession = (await sessions.GetActiveAsync(ct))?.BlockPresetId == command.PresetId;
+                var lockedByFutureBlock = await plannedBlocks.HasFutureBlocksForPresetAsync(command.PresetId, DateTime.UtcNow, ct);
 
-        RuleFor(x => x.PresetId)
-            .MustAsync(async (id, ct) =>
-                !await plannedBlocks.HasFutureBlocksForPresetAsync(id, DateTime.UtcNow, ct))
-            .WithMessage("This preset is assigned to one or more future planned blocks and cannot be modified.");
+                if (!lockedByActiveSession && !lockedByFutureBlock)
+                    return true;
+
+                var current = await presets.GetByIdAsync(command.PresetId, ct);
+                return current is null || IsAddOnlyChange(command, current);
+            })
+            .WithMessage("This preset is in use by an active session or a scheduled block (planned directly or under a Nen Contract) — while locked, you may only add apps or websites. Removing entries, renaming, or changing its type or filter is not allowed until it's free.");
 
         RuleForEach(x => x.BlockedApps)
             .Must(app => !SystemSafetyConstants.UnkillableProcesses.Contains(ProcessUtils.NormalizeProcessName(app)))
             .WithMessage((cmd, app) => $"'{app}' is a critical system process and cannot be blocked.");
+    }
+
+    /// <summary>
+    /// True only if every field but BlockedApps/Websites is unchanged from the currently
+    /// persisted preset, and both lists are supersets of their current contents — nothing
+    /// already blocked may be dropped while the preset is locked.
+    /// </summary>
+    private static bool IsAddOnlyChange(UpdateBlockPresetCommand command, BlockPreset current)
+    {
+        if (command.Name.Trim() != current.Name) return false;
+        if (command.WebsiteFilterType != current.WebsiteFilterType) return false;
+        if (command.PresetType != current.PresetType) return false;
+        if (!command.Tags.Select(t => t.Trim()).ToHashSet().SetEquals(current.Tags)) return false;
+
+        var currentApps = current.BlockedApps.Select(a => a.ProcessName).ToHashSet();
+        var newApps = command.BlockedApps.Select(a => a.Trim()).ToHashSet();
+        if (!currentApps.IsSubsetOf(newApps)) return false;
+
+        var currentSites = current.Websites.Select(s => s.Url).ToHashSet();
+        var newSites = command.Websites.Select(u => u.Trim().ToLowerInvariant()).ToHashSet();
+        if (!currentSites.IsSubsetOf(newSites)) return false;
+
+        return true;
     }
 }

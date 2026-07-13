@@ -69,6 +69,21 @@ public class DuplicateBlockPresetCommandHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_ExplicitBlankNewName_FailsCleanlyInsteadOfThrowing()
+    {
+        // An explicit "" (not null) skips the ?? default, so it reaches
+        // BlockPreset.Duplicate/Create unchanged, which rejects a blank name.
+        var sourceId = Guid.NewGuid();
+        _presets.GetByIdAsync(sourceId, Arg.Any<CancellationToken>()).Returns(CreateSourcePreset(sourceId));
+
+        var result = await CreateHandler().HandleAsync(
+            new DuplicateBlockPresetCommand { SourcePresetId = sourceId, NewName = "   " });
+
+        result.Success.Should().BeFalse();
+        await _presets.DidNotReceive().AddAsync(Arg.Any<BlockPreset>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task HandleAsync_HappyPath_ReturnsNewPresetId()
     {
         var sourceId = Guid.NewGuid();
