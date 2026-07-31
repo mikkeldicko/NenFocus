@@ -42,7 +42,11 @@
       "Read(//c//**)",
       "PowerShell(Get-ChildItem *)",
       "Bash(nohup dotnet \"NenFocus/bin/Debug/net9.0-windows10.0.19041.0/NenFocus.dll\")",
-      "Bash(disown)"
+      "Bash(disown)",
+      "Bash(node *)",
+      "Bash(find 'C:\\\\Users\\\\mikke/.claude/projects' -name *.jsonl -printf '%T@ %p\\\\n')",
+      "Bash(find 'C:\\\\Users\\\\mikke/.claude/projects' -name *.jsonl)",
+      "Bash(xargs -I{} node -e \"console.log\\(new Date\\({}*1000\\).toISOString\\(\\)\\)\")"
     ]
   }
 }

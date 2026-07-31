@@ -11,7 +11,7 @@ This file is the canonical reference for every domain concept in NenFocus. It ex
 | **Session** | A bounded focus period; lifecycle `NotStarted → Active → (OnBreak ↔ Active) → Completed` |
 | **Ritual** | The four-step wizard (Ten → Zetsu → Ren → Hatsu) that creates a Session |
 | **Block Preset** | A reusable template of blocked apps + website filter type; typed as Focus or Background at creation |
-| **Planned Block** | Abstract base for `FocusBlock` and `BackgroundBlock`; carries `Start`, `End`, `BlockPresetId`, `IsActive()`, `OverlapsWith()` |
+| **Planned Block** | Abstract base for `FocusBlock` and `BackgroundBlock`; carries `Start`, `End`, `BlockPresetId`, `RecurringSeriesId (Guid?)`, `IsActive()`, `OverlapsWith()` |
 | **Focus Block** | A planned calendar entry that activates enforcement AND triggers the Nen Ritual at the designated time |
 | **Background Block** | A planned calendar entry that activates enforcement at the designated time without triggering the Ritual |
 | **Policy Slice** | The merged, computed enforcement state at a given instant; represented as `ActivePolicySlice` (Domain Value Object), produced by `PolicyEngine` |
@@ -44,6 +44,9 @@ This file is the canonical reference for every domain concept in NenFocus. It ex
 | **UsageCeiling** | An ambient, perpetual cap on daily or weekly access time for a specific site or app; created on the Presets page; deliberately independent of `BlockPreset` and `NenContract` |
 | **CeilingPeriod** | Enum (`Daily` \| `Weekly`) — the aggregation window a `UsageCeiling`'s cap is measured against |
 | **IUsageTracker** | Application-layer interface through which infrastructure records usage events; analogous in pattern to `IBlockedAttemptTracker` |
+| **RecurrenceRule** | Value object describing a repeat schedule: interval, unit (Day/Week/Month), weekday mask, end condition — the single shape behind "Every day," "Specific weekdays," and "Custom" recurrence pickers |
+| **RecurringSeries** | Entity owning a `RecurrenceRule` + block template (preset, time-of-day); generates and keeps topped-up the materialized `PlannedBlock` rows that belong to it |
+| **SkippedOccurrence** | Append-only fact recording a recurring instance that couldn't be generated due to a conflict with another block; exists only while unresolved |
 
 ---
 
@@ -268,6 +271,33 @@ NenFocus has five pages accessible via the sidebar:
 - Whether the native per-app audio-playing exception ships in v1.
 
 See `ARCHITECT_GOVERNANCE.md` → Open Gap A for the full interrogation record.
+
+---
+
+## Recurring Blocks *(fully interrogated 2026-07-15 — not yet built)*
+
+**Definition:** A `PlannedBlock` (Focus or Background) that repeats on a schedule instead of existing as a single one-off calendar entry — e.g. "9–5 every weekday." Type (Focus vs Background) is decided exactly the way it already is today: by which `BlockPreset` is picked when the recurring block is created. Recurrence is a Planner-only concept, deliberately independent of `NenContract` and unrelated to `UsageCeiling` (a soft ambient cap, not a hard recurring schedule).
+
+**One recurrence shape, not three:** "Every day," "Specific weekdays," and "Custom" are all just Planner UI presets over a single `RecurrenceRule` value object — never separate domain types. This mirrors the Simple/Advanced Contract precedent (one underlying shape, simplified entry points for the common case) and avoids duplicating "does this fire on date X" logic in three places.
+
+**Materialization is real, not lazy:** unlike Google Calendar (which expands an `RRULE` lazily, only for the date range a client is viewing), NenFocus needs concrete `PlannedBlock` rows for `ScheduledEnforcementService` to enforce against — a series can't wait to be "computed" the next time someone opens the Planner. A `RecurringSeries` therefore materializes real rows on a rolling **1-year horizon**, kept topped up by a background heartbeat (mirroring `NenContractHeartbeatService`'s pattern) plus a cold-start catch-up check at launch.
+
+**Editing/deletion — three Google Calendar scopes:** "This event" (detaches one instance — clears its `RecurringSeriesId`), "This and following events" (splits the series: truncates the original, spawns a new `RecurringSeries` from that instance forward), "All events" (edits the series template; only propagates to instances still linked, not ones already detached).
+
+**Conflict handling, two different moments:** at creation time (user is present) — validate the full 1-year window up front, show every conflict, let the user skip that occurrence or cancel entirely. At background top-up time (nobody's present) — the conflicting occurrence is force-skipped (can't violate the no-overlapping-Focus-Blocks rule) and recorded as a `SkippedOccurrence`; surfaced as an actionable prompt next time the app opens ("Change it" jumps to the Planner on that date; "Skip" dismisses). Once the conflicting block is cleared, the missing occurrence auto-regenerates on the next top-up pass.
+
+**Technical mapping:**
+
+| Layer | Artifact | Role |
+|-------|----------|------|
+| Domain | `RecurrenceRule` value object | `{ IntervalValue, IntervalUnit (Day\|Week\|Month), WeekdayMask, EndCondition (Never\|OnDate\|AfterOccurrences) }`. **Not yet built.** |
+| Domain | `RecurringSeries` entity | `Id`, `BlockPresetId`, `RecurrenceRule`, time-of-day template, `Title?`. Owns truncation (for "this and following" splits). **Not yet built.** |
+| Domain | `PlannedBlock.RecurringSeriesId (Guid?)` | Nullable FK, mirrors `ContractId`. `null` = ordinary one-off block. **Not yet built.** |
+| Domain | `SkippedOccurrence` entity | `{ Id, SeriesId, Date, ConflictingBlockId }`. No `Resolved` flag — existence means pending; deleted once regenerated. No domain events. **Not yet built.** |
+| Infrastructure | Materialization heartbeat | New low-frequency `BackgroundService` (mirrors `NenContractHeartbeatService`), keeps each series' rows topped up 1 year ahead; re-scans `SkippedOccurrence` rows each pass for cleared conflicts. **Not yet built.** |
+| UI | Planner block-creation form | "Repeat" toggle reveals the `RecurrenceRule` picker (Every day / Specific weekdays / Custom). Edit/delete on a recurring instance prompts for scope (This event / This and following / All events). Pending `SkippedOccurrence` rows surface as an actionable prompt on app open. **Not yet built.** |
+
+See `ARCHITECT_GOVERNANCE.md` → Open Gap E for the full interrogation record, including verified performance facts about the `PlannedBlocks` table.
 
 ---
 

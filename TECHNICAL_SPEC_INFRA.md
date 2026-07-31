@@ -75,7 +75,7 @@ Tactical implementation details, current build state, and platform-specific gotc
 | GetInsightsCalendarQuery | Stub exists. Merges `BackgroundBlock` rows, `FocusBlock` rows, and Spontaneous `Session` rows into unified `InsightsEntryDto` list. Implement when Insights page is built. |
 | Universal usage tracking + Usage Ceiling | Extension currently tracks navigation attempts only. Scoped 2026-07-07 — see `ARCHITECT_GOVERNANCE.md` → Open Gap A for the full interrogated design (`DailyUsage`, `UsageCeiling`, idle detection, `/report-time` endpoint). Domain shape settled; not yet built. |
 | Planned Period / Strict Mode | Superseded by Nen Contract — this row described what `NenContract` (`StrictnessRule`: `DailyFlexibility`/`DailyTimeBudget`/`PeriodTimeBudget`, `AllowCancellation`, `DailyFloorPolicy`, optional `WorkHoursPolicy`) now implements end-to-end via the Contract Wizard. Kept here only as a historical cross-reference; do not build a second, parallel feature for this. |
-| Recurring Blocks | UI not built. Each recurrence instance is a separate row. Google Calendar edit model (edit one instance, others unchanged). |
+| Recurring Blocks | Fully interrogated 2026-07-15 — see `ARCHITECT_GOVERNANCE.md` → Open Gap E for the complete design (`RecurrenceRule`, `RecurringSeries`, `SkippedOccurrence`, 1-year rolling materialization horizon, three-way edit/delete scopes, two-moment conflict handling). Domain shape settled; not yet built. |
 | FocusBlock → Session link | CLOSED in Gap 3. `Session.OriginatingBlockId` and `FocusBlock.RitualCompletedAt` added. |
 | Settings page | Stub only — theme, strict mode toggle, notification filter, sounds, daily adjustment window constraints. |
 | Checklist / Quest persistence | UI present on Main page. No storage wired up. |
@@ -146,6 +146,7 @@ The Source of Truth flow: `Database → PolicyEngine (Domain) → ActivePolicySl
 - **FocusBlock update**: There is no `FocusBlock.Update()` method — `UpdatePlannedBlockCommand` uses delete + recreate.
 - **Hosts file markers**: must be exactly `# NEN_FOCUS_START` and `# NEN_FOCUS_END` (case-sensitive, underscores). Any deviation causes duplicate entries on next write.
 - **Break reminders**: Implemented as `Task.Delay` fire-and-forget tasks tracked by `CancellationTokenSource`. They do not survive app restarts. A persistent scheduler is a future concern.
+- **No index on `PlannedBlocks.Start`/`End`**: confirmed 2026-07-15 while sizing the Recurring Blocks materialization horizon (see `ARCHITECT_GOVERNANCE.md` → Open Gap E) — every range query (`GetForDayAsync`, `GetForRangeAsync`, `GetOverlappingAsync`, etc.) is currently a full table scan. Not a problem at current or foreseeable single-user scale; worth adding an index on `(Start, End)` before row counts climb into the tens of thousands, independent of any specific feature.
 
 ### DI & Registration
 
