@@ -585,22 +585,18 @@ public class NenContractTests
         contract.CheckMakeUpEligibility(StartDate, StartDate.AddDays(1)).Should().Be(MakeUpEligibility.NotAllowed);
     }
 
-    [Theory]
-    [InlineData(StrictnessRule.DailyFlexibility)]
-    [InlineData(StrictnessRule.DailyTimeBudget)]
-    public void CheckMakeUpEligibility_DailyModes_SameDayAllowed(StrictnessRule rule)
+    [Fact]
+    public void CheckMakeUpEligibility_DailyFlexibility_SameDayAllowed()
     {
-        var contract = Seal(strictnessRule: rule);
+        var contract = Seal(strictnessRule: StrictnessRule.DailyFlexibility);
 
         contract.CheckMakeUpEligibility(StartDate, StartDate).Should().Be(MakeUpEligibility.Allowed);
     }
 
-    [Theory]
-    [InlineData(StrictnessRule.DailyFlexibility)]
-    [InlineData(StrictnessRule.DailyTimeBudget)]
-    public void CheckMakeUpEligibility_DailyModes_DifferentDayIsWrongDay(StrictnessRule rule)
+    [Fact]
+    public void CheckMakeUpEligibility_DailyFlexibility_DifferentDayIsWrongDay()
     {
-        var contract = Seal(strictnessRule: rule);
+        var contract = Seal(strictnessRule: StrictnessRule.DailyFlexibility);
 
         contract.CheckMakeUpEligibility(StartDate, StartDate.AddDays(1)).Should().Be(MakeUpEligibility.WrongDay);
     }

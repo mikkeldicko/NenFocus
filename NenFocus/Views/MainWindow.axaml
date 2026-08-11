@@ -121,5 +121,9 @@
 		<ContentControl Content="{Binding TriageViewModel}"
                         IsVisible="{Binding IsTriageActive}"/>
 
+		<!-- Nen Contract wizard full-screen overlay -->
+		<ContentControl Content="{Binding ContractWizardViewModel}"
+                        IsVisible="{Binding IsContractWizardActive}"/>
+
 	</Grid>
 </Window>

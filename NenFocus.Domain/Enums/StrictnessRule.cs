@@ -4,6 +4,5 @@ public enum StrictnessRule
 {
     Locked,
     DailyFlexibility,
-    DailyTimeBudget,
     PeriodTimeBudget
 }

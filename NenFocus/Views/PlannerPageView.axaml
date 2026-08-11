@@ -354,12 +354,6 @@
 			</Border>
 		</Border>
 
-		<Border Background="White"
-                IsVisible="{Binding IsWizardVisible}"
-                IsHitTestVisible="{Binding IsWizardVisible}">
-			<ContentControl Content="{Binding WizardViewModel}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-		</Border>
-
 		<Border IsVisible="{Binding IsConfirmDiscardDraftVisible}" Background="#88000000">
 			<Border Background="#FFFFFF" CornerRadius="14" Width="400" Padding="32,28"
                     HorizontalAlignment="Center" VerticalAlignment="Center"

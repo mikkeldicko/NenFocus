@@ -292,6 +292,22 @@ Gaps that have been identified but not yet closed. Each is here because deferrin
 
 \---
 
+### Open Gap F — Daily Flexibility: Total-Time Conservation Not Enforced (surfaced 2026-08-11; not yet built)
+
+**The gap:** `StrictnessRule` used to have four values — `Locked`, `DailyFlexibility`, `DailyTimeBudget`, `PeriodTimeBudget`. Auditing them (prompted by the architect asking what actually distinguished `DailyFlexibility` from `DailyTimeBudget`) found they were **already 100% behaviorally identical in shipped code** — the only place either was checked, `NenContract.CheckMakeUpEligibility`, treated them as one branch (both just require same-day make-up coverage). The "total block time for that day must stay the same" idea documented for `DailyTimeBudget` had never been implemented as an actual guard anywhere; it existed purely as prose in `DOMAIN_DICTIONARY.md`.
+
+**The decision (2026-08-11):** Rather than keep two enum values that mean the same thing today, `DailyTimeBudget` was deleted from `StrictnessRule` entirely. `DailyFlexibility` absorbs its slot and, going forward, is the name that carries the "rearrange freely within a day, but the day's total scheduled block time must stay the same" intent — a straight rename/merge, not new behavior. `StrictnessRule` is now a true three-value enum: `Locked`, `DailyFlexibility`, `PeriodTimeBudget`. Every reference across Domain, Application, tests, and docs was updated to match (see `DESIGN_GAP_HISTORY.md` for the closure record). The Simple-contract preset list already only ever exposed three named presets (Lockdown/Daily Flex/Period Study) — the fourth documented preset, "Light Touch," never existed in code and was deleted from the docs in the same pass as pure doc cleanup, unrelated to the enum merge.
+
+**What's still open:** The actual enforcement — a guard that rejects a `CreatePlannedBlock`/`UpdatePlannedBlock`/`DeletePlannedBlock` edit if it would change a day's total scheduled Focus-block time under an active `DailyFlexibility` contract — was deliberately **not** built in this pass. It needs its own interrogation before implementation, at minimum:
+- What counts toward "the day's total" — Focus blocks only (matching how Daily Floor is Focus-only), or Focus + Background combined?
+- Is "the same" measured against the total originally scheduled at Seal time for that day, or the total immediately before the edit? This matters a lot: if it's the Seal-time total, a single resize or delete would always violate it unless paired with a compensating edit elsewhere — there's no current mechanism for a multi-block atomic "swap." If it's pre-edit total, the same problem applies to any single-block edit that isn't a same-duration move.
+- Floating-point/duration tolerance for "the same."
+- How this interacts with the Make-Up path (`MakeUpForEntry`) — a make-up block is new time added to a day on purpose to cover a deficit elsewhere; it must not itself trip a total-conservation guard meant for ordinary rearrangement.
+
+**Must be closed before:** Nothing urgent — `DailyFlexibility` behaves exactly as it always has (day-scoped rearrangement, no total-time restriction in practice) until this is picked up. Flagged here so the gap between documented intent and enforced behavior isn't lost.
+
+\---
+
 ## Minor Cleanups
 
 Trivial style or consistency fixes that don't rise to the level of a Design Gap. Deferred until the relevant file is next edited for other reasons. Items here should be deletable in a single line change.

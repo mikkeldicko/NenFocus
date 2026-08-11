@@ -189,7 +189,6 @@ public partial class ContractWizardViewModel : ViewModelBase
     {
         StrictnessRule.Locked => "Lockdown",
         StrictnessRule.DailyFlexibility => "Daily Flex",
-        StrictnessRule.DailyTimeBudget => "Daily Time Budget",
         StrictnessRule.PeriodTimeBudget => "Period Study",
         _ => rule.ToString()
     };

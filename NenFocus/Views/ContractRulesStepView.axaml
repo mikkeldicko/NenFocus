@@ -37,7 +37,7 @@
         </Style>
     </UserControl.Styles>
 
-    <ScrollViewer Width="480" MaxHeight="440" Margin="0,8,0,0">
+    <ScrollViewer MaxHeight="440" Margin="0,8,0,0">
         <StackPanel Spacing="16">
             <StackPanel Spacing="2">
                 <TextBlock Text="Set the rules" FontSize="18" FontWeight="SemiBold" Foreground="#1A1A2E"/>

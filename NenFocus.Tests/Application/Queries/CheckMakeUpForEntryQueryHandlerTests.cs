@@ -98,28 +98,24 @@ public class CheckMakeUpForEntryQueryHandlerTests
         result.Should().Be(MakeUpForEntryCheckResult.StrictnessDoesNotAllowMakeUp);
     }
 
-    [Theory]
-    [InlineData(StrictnessRule.DailyFlexibility)]
-    [InlineData(StrictnessRule.DailyTimeBudget)]
-    public async Task HandleAsync_WrongDay_ReturnsWrongDay(StrictnessRule rule)
+    [Fact]
+    public async Task HandleAsync_WrongDay_ReturnsWrongDay()
     {
         var missed = MissedBlock();
         _blocks.GetByIdAsync(missed.Id, Arg.Any<CancellationToken>()).Returns(missed);
-        _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(ContractWith(rule));
+        _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(ContractWith(StrictnessRule.DailyFlexibility));
 
         var result = await CreateHandler().HandleAsync(Query(missed.Id, MissedBlockDate.AddDays(1)), CancellationToken.None);
 
         result.Should().Be(MakeUpForEntryCheckResult.WrongDay);
     }
 
-    [Theory]
-    [InlineData(StrictnessRule.DailyFlexibility)]
-    [InlineData(StrictnessRule.DailyTimeBudget)]
-    public async Task HandleAsync_SameDay_PassesTheDayCheck(StrictnessRule rule)
+    [Fact]
+    public async Task HandleAsync_SameDay_PassesTheDayCheck()
     {
         var missed = MissedBlock();
         _blocks.GetByIdAsync(missed.Id, Arg.Any<CancellationToken>()).Returns(missed);
-        _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(ContractWith(rule));
+        _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(ContractWith(StrictnessRule.DailyFlexibility));
         _deficits.HandleAsync(Arg.Any<GetNenContractDeficitsQuery>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<FocusBlockDeficitDto>)[
                 new FocusBlockDeficitDto { FocusBlockId = missed.Id, RemainingDeficitMinutes = 120 }

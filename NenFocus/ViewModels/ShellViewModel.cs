@@ -27,6 +27,7 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
+using NenFocus.ViewModels.Contracts;
 using NenFocus.ViewModels.Pages;
 using NenFocus.ViewModels.Ritual;
 using Avalonia.Controls;
@@ -63,6 +64,8 @@ public partial class ShellViewModel : ViewModelBase
     [ObservableProperty] private PostSessionViewModel? _postSessionViewModel;
     [ObservableProperty] private bool _isTriageActive;
     [ObservableProperty] private MissedSessionsTriageViewModel? _triageViewModel;
+    [ObservableProperty] private bool _isContractWizardActive;
+    [ObservableProperty] private ContractWizardViewModel? _contractWizardViewModel;
 
     public ObservableCollection<NavItemViewModel> NavItems { get; } = new();
 
@@ -120,7 +123,10 @@ public partial class ShellViewModel : ViewModelBase
 
         NavItems.Add(new NavItemViewModel("Main", "⊹", new MainPageViewModel(() => StartRitual(), ShowPostSession, _sessionState, _monitor, _endSession, _startBreak, _resumeFromBreak, _plannerClock), Select));
         NavItems.Add(new NavItemViewModel("Presets", "◻", new BlockPresetPageViewModel(presetsQuery, createPreset, updatePreset, deletePreset, duplicatePreset), Select));
-        NavItems.Add(new NavItemViewModel("Planner", "◫", new PlannerPageViewModel(presetsQuery, getBlocksForDay, createPlannedBlock, updatePlannedBlock, deletePlannedBlock, sealContract, computePlannedFocusHours, getContractPresets, createContractPreset, _plannerClock, _sessionState), Select));
+        var plannerViewModel = new PlannerPageViewModel(presetsQuery, getBlocksForDay, createPlannedBlock, updatePlannedBlock, deletePlannedBlock, sealContract, computePlannedFocusHours, getContractPresets, createContractPreset, _plannerClock, _sessionState);
+        plannerViewModel.ContractWizardOpened += OnContractWizardOpened;
+        plannerViewModel.ContractWizardClosed += OnContractWizardClosed;
+        NavItems.Add(new NavItemViewModel("Planner", "◫", plannerViewModel, Select));
         NavItems.Add(new NavItemViewModel("Insights", "◈", new InsightsPageViewModel(), Select));
         NavItems.Add(new NavItemViewModel("Settings", "◎", new SettingsPageViewModel(), Select));
 
@@ -193,7 +199,7 @@ public partial class ShellViewModel : ViewModelBase
     {
         if (IsRitualActive) return;
 
-        if (IsPostSessionActive || IsTriageActive)
+        if (IsPostSessionActive || IsTriageActive || IsContractWizardActive)
         {
             if (focusBlockId.HasValue)
                 _pendingOverlays.Enqueue(new PendingRitual(focusBlockId.Value));
@@ -268,7 +274,7 @@ public partial class ShellViewModel : ViewModelBase
 
     private void TryDrainQueue()
     {
-        if (IsRitualActive || IsPostSessionActive || IsTriageActive) return;
+        if (IsRitualActive || IsPostSessionActive || IsTriageActive || IsContractWizardActive) return;
 
         if (_pendingOverlays.Count == 0)
         {
@@ -347,6 +353,19 @@ public partial class ShellViewModel : ViewModelBase
     {
         IsTriageActive = false;
         TriageViewModel = null;
+    }
+
+    private void OnContractWizardOpened(ContractWizardViewModel vm)
+    {
+        ContractWizardViewModel = vm;
+        IsContractWizardActive = true;
+    }
+
+    private void OnContractWizardClosed()
+    {
+        IsContractWizardActive = false;
+        ContractWizardViewModel = null;
+        TryDrainQueue();
     }
 
     private void GoToMain()

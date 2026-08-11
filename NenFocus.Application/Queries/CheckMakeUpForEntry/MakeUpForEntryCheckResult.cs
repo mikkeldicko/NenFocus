@@ -13,7 +13,7 @@ public enum MakeUpForEntryCheckResult
     /// <summary>Rule 10 — a Locked contract has no make-up recovery mechanism at all.</summary>
     StrictnessDoesNotAllowMakeUp,
 
-    /// <summary>Rules 8/10 — DailyFlexibility and DailyTimeBudget both require same-day coverage.</summary>
+    /// <summary>Rule 8 — DailyFlexibility requires same-day coverage.</summary>
     WrongDay,
 
     /// <summary>The referenced block's remaining deficit can't absorb this many minutes.</summary>
