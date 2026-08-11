@@ -39,4 +39,13 @@ public interface INenContractRepository
     Task<bool> HasContractsInEffectForPresetAsync(
         Guid contractPresetId,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns every contract for which NenContract.IsInEffect is true (Scheduled or
+    /// Active) — nothing currently prevents more than one from being in effect at once.
+    /// Backs both the Planner's active-contract banner (filtered/tie-broken per viewed
+    /// week by the caller) and the contract-overlap check at wizard-Basics-step and Seal
+    /// time. Callers own whatever selection/filtering they need; this returns the raw set.
+    /// </summary>
+    Task<IReadOnlyList<NenContract>> GetAllInEffectAsync(CancellationToken cancellationToken = default);
 }

@@ -296,4 +296,73 @@ public class NenContractRepositoryTests : SqliteRepositoryTestBase
         var reloaded = await CreateRepository().GetByIdAsync(contract.Id);
         reloaded!.Status.Should().Be(NenContractStatus.Active);
     }
+
+    [Fact]
+    public async Task GetAllInEffectAsync_NoContracts_ReturnsEmpty()
+    {
+        var result = await CreateRepository().GetAllInEffectAsync();
+
+        result.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetAllInEffectAsync_ActiveContract_IncludesIt()
+    {
+        var repo = CreateRepository();
+        var contract = Seal(sealedAt: SealedOnStart); // Active
+        await repo.AddAsync(contract);
+        await Context.SaveChangesAsync();
+
+        var result = await CreateRepository().GetAllInEffectAsync();
+
+        result.Should().ContainSingle(c => c.Id == contract.Id);
+    }
+
+    [Fact]
+    public async Task GetAllInEffectAsync_ScheduledContract_IncludesIt()
+    {
+        var repo = CreateRepository();
+        var contract = Seal(sealedAt: SealedBeforeStart); // Scheduled
+        await repo.AddAsync(contract);
+        await Context.SaveChangesAsync();
+
+        var result = await CreateRepository().GetAllInEffectAsync();
+
+        result.Should().ContainSingle(c => c.Id == contract.Id);
+    }
+
+    [Fact]
+    public async Task GetAllInEffectAsync_CompletedContract_ExcludesIt()
+    {
+        var repo = CreateRepository();
+        var contract = Seal(sealedAt: SealedOnStart);
+        contract.Complete(SealedOnStart.AddDays(7));
+        await repo.AddAsync(contract);
+        await Context.SaveChangesAsync();
+
+        var result = await CreateRepository().GetAllInEffectAsync();
+
+        result.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetAllInEffectAsync_ActiveAndScheduledBothPresent_ReturnsBoth()
+    {
+        var repo = CreateRepository();
+        var scheduled = Seal(sealedAt: SealedBeforeStart); // Scheduled
+        var active = NenContract.Seal(
+            Guid.NewGuid(), "Later Contract", new NenContractGoal("Goal"),
+            StartDate.AddDays(30), EndDate.AddDays(30),
+            StrictnessRule.Locked, DailyFloorPolicy.None, null, false,
+            new Dictionary<DateOnly, double>(), sealedAt: StartDate.AddDays(30).ToDateTime(TimeOnly.MinValue)); // Active
+        await repo.AddAsync(scheduled);
+        await repo.AddAsync(active);
+        await Context.SaveChangesAsync();
+
+        var result = await CreateRepository().GetAllInEffectAsync();
+
+        result.Should().HaveCount(2);
+        result.Should().Contain(c => c.Id == scheduled.Id);
+        result.Should().Contain(c => c.Id == active.Id);
+    }
 }

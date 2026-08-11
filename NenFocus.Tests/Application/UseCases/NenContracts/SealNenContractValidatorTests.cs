@@ -1,6 +1,7 @@
 using FluentAssertions;
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
+using NenFocus.Application.Queries.CheckNenContractDateRangeOverlap;
 using NenFocus.Application.UseCases.NenContracts.Seal;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
@@ -14,8 +15,16 @@ public class SealNenContractValidatorTests
     private static readonly DateOnly EndDate = new(2026, 1, 7);
 
     private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
+    private readonly IQueryHandler<CheckNenContractDateRangeOverlapQuery, string?> _checkOverlap =
+        Substitute.For<IQueryHandler<CheckNenContractDateRangeOverlapQuery, string?>>();
 
-    private SealNenContractValidator CreateValidator() => new(_presets);
+    public SealNenContractValidatorTests()
+    {
+        _checkOverlap.HandleAsync(Arg.Any<CheckNenContractDateRangeOverlapQuery>(), Arg.Any<CancellationToken>())
+            .Returns((string?)null);
+    }
+
+    private SealNenContractValidator CreateValidator() => new(_presets, _checkOverlap);
 
     private static SealNenContractCommand ValidCommand() => new()
     {
@@ -134,5 +143,34 @@ public class SealNenContractValidatorTests
         var result = await CreateValidator().ValidateAsync(ValidCommand() with { Blocks = [block] });
 
         result.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Validate_OverlapsExistingContract_IsInvalid()
+    {
+        _checkOverlap.HandleAsync(Arg.Any<CheckNenContractDateRangeOverlapQuery>(), Arg.Any<CancellationToken>())
+            .Returns("Other Contract");
+
+        var result = await CreateValidator().ValidateAsync(ValidCommand());
+
+        result.IsValid.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Validate_NoOverlap_IsValid()
+    {
+        var result = await CreateValidator().ValidateAsync(ValidCommand());
+
+        result.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Validate_OverlapCheck_ReceivesCommandDateRange()
+    {
+        await CreateValidator().ValidateAsync(ValidCommand());
+
+        await _checkOverlap.Received(1).HandleAsync(
+            Arg.Is<CheckNenContractDateRangeOverlapQuery>(q => q.StartDate == StartDate && q.EndDate == EndDate),
+            Arg.Any<CancellationToken>());
     }
 }

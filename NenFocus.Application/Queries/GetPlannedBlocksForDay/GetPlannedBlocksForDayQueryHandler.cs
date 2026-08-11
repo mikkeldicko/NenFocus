@@ -10,15 +10,18 @@ public sealed class GetPlannedBlocksForDayQueryHandler
 {
     private readonly IPlannedBlockRepository _blocks;
     private readonly IBlockPresetRepository _presets;
+    private readonly INenContractRepository _contracts;
     private readonly ISystemClock _clock;
 
     public GetPlannedBlocksForDayQueryHandler(
         IPlannedBlockRepository blocks,
         IBlockPresetRepository presets,
+        INenContractRepository contracts,
         ISystemClock clock)
     {
         _blocks = blocks;
         _presets = presets;
+        _contracts = contracts;
         _clock = clock;
     }
 
@@ -31,6 +34,14 @@ public sealed class GetPlannedBlocksForDayQueryHandler
         var allPresets = await _presets.GetAllAsync(cancellationToken);
         var presetMap = allPresets.ToDictionary(p => p.Id);
         var now = _clock.UtcNow;
+
+        var contractIds = blocks.Select(b => b.ContractId).Where(id => id.HasValue).Select(id => id!.Value).Distinct();
+        var inEffectByContractId = new Dictionary<Guid, bool>();
+        foreach (var contractId in contractIds)
+        {
+            var contract = await _contracts.GetByIdAsync(contractId, cancellationToken);
+            inEffectByContractId[contractId] = contract?.IsInEffect ?? false;
+        }
 
         return blocks.Select(b =>
         {
@@ -46,7 +57,8 @@ public sealed class GetPlannedBlocksForDayQueryHandler
                 WebsiteFilterType = preset?.WebsiteFilterType ?? WebsiteFilterType.Blocklist,
                 ContractId = b.ContractId,
                 IsCompleted = b is FocusBlock fb && fb.RitualCompletedAt.HasValue,
-                HasEnded = b.HasEnded(now)
+                HasEnded = b.HasEnded(now),
+                IsUnderInEffectContract = b.ContractId.HasValue && inEffectByContractId.GetValueOrDefault(b.ContractId.Value)
             };
         }).ToList();
     }

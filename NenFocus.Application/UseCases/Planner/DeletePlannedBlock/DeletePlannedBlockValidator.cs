@@ -8,6 +8,7 @@ public sealed class DeletePlannedBlockValidator : AbstractValidator<DeletePlanne
     public DeletePlannedBlockValidator(
         IPlannedBlockRepository blocks,
         ISessionRepository sessions,
+        INenContractRepository contracts,
         ISystemClock clock)
     {
         RuleFor(x => x.BlockId)
@@ -30,5 +31,16 @@ public sealed class DeletePlannedBlockValidator : AbstractValidator<DeletePlanne
                 return active?.OriginatingBlockId != command.BlockId;
             })
             .WithMessage("This block is the active session's originating block and cannot be deleted while the session is running.");
+
+        RuleFor(x => x)
+            .MustAsync(async (command, ct) =>
+            {
+                if (command.BlockId == Guid.Empty) return true;
+                var block = await blocks.GetByIdAsync(command.BlockId, ct);
+                if (block?.ContractId is not { } contractId) return true;
+                var contract = await contracts.GetByIdAsync(contractId, ct);
+                return contract is null || !contract.IsInEffect;
+            })
+            .WithMessage("Cannot delete a block that belongs to a sealed contract.");
     }
 }

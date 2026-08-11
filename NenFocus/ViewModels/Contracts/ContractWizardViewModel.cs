@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
+using NenFocus.Application.Queries.CheckNenContractDateRangeOverlap;
 using NenFocus.Application.Queries.GetAllContractPresets;
 using NenFocus.Application.UseCases.ContractPresets.CreateContractPreset;
 using NenFocus.Domain.Enums;
@@ -22,6 +23,7 @@ public partial class ContractWizardViewModel : ViewModelBase
 {
     private readonly IQueryHandler<GetAllContractPresetsQuery, IReadOnlyList<ContractPresetDto>> _getPresets;
     private readonly ICommandHandler<CreateContractPresetCommand, CreateContractPresetResult> _createPreset;
+    private readonly IQueryHandler<CheckNenContractDateRangeOverlapQuery, string?> _checkOverlap;
     private readonly Action<NenContractDraftRules> _onReadyToSchedule;
     private readonly Action _onCancel;
 
@@ -58,12 +60,14 @@ public partial class ContractWizardViewModel : ViewModelBase
     public ContractWizardViewModel(
         IQueryHandler<GetAllContractPresetsQuery, IReadOnlyList<ContractPresetDto>> getPresets,
         ICommandHandler<CreateContractPresetCommand, CreateContractPresetResult> createPreset,
+        IQueryHandler<CheckNenContractDateRangeOverlapQuery, string?> checkOverlap,
         DateOnly initialStartDate,
         Action<NenContractDraftRules> onReadyToSchedule,
         Action onCancel)
     {
         _getPresets = getPresets;
         _createPreset = createPreset;
+        _checkOverlap = checkOverlap;
         _startDate = initialStartDate;
         _endDate = initialStartDate.AddDays(6);
         _onReadyToSchedule = onReadyToSchedule;
@@ -80,6 +84,7 @@ public partial class ContractWizardViewModel : ViewModelBase
         IsBackVisible = true;
         _currentBackAction = _onCancel;
         _basicsVm = new ContractBasicsStepViewModel(
+            checkOverlap: _checkOverlap,
             initialName: _name,
             initialGoal: _goal,
             initialStartDate: new DateTimeOffset(_startDate.ToDateTime(TimeOnly.MinValue)),

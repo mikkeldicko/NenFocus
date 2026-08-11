@@ -138,8 +138,8 @@ public class NenContract : AggregateRoot
 
     public void Break(DateTime brokenAt)
     {
-        if (Status != NenContractStatus.Active)
-            throw new InvalidOperationException("Only an active contract can be broken.");
+        if (!IsInEffect)
+            throw new InvalidOperationException("Only a contract that is still in effect (Scheduled or Active) can be broken.");
 
         if (!AllowCancellation)
             throw new InvalidOperationException("This contract does not allow cancellation.");
@@ -159,6 +159,13 @@ public class NenContract : AggregateRoot
         var floor = DailyFloorPolicy.For(date);
         return floor is null || floor.IsSatisfiedBy(completedFocusHours);
     }
+
+    /// <summary>
+    /// True when this day resolves to no obligation at all — same resolution IsDayMet
+    /// uses internally, exposed so Application-layer callers (e.g. the active-contract
+    /// banner's days-behind count) never reach into DailyFloorPolicy directly.
+    /// </summary>
+    public bool IsRestDay(DateOnly date) => DailyFloorPolicy.For(date) is null;
 
     /// <summary>
     /// Whether a missed Focus block due on <paramref name="missedBlockDate"/> can be
@@ -188,6 +195,27 @@ public class NenContract : AggregateRoot
     {
         var workHours = WorkHoursPolicy?.For(date);
         return workHours is null || workHours.ContainsRange(start, end);
+    }
+
+    /// <summary>
+    /// Whether a block originally scheduled on <paramref name="originalDate"/> may be
+    /// rescheduled to a new window spanning <paramref name="newStartDate"/> through
+    /// <paramref name="newEndDate"/> (inclusive), per this contract's StrictnessRule.
+    /// All three dates are calendar days — callers resolve local time before calling;
+    /// this method only ever compares dates. Locked never allows a time change at all.
+    /// DailyFlexibility requires the new window to stay entirely on the block's original
+    /// day. PeriodTimeBudget requires the new window to stay within the contract's own
+    /// [StartDate, EndDate] range.
+    /// </summary>
+    public bool AllowsBlockTimeChange(DateOnly originalDate, DateOnly newStartDate, DateOnly newEndDate)
+    {
+        if (StrictnessRule == StrictnessRule.Locked)
+            return false;
+
+        if (StrictnessRule == StrictnessRule.DailyFlexibility)
+            return newStartDate == originalDate && newEndDate == originalDate;
+
+        return newStartDate >= StartDate && newEndDate <= EndDate; // PeriodTimeBudget
     }
 
     /// <param name="plannedFocusHoursByNewDays">

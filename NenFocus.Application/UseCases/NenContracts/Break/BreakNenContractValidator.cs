@@ -1,6 +1,5 @@
 using FluentValidation;
 using NenFocus.Application.Interfaces;
-using NenFocus.Domain.Enums;
 
 namespace NenFocus.Application.UseCases.NenContracts.Break;
 
@@ -25,9 +24,9 @@ public sealed class BreakNenContractValidator : AbstractValidator<BreakNenContra
             {
                 if (command.ContractId == Guid.Empty) return true;
                 var contract = await contracts.GetByIdAsync(command.ContractId, ct);
-                return contract is null || contract.Status == NenContractStatus.Active;
+                return contract is null || contract.IsInEffect;
             })
-            .WithMessage("Only an active contract can be broken.");
+            .WithMessage("Only a contract that is still in effect (Scheduled or Active) can be broken.");
 
         RuleFor(x => x)
             .MustAsync(async (command, ct) =>

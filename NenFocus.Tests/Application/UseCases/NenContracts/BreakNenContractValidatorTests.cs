@@ -50,9 +50,22 @@ public class BreakNenContractValidatorTests
     }
 
     [Fact]
-    public async Task Validate_ContractNotActive_IsInvalid()
+    public async Task Validate_ScheduledAndCancellable_IsValid()
     {
+        // Not yet started, but still in effect — cancellable before Day 1.
         var contract = Seal(allowCancellation: true, sealedAt: StartDate.AddDays(-5).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)); // Scheduled
+        _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
+
+        var result = await CreateValidator().ValidateAsync(new BreakNenContractCommand { ContractId = contract.Id });
+
+        result.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Validate_ContractAlreadyCompleted_IsInvalid()
+    {
+        var contract = Seal(allowCancellation: true, sealedAt: StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)); // Active
+        contract.Complete(StartDate.AddDays(10).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
         _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
 
         var result = await CreateValidator().ValidateAsync(new BreakNenContractCommand { ContractId = contract.Id });

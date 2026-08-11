@@ -111,6 +111,22 @@
 			<Setter Property="Padding" Value="14,8"/>
 			<Setter Property="Cursor" Value="Hand"/>
 		</Style>
+		<Style Selector="Button.bannerCancelBtn">
+			<Setter Property="Background" Value="Transparent"/>
+			<Setter Property="Foreground" Value="#7A7A8C"/>
+			<Setter Property="BorderThickness" Value="0"/>
+			<Setter Property="CornerRadius" Value="6"/>
+			<Setter Property="Padding" Value="8,4"/>
+			<Setter Property="FontSize" Value="13"/>
+			<Setter Property="Cursor" Value="Hand"/>
+		</Style>
+		<Style Selector="Button.bannerCancelBtn:pointerover /template/ ContentPresenter">
+			<Setter Property="Background" Value="#F8DAD6"/>
+		</Style>
+		<Style Selector="Button.bannerCancelBtn:pointerover">
+			<Setter Property="Foreground" Value="#C03A2B"/>
+		</Style>
+
 		<Style Selector="Button.danger">
 			<Setter Property="Background" Value="Transparent"/>
 			<Setter Property="Foreground" Value="#C03A2B"/>
@@ -136,7 +152,7 @@
 	</UserControl.Styles>
 
 	<Grid>
-		<Grid RowDefinitions="Auto,Auto,*" Margin="24">
+		<Grid RowDefinitions="Auto,Auto,Auto,*" Margin="24">
 
 			<Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,16">
 				<StackPanel Grid.Column="0" Spacing="2">
@@ -157,6 +173,31 @@
 			</Grid>
 
 			<Border Grid.Row="1"
+                    IsVisible="{Binding HasActiveContract}"
+                    Background="#F0F0F8"
+                    BorderBrush="#DDDDE8"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="14,10"
+                    Margin="0,0,0,16">
+				<Grid ColumnDefinitions="*,Auto">
+					<StackPanel Grid.Column="0" Spacing="4">
+						<TextBlock Text="{Binding ActiveContractBannerText}" FontSize="13" FontWeight="SemiBold" Foreground="#1A1A2E"/>
+						<TextBlock Text="{Binding CancelContractErrorMessage}"
+                                   IsVisible="{Binding CancelContractErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                   FontSize="12" Foreground="#C03A2B" TextWrapping="Wrap"/>
+					</StackPanel>
+					<Button Grid.Column="1"
+                            Classes="bannerCancelBtn"
+                            Content="✕"
+                            ToolTip.Tip="Cancel contract"
+                            Command="{Binding RequestCancelContractCommand}"
+                            IsVisible="{Binding CanCancelActiveContract}"
+                            VerticalAlignment="Center"/>
+				</Grid>
+			</Border>
+
+			<Border Grid.Row="2"
                     IsVisible="{Binding IsDraftingContract}"
                     Background="#FFF8E5"
                     BorderBrush="#B8922A"
@@ -199,7 +240,7 @@
 				</Grid>
 			</Border>
 
-			<Border Grid.Row="2"
+			<Border Grid.Row="3"
                     Background="#FFFFFF"
                     BorderBrush="#E6E6EE"
                     BorderThickness="1"
@@ -364,6 +405,21 @@
 					<StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="12">
 						<Button Classes="secondary" Content="Keep Drafting" Command="{Binding CancelCancelDraftCommand}"/>
 						<Button Classes="danger" Content="Discard" Command="{Binding ConfirmCancelDraftCommand}"/>
+					</StackPanel>
+				</StackPanel>
+			</Border>
+		</Border>
+
+		<Border IsVisible="{Binding IsConfirmCancelContractVisible}" Background="#88000000">
+			<Border Background="#FFFFFF" CornerRadius="14" Width="400" Padding="32,28"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                    BoxShadow="0 12 48 0 #44000000">
+				<StackPanel Spacing="20">
+					<TextBlock Text="Cancel Contract" FontSize="18" FontWeight="SemiBold" Foreground="#1A1A2E"/>
+					<TextBlock Text="{Binding ConfirmCancelContractMessage}" FontSize="14" Foreground="#888899" TextWrapping="Wrap"/>
+					<StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="12">
+						<Button Classes="secondary" Content="Keep Contract" Command="{Binding CancelCancelContractCommand}"/>
+						<Button Classes="danger" Content="Cancel Contract" Command="{Binding ConfirmCancelContractCommand}"/>
 					</StackPanel>
 				</StackPanel>
 			</Border>

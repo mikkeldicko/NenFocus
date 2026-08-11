@@ -244,11 +244,25 @@ public class NenContractTests
     }
 
     [Fact]
-    public void Break_WhenNotActive_Throws()
+    public void Break_WhenScheduled_TransitionsToBrokenAndRaisesEvent()
     {
+        // A not-yet-started contract is still "in effect" and can be cancelled before Day 1.
         var contract = Seal(sealedAt: SealedBeforeStart, allowCancellation: true); // Scheduled
+        contract.ClearDomainEvents();
 
-        var act = () => contract.Break(SealedOnStart);
+        contract.Break(SealedOnStart);
+
+        contract.Status.Should().Be(NenContractStatus.Broken);
+        contract.DomainEvents.Should().ContainSingle(e => e is NenContractBrokenEvent);
+    }
+
+    [Fact]
+    public void Break_WhenAlreadyCompleted_Throws()
+    {
+        var contract = Seal(sealedAt: SealedOnStart, allowCancellation: true); // Active
+        contract.Complete(SealedOnStart.AddDays(8));
+
+        var act = () => contract.Break(SealedOnStart.AddDays(9));
 
         act.Should().Throw<InvalidOperationException>();
     }
@@ -648,5 +662,79 @@ public class NenContractTests
 
         contract.AllowsBlockPlacement(StartDate, StartDate.ToDateTime(new TimeOnly(20, 0)), StartDate.ToDateTime(new TimeOnly(21, 0)))
             .Should().BeTrue();
+    }
+
+    [Fact]
+    public void IsRestDay_DayWithResolvedFloor_ReturnsFalse()
+    {
+        var contract = Seal(dailyFloorPolicy: new DailyFloorPolicy(new DailyFloor(4)));
+
+        contract.IsRestDay(StartDate).Should().BeFalse();
+    }
+
+    [Fact]
+    public void IsRestDay_DayWithNoResolvedFloor_ReturnsTrue()
+    {
+        var policy = new DailyFloorPolicy(new DailyFloor(4), new Dictionary<DateOnly, DailyFloor?> { [StartDate] = null });
+        var contract = Seal(dailyFloorPolicy: policy);
+
+        contract.IsRestDay(StartDate).Should().BeTrue();
+    }
+
+    [Fact]
+    public void AllowsBlockTimeChange_Locked_NeverAllowed()
+    {
+        var contract = Seal(strictnessRule: StrictnessRule.Locked);
+
+        contract.AllowsBlockTimeChange(StartDate, StartDate, StartDate).Should().BeFalse();
+    }
+
+    [Fact]
+    public void AllowsBlockTimeChange_DailyFlexibility_SameDayAllowed()
+    {
+        var contract = Seal(strictnessRule: StrictnessRule.DailyFlexibility);
+
+        contract.AllowsBlockTimeChange(StartDate, StartDate, StartDate).Should().BeTrue();
+    }
+
+    [Fact]
+    public void AllowsBlockTimeChange_DailyFlexibility_DifferentStartDayNotAllowed()
+    {
+        var contract = Seal(strictnessRule: StrictnessRule.DailyFlexibility);
+
+        contract.AllowsBlockTimeChange(StartDate, StartDate.AddDays(1), StartDate.AddDays(1)).Should().BeFalse();
+    }
+
+    [Fact]
+    public void AllowsBlockTimeChange_DailyFlexibility_SpanningIntoNextDayNotAllowed()
+    {
+        var contract = Seal(strictnessRule: StrictnessRule.DailyFlexibility);
+
+        // Starts on the original day but the (resized) end crosses into the next day.
+        contract.AllowsBlockTimeChange(StartDate, StartDate, StartDate.AddDays(1)).Should().BeFalse();
+    }
+
+    [Fact]
+    public void AllowsBlockTimeChange_PeriodTimeBudget_WithinContractRangeAllowed()
+    {
+        var contract = Seal(strictnessRule: StrictnessRule.PeriodTimeBudget);
+
+        contract.AllowsBlockTimeChange(StartDate, StartDate.AddDays(2), StartDate.AddDays(3)).Should().BeTrue();
+    }
+
+    [Fact]
+    public void AllowsBlockTimeChange_PeriodTimeBudget_BeforeContractStartNotAllowed()
+    {
+        var contract = Seal(strictnessRule: StrictnessRule.PeriodTimeBudget);
+
+        contract.AllowsBlockTimeChange(StartDate, StartDate.AddDays(-1), StartDate).Should().BeFalse();
+    }
+
+    [Fact]
+    public void AllowsBlockTimeChange_PeriodTimeBudget_AfterContractEndNotAllowed()
+    {
+        var contract = Seal(strictnessRule: StrictnessRule.PeriodTimeBudget);
+
+        contract.AllowsBlockTimeChange(StartDate, EndDate, EndDate.AddDays(1)).Should().BeFalse();
     }
 }

@@ -76,6 +76,44 @@ public sealed class UpdatePlannedBlockValidator : AbstractValidator<UpdatePlanne
             })
             .WithMessage("This block falls outside the contract's configured Work Hours for that day.");
 
+        // Sealed-contract enforcement guards. A block's ContractId only ever resolves to a
+        // contract that has been Seal()-ed — NenContract has no other way into existence —
+        // so a resolvable contract IS a sealed contract; there is no separate "is it sealed"
+        // flag to check. Only a still-live commitment (Scheduled or Active) constrains
+        // edits — a Completed or Broken contract falls back to the ordinary HasEnded-based
+        // protections, same precedent as the missing-contract case above.
+        RuleFor(x => x)
+            .CustomAsync(async (command, context, ct) =>
+            {
+                var block = await _blocks.GetByIdAsync(command.BlockId, ct);
+                if (block?.ContractId is not { } contractId) return;
+
+                var contract = await contracts.GetByIdAsync(contractId, ct);
+                if (contract is null || !contract.IsInEffect) return;
+
+                if (block.BlockPresetId != command.PresetId)
+                {
+                    context.AddFailure(nameof(UpdatePlannedBlockCommand.PresetId),
+                        "This block's preset cannot be changed while it belongs to a sealed contract.");
+                    return;
+                }
+
+                var originalDate = DateOnly.FromDateTime(block.Start.ToLocalTime());
+                var newStartDate = DateOnly.FromDateTime(command.Start.ToLocalTime());
+                var newEndDate = DateOnly.FromDateTime(command.End.ToLocalTime());
+
+                if (contract.AllowsBlockTimeChange(originalDate, newStartDate, newEndDate))
+                    return;
+
+                var message = contract.StrictnessRule switch
+                {
+                    StrictnessRule.Locked => "This block is locked by a Lockdown contract.",
+                    StrictnessRule.DailyFlexibility => "Daily Flex contracts only allow moving blocks within the same day.",
+                    _ => "Cannot move block outside the contract period." // PeriodTimeBudget
+                };
+                context.AddFailure(nameof(UpdatePlannedBlockCommand.Start), message);
+            });
+
         RuleForEach(x => x.MakeUpForEntries)
             .CustomAsync(async (entry, context, ct) =>
             {

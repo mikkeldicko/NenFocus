@@ -32,6 +32,10 @@
             </StackPanel>
         </Grid>
 
+        <TextBlock Text="{Binding OverlapErrorMessage}"
+                   IsVisible="{Binding OverlapErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                   FontSize="12" Foreground="#C03A2B" TextWrapping="Wrap"/>
+
         <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,8,0,0">
             <Button Grid.Column="2" Classes="primary" Content="Continue" Command="{Binding ContinueCommand}"/>
         </Grid>

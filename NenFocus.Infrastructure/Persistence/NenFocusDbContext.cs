@@ -212,7 +212,7 @@ public class NenFocusDbContext : DbContext
             var bgAllowlistId     = new Guid("a0000001-0000-0000-0000-000000000004");
 
             entity.HasData(
-                new { Id = focusAllowlistId, Name = "Focus — Allowlist",     WebsiteFilterType = WebsiteFilterType.Allowlist, PresetType = BlockPresetType.Focus,      TagsSerialized = "" },
+                new { Id = focusAllowlistId, Name = "Focus — Allowlist",      WebsiteFilterType = WebsiteFilterType.Allowlist, PresetType = BlockPresetType.Focus,      TagsSerialized = "" },
                 new { Id = focusBlocklistId, Name = "Focus — Blocklist",      WebsiteFilterType = WebsiteFilterType.Blocklist, PresetType = BlockPresetType.Focus,      TagsSerialized = "" },
                 new { Id = bgBlocklistId,    Name = "Background — Blocklist", WebsiteFilterType = WebsiteFilterType.Blocklist, PresetType = BlockPresetType.Background, TagsSerialized = "" },
                 new { Id = bgAllowlistId,    Name = "Background — Allowlist", WebsiteFilterType = WebsiteFilterType.Allowlist, PresetType = BlockPresetType.Background, TagsSerialized = "" }

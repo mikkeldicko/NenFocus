@@ -1,11 +1,14 @@
 using FluentValidation;
 using NenFocus.Application.Interfaces;
+using NenFocus.Application.Queries.CheckNenContractDateRangeOverlap;
 
 namespace NenFocus.Application.UseCases.NenContracts.Seal;
 
 public sealed class SealNenContractValidator : AbstractValidator<SealNenContractCommand>
 {
-    public SealNenContractValidator(IBlockPresetRepository presets)
+    public SealNenContractValidator(
+        IBlockPresetRepository presets,
+        IQueryHandler<CheckNenContractDateRangeOverlapQuery, string?> checkOverlap)
     {
         RuleFor(x => x.Name)
             .NotEmpty().WithMessage("Contract name is required.");
@@ -13,6 +16,19 @@ public sealed class SealNenContractValidator : AbstractValidator<SealNenContract
         RuleFor(x => x.EndDate)
             .GreaterThanOrEqualTo(x => x.StartDate)
             .WithMessage("End date must be on or after the start date.");
+
+        // The real guard — defense in depth behind the wizard's live Basics-step check,
+        // which is UX convenience only and can't be trusted as the sole gate.
+        RuleFor(x => x)
+            .CustomAsync(async (command, context, ct) =>
+            {
+                if (command.EndDate < command.StartDate) return; // already reported above
+                var overlapping = await checkOverlap.HandleAsync(
+                    new CheckNenContractDateRangeOverlapQuery(command.StartDate, command.EndDate), ct);
+                if (overlapping is not null)
+                    context.AddFailure(nameof(SealNenContractCommand.StartDate),
+                        $"This date range overlaps with your existing contract '{overlapping}'.");
+            });
 
         RuleFor(x => x.FixedDailyFloorHours)
             .InclusiveBetween(0, 24)

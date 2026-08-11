@@ -80,4 +80,12 @@ public sealed class NenContractRepository : INenContractRepository
             .Where(c => c.Status == NenContractStatus.Scheduled || c.Status == NenContractStatus.Active)
             .AnyAsync(cancellationToken);
     }
+
+    public async Task<IReadOnlyList<NenContract>> GetAllInEffectAsync(CancellationToken cancellationToken = default)
+    {
+        // Mirrors NenContract.IsInEffect exactly.
+        return await _context.NenContracts
+            .Where(c => c.Status == NenContractStatus.Scheduled || c.Status == NenContractStatus.Active)
+            .ToListAsync(cancellationToken);
+    }
 }

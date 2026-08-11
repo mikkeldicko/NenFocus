@@ -8,11 +8,14 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
+using NenFocus.Application.Queries.CheckNenContractDateRangeOverlap;
 using NenFocus.Application.Queries.ComputePlannedFocusHours;
+using NenFocus.Application.Queries.GetActiveNenContract;
 using NenFocus.Application.Queries.GetAllBlockPresets;
 using NenFocus.Application.Queries.GetAllContractPresets;
 using NenFocus.Application.Queries.GetPlannedBlocksForDay;
 using NenFocus.Application.UseCases.ContractPresets.CreateContractPreset;
+using NenFocus.Application.UseCases.NenContracts.Break;
 using NenFocus.Application.UseCases.NenContracts.Seal;
 using NenFocus.Application.UseCases.Planner.CreatePlannedBlock;
 using NenFocus.Application.UseCases.Planner.DeletePlannedBlock;
@@ -37,9 +40,12 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     private readonly ICommandHandler<UpdatePlannedBlockCommand, UpdatePlannedBlockResult> _updateBlock;
     private readonly ICommandHandler<DeletePlannedBlockCommand, DeletePlannedBlockResult> _deleteBlock;
     private readonly ICommandHandler<SealNenContractCommand, SealNenContractResult> _sealContract;
+    private readonly ICommandHandler<BreakNenContractCommand, BreakNenContractResult> _breakContract;
     private readonly IQueryHandler<ComputePlannedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> _computePlannedFocusHours;
     private readonly IQueryHandler<GetAllContractPresetsQuery, IReadOnlyList<ContractPresetDto>> _getContractPresets;
     private readonly ICommandHandler<CreateContractPresetCommand, CreateContractPresetResult> _createContractPreset;
+    private readonly IQueryHandler<GetActiveNenContractQuery, ActiveNenContractDto?> _getActiveContract;
+    private readonly IQueryHandler<CheckNenContractDateRangeOverlapQuery, string?> _checkOverlap;
     private readonly IPlannerClockService _clockService;
     private readonly ISessionStateService _sessionState;
 
@@ -92,6 +98,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     [ObservableProperty] private bool _isStartLocked;
     [ObservableProperty] private bool _isEditingCompleted;
     [ObservableProperty] private bool _isEditingBlockEnded;
+    [ObservableProperty] private bool _isEditingBlockContractLocked;
     [ObservableProperty] private string? _dragError;
 
     // ── Nen Contract wizard + drafting mode ───────────────────────────────────
@@ -104,13 +111,80 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     [ObservableProperty] private bool _isConfirmDiscardDraftVisible;
     [ObservableProperty] private string _confirmDiscardDraftMessage = string.Empty;
 
+    // ── Active-contract banner (persists for the contract's full duration, independent
+    // of drafting mode) ─────────────────────────────────────────────────────────────
+    [ObservableProperty] private ActiveNenContractDto? _activeContract;
+    [ObservableProperty] private bool _isConfirmCancelContractVisible;
+    [ObservableProperty] private string _confirmCancelContractMessage = string.Empty;
+    [ObservableProperty] private string? _cancelContractErrorMessage;
+
+    public bool HasActiveContract => ActiveContract is not null;
+
+    // Mirrors NenContract.AllowCancellation via the DTO — the button is hidden rather than
+    // shown-then-rejected, same "UI references the Application-computed answer" precedent
+    // CanDeleteFromForm already follows for HasEnded/IsUnderInEffectContract.
+    public bool CanCancelActiveContract => ActiveContract?.AllowCancellation ?? false;
+
+    public string ActiveContractBannerText => ActiveContract is null
+        ? string.Empty
+        : $"Contract: {ActiveContract.Name} — Day {ActiveContract.DayNumber}/{ActiveContract.TotalDays} — " +
+          $"{ActiveContract.DaysBehind} of {ActiveContract.DaysConsidered} days behind — {ActiveContract.DeficitHours:0.#}h deficit";
+
+    partial void OnActiveContractChanged(ActiveNenContractDto? value)
+    {
+        OnPropertyChanged(nameof(HasActiveContract));
+        OnPropertyChanged(nameof(ActiveContractBannerText));
+        OnPropertyChanged(nameof(CanCancelActiveContract));
+    }
+
+    // Scoped to the currently viewed week — the banner only shows when a contract's date
+    // range overlaps the week actually on screen, not just "some contract is in effect
+    // somewhere." Must be re-run on every week navigation, not only on init/seal/session-end.
+    private async Task RefreshActiveContractAsync()
+    {
+        var weekStartDate = DateOnly.FromDateTime(WeekStart);
+        var weekEndDate = weekStartDate.AddDays(6);
+        ActiveContract = await _getActiveContract.HandleAsync(new GetActiveNenContractQuery(weekStartDate, weekEndDate));
+    }
+
+    [RelayCommand]
+    private void RequestCancelContract()
+    {
+        if (ActiveContract is null) return;
+        CancelContractErrorMessage = null;
+        ConfirmCancelContractMessage = "Are you sure you want to cancel this contract? This cannot be undone.";
+        IsConfirmCancelContractVisible = true;
+    }
+
+    [RelayCommand]
+    private async Task ConfirmCancelContractAsync()
+    {
+        if (ActiveContract is null) { IsConfirmCancelContractVisible = false; return; }
+
+        var result = await _breakContract.HandleAsync(new BreakNenContractCommand { ContractId = ActiveContract.Id });
+        IsConfirmCancelContractVisible = false;
+
+        if (!result.Success)
+        {
+            CancelContractErrorMessage = result.ErrorMessage;
+            return;
+        }
+
+        await RefreshActiveContractAsync();
+        await LoadWeekAsync();
+    }
+
+    [RelayCommand]
+    private void CancelCancelContract() => IsConfirmCancelContractVisible = false;
+
     public string SaveButtonLabel => IsEditing ? "Save Changes" : "Create Block";
 
-    // Mirrors DeletePlannedBlockValidator's two rejection conditions exactly — sourced from
-    // dto.HasEnded (Application-computed, same PlannedBlock.HasEnded the validator calls) and
-    // the live active-session noticeboard, not re-derived from raw Start/End here.
+    // Mirrors DeletePlannedBlockValidator's rejection conditions exactly — sourced from
+    // dto.HasEnded / dto.IsUnderInEffectContract (Application-computed, same predicates the
+    // validator calls) and the live active-session noticeboard, not re-derived here.
     public bool CanDeleteFromForm =>
-        IsEditing && !_isEditingBlockEnded && _sessionState.ActiveSession?.OriginatingBlockId != _editingBlockId;
+        IsEditing && !_isEditingBlockEnded && !_isEditingBlockContractLocked
+        && _sessionState.ActiveSession?.OriginatingBlockId != _editingBlockId;
 
     // True when the editing block is either currently running (active session) or already completed.
     // Controls visibility of the Save button and disables form inputs.
@@ -148,6 +222,11 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(CanDeleteFromForm));
     }
 
+    partial void OnIsEditingBlockContractLockedChanged(bool value)
+    {
+        OnPropertyChanged(nameof(CanDeleteFromForm));
+    }
+
     partial void OnIsFormVisibleChanged(bool value) => OnPropertyChanged(nameof(CanOpenContractWizard));
     partial void OnIsWizardVisibleChanged(bool value) => OnPropertyChanged(nameof(CanOpenContractWizard));
     partial void OnIsDraftingContractChanged(bool value) => OnPropertyChanged(nameof(CanOpenContractWizard));
@@ -159,9 +238,12 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         ICommandHandler<UpdatePlannedBlockCommand, UpdatePlannedBlockResult> updateBlock,
         ICommandHandler<DeletePlannedBlockCommand, DeletePlannedBlockResult> deleteBlock,
         ICommandHandler<SealNenContractCommand, SealNenContractResult> sealContract,
+        ICommandHandler<BreakNenContractCommand, BreakNenContractResult> breakContract,
         IQueryHandler<ComputePlannedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> computePlannedFocusHours,
         IQueryHandler<GetAllContractPresetsQuery, IReadOnlyList<ContractPresetDto>> getContractPresets,
         ICommandHandler<CreateContractPresetCommand, CreateContractPresetResult> createContractPreset,
+        IQueryHandler<GetActiveNenContractQuery, ActiveNenContractDto?> getActiveContract,
+        IQueryHandler<CheckNenContractDateRangeOverlapQuery, string?> checkOverlap,
         IPlannerClockService clockService,
         ISessionStateService sessionState)
     {
@@ -171,9 +253,12 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         _updateBlock = updateBlock;
         _deleteBlock = deleteBlock;
         _sealContract = sealContract;
+        _breakContract = breakContract;
         _computePlannedFocusHours = computePlannedFocusHours;
         _getContractPresets = getContractPresets;
         _createContractPreset = createContractPreset;
+        _getActiveContract = getActiveContract;
+        _checkOverlap = checkOverlap;
         _clockService = clockService;
         _sessionState = sessionState;
         _sessionState.SessionChanged += OnSessionChanged;
@@ -206,7 +291,10 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
             OnPropertyChanged(nameof(CanDeleteFromForm));
             OnPropertyChanged(nameof(CanOpenContractWizard));
             if (session is null)
+            {
                 _ = LoadWeekAsync();
+                _ = RefreshActiveContractAsync(); // a finished session may move Day Met/deficit
+            }
         });
     }
 
@@ -239,6 +327,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     {
         await LoadPresetsAsync();
         await LoadWeekAsync();
+        await RefreshActiveContractAsync();
     }
 
     [RelayCommand]
@@ -265,6 +354,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         BuildDayHeaders();
         UpdateCurrentTimePosition();
         await LoadWeekAsync();
+        await RefreshActiveContractAsync();
     }
 
     private bool WeekOverlapsDraftRange(DateTime candidateWeekStart)
@@ -391,6 +481,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
             IsStartLocked = false;
             IsEditingCompleted = false;
             IsEditingBlockEnded = false;
+            IsEditingBlockContractLocked = false;
             FormTitle = "Edit Draft Block";
             ResetForm();
 
@@ -417,6 +508,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         IsStartLocked = dto.Start <= DateTime.UtcNow;
         IsEditingCompleted = dto.IsCompleted;
         IsEditingBlockEnded = dto.HasEnded;
+        IsEditingBlockContractLocked = dto.IsUnderInEffectContract;
         FormTitle = "Edit Block";
         ResetForm();
 
@@ -541,6 +633,10 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         var dayDate = FormDate.Date;
         var localStart = DateTime.SpecifyKind(dayDate.Add(startTime), DateTimeKind.Local);
         var localEnd = DateTime.SpecifyKind(dayDate.Add(endTime), DateTimeKind.Local);
+
+        var placementError = ValidateDraftPlacement(localStart, localEnd);
+        if (placementError is not null) { FormError = placementError; return; }
+
         var startUtc = localStart.ToUniversalTime();
         var endUtc = localEnd.ToUniversalTime();
         bool isFocus = IsFocusBlock;
@@ -598,6 +694,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         IsStartLocked = false;
         IsEditingCompleted = false;
         IsEditingBlockEnded = false;
+        IsEditingBlockContractLocked = false;
         _editingBlockId = null;
         _editingIsDraft = false;
     }
@@ -667,6 +764,14 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         var draftIndex = _draftBlocks.FindIndex(d => d.Id == result.BlockId);
         if (draftIndex >= 0)
         {
+            var placementError = ValidateDraftPlacement(result.NewStartUtc.ToLocalTime(), result.NewEndUtc.ToLocalTime());
+            if (placementError is not null)
+            {
+                DragError = placementError;
+                RebuildDraftTilesInPlace(); // _draftBlocks untouched — snaps the ghosted tile back
+                return;
+            }
+
             _draftBlocks[draftIndex] = _draftBlocks[draftIndex] with { Start = result.NewStartUtc, End = result.NewEndUtc };
             RebuildDraftTilesInPlace();
             await RefreshDayFloorPreviewsAsync();
@@ -694,11 +799,12 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         });
 
         if (!updateResult.Success)
-        {
             DragError = updateResult.ErrorMessage;
-            return;
-        }
 
+        // Reload either way: on success to reflect the committed change, on failure so the
+        // tile snaps back to its actual (unchanged) position — the drag gesture already
+        // moved it visually, and without this it would stay stuck at the rejected drop
+        // point until some unrelated reload happened to fire.
         await LoadWeekAsync();
     }
 
@@ -711,6 +817,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         WizardViewModel = new ContractWizardViewModel(
             getPresets: _getContractPresets,
             createPreset: _createContractPreset,
+            checkOverlap: _checkOverlap,
             initialStartDate: DateOnly.FromDateTime(_clockService.LocalNow.Date),
             onReadyToSchedule: BeginDrafting,
             onCancel: CloseWizard);
@@ -781,6 +888,26 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         AppendDraftTiles();
     }
 
+    // Shared by SaveDraftBlock (create/edit-via-form) and MoveOrResizeBlockAsync's draft
+    // branch (drag-move/resize of an already-placed draft tile) — same two rules, same
+    // reject-after-the-fact mechanism every other Planner rule already uses (Focus-overlap,
+    // Work Hours, past-date for ordinary blocks). Returns null when the placement is valid.
+    private string? ValidateDraftPlacement(DateTime localStart, DateTime localEnd)
+    {
+        if (localStart <= _clockService.LocalNow)
+            return "Blocks cannot start in the past.";
+
+        if (_draftRules is not null)
+        {
+            var startDate = DateOnly.FromDateTime(localStart);
+            var endDate = DateOnly.FromDateTime(localEnd);
+            if (startDate < _draftRules.StartDate || endDate > _draftRules.EndDate)
+                return $"Blocks must be placed within the contract's date range ({_draftRules.StartDate:MMM d} – {_draftRules.EndDate:MMM d}).";
+        }
+
+        return null;
+    }
+
     private async Task RefreshDayFloorPreviewsAsync()
     {
         DayFloorPreviews.Clear();
@@ -848,6 +975,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
             ExitDraftingMode();
             await LoadWeekAsync();
+            await RefreshActiveContractAsync();
         }
         finally
         {

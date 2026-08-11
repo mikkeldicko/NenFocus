@@ -1,7 +1,9 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
+using NenFocus.Application.Queries.CheckNenContractDateRangeOverlap;
 using NenFocus.Application.Queries.ComputePlannedFocusHours;
+using NenFocus.Application.Queries.GetActiveNenContract;
 using NenFocus.Application.Queries.GetAllBlockPresets;
 using NenFocus.Application.Queries.GetAllContractPresets;
 using NenFocus.Application.Queries.GetFocusBlockRitualContext;
@@ -11,6 +13,7 @@ using NenFocus.Application.UseCases.BlockPresets.DeleteBlockPreset;
 using NenFocus.Application.UseCases.BlockPresets.DuplicateBlockPreset;
 using NenFocus.Application.UseCases.BlockPresets.UpdateBlockPreset;
 using NenFocus.Application.UseCases.ContractPresets.CreateContractPreset;
+using NenFocus.Application.UseCases.NenContracts.Break;
 using NenFocus.Application.UseCases.NenContracts.Seal;
 using NenFocus.Application.UseCases.Planner.CreatePlannedBlock;
 using NenFocus.Application.UseCases.Planner.DeletePlannedBlock;
@@ -91,9 +94,12 @@ public partial class ShellViewModel : ViewModelBase
        ICommandHandler<UpdatePlannedBlockCommand, UpdatePlannedBlockResult> updatePlannedBlock,
        ICommandHandler<DeletePlannedBlockCommand, DeletePlannedBlockResult> deletePlannedBlock,
        ICommandHandler<SealNenContractCommand, SealNenContractResult> sealContract,
+       ICommandHandler<BreakNenContractCommand, BreakNenContractResult> breakContract,
        IQueryHandler<ComputePlannedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> computePlannedFocusHours,
        IQueryHandler<GetAllContractPresetsQuery, IReadOnlyList<ContractPresetDto>> getContractPresets,
-       ICommandHandler<CreateContractPresetCommand, CreateContractPresetResult> createContractPreset)
+       ICommandHandler<CreateContractPresetCommand, CreateContractPresetResult> createContractPreset,
+       IQueryHandler<GetActiveNenContractQuery, ActiveNenContractDto?> getActiveContract,
+       IQueryHandler<CheckNenContractDateRangeOverlapQuery, string?> checkOverlap)
     {
         _presetsQuery = presetsQuery;
         _getFocusBlockRitualContext = getFocusBlockRitualContext;
@@ -123,7 +129,7 @@ public partial class ShellViewModel : ViewModelBase
 
         NavItems.Add(new NavItemViewModel("Main", "⊹", new MainPageViewModel(() => StartRitual(), ShowPostSession, _sessionState, _monitor, _endSession, _startBreak, _resumeFromBreak, _plannerClock), Select));
         NavItems.Add(new NavItemViewModel("Presets", "◻", new BlockPresetPageViewModel(presetsQuery, createPreset, updatePreset, deletePreset, duplicatePreset), Select));
-        var plannerViewModel = new PlannerPageViewModel(presetsQuery, getBlocksForDay, createPlannedBlock, updatePlannedBlock, deletePlannedBlock, sealContract, computePlannedFocusHours, getContractPresets, createContractPreset, _plannerClock, _sessionState);
+        var plannerViewModel = new PlannerPageViewModel(presetsQuery, getBlocksForDay, createPlannedBlock, updatePlannedBlock, deletePlannedBlock, sealContract, breakContract, computePlannedFocusHours, getContractPresets, createContractPreset, getActiveContract, checkOverlap, _plannerClock, _sessionState);
         plannerViewModel.ContractWizardOpened += OnContractWizardOpened;
         plannerViewModel.ContractWizardClosed += OnContractWizardClosed;
         NavItems.Add(new NavItemViewModel("Planner", "◫", plannerViewModel, Select));
@@ -365,7 +371,14 @@ public partial class ShellViewModel : ViewModelBase
     {
         IsContractWizardActive = false;
         ContractWizardViewModel = null;
-        TryDrainQueue();
+
+        // The wizard is opened from the Planner page as a page-scoped action, not an
+        // app-wide interrupt like Ritual/PostSession/Triage — so unlike those overlays,
+        // closing it must not force navigation back to Main. Only drain the queue (and
+        // therefore only navigate) when something actually queued up behind it, e.g. a
+        // Ritual that became due while the wizard was open.
+        if (_pendingOverlays.Count > 0)
+            TryDrainQueue();
     }
 
     private void GoToMain()
