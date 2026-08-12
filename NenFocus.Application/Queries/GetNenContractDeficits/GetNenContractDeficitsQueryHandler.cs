@@ -39,11 +39,11 @@ public sealed class GetNenContractDeficitsQueryHandler
 
         foreach (var block in focusBlocks)
         {
-            var outcome = _classifier.Classify(block.Start, block.End, block.RitualCompletedAt, now);
-            if (outcome is not (FocusBlockOutcome.Missed or FocusBlockOutcome.StartedLate))
+            var session = await _sessions.GetByOriginatingBlockIdAsync(block.Id, ct);
+            var outcome = _classifier.Classify(block.Start, block.End, block.RitualCompletedAt, session?.EndedAt, now);
+            if (outcome is not (FocusBlockOutcome.Missed or FocusBlockOutcome.StartedLate or FocusBlockOutcome.EndedEarly))
                 continue;
 
-            var session = await _sessions.GetByOriginatingBlockIdAsync(block.Id, ct);
             var actualElapsedMinutes = session?.GetElapsedTime(now)?.TotalMinutes ?? 0;
             var scheduledMinutes = block.GetDuration().TotalMinutes;
             var rawDeficit = Math.Max(0, scheduledMinutes - actualElapsedMinutes);

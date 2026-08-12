@@ -16,10 +16,12 @@ public sealed class FocusBlockOutcomeClassifier : IFocusBlockOutcomeClassifier
         DateTime scheduledStart,
         DateTime scheduledEnd,
         DateTime? ritualCompletedAt,
+        DateTime? sessionEndedAt,
         DateTime asOf)
     {
         if (ritualCompletedAt is { } completedAt)
         {
+            if (sessionEndedAt is { } endedEarly && endedEarly < scheduledEnd) return FocusBlockOutcome.EndedEarly;
             if (completedAt <= scheduledStart.AddMinutes(GracePeriodMinutes)) return FocusBlockOutcome.CompletedOnTime;
             if (completedAt < scheduledEnd) return FocusBlockOutcome.StartedLate;
             return FocusBlockOutcome.Missed;
@@ -32,8 +34,12 @@ public sealed class FocusBlockOutcomeClassifier : IFocusBlockOutcomeClassifier
         DateTime scheduledStart,
         DateTime scheduledEnd,
         DateTime? ritualCompletedAt,
+        DateTime? sessionEndedAt,
         double actualElapsedMinutes)
     {
+        if (sessionEndedAt is { } endedEarly && endedEarly < scheduledEnd)
+            return actualElapsedMinutes;
+
         if (ritualCompletedAt is { } completedAt && completedAt <= scheduledStart.AddMinutes(GracePeriodMinutes))
             return (scheduledEnd - scheduledStart).TotalMinutes;
 

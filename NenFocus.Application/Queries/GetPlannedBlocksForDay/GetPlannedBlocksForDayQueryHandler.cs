@@ -53,7 +53,9 @@ public sealed class GetPlannedBlocksForDayQueryHandler
                 PresetName = preset?.Name ?? "Unknown",
                 BlockPresetType = b is FocusBlock ? BlockPresetType.Focus : BlockPresetType.Background,
                 Start = b.Start,
-                End = b.End,
+                End = b is FocusBlock displayBlock && displayBlock.SessionEndedAt is { } sessionEndedAt && sessionEndedAt < b.End
+                    ? sessionEndedAt
+                    : b.End,
                 WebsiteFilterType = preset?.WebsiteFilterType ?? WebsiteFilterType.Blocklist,
                 ContractId = b.ContractId,
                 IsCompleted = b is FocusBlock fb && fb.RitualCompletedAt.HasValue,

@@ -7,6 +7,9 @@ public sealed class FocusBlock : PlannedBlock
     /// <summary>Null means the Ritual was never completed for this block.</summary>
     public DateTime? RitualCompletedAt { get; private set; }
 
+    /// <summary>Null unless the session ended before this block's scheduled End.</summary>
+    public DateTime? SessionEndedAt { get; private set; }
+
     private FocusBlock() { }
 
     public static FocusBlock Create(
@@ -40,6 +43,15 @@ public sealed class FocusBlock : PlannedBlock
                 "Ritual has already been marked complete for this block.");
 
         RitualCompletedAt = completedAt;
+    }
+
+    public void MarkSessionEnded(DateTime endedAt)
+    {
+        if (SessionEndedAt.HasValue)
+            throw new InvalidOperationException(
+                "Session end has already been marked for this block.");
+
+        SessionEndedAt = endedAt;
     }
 
     /// <summary>

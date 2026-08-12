@@ -50,14 +50,14 @@ public sealed class GetNenContractCompletedFocusHoursQueryHandler
 
         foreach (var block in focusBlocks)
         {
-            var outcome = _classifier.Classify(block.Start, block.End, block.RitualCompletedAt, now);
+            var session = await _sessions.GetByOriginatingBlockIdAsync(block.Id, ct);
+            var outcome = _classifier.Classify(block.Start, block.End, block.RitualCompletedAt, session?.EndedAt, now);
             if (outcome is null)
                 continue; // still open — nothing resolved to credit yet
 
-            var session = await _sessions.GetByOriginatingBlockIdAsync(block.Id, ct);
             var actualElapsedMinutes = session?.GetElapsedTime(now)?.TotalMinutes ?? 0;
             var creditedMinutes = _classifier.CreditedFocusMinutes(
-                block.Start, block.End, block.RitualCompletedAt, actualElapsedMinutes);
+                block.Start, block.End, block.RitualCompletedAt, session?.EndedAt, actualElapsedMinutes);
 
             AddMinutes(hoursByDay, DateOnly.FromDateTime(block.Start), creditedMinutes);
         }

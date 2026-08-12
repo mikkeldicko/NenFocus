@@ -310,6 +310,9 @@ namespace NenFocus.Infrastructure.Migrations
                     b.Property<DateTime?>("RitualCompletedAt")
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime?>("SessionEndedAt")
+                        .HasColumnType("TEXT");
+
                     b.HasDiscriminator().HasValue("Focus");
                 });
 

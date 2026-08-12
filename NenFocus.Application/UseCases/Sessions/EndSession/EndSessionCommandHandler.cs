@@ -1,5 +1,6 @@
 ﻿using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
+using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
 
 namespace NenFocus.Application.UseCases.Sessions.EndSession;
@@ -59,10 +60,10 @@ public sealed class EndSessionCommandHandler
         if (session.OriginatingBlockId.HasValue)
         {
             var block = await _plannedBlocks.GetByIdAsync(session.OriginatingBlockId.Value, ct);
-            if (block is not null && endedAt < block.End)
+            if (block is FocusBlock focusBlock && endedAt < focusBlock.End)
             {
-                block.TrimEnd(endedAt);
-                await _plannedBlocks.SaveAsync(block, ct);
+                focusBlock.MarkSessionEnded(endedAt);
+                await _plannedBlocks.SaveAsync(focusBlock, ct);
             }
         }
 

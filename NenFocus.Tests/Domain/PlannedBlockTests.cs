@@ -62,6 +62,44 @@ public class PlannedBlockTests
     }
 
     [Fact]
+    public void FocusBlock_Create_Valid_HasNoSessionEndedYet()
+    {
+        CreateFocusBlock().SessionEndedAt.Should().BeNull();
+    }
+
+    [Fact]
+    public void FocusBlock_MarkSessionEnded_SetsTimestamp()
+    {
+        var block = CreateFocusBlock();
+        var endedAt = Start.AddMinutes(20);
+
+        block.MarkSessionEnded(endedAt);
+
+        block.SessionEndedAt.Should().Be(endedAt);
+    }
+
+    [Fact]
+    public void FocusBlock_MarkSessionEnded_Twice_Throws()
+    {
+        var block = CreateFocusBlock();
+        block.MarkSessionEnded(Start.AddMinutes(20));
+
+        var act = () => block.MarkSessionEnded(Start.AddMinutes(30));
+
+        act.Should().Throw<InvalidOperationException>();
+    }
+
+    [Fact]
+    public void FocusBlock_MarkSessionEnded_DoesNotMutateEnd()
+    {
+        var block = CreateFocusBlock();
+
+        block.MarkSessionEnded(Start.AddMinutes(20));
+
+        block.End.Should().Be(End);
+    }
+
+    [Fact]
     public void BackgroundBlock_Create_EndBeforeStart_Throws()
     {
         var act = () => BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(), End, Start);

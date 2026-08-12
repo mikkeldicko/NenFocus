@@ -129,22 +129,24 @@ public class EndSessionCommandHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_OriginatingBlockEndsLaterThanActualEnd_TrimsBlockToActualEnd()
+    public async Task HandleAsync_OriginatingBlockEndsLaterThanActualEnd_MarksSessionEndedWithoutMutatingEnd()
     {
         var blockId = Guid.NewGuid();
         var session = CreateActiveSession(blockId);
         _sessions.GetByIdAsync(session.Id, Arg.Any<CancellationToken>()).Returns(session);
-        var block = FocusBlock.Create(blockId, session.BlockPresetId, Now.AddMinutes(-10), Now.AddHours(1));
+        var originalEnd = Now.AddHours(1);
+        var block = FocusBlock.Create(blockId, session.BlockPresetId, Now.AddMinutes(-10), originalEnd);
         _plannedBlocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns(block);
 
         await CreateHandler().HandleAsync(new EndSessionCommand { SessionId = session.Id });
 
-        block.End.Should().Be(Now);
+        block.SessionEndedAt.Should().Be(Now);
+        block.End.Should().Be(originalEnd); // original schedule preserved, not overwritten
         await _plannedBlocks.Received(1).SaveAsync(block, Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task HandleAsync_OriginatingBlockAlreadyEndedNaturally_DoesNotTrim()
+    public async Task HandleAsync_OriginatingBlockAlreadyEndedNaturally_DoesNotMarkSessionEnded()
     {
         var blockId = Guid.NewGuid();
         var session = CreateActiveSession(blockId);
@@ -154,6 +156,7 @@ public class EndSessionCommandHandlerTests
 
         await CreateHandler().HandleAsync(new EndSessionCommand { SessionId = session.Id });
 
+        block.SessionEndedAt.Should().BeNull();
         await _plannedBlocks.DidNotReceive().SaveAsync(Arg.Any<PlannedBlock>(), Arg.Any<CancellationToken>());
     }
 

@@ -49,6 +49,34 @@ public class GetPlannedBlocksForDayQueryHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_FocusBlockEndedEarly_DisplayEndIsSessionEndedAt()
+    {
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End);
+        block.MarkSessionEnded(Start.AddMinutes(20));
+        _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
+        _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
+
+        var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
+
+        var dto = result.Should().ContainSingle().Subject;
+        dto.End.Should().Be(Start.AddMinutes(20)); // tile visually shortened, underlying block.End untouched
+        dto.Start.Should().Be(Start);
+        block.End.Should().Be(End);
+    }
+
+    [Fact]
+    public async Task HandleAsync_FocusBlockWithoutSessionEnded_DisplayEndIsScheduledEnd()
+    {
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End);
+        _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
+        _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
+
+        var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
+
+        result.Should().ContainSingle().Subject.End.Should().Be(End);
+    }
+
+    [Fact]
     public async Task HandleAsync_BlockAlreadyEnded_HasEndedIsTrue()
     {
         _clock.UtcNow.Returns(End.AddMinutes(1));

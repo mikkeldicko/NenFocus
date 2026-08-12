@@ -291,6 +291,7 @@ public class NenFocusDbContext : DbContext
         modelBuilder.Entity<FocusBlock>(entity =>
         {
             entity.Property(r => r.RitualCompletedAt);
+            entity.Property(r => r.SessionEndedAt);
         });
 
         modelBuilder.Entity<BlockedAttempt>(entity =>
