@@ -308,12 +308,12 @@ Gaps that have been identified but not yet closed. Each is here because deferrin
 
 \---
 
-### Open Gap G — Nen Contract Lifecycle Notifications & Insights Recap Data (interrogated 2026-08-12; not yet built)
+### Open Gap G — Nen Contract Lifecycle Notifications & Insights Recap Data (interrogated 2026-08-12; notification half CLOSED 2026-08-12, recap half not yet built)
 
 **The feature, in two independent parts:**
 
-1. **Start/end notifications.** A toast when a Nen Contract activates (`StartDate` arrives) and another when it completes (`EndDate` passes) — the same delivery mechanism as the existing session-start/session-end toasts.
-2. **Contract recap data for Insights.** Structural facts about a contract — date range/duration, strictness rule, and which Block Presets were scheduled with how many hours each — readable independently of the Insights page itself being built.
+1. **Start/end notifications — CLOSED 2026-08-12.** A toast when a Nen Contract activates (`StartDate` arrives) and another when it completes (`EndDate` passes), same delivery mechanism as the existing session-start/session-end toasts. `NenContractActivatedEventHandler`/`NenContractCompletedEventHandler` built exactly to the settled shape below — see `TECHNICAL_SPEC_INFRA.md` → Done for the closure record.
+2. **Contract recap data for Insights — still open.** Structural facts about a contract — date range/duration, strictness rule, and which Block Presets were scheduled with how many hours each — readable independently of the Insights page itself being built.
 
 **Why this qualifies as an Open Gap despite touching no new domain state:** checked against the live code (not just the docs) before writing this up. Both parts turn out to be pure Application-layer wiring gaps — the underlying data was already sufficient:
 
@@ -326,12 +326,12 @@ Gaps that have been identified but not yet closed. Each is here because deferrin
 
 | Concept | Shape |
 |---|---|
-| `NenContractActivatedEventHandler` / `NenContractCompletedEventHandler` (Application, new) | Mirror `SessionStartedEventHandler`'s pattern exactly: load the contract by `ContractId` via `INenContractRepository`, call `INotificationService` with a message built from `Name`/`StartDate`/`EndDate`. No new interfaces needed — both dependencies already exist. |
-| `GetNenContractRecapQuery` / Handler (Application, new) | Given a `ContractId`, returns date range, `StrictnessRule`, and a per-preset hours breakdown (Focus vs Background). Composes `INenContractRepository.GetByIdAsync` + `IPlannedBlockRepository.GetForContractAsync` + `IBlockPresetRepository`, the same "inject a sibling query/repository" composition style `GetActiveNenContractQuery` already uses. Deliberately a standalone query, not bundled into the Insights page build — Insights can consume it later exactly as it will consume `GetInsightsCalendarQuery`, but this query has no dependency on the Insights page existing. |
+| `NenContractActivatedEventHandler` / `NenContractCompletedEventHandler` (Application) | **Built 2026-08-12.** Mirror `SessionStartedEventHandler`'s pattern exactly: load the contract by `ContractId` via `INenContractRepository`, call `INotificationService` with a message built from `Name`. No new interfaces needed — both dependencies already existed. |
+| `GetNenContractRecapQuery` / Handler (Application, new) | **Not yet built.** Given a `ContractId`, returns date range, `StrictnessRule`, and a per-preset hours breakdown (Focus vs Background). Composes `INenContractRepository.GetByIdAsync` + `IPlannedBlockRepository.GetForContractAsync` + `IBlockPresetRepository`, the same "inject a sibling query/repository" composition style `GetActiveNenContractQuery` already uses. Deliberately a standalone query, not bundled into the Insights page build — Insights can consume it later exactly as it will consume `GetInsightsCalendarQuery`, but this query has no dependency on the Insights page existing. |
 
 **Deliberately out of scope, kept separate:** performance/scoring data — Day-Met percentage (Open Gap C1), in-contract streaks (C2), and deficit digest notifications (C3) — stays exactly as already designed in Open Gap C. This gap is structural facts only (what the contract *was*, not how well it went); C1/C2/C3 can layer on top of the eventual Insights UI independently, without this gap needing to change shape.
 
-**Must be closed before:** Nothing urgent — deferred until picked up. Both slices are small and independently buildable (notification handlers first, recap query whenever Insights work starts) since neither depends on the other or on any unbuilt domain/persistence work.
+**Must be closed before:** Nothing urgent — the recap-query half is deferred until Insights work starts. It remains independently buildable and does not depend on the now-closed notification half.
 
 \---
 
