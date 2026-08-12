@@ -101,7 +101,7 @@ Tactical implementation details, current build state, and platform-specific gotc
 - Only one Focus session at a time (`HasActiveSessionAsync` check on start).
 - Once a session starts, the preset is **locked** — it cannot be edited mid-session.
 - Session-only adjustments (Ren page) are not persisted to the preset; they apply only for the duration.
-- Users can **extend** the timer (make longer) but cannot shorten it or end early via the UI.
+- Users can **extend** the timer (make longer). Ending early is also currently possible — `MainPageViewModel.EndSession()` has no guard beyond `EndSessionCommandHandler`'s own `Status == Active || OnBreak` check, so any active or on-break session can be ended at any point (this doc previously claimed the opposite; corrected 2026-08-12, drift found and fixed against `DOMAIN_DICTIONARY.md`'s already-accurate note). Ending early trims the originating block's `End` to match (`EndSessionCommandHandler` calls `block.TrimEnd(endedAt)` when the session ends before the block's scheduled end). A future Strict Mode Settings toggle (already tracked under Not Yet Built) will prevent ending early when enabled — see `DOMAIN_DICTIONARY.md`'s Session section.
 - Background Blocks may overlap with anything; Ritual + Ritual overlap is rejected at creation time.
 
 ### Session Adjustment Rules (Ren page)
