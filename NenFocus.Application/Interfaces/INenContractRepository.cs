@@ -48,4 +48,7 @@ public interface INenContractRepository
     /// time. Callers own whatever selection/filtering they need; this returns the raw set.
     /// </summary>
     Task<IReadOnlyList<NenContract>> GetAllInEffectAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Removes a contract by Id. No-op if it doesn't exist.</summary>
+    Task DeleteAsync(Guid id, CancellationToken cancellationToken = default);
 }

@@ -88,4 +88,14 @@ public sealed class NenContractRepository : INenContractRepository
             .Where(c => c.Status == NenContractStatus.Scheduled || c.Status == NenContractStatus.Active)
             .ToListAsync(cancellationToken);
     }
+
+    public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var contract = await _context.NenContracts
+            .FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
+
+        if (contract is null) return;
+
+        _context.NenContracts.Remove(contract);
+    }
 }

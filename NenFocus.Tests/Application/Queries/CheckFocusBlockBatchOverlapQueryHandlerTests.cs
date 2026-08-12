@@ -69,4 +69,36 @@ public class CheckFocusBlockBatchOverlapQueryHandlerTests
 
         result.Should().BeTrue();
     }
+
+    [Fact]
+    public async Task HandleAsync_OverlapBelongsToExcludedContract_ReturnsFalse()
+    {
+        var contractId = Guid.NewGuid();
+        var block = FocusBlock.Create(Guid.NewGuid(), PresetId,
+            new DateTime(2026, 1, 1, 9, 0, 0), new DateTime(2026, 1, 1, 10, 0, 0));
+        var ownPriorBlock = FocusBlock.Create(Guid.NewGuid(), PresetId, block.Start, block.End, contractId: contractId);
+        _blocks.GetOverlappingAsync(block.Start, block.End, ritualOnly: true, cancellationToken: Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyList<PlannedBlock>)[ownPriorBlock]);
+
+        var result = await CreateHandler().HandleAsync(
+            new CheckFocusBlockBatchOverlapQuery([block], ExcludeContractId: contractId), CancellationToken.None);
+
+        result.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task HandleAsync_ExcludeContractId_StillCatchesOverlapWithADifferentContract()
+    {
+        var editingContractId = Guid.NewGuid();
+        var block = FocusBlock.Create(Guid.NewGuid(), PresetId,
+            new DateTime(2026, 1, 1, 9, 0, 0), new DateTime(2026, 1, 1, 10, 0, 0));
+        var someoneElsesBlock = FocusBlock.Create(Guid.NewGuid(), PresetId, block.Start, block.End, contractId: Guid.NewGuid());
+        _blocks.GetOverlappingAsync(block.Start, block.End, ritualOnly: true, cancellationToken: Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyList<PlannedBlock>)[someoneElsesBlock]);
+
+        var result = await CreateHandler().HandleAsync(
+            new CheckFocusBlockBatchOverlapQuery([block], ExcludeContractId: editingContractId), CancellationToken.None);
+
+        result.Should().BeTrue();
+    }
 }

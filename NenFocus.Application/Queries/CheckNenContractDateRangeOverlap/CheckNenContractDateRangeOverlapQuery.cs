@@ -9,5 +9,10 @@ namespace NenFocus.Application.Queries.CheckNenContractDateRangeOverlap;
 /// allowed. Returns the name of the first overlapping contract found, or null if none.
 /// Composed live by the Contract Wizard's Basics step (UX convenience, disables Continue)
 /// and by SealNenContractValidator (the real guard, defense in depth).
+/// ExcludeContractId omits a specific contract from consideration — used when editing an
+/// existing contract, so it never collides with its own not-yet-replaced prior state.
 /// </summary>
-public sealed record CheckNenContractDateRangeOverlapQuery(DateOnly StartDate, DateOnly EndDate) : IQuery<string?>;
+public sealed record CheckNenContractDateRangeOverlapQuery(
+    DateOnly StartDate,
+    DateOnly EndDate,
+    Guid? ExcludeContractId = null) : IQuery<string?>;

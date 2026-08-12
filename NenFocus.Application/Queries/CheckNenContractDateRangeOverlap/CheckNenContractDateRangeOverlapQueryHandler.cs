@@ -15,6 +15,7 @@ public sealed class CheckNenContractDateRangeOverlapQueryHandler
         var inEffect = await _contracts.GetAllInEffectAsync(cancellationToken);
 
         var overlapping = inEffect.FirstOrDefault(c =>
+            c.Id != query.ExcludeContractId &&
             query.StartDate <= c.EndDate && query.EndDate >= c.StartDate);
 
         return overlapping?.Name;
