@@ -19,7 +19,7 @@ Tactical implementation details, current build state, and platform-specific gotc
 - Browser extension (`NenFocusExtension/`): intercepts navigation, queries `/check`, redirects to `blocked.html` if blocked, calls `/report` to increment the web block counter
 - Registry enforcement: disables DNS-over-HTTPS (DoH) in Chrome, Edge, and Brave via `BuiltInDnsClientEnabled = 0` registry key, preventing browsers from bypassing the hosts file
 - Admin manifest (`requireAdministrator`): required for hosts file writes, registry key edits, and high-privilege process tree termination
-- Windows toast notifications + scheduled break reminders (in-process Task.Delay)
+- Windows toast notifications. Scheduled break reminders (in-process `Task.Delay`) are implemented in `WindowsNotificationService` but never wired to any caller — see Known Workarounds below and `ARCHITECT_GOVERNANCE.md` → Open Gap I.
 - Session rehydration on startup: `SessionStateService.InitializeAsync()` queries DB for active/on-break sessions and maps domain entities to `SessionDto`; `SessionStateService` injects `IBlockPresetRepository` to resolve the real preset name from its ID
 - Session persistence across app restarts (`%AppData%\NenFocus\active_session.json`)
 - Post-session reflection: `SaveReflectionCommand` persists `Rating (1–5)` and `Reflection (string)` to the `Session` entity
@@ -153,7 +153,7 @@ The Source of Truth flow: `Database → PolicyEngine (Domain) → ActivePolicySl
 
 - **FocusBlock update**: There is no `FocusBlock.Update()` method — `UpdatePlannedBlockCommand` uses delete + recreate.
 - **Hosts file markers**: must be exactly `# NEN_FOCUS_START` and `# NEN_FOCUS_END` (case-sensitive, underscores). Any deviation causes duplicate entries on next write.
-- **Break reminders**: Implemented as `Task.Delay` fire-and-forget tasks tracked by `CancellationTokenSource`. They do not survive app restarts. A persistent scheduler is a future concern.
+- **Break reminders**: Implemented as `Task.Delay` fire-and-forget tasks tracked by `CancellationTokenSource` — but `INotificationService.ScheduleBreakReminderAsync` is never called by anything (verified against the full solution 2026-08-12), so this is currently unreachable rather than a live restart-survival risk. See `ARCHITECT_GOVERNANCE.md` → Open Gap I.
 - **No index on `PlannedBlocks.Start`/`End`**: confirmed 2026-07-15 while sizing the Recurring Blocks materialization horizon (see `ARCHITECT_GOVERNANCE.md` → Open Gap E) — every range query (`GetForDayAsync`, `GetForRangeAsync`, `GetOverlappingAsync`, etc.) is currently a full table scan. Not a problem at current or foreseeable single-user scale; worth adding an index on `(Start, End)` before row counts climb into the tens of thousands, independent of any specific feature.
 
 ### DI & Registration

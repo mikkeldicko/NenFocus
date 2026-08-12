@@ -386,6 +386,24 @@ Gaps that have been identified but not yet closed. Each is here because deferrin
 
 \---
 
+### Open Gap I — Break Reminder Notifications Are Unreachable Dead Code (surfaced 2026-08-12; not yet built/wired)
+
+**Found while auditing Open Gap B's rehydration path, not while looking for it.** The stated goal was checking whether crash-resilience risk extends beyond the two failure modes Gap B already documents. The session/enforcement rehydration path (`SessionStateService.InitializeAsync()`, `ActiveSessionMonitor`'s timer rebuild from stored `BreakStartedAt`/`BreakSettings`) checked out clean — both already-documented Gap B failure modes are accurate and nothing new was found there. But tracing the specific claim that led here — `TECHNICAL_SPEC_INFRA.md`'s "break reminders... do not survive app restarts" — surfaced something bigger: **the break reminder feature can't fire in the first place, restart or not.**
+
+**Verified against the full solution, not assumed:** `INotificationService.ScheduleBreakReminderAsync` is fully implemented in `WindowsNotificationService` — real `Task.Delay` + `CancellationTokenSource` tracking, exactly as documented. Grepped every file in the solution: **it is never called from anywhere.** Not `SessionStartedEventHandler`, not any command handler, not any ViewModel. `CancelAllRemindersAsync` *is* called (from `SessionEndedEventHandler`, on every session end) — but since nothing ever schedules a reminder, that call is a harmless no-op every single time. `CancelReminderAsync` (the single-token variant) is never called at all.
+
+**Why this is more than unused plumbing:** the Ritual's Hatsu step explicitly lets the user **configure** break reminder settings when starting a session ("user... can configure break reminders") — a user setting an interval reasonably expects to actually get reminded. `DOMAIN_DICTIONARY.md`'s Session section describes it as live, working behavior: *"When a break reminder fires, a break countdown timer replaces the session timer on the Main Page."* `TECHNICAL_SPEC_INFRA.md`'s Done list includes "scheduled break reminders (in-process Task.Delay)" alongside other genuinely-shipped features. Both docs overclaim a feature that cannot currently fire.
+
+**What actually works today:** breaks are 100% user-initiated. `MainPageViewModel.TakeBreak()` → `StartBreakCommand { SessionId = ..., UserInitiated = true }` is the only path into `OnBreak`. The `UserInitiated` flag's very existence is a strong signal a non-user-initiated (reminder-triggered) path was designed and anticipated, then never actually built.
+
+**Two directions, neither decided — this is a "for now" write-up, not a design:**
+- **Wire it up for real.** Call `ScheduleBreakReminderAsync` from `SessionStartedEventHandler` (alongside the existing enforcement + notification calls) using `Session.BreakSettings.IntervalMinutes`; on fire, dispatch `StartBreakCommand { UserInitiated = false }` rather than just showing a toast, matching the documented "reminder fires → break starts" framing and giving the `UserInitiated` flag a real reason to exist. **This would reopen Gap B's exact class of problem in a new spot**: a scheduled reminder is just as vulnerable to not surviving a restart as the two failure modes Gap B already tracks — `InitializeAsync()` would need to reschedule the next reminder on rehydration (computing remaining time from `Session.StartedAt`/`BreakSettings.IntervalMinutes`, the same "recompute from stored data" idiom `ActiveSessionMonitor` already uses successfully). Wiring this up without also handling its own rehydration would just relocate the current bug from "unreachable" to "reachable but still silently lost on crash."
+- **Or confirm it was deliberately abandoned and correct the docs instead** — remove the "when a break reminder fires" framing from `DOMAIN_DICTIONARY.md`, correct the Done-list entry in `TECHNICAL_SPEC_INFRA.md`, and either delete the dead interface members or leave them as clearly-marked unused scaffolding.
+
+**Must be closed before:** Nothing urgent — low severity (a missing UX nicety, not a data-integrity or enforcement-safety issue like Gap B's tracked failure modes). Flagged so the doc overclaim and the dead-code/half-built-feature status aren't silently carried forward.
+
+\---
+
 ## Minor Cleanups
 
 Trivial style or consistency fixes that don't rise to the level of a Design Gap. Deferred until the relevant file is next edited for other reasons. Items here should be deletable in a single line change.

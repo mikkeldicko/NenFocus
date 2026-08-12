@@ -76,7 +76,7 @@ NenFocus has five pages accessible via the sidebar:
 - A Session cannot be paused — only placed *on break*.
 - A Session is *missed*, never *failed* or *expired* — "missed" is the only vocabulary for a Planned session whose window closed unfulfilled.
 
-**Break behaviour:** When a break reminder fires, a break countdown timer replaces the session timer on the Main Page. Enforcement remains active during breaks — blocked sites and apps stay blocked. The break is a reminder only. A future Settings option will allow the user to choose whether enforcement is paused during breaks.
+**Break behaviour:** Once a break starts, a break countdown timer replaces the session timer on the Main Page. Enforcement remains active during breaks — blocked sites and apps stay blocked. The break is a reminder only. A future Settings option will allow the user to choose whether enforcement is paused during breaks. **Breaks are currently user-initiated only** (`MainPageViewModel.TakeBreak()`) — the "reminder fires and starts a break automatically" framing this line used to have does not match shipped code; `INotificationService.ScheduleBreakReminderAsync` is fully implemented but never called anywhere. See `ARCHITECT_GOVERNANCE.md` → Open Gap I.
 
 **Ending early:** Currently the user can end a session before the timer runs out. A future "Strict Mode" setting will prevent this.
 
