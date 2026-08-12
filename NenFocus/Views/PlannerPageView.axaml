@@ -164,9 +164,8 @@
 					<Button Classes="navButton" Content="‹" Command="{Binding PreviousWeekCommand}"/>
 					<Button Classes="todayButton" Content="Today" Command="{Binding GoToTodayCommand}"/>
 					<Button Classes="navButton" Content="›" Command="{Binding NextWeekCommand}"/>
-					<Button Classes="primary" Content="Make Nen Contract"
-                            Command="{Binding OpenContractWizardCommand}"
-                            IsEnabled="{Binding CanOpenContractWizard}"
+					<Button Name="NenContractButton" Classes="primary" Content="Nen Contract"
+                            Command="{Binding ToggleNenContractPopoverCommand}"
                             IsVisible="{Binding !IsDraftingContract}"
                             Margin="8,0,0,0"/>
 				</StackPanel>
@@ -424,5 +423,115 @@
 				</StackPanel>
 			</Border>
 		</Border>
+
+		<Border IsVisible="{Binding IsConfirmDeleteContractVisible}" Background="#88000000">
+			<Border Background="#FFFFFF" CornerRadius="14" Width="400" Padding="32,28"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                    BoxShadow="0 12 48 0 #44000000">
+				<StackPanel Spacing="20">
+					<TextBlock Text="Delete Contract" FontSize="18" FontWeight="SemiBold" Foreground="#1A1A2E"/>
+					<TextBlock Text="{Binding ConfirmDeleteContractMessage}" FontSize="14" Foreground="#888899" TextWrapping="Wrap"/>
+					<StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="12">
+						<Button Classes="secondary" Content="Keep It" Command="{Binding CancelDeleteContractCommand}"/>
+						<Button Classes="danger" Content="Delete" Command="{Binding ConfirmDeleteContractCommand}"/>
+					</StackPanel>
+				</StackPanel>
+			</Border>
+		</Border>
+
+		<Popup IsOpen="{Binding IsNenContractPopoverVisible, Mode=TwoWay}"
+               PlacementTarget="{Binding #NenContractButton}"
+               Placement="BottomEdgeAlignedRight"
+               IsLightDismissEnabled="True"
+               VerticalOffset="6">
+			<Border Background="#FFFFFF" BorderBrush="#DDDDE8" BorderThickness="1" CornerRadius="12"
+                    Width="360" Padding="18" BoxShadow="0 12 40 0 #33000000">
+				<StackPanel Spacing="16">
+
+					<TextBlock Text="No active contracts" FontSize="13" Foreground="#888899"
+                               IsVisible="{Binding HasNoContracts}"/>
+
+					<StackPanel Spacing="8" IsVisible="{Binding HasActiveContract}">
+						<TextBlock Text="ACTIVE" FontSize="10" FontWeight="Medium" LetterSpacing="1" Foreground="#AAAABC"/>
+						<Border Background="#F0F0F8" CornerRadius="8" Padding="12,10">
+							<Grid ColumnDefinitions="*,Auto">
+								<StackPanel Grid.Column="0" Spacing="4">
+									<TextBlock Text="{Binding ActiveContract.Name}" FontSize="14" FontWeight="SemiBold" Foreground="#1A1A2E"/>
+									<StackPanel Orientation="Horizontal" Spacing="4">
+										<TextBlock Text="{Binding ActiveContract.StartDate, StringFormat='{}{0:MMM d}'}" FontSize="12" Foreground="#888899"/>
+										<TextBlock Text="–" FontSize="12" Foreground="#888899"/>
+										<TextBlock Text="{Binding ActiveContract.EndDate, StringFormat='{}{0:MMM d, yyyy}'}" FontSize="12" Foreground="#888899"/>
+									</StackPanel>
+									<StackPanel Orientation="Horizontal" Spacing="6">
+										<Border Background="#B8922A" CornerRadius="4" Padding="6,2">
+											<TextBlock Text="Active" FontSize="10" FontWeight="Medium" Foreground="White"/>
+										</Border>
+										<TextBlock FontSize="12" Foreground="#888899">
+											<Run Text="{Binding ActiveContract.StrictnessRule, Converter={x:Static conv:StrictnessRuleToLabelConverter.Instance}}"/>
+										</TextBlock>
+									</StackPanel>
+									<TextBlock Text="{Binding CancelContractErrorMessage}"
+                                               IsVisible="{Binding CancelContractErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                               FontSize="11" Foreground="#C03A2B" TextWrapping="Wrap"/>
+								</StackPanel>
+								<Button Grid.Column="1" Classes="bannerCancelBtn" Content="✕"
+                                        ToolTip.Tip="Cancel contract"
+                                        Command="{Binding RequestCancelContractCommand}"
+                                        IsVisible="{Binding CanCancelActiveContract}"
+                                        VerticalAlignment="Top"/>
+							</Grid>
+						</Border>
+					</StackPanel>
+
+					<StackPanel Spacing="8" IsVisible="{Binding ScheduledContracts.Count}">
+						<TextBlock Text="UPCOMING" FontSize="10" FontWeight="Medium" LetterSpacing="1" Foreground="#AAAABC"/>
+						<ItemsControl ItemsSource="{Binding ScheduledContracts}">
+							<ItemsControl.ItemsPanel>
+								<ItemsPanelTemplate>
+									<StackPanel Spacing="8"/>
+								</ItemsPanelTemplate>
+							</ItemsControl.ItemsPanel>
+							<ItemsControl.ItemTemplate>
+								<DataTemplate DataType="dto:ScheduledNenContractDto">
+									<Border Background="#F8F8FB" CornerRadius="8" Padding="12,10">
+										<Grid ColumnDefinitions="*,Auto,Auto">
+											<StackPanel Grid.Column="0" Spacing="4">
+												<TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold" Foreground="#1A1A2E"/>
+												<StackPanel Orientation="Horizontal" Spacing="4">
+													<TextBlock Text="{Binding StartDate, StringFormat='{}{0:MMM d}'}" FontSize="11" Foreground="#888899"/>
+													<TextBlock Text="–" FontSize="11" Foreground="#888899"/>
+													<TextBlock Text="{Binding EndDate, StringFormat='{}{0:MMM d, yyyy}'}" FontSize="11" Foreground="#888899"/>
+												</StackPanel>
+												<TextBlock Text="{Binding StrictnessRule, Converter={x:Static conv:StrictnessRuleToLabelConverter.Instance}}"
+                                                           FontSize="11" Foreground="#AAAABC"/>
+											</StackPanel>
+											<Button Grid.Column="1" Classes="bannerCancelBtn" Content="Edit"
+                                                    Foreground="#1A1A2E"
+                                                    Command="{Binding $parent[UserControl].((vm:PlannerPageViewModel)DataContext).RequestEditContractCommand}"
+                                                    CommandParameter="{Binding Id}"
+                                                    IsEnabled="{Binding $parent[UserControl].((vm:PlannerPageViewModel)DataContext).CanOpenContractWizard}"
+                                                    VerticalAlignment="Top"/>
+											<Button Grid.Column="2" Classes="bannerCancelBtn" Content="Delete"
+                                                    Command="{Binding $parent[UserControl].((vm:PlannerPageViewModel)DataContext).RequestDeleteContractCommand}"
+                                                    CommandParameter="{Binding Id}"
+                                                    VerticalAlignment="Top"/>
+										</Grid>
+									</Border>
+								</DataTemplate>
+							</ItemsControl.ItemTemplate>
+						</ItemsControl>
+					</StackPanel>
+
+					<TextBlock Text="{Binding DeleteContractErrorMessage}"
+                               IsVisible="{Binding DeleteContractErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                               FontSize="12" Foreground="#C03A2B" TextWrapping="Wrap"/>
+
+					<Button Classes="primary" Content="Make Nen Contract"
+                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                            Command="{Binding OpenContractWizardCommand}"
+                            IsEnabled="{Binding CanOpenContractWizard}"/>
+				</StackPanel>
+			</Border>
+		</Popup>
 	</Grid>
 </UserControl>

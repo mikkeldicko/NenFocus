@@ -90,6 +90,7 @@ public class GetActiveNenContractQueryHandlerTests
         result.EndDate.Should().Be(EndDate);
         result.TotalDays.Should().Be(10);
         result.DayNumber.Should().Be(4); // Today is Jan 4, contract starts Jan 1
+        result.StrictnessRule.Should().Be(StrictnessRule.DailyFlexibility);
     }
 
     [Fact]

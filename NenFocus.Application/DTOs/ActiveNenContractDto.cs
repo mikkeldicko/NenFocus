@@ -1,8 +1,11 @@
+using NenFocus.Domain.Enums;
+
 namespace NenFocus.Application.DTOs;
 
 /// <summary>
 /// Feeds the Planner's persistent active-contract banner:
 /// "Contract: [Name] — Day X/Y — Z of N days behind — Hh deficit".
+/// Also feeds the Nen Contract popover's Active section.
 /// </summary>
 public sealed record ActiveNenContractDto
 {
@@ -10,6 +13,7 @@ public sealed record ActiveNenContractDto
     public string Name { get; init; } = string.Empty;
     public DateOnly StartDate { get; init; }
     public DateOnly EndDate { get; init; }
+    public StrictnessRule StrictnessRule { get; init; }
 
     /// <summary>1-based day of the contract "today" falls on — clamped into [1, TotalDays].</summary>
     public int DayNumber { get; init; }

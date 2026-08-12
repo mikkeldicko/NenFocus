@@ -68,6 +68,7 @@ public sealed class GetActiveNenContractQueryHandler : IQueryHandler<GetActiveNe
             Name = contract.Name,
             StartDate = contract.StartDate,
             EndDate = contract.EndDate,
+            StrictnessRule = contract.StrictnessRule,
             DayNumber = dayNumber,
             TotalDays = totalDays,
             DaysBehind = daysBehind,
