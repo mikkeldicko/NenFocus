@@ -466,9 +466,8 @@
 										<Border Background="#B8922A" CornerRadius="4" Padding="6,2">
 											<TextBlock Text="Active" FontSize="10" FontWeight="Medium" Foreground="White"/>
 										</Border>
-										<TextBlock FontSize="12" Foreground="#888899">
-											<Run Text="{Binding ActiveContract.StrictnessRule, Converter={x:Static conv:StrictnessRuleToLabelConverter.Instance}}"/>
-										</TextBlock>
+										<TextBlock Text="{Binding ActiveContract.StrictnessRule, Converter={x:Static conv:StrictnessRuleToLabelConverter.Instance}}"
+                                                   FontSize="12" Foreground="#888899"/>
 									</StackPanel>
 									<TextBlock Text="{Binding CancelContractErrorMessage}"
                                                IsVisible="{Binding CancelContractErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
