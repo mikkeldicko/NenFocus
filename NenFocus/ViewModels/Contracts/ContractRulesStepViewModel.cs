@@ -83,7 +83,14 @@ public partial class ContractRulesStepViewModel : ViewModelBase
         DateOnly endDate,
         IQueryHandler<GetAllContractPresetsQuery, IReadOnlyList<ContractPresetDto>>? getPresets,
         Action onContinue,
-        Action onBack)
+        Action onBack,
+        StrictnessRule? initialStrictnessRule = null,
+        double? initialFixedDailyFloorHours = null,
+        bool initialAllowCancellation = true,
+        bool initialIsWorkHoursEnabled = false,
+        TimeOnly? initialWorkHoursStart = null,
+        TimeOnly? initialWorkHoursEnd = null,
+        IReadOnlyCollection<DateOnly>? initialRestDays = null)
     {
         IsAdvanced = isAdvanced;
         StartDate = startDate;
@@ -100,13 +107,25 @@ public partial class ContractRulesStepViewModel : ViewModelBase
         SimpleOptions.Add(new SimpleContractOptionViewModel("Lockdown", "This schedule is law. I will not touch it.", StrictnessRule.Locked, false));
         SimpleOptions.Add(new SimpleContractOptionViewModel("Daily Flex", "I can shuffle blocks around within each day.", StrictnessRule.DailyFlexibility, true));
         SimpleOptions.Add(new SimpleContractOptionViewModel("Period Study", "Blocks can shift around during the contract, but the total hours I seal stay fixed.", StrictnessRule.PeriodTimeBudget, true));
-        SelectedSimpleOption = SimpleOptions[0];
+        SelectedSimpleOption = (!isAdvanced && initialStrictnessRule.HasValue
+            ? SimpleOptions.FirstOrDefault(o => o.StrictnessRule == initialStrictnessRule.Value)
+            : null) ?? SimpleOptions[0];
         SelectedSimpleOption.IsSelected = true;
 
         for (var d = startDate; d <= endDate; d = d.AddDays(1))
-            RestDayChips.Add(new RestDayChipViewModel(d));
+            RestDayChips.Add(new RestDayChipViewModel(d) { IsRestDay = initialRestDays?.Contains(d) ?? false });
 
-        if (isAdvanced) _ = LoadPresetsAsync();
+        if (isAdvanced)
+        {
+            if (initialStrictnessRule.HasValue) StrictnessRule = initialStrictnessRule.Value;
+            if (initialFixedDailyFloorHours.HasValue) DailyFloorHoursText = initialFixedDailyFloorHours.Value.ToString("0.##");
+            AllowCancellation = initialAllowCancellation;
+            IsWorkHoursEnabled = initialIsWorkHoursEnabled;
+            if (initialWorkHoursStart.HasValue) WorkHoursStartText = FormatTime(initialWorkHoursStart.Value);
+            if (initialWorkHoursEnd.HasValue) WorkHoursEndText = FormatTime(initialWorkHoursEnd.Value);
+
+            _ = LoadPresetsAsync();
+        }
     }
 
     private async Task LoadPresetsAsync()

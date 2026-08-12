@@ -13,9 +13,13 @@ using NenFocus.Application.Queries.ComputePlannedFocusHours;
 using NenFocus.Application.Queries.GetActiveNenContract;
 using NenFocus.Application.Queries.GetAllBlockPresets;
 using NenFocus.Application.Queries.GetAllContractPresets;
+using NenFocus.Application.Queries.GetNenContractForEdit;
 using NenFocus.Application.Queries.GetPlannedBlocksForDay;
+using NenFocus.Application.Queries.GetScheduledNenContracts;
 using NenFocus.Application.UseCases.ContractPresets.CreateContractPreset;
 using NenFocus.Application.UseCases.NenContracts.Break;
+using NenFocus.Application.UseCases.NenContracts.Delete;
+using NenFocus.Application.UseCases.NenContracts.Edit;
 using NenFocus.Application.UseCases.NenContracts.Seal;
 using NenFocus.Application.UseCases.Planner.CreatePlannedBlock;
 using NenFocus.Application.UseCases.Planner.DeletePlannedBlock;
@@ -46,6 +50,10 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     private readonly ICommandHandler<CreateContractPresetCommand, CreateContractPresetResult> _createContractPreset;
     private readonly IQueryHandler<GetActiveNenContractQuery, ActiveNenContractDto?> _getActiveContract;
     private readonly IQueryHandler<CheckNenContractDateRangeOverlapQuery, string?> _checkOverlap;
+    private readonly IQueryHandler<GetScheduledNenContractsQuery, IReadOnlyList<ScheduledNenContractDto>> _getScheduledContracts;
+    private readonly IQueryHandler<GetNenContractForEditQuery, NenContractEditDto?> _getContractForEdit;
+    private readonly ICommandHandler<EditNenContractCommand, EditNenContractResult> _editContract;
+    private readonly ICommandHandler<DeleteNenContractCommand, DeleteNenContractResult> _deleteContract;
     private readonly IPlannerClockService _clockService;
     private readonly ISessionStateService _sessionState;
 
@@ -55,6 +63,11 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     private Guid? _editingBlockId;
     private bool _editingIsDraft;
     private NenContractDraftRules? _draftRules;
+
+    // Set only while drafting is seeded from an existing Scheduled contract (Edit flow).
+    // Carries the original blocks (converted into draft tiles by BeginDrafting) so nothing
+    // needs to be re-fetched at Seal time; cleared by ExitDraftingMode.
+    private NenContractEditDto? _editingContractPayload;
 
     [ObservableProperty] private DateTime _weekStart;
 
@@ -118,6 +131,16 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     [ObservableProperty] private string _confirmCancelContractMessage = string.Empty;
     [ObservableProperty] private string? _cancelContractErrorMessage;
 
+    // ── Nen Contract popover (replaces the old top-right "Make Nen Contract" button) ──
+    [ObservableProperty] private bool _isNenContractPopoverVisible;
+    public ObservableCollection<ScheduledNenContractDto> ScheduledContracts { get; } = new();
+    public bool HasNoContracts => ActiveContract is null && ScheduledContracts.Count == 0;
+
+    [ObservableProperty] private bool _isConfirmDeleteContractVisible;
+    [ObservableProperty] private string _confirmDeleteContractMessage = string.Empty;
+    [ObservableProperty] private string? _deleteContractErrorMessage;
+    private Guid? _contractIdPendingDelete;
+
     public bool HasActiveContract => ActiveContract is not null;
 
     // Mirrors NenContract.AllowCancellation via the DTO — the button is hidden rather than
@@ -135,6 +158,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(HasActiveContract));
         OnPropertyChanged(nameof(ActiveContractBannerText));
         OnPropertyChanged(nameof(CanCancelActiveContract));
+        OnPropertyChanged(nameof(HasNoContracts));
     }
 
     // Scoped to the currently viewed week — the banner only shows when a contract's date
@@ -170,6 +194,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
             return;
         }
 
+        IsNenContractPopoverVisible = false;
         await RefreshActiveContractAsync();
         await LoadWeekAsync();
     }
@@ -193,8 +218,12 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
     public bool CanSaveBlock => !IsBlockLocked;
 
+    // Deliberately NOT gated on session-active — confirmed with the architect: the only
+    // reason to disable Make/Edit is a genuine overlay collision (a form or the wizard
+    // already open), not merely a session running. This differs from the old top-right
+    // button's original guard, which this popover fully replaces.
     public bool CanOpenContractWizard =>
-        !IsFormVisible && !IsWizardVisible && !IsDraftingContract && _sessionState.ActiveSession is null;
+        !IsFormVisible && !IsWizardVisible && !IsDraftingContract;
 
     // Shell renders the wizard as a full-screen overlay (mirrors the Ritual overlay), so it
     // needs to know when one opens/closes even though this ViewModel still owns construction
@@ -244,6 +273,10 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         ICommandHandler<CreateContractPresetCommand, CreateContractPresetResult> createContractPreset,
         IQueryHandler<GetActiveNenContractQuery, ActiveNenContractDto?> getActiveContract,
         IQueryHandler<CheckNenContractDateRangeOverlapQuery, string?> checkOverlap,
+        IQueryHandler<GetScheduledNenContractsQuery, IReadOnlyList<ScheduledNenContractDto>> getScheduledContracts,
+        IQueryHandler<GetNenContractForEditQuery, NenContractEditDto?> getContractForEdit,
+        ICommandHandler<EditNenContractCommand, EditNenContractResult> editContract,
+        ICommandHandler<DeleteNenContractCommand, DeleteNenContractResult> deleteContract,
         IPlannerClockService clockService,
         ISessionStateService sessionState)
     {
@@ -253,6 +286,10 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         _updateBlock = updateBlock;
         _deleteBlock = deleteBlock;
         _sealContract = sealContract;
+        _getScheduledContracts = getScheduledContracts;
+        _getContractForEdit = getContractForEdit;
+        _editContract = editContract;
+        _deleteContract = deleteContract;
         _breakContract = breakContract;
         _computePlannedFocusHours = computePlannedFocusHours;
         _getContractPresets = getContractPresets;
@@ -814,6 +851,8 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     private void OpenContractWizard()
     {
         if (!CanOpenContractWizard) return;
+        _editingContractPayload = null;
+        IsNenContractPopoverVisible = false;
         WizardViewModel = new ContractWizardViewModel(
             getPresets: _getContractPresets,
             createPreset: _createContractPreset,
@@ -821,6 +860,30 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
             initialStartDate: DateOnly.FromDateTime(_clockService.LocalNow.Date),
             onReadyToSchedule: BeginDrafting,
             onCancel: CloseWizard);
+        IsWizardVisible = true;
+        ContractWizardOpened?.Invoke(WizardViewModel);
+    }
+
+    // Popover's Edit action on an Upcoming (Scheduled) contract. Gated the same way as
+    // OpenContractWizard (overlay collision only, not session-active — see CanOpenContractWizard).
+    [RelayCommand]
+    private async Task RequestEditContractAsync(Guid contractId)
+    {
+        if (!CanOpenContractWizard) return;
+
+        var payload = await _getContractForEdit.HandleAsync(new GetNenContractForEditQuery(contractId));
+        if (payload is null) return;
+
+        _editingContractPayload = payload;
+        IsNenContractPopoverVisible = false;
+        WizardViewModel = new ContractWizardViewModel(
+            getPresets: _getContractPresets,
+            createPreset: _createContractPreset,
+            checkOverlap: _checkOverlap,
+            initialStartDate: payload.StartDate,
+            onReadyToSchedule: BeginDrafting,
+            onCancel: CloseWizard,
+            editingContract: payload);
         IsWizardVisible = true;
         ContractWizardOpened?.Invoke(WizardViewModel);
     }
@@ -836,6 +899,18 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     {
         _draftRules = rules;
         _draftBlocks.Clear();
+
+        // Editing an existing Scheduled contract: seed the calendar with its already-drafted
+        // blocks instead of a blank week, so "edit" actually shows what's being edited.
+        if (rules.EditingContractId.HasValue && _editingContractPayload is not null)
+        {
+            foreach (var block in _editingContractPayload.Blocks)
+            {
+                _draftBlocks.Add(new ContractDraftBlock(
+                    Guid.NewGuid(), block.PresetId, block.PresetName, block.Start, block.End, block.IsFocus));
+            }
+        }
+
         CloseWizard();
         IsDraftingContract = true;
         DraftContractName = rules.Name;
@@ -950,32 +1025,61 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
                 .Select(d => new NenContractBlockSpec(d.PresetId, d.Start, d.End, d.IsFocus))
                 .ToList();
 
-            var command = new SealNenContractCommand
-            {
-                Name = _draftRules.Name,
-                Goal = _draftRules.Goal,
-                StartDate = _draftRules.StartDate,
-                EndDate = _draftRules.EndDate,
-                StrictnessRule = _draftRules.StrictnessRule,
-                AllowCancellation = _draftRules.AllowCancellation,
-                FixedDailyFloorHours = _draftRules.FixedDailyFloorHours,
-                RestDays = _draftRules.RestDays,
-                WorkHoursStart = _draftRules.WorkHoursStart,
-                WorkHoursEnd = _draftRules.WorkHoursEnd,
-                Blocks = blocks,
-                ContractPresetId = _draftRules.ContractPresetId
-            };
+            bool success;
+            string? errorMessage;
 
-            var result = await _sealContract.HandleAsync(command);
-            if (!result.Success)
+            if (_draftRules.EditingContractId is { } editingContractId)
             {
-                SealErrorMessage = result.ErrorMessage;
+                var editResult = await _editContract.HandleAsync(new EditNenContractCommand
+                {
+                    ContractId = editingContractId,
+                    Name = _draftRules.Name,
+                    Goal = _draftRules.Goal,
+                    StartDate = _draftRules.StartDate,
+                    EndDate = _draftRules.EndDate,
+                    StrictnessRule = _draftRules.StrictnessRule,
+                    AllowCancellation = _draftRules.AllowCancellation,
+                    FixedDailyFloorHours = _draftRules.FixedDailyFloorHours,
+                    RestDays = _draftRules.RestDays,
+                    WorkHoursStart = _draftRules.WorkHoursStart,
+                    WorkHoursEnd = _draftRules.WorkHoursEnd,
+                    Blocks = blocks,
+                    ContractPresetId = _draftRules.ContractPresetId
+                });
+                success = editResult.Success;
+                errorMessage = editResult.ErrorMessage;
+            }
+            else
+            {
+                var sealResult = await _sealContract.HandleAsync(new SealNenContractCommand
+                {
+                    Name = _draftRules.Name,
+                    Goal = _draftRules.Goal,
+                    StartDate = _draftRules.StartDate,
+                    EndDate = _draftRules.EndDate,
+                    StrictnessRule = _draftRules.StrictnessRule,
+                    AllowCancellation = _draftRules.AllowCancellation,
+                    FixedDailyFloorHours = _draftRules.FixedDailyFloorHours,
+                    RestDays = _draftRules.RestDays,
+                    WorkHoursStart = _draftRules.WorkHoursStart,
+                    WorkHoursEnd = _draftRules.WorkHoursEnd,
+                    Blocks = blocks,
+                    ContractPresetId = _draftRules.ContractPresetId
+                });
+                success = sealResult.Success;
+                errorMessage = sealResult.ErrorMessage;
+            }
+
+            if (!success)
+            {
+                SealErrorMessage = errorMessage;
                 return;
             }
 
             ExitDraftingMode();
             await LoadWeekAsync();
             await RefreshActiveContractAsync();
+            await RefreshScheduledContractsAsync();
         }
         finally
         {
@@ -1014,7 +1118,65 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         _draftBlocks.Clear();
         DayFloorPreviews.Clear();
         SealErrorMessage = null;
+        _editingContractPayload = null;
     }
+
+    // ── Nen Contract popover ────────────────────────────────────────────────
+
+    [RelayCommand]
+    private async Task ToggleNenContractPopoverAsync()
+    {
+        if (IsNenContractPopoverVisible)
+        {
+            IsNenContractPopoverVisible = false;
+            return;
+        }
+
+        await RefreshScheduledContractsAsync();
+        IsNenContractPopoverVisible = true;
+    }
+
+    [RelayCommand]
+    private void CloseNenContractPopover() => IsNenContractPopoverVisible = false;
+
+    private async Task RefreshScheduledContractsAsync()
+    {
+        var scheduled = await _getScheduledContracts.HandleAsync(new GetScheduledNenContractsQuery());
+        ScheduledContracts.Clear();
+        foreach (var contract in scheduled)
+            ScheduledContracts.Add(contract);
+        OnPropertyChanged(nameof(HasNoContracts));
+    }
+
+    [RelayCommand]
+    private void RequestDeleteContract(Guid contractId)
+    {
+        _contractIdPendingDelete = contractId;
+        DeleteContractErrorMessage = null;
+        ConfirmDeleteContractMessage = "Delete this contract? This cannot be undone.";
+        IsConfirmDeleteContractVisible = true;
+    }
+
+    [RelayCommand]
+    private async Task ConfirmDeleteContractAsync()
+    {
+        if (_contractIdPendingDelete is not { } contractId) { IsConfirmDeleteContractVisible = false; return; }
+
+        var result = await _deleteContract.HandleAsync(new DeleteNenContractCommand { ContractId = contractId });
+        IsConfirmDeleteContractVisible = false;
+        _contractIdPendingDelete = null;
+
+        if (!result.Success)
+        {
+            DeleteContractErrorMessage = result.ErrorMessage;
+            return;
+        }
+
+        await RefreshScheduledContractsAsync();
+    }
+
+    [RelayCommand]
+    private void CancelDeleteContract() => IsConfirmDeleteContractVisible = false;
 
     public void Dispose()
     {

@@ -12,6 +12,7 @@ public partial class ContractBasicsStepViewModel : ViewModelBase
     private readonly IQueryHandler<CheckNenContractDateRangeOverlapQuery, string?> _checkOverlap;
     private readonly Action _onContinue;
     private readonly Action _onBack;
+    private readonly Guid? _excludeContractId;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanContinue))]
@@ -52,7 +53,8 @@ public partial class ContractBasicsStepViewModel : ViewModelBase
         DateTimeOffset initialStartDate,
         DateTimeOffset initialEndDate,
         Action onContinue,
-        Action onBack)
+        Action onBack,
+        Guid? excludeContractId = null)
     {
         _checkOverlap = checkOverlap;
         _name = initialName;
@@ -61,6 +63,7 @@ public partial class ContractBasicsStepViewModel : ViewModelBase
         _endDate = initialEndDate;
         _onContinue = onContinue;
         _onBack = onBack;
+        _excludeContractId = excludeContractId;
 
         _ = RevalidateOverlapAsync();
     }
@@ -73,7 +76,7 @@ public partial class ContractBasicsStepViewModel : ViewModelBase
         if (EndDate.Date < StartDate.Date) { OverlapErrorMessage = null; return; }
 
         var overlapping = await _checkOverlap.HandleAsync(new CheckNenContractDateRangeOverlapQuery(
-            DateOnly.FromDateTime(StartDate.Date), DateOnly.FromDateTime(EndDate.Date)));
+            DateOnly.FromDateTime(StartDate.Date), DateOnly.FromDateTime(EndDate.Date), _excludeContractId));
 
         OverlapErrorMessage = overlapping is not null
             ? $"Overlaps with your existing contract \"{overlapping}\"."

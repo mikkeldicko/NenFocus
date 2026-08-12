@@ -53,6 +53,12 @@ public partial class ContractWizardViewModel : ViewModelBase
     private DateOnly _endDate;
     private bool _isAdvanced;
 
+    // Non-null when this wizard instance is editing an existing Scheduled contract rather
+    // than creating a new one — carried through to the assembled NenContractDraftRules so
+    // PlannerPageViewModel knows to dispatch EditNenContractCommand (replace in place)
+    // instead of SealNenContractCommand at the end of drafting.
+    private readonly NenContractEditDto? _editingContract;
+
     private ContractBasicsStepViewModel? _basicsVm;
     private ContractModeStepViewModel? _modeVm;
     private ContractRulesStepViewModel? _rulesVm;
@@ -63,15 +69,29 @@ public partial class ContractWizardViewModel : ViewModelBase
         IQueryHandler<CheckNenContractDateRangeOverlapQuery, string?> checkOverlap,
         DateOnly initialStartDate,
         Action<NenContractDraftRules> onReadyToSchedule,
-        Action onCancel)
+        Action onCancel,
+        NenContractEditDto? editingContract = null)
     {
         _getPresets = getPresets;
         _createPreset = createPreset;
         _checkOverlap = checkOverlap;
-        _startDate = initialStartDate;
-        _endDate = initialStartDate.AddDays(6);
         _onReadyToSchedule = onReadyToSchedule;
         _onCancel = onCancel;
+        _editingContract = editingContract;
+
+        if (editingContract is not null)
+        {
+            _name = editingContract.Name;
+            _goal = editingContract.Goal;
+            _startDate = editingContract.StartDate;
+            _endDate = editingContract.EndDate;
+            _isAdvanced = editingContract.IsAdvanced;
+        }
+        else
+        {
+            _startDate = initialStartDate;
+            _endDate = initialStartDate.AddDays(6);
+        }
 
         NavigateToBasics();
     }
@@ -90,7 +110,8 @@ public partial class ContractWizardViewModel : ViewModelBase
             initialStartDate: new DateTimeOffset(_startDate.ToDateTime(TimeOnly.MinValue)),
             initialEndDate: new DateTimeOffset(_endDate.ToDateTime(TimeOnly.MinValue)),
             onContinue: NavigateToMode,
-            onBack: _onCancel);
+            onBack: _onCancel,
+            excludeContractId: _editingContract?.Id);
         CurrentStep = _basicsVm;
     }
 
@@ -126,7 +147,14 @@ public partial class ContractWizardViewModel : ViewModelBase
             endDate: _endDate,
             getPresets: _isAdvanced ? _getPresets : null,
             onContinue: NavigateToReview,
-            onBack: NavigateToMode);
+            onBack: NavigateToMode,
+            initialStrictnessRule: _editingContract?.StrictnessRule,
+            initialFixedDailyFloorHours: _editingContract?.FixedDailyFloorHours,
+            initialAllowCancellation: _editingContract?.AllowCancellation ?? true,
+            initialIsWorkHoursEnabled: _editingContract?.WorkHoursStart is not null,
+            initialWorkHoursStart: _editingContract?.WorkHoursStart,
+            initialWorkHoursEnd: _editingContract?.WorkHoursEnd,
+            initialRestDays: _editingContract?.RestDays);
         _currentBackAction = NavigateToMode;
         CurrentStep = _rulesVm;
     }
@@ -172,7 +200,8 @@ public partial class ContractWizardViewModel : ViewModelBase
                 RestDays = restDays,
                 WorkHoursStart = workHoursStart,
                 WorkHoursEnd = workHoursEnd,
-                ContractPresetId = contractPresetId
+                ContractPresetId = contractPresetId,
+                EditingContractId = _editingContract?.Id
             },
             presetToSave: presetToSave,
             summaryName: _name,

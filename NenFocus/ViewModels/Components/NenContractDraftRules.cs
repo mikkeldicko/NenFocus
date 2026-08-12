@@ -24,4 +24,13 @@ public sealed record NenContractDraftRules
     public TimeOnly? WorkHoursStart { get; init; }
     public TimeOnly? WorkHoursEnd { get; init; }
     public Guid? ContractPresetId { get; init; }
+
+    /// <summary>
+    /// Non-null when this draft replaces an existing Scheduled contract rather than creating
+    /// a new one — set by ContractWizardViewModel when it was opened in edit mode. Tells
+    /// PlannerPageViewModel to seed drafting mode from the original blocks and to dispatch
+    /// EditNenContractCommand (replace in place, same ContractId) instead of
+    /// SealNenContractCommand at Seal.
+    /// </summary>
+    public Guid? EditingContractId { get; init; }
 }
