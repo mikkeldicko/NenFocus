@@ -308,6 +308,33 @@ Gaps that have been identified but not yet closed. Each is here because deferrin
 
 \---
 
+### Open Gap G — Nen Contract Lifecycle Notifications & Insights Recap Data (interrogated 2026-08-12; not yet built)
+
+**The feature, in two independent parts:**
+
+1. **Start/end notifications.** A toast when a Nen Contract activates (`StartDate` arrives) and another when it completes (`EndDate` passes) — the same delivery mechanism as the existing session-start/session-end toasts.
+2. **Contract recap data for Insights.** Structural facts about a contract — date range/duration, strictness rule, and which Block Presets were scheduled with how many hours each — readable independently of the Insights page itself being built.
+
+**Why this qualifies as an Open Gap despite touching no new domain state:** checked against the live code (not just the docs) before writing this up. Both parts turn out to be pure Application-layer wiring gaps — the underlying data was already sufficient:
+
+- `NenContractActivatedEvent` and `NenContractCompletedEvent` already fire from `NenContract.Activate()`/`Complete()` and already carry `ContractId` (confirmed in `NenFocus.Domain/Events/`). No new event fields needed — a handler resolves `Name`/dates via `INenContractRepository.GetByIdAsync(ContractId)`, same as any other consumer of a contract-scoped event.
+- `IPlannedBlockRepository.GetForContractAsync(Guid)` already exists and already returns every block linked to a contract (built alongside the Seal slice, reused by `GetNenContractDeficitsQuery`/`GetNenContractCompletedFocusHoursQuery`/`ComputePlannedFocusHoursQuery`/`BreakNenContractCommandHandler`). Combined with `IBlockPresetRepository` to resolve each block's preset name/type, a preset-hours breakdown is a pure composition of existing repository calls — no new persistence.
+
+**Why event handlers are the right shape here (contrast with Gap 7's rejection of a `NenContractBrokenEvent` handler):** `Break` was rejected as an event-handler case because it only ever fires from a direct, synchronous UI button click — the caller already has full context, so relaying it through an event is a pointless extra hop. Activate and Complete are structurally different: both fire from `SweepNenContractLifecycleCommandHandler`, dispatched by `NenContractHeartbeatService`'s unattended 1-minute background loop. Nothing in the UI necessarily knows the transition happened — the whole point of sealing a contract is not having to watch it. This is the same "fact needs to reach a consumer that doesn't share the calling context" shape that already justifies `SessionStartedEventHandler`/`SessionEndedEventHandler`.
+
+**Settled shape:**
+
+| Concept | Shape |
+|---|---|
+| `NenContractActivatedEventHandler` / `NenContractCompletedEventHandler` (Application, new) | Mirror `SessionStartedEventHandler`'s pattern exactly: load the contract by `ContractId` via `INenContractRepository`, call `INotificationService` with a message built from `Name`/`StartDate`/`EndDate`. No new interfaces needed — both dependencies already exist. |
+| `GetNenContractRecapQuery` / Handler (Application, new) | Given a `ContractId`, returns date range, `StrictnessRule`, and a per-preset hours breakdown (Focus vs Background). Composes `INenContractRepository.GetByIdAsync` + `IPlannedBlockRepository.GetForContractAsync` + `IBlockPresetRepository`, the same "inject a sibling query/repository" composition style `GetActiveNenContractQuery` already uses. Deliberately a standalone query, not bundled into the Insights page build — Insights can consume it later exactly as it will consume `GetInsightsCalendarQuery`, but this query has no dependency on the Insights page existing. |
+
+**Deliberately out of scope, kept separate:** performance/scoring data — Day-Met percentage (Open Gap C1), in-contract streaks (C2), and deficit digest notifications (C3) — stays exactly as already designed in Open Gap C. This gap is structural facts only (what the contract *was*, not how well it went); C1/C2/C3 can layer on top of the eventual Insights UI independently, without this gap needing to change shape.
+
+**Must be closed before:** Nothing urgent — deferred until picked up. Both slices are small and independently buildable (notification handlers first, recap query whenever Insights work starts) since neither depends on the other or on any unbuilt domain/persistence work.
+
+\---
+
 ## Minor Cleanups
 
 Trivial style or consistency fixes that don't rise to the level of a Design Gap. Deferred until the relevant file is next edited for other reasons. Items here should be deletable in a single line change.
