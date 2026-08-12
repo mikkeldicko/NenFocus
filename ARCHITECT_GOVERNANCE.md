@@ -356,6 +356,36 @@ Gaps that have been identified but not yet closed. Each is here because deferrin
 
 \---
 
+### Open Gap H — `EndedEarly` Focus Block Outcome & Deficit-Ledger Correctness (interrogated 2026-08-12; not yet built)
+
+**The gap, found while verifying a doc-drift claim, not while looking for it:** `TECHNICAL_SPEC_INFRA.md` used to (wrongly) claim sessions can't be ended early. Fixing that led to reading `EndSessionCommandHandler`, which revealed `block.TrimEnd(endedAt)` — when a Planned session ends before its originating block's scheduled end, the block's own `End` field is **permanently overwritten** to match. Tracing what that actually breaks:
+
+- **`TrimEnd`'s usual justification turns out to be redundant.** The assumed reason — stopping the block from re-triggering the Ritual or re-applying enforcement once the session's gone — is already handled by a *different*, purpose-built mechanism: `PolicyEngine.ComputeSlice()` already computes `FocusSessionCompleted` (`RitualCompletedAt != null && !activeSessions.Any()`), and `ScheduledEnforcementService` already checks it and calls `RemoveEnforcementAsync` + `SetRitualRequired(false)`. Confirmed in the live code — `TrimEnd` was never needed for enforcement safety at all.
+- **Its one genuine remaining job is Planner display** — not leaving a tile that visually stretches to the original end time after the session's already over. But because `End` is the *same field* `IFocusBlockOutcomeClassifier.Classify(...)` and every deficit/credited-hours computation read as "scheduledEnd," fixing a display concern silently corrupts the historical record.
+- **Concrete damage, verified against `GetNenContractDeficitsQueryHandler`/`GetNenContractCompletedFocusHoursQueryHandler`:**
+  - A `StartedLate` block that also ends early: raw deficit (`scheduledMinutes − actualElapsedMinutes`) algebraically collapses to *only* the late-start gap — the "ended early" component vanishes entirely, however early the session actually stopped, because `scheduledMinutes` is computed from the already-trimmed `End`.
+  - A `CompletedOnTime` block that ends early accidentally avoids over-crediting the Daily Floor (the grace-period "full scheduled duration" credit ends up equal to actual time worked, purely because `End` was already trimmed to match) — but this is a side effect of the bug, not a designed behavior, and fixing the bug properly needs to preserve this outcome deliberately rather than by accident.
+  - There is no way today to distinguish "ran the full block" from "started on time but quit after five minutes" anywhere in the domain — both read as plain `CompletedOnTime`.
+
+**Settled shape:**
+
+| Concept | Shape |
+|---|---|
+| `FocusBlock.SessionEndedAt (DateTime?)` | New. Stamped via `MarkSessionEnded(DateTime endedAt)`, mirroring `RitualCompletedAt`/`MarkRitualCompleted`'s stamped-timestamp idiom. Only stamped when ending genuinely early (`endedAt < block.End`) — same condition `TrimEnd` already used, just redirected to a non-destructive field. `block.End` is never mutated by session-ending again; `EndSessionCommandHandler`'s `TrimEnd` call is deleted outright. |
+| `IFocusBlockOutcomeClassifier.Classify(...)` (widened) | Gains a `DateTime? sessionEndedAt` parameter. **Deliberately part of `Classify` itself, unlike `Cancelled`** — `Cancelled`'s cause (a `NenContract` breaking) is genuinely external to the block's own story, which is why it stayed a query-layered interpretation outside the classifier. `EndedEarly`'s cause is entirely intrinsic to the block+session pair — the same category of fact `ritualCompletedAt` already is — so it belongs inside the one function that already owns "what happened to this block." If the Ritual was completed (on time or late) and `sessionEndedAt.HasValue && sessionEndedAt.Value < scheduledEnd`, the verdict becomes **`EndedEarly`** instead of `CompletedOnTime`/`StartedLate`. |
+| `FocusBlockOutcome` enum (widened) | Gains `EndedEarly` — a fourth value alongside `CompletedOnTime`/`StartedLate`/`Missed`. |
+| `IFocusBlockOutcomeClassifier.CreditedFocusMinutes(...)` | For `EndedEarly`, credits `actualElapsedMinutes` — confirmed with the architect, not the grace-period full-scheduled-duration credit. That credit exists to forgive a late *start*; applying it to an early *end* was never a deliberate choice, just an accident of `TrimEnd` making the two numbers equal. Behaves like `StartedLate` for crediting purposes. |
+| `GetNenContractDeficitsQueryHandler` | Outcome filter widens from `Missed or StartedLate` to `Missed or StartedLate or EndedEarly`; passes `session.EndedAt` into `Classify(...)`. Raw deficit now computes correctly against the untouched original schedule. `MakeUpForEntry` needs no changes — it already generalizes over whatever block IDs appear in the deficit result set. |
+| `GetNenContractCompletedFocusHoursQueryHandler` | Also passes `session.EndedAt` into the now-widened `Classify(...)` call; existing "outcome is null → still open, skip" logic is unaffected since `EndedEarly` is always a resolved (non-null) outcome. |
+| Planner tile rendering | Visual end becomes `Min(End, SessionEndedAt ?? End)`, computed at query/display time (`GetPlannedBlocksForDayQueryHandler`), same "Application computes, UI only references" precedent used throughout this session's other designs. `End` itself is never touched, so this is purely cosmetic — same visual outcome as today, correct underlying data. |
+| `PolicyEngine` | **No changes needed** — confirmed by checking why `CancelledAt` needed a new exclusion and `SessionEndedAt` doesn't: a cancelled-but-never-started block can have `RitualCompletedAt == null`, so `FocusSessionCompleted`'s existing check doesn't cover it, which is why `CancelledAt` needed its own `PolicyEngine.ComputeSlice()` filter. An early-ended block always has `RitualCompletedAt` set (a session had to exist to end early), so `FocusSessionCompleted` already covers its enforcement-safety case fully. The two mechanisms don't overlap and neither needs to do the other's job. |
+
+**Cross-reference:** widens `GetNenContractDeficitsQueryHandler`/`GetNenContractCompletedFocusHoursQueryHandler`, both already listed under Open Gap G's "why little new domain state was needed" — this gap is what makes their deficit/credited-hours output trustworthy for a block that ended early, contract or no contract. Independent of Open Gap G otherwise — this fixes a general Session/FocusBlock correctness issue, not something specific to Nen Contract lifecycle.
+
+**Must be closed before:** Nothing urgent — deferred until picked up. The deficit-ledger corruption this fixes is a real, currently-live bug (verified against shipped code, not hypothetical), but it's silent and low-stakes for a personal-use tool; flagged here so it isn't lost, not because it's blocking anything today.
+
+\---
+
 ## Minor Cleanups
 
 Trivial style or consistency fixes that don't rise to the level of a Design Gap. Deferred until the relevant file is next edited for other reasons. Items here should be deletable in a single line change.
