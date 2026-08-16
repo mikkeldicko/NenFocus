@@ -61,6 +61,10 @@
 			<Setter Property="Background" Value="#E8E8F0"/>
 			<Setter Property="Foreground" Value="#1A1A2E"/>
 		</Style>
+		<Style Selector="Button.missedTile">
+			<Setter Property="Background" Value="#C0392B"/>
+			<Setter Property="Foreground" Value="White"/>
+		</Style>
 		<Style Selector="Button.blockTile:pointerover /template/ ContentPresenter">
 			<Setter Property="Opacity" Value="0.85"/>
 		</Style>

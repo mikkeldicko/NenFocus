@@ -74,7 +74,7 @@ public class PlannedBlockRepositoryTests : SqliteRepositoryTestBase
         await repo.AddAsync(BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End));
         await Context.SaveChangesAsync();
 
-        var result = await CreateRepository().GetOverlappingAsync(Start, End, ritualOnly: true);
+        var result = await CreateRepository().GetOverlappingAsync(Start, End, Start, ritualOnly: true);
 
         result.Should().ContainSingle().Which.Should().BeOfType<FocusBlock>();
     }
@@ -87,9 +87,69 @@ public class PlannedBlockRepositoryTests : SqliteRepositoryTestBase
         await repo.AddAsync(block);
         await Context.SaveChangesAsync();
 
-        var result = await CreateRepository().GetOverlappingAsync(Start, End, excludeId: block.Id);
+        var result = await CreateRepository().GetOverlappingAsync(Start, End, Start, excludeId: block.Id);
 
         result.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetOverlappingAsync_SessionEndedEarly_FreedTailIsNotReported()
+    {
+        var repo = CreateRepository();
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End);
+        block.MarkRitualCompleted(Start);
+        var endedEarly = Start.AddMinutes(20);
+        block.MarkSessionEnded(endedEarly);
+        await repo.AddAsync(block);
+        await Context.SaveChangesAsync();
+
+        var result = await CreateRepository().GetOverlappingAsync(
+            endedEarly.AddMinutes(5), End, asOf: endedEarly.AddMinutes(5), ritualOnly: true);
+
+        result.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetOverlappingAsync_SessionEndedEarly_UsedPortionStillReported()
+    {
+        var repo = CreateRepository();
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End);
+        block.MarkRitualCompleted(Start);
+        var endedEarly = Start.AddMinutes(20);
+        block.MarkSessionEnded(endedEarly);
+        await repo.AddAsync(block);
+        await Context.SaveChangesAsync();
+
+        var result = await CreateRepository().GetOverlappingAsync(
+            Start, endedEarly.AddMinutes(-5), asOf: endedEarly.AddMinutes(5), ritualOnly: true);
+
+        result.Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task GetOverlappingAsync_FullyMissedAndWindowClosed_WholeWindowIsFreed()
+    {
+        var repo = CreateRepository();
+        await repo.AddAsync(FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End));
+        await Context.SaveChangesAsync();
+
+        var result = await CreateRepository().GetOverlappingAsync(
+            Start, End, asOf: End.AddMinutes(1), ritualOnly: true);
+
+        result.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetOverlappingAsync_NotYetMissed_StillPending_StillReported()
+    {
+        var repo = CreateRepository();
+        await repo.AddAsync(FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End));
+        await Context.SaveChangesAsync();
+
+        var result = await CreateRepository().GetOverlappingAsync(
+            Start, End, asOf: Start.AddMinutes(10), ritualOnly: true);
+
+        result.Should().ContainSingle();
     }
 
     [Fact]

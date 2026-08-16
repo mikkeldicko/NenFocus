@@ -35,6 +35,16 @@ public abstract class PlannedBlock
     /// </summary>
     public bool HasEnded(DateTime asOf) => End < asOf;
 
+    /// <summary>
+    /// How much of this block's window is still actually reserved, as of <paramref name="asOf"/> —
+    /// the boundary overlap-checks use instead of <see cref="End"/>, so a block that no longer
+    /// occupies its full scheduled span (e.g. a Focus session that ended early) frees the rest
+    /// for new scheduling without ever mutating <see cref="End"/> itself (which stays the
+    /// historical record used by Daily Floor / deficit scoring). Base case: the whole window
+    /// is still reserved, unconditionally — overridden by <see cref="FocusBlock"/>.
+    /// </summary>
+    public virtual DateTime EffectiveEnd(DateTime asOf) => End;
+
     public TimeSpan GetDuration() => End - Start;
 
     public int MinutesUntilStart(DateTime asOf) => (int)(Start - asOf).TotalMinutes;

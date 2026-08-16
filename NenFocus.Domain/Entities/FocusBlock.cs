@@ -55,6 +55,20 @@ public sealed class FocusBlock : PlannedBlock
     }
 
     /// <summary>
+    /// Tail freed once a session ended early; whole window freed once the block is genuinely
+    /// Missed (ritual never completed and its scheduled End has already passed) — mirrors
+    /// <see cref="Services.IFocusBlockOutcomeClassifier.Classify"/>'s own Missed condition so
+    /// the two can never disagree about when a block is truly vacated. Still-pending or
+    /// fully-used blocks keep the whole window reserved.
+    /// </summary>
+    public override DateTime EffectiveEnd(DateTime asOf)
+    {
+        if (SessionEndedAt is { } endedEarly) return endedEarly;
+        if (RitualCompletedAt is null && asOf >= End) return Start;
+        return End;
+    }
+
+    /// <summary>
     /// Replaces which missed/late blocks this make-up block covers. A plain setter, same
     /// as AssignPreset/AssignContract — same-preset, uncovered-deficit, and same-day
     /// constraints are Application-layer concerns, not enforced here.

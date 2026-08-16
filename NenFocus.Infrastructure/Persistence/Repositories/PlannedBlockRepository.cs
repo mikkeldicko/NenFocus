@@ -40,10 +40,14 @@ public sealed class PlannedBlockRepository : IPlannedBlockRepository
     public async Task<IReadOnlyList<PlannedBlock>> GetOverlappingAsync(
         DateTime start,
         DateTime end,
+        DateTime asOf,
         bool ritualOnly = false,
         Guid? excludeId = null,
         CancellationToken cancellationToken = default)
     {
+        // Filters on raw Start/End first — a safe superset, since EffectiveEnd(asOf) is
+        // never later than End — then refines in-memory against EffectiveEnd, which needs
+        // the materialized FocusBlock/BackgroundBlock type to evaluate.
         var query = _context.PlannedBlocks
             .Where(b => b.Start < end && b.End > start);
 
@@ -52,10 +56,12 @@ public sealed class PlannedBlockRepository : IPlannedBlockRepository
 
         var blocks = await query.ToListAsync(cancellationToken);
 
-        if (ritualOnly)
-            return blocks.OfType<FocusBlock>().ToList<PlannedBlock>();
+        var stillReserved = blocks.Where(b => b.EffectiveEnd(asOf) > start).ToList();
 
-        return blocks;
+        if (ritualOnly)
+            return stillReserved.OfType<FocusBlock>().ToList<PlannedBlock>();
+
+        return stillReserved;
     }
 
     public async Task<PlannedBlock?> GetByIdAsync(

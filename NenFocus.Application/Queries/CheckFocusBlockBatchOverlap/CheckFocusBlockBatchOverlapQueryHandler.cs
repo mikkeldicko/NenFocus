@@ -5,17 +5,19 @@ namespace NenFocus.Application.Queries.CheckFocusBlockBatchOverlap;
 public sealed class CheckFocusBlockBatchOverlapQueryHandler : IQueryHandler<CheckFocusBlockBatchOverlapQuery, bool>
 {
     private readonly IPlannedBlockRepository _blocks;
+    private readonly ISystemClock _clock;
 
-    public CheckFocusBlockBatchOverlapQueryHandler(IPlannedBlockRepository blocks)
+    public CheckFocusBlockBatchOverlapQueryHandler(IPlannedBlockRepository blocks, ISystemClock clock)
     {
         _blocks = blocks;
+        _clock = clock;
     }
 
     public async Task<bool> HandleAsync(CheckFocusBlockBatchOverlapQuery query, CancellationToken ct = default)
     {
         foreach (var focusBlock in query.FocusBlocks)
         {
-            var overlapping = await _blocks.GetOverlappingAsync(focusBlock.Start, focusBlock.End, ritualOnly: true, cancellationToken: ct);
+            var overlapping = await _blocks.GetOverlappingAsync(focusBlock.Start, focusBlock.End, _clock.UtcNow, ritualOnly: true, cancellationToken: ct);
             if (overlapping.Any(b => query.ExcludeContractId is null || b.ContractId != query.ExcludeContractId))
                 return true;
         }

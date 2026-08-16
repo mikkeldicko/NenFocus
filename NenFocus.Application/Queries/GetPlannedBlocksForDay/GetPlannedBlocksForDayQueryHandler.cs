@@ -60,7 +60,8 @@ public sealed class GetPlannedBlocksForDayQueryHandler
                 ContractId = b.ContractId,
                 IsCompleted = b is FocusBlock fb && fb.RitualCompletedAt.HasValue,
                 HasEnded = b.HasEnded(now),
-                IsUnderInEffectContract = b.ContractId.HasValue && inEffectByContractId.GetValueOrDefault(b.ContractId.Value)
+                IsUnderInEffectContract = b.ContractId.HasValue && inEffectByContractId.GetValueOrDefault(b.ContractId.Value),
+                IsMissed = b is FocusBlock missedCheck && missedCheck.RitualCompletedAt is null && b.HasEnded(now)
             };
         }).ToList();
     }

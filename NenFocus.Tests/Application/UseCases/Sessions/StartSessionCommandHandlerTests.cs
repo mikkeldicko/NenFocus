@@ -93,6 +93,24 @@ public class StartSessionCommandHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_Spontaneous_FreedTailAfterEarlyEnd_Succeeds()
+    {
+        // A Focus block that already ended its session early no longer occupies the rest
+        // of its slated window — starting a spontaneous session in that freed tail must
+        // not be rejected as "a focus block is currently active."
+        var endedEarlyBlock = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Now.AddHours(-2), Now.AddHours(1));
+        endedEarlyBlock.MarkRitualCompleted(Now.AddHours(-2));
+        endedEarlyBlock.MarkSessionEnded(Now.AddMinutes(-5));
+        _plannedBlocks.GetForRangeAsync(Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyList<PlannedBlock>)[endedEarlyBlock]);
+
+        var result = await CreateHandler().HandleAsync(SpontaneousCommand(), CancellationToken.None);
+
+        result.Success.Should().BeTrue();
+        await _sessions.Received(1).SaveAsync(Arg.Any<Session>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task HandleAsync_WithBreakSettings_ConvertsToDomainBreakSettings()
     {
         var command = SpontaneousCommand() with

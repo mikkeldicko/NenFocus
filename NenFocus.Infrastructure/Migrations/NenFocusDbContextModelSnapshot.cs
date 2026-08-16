@@ -51,7 +51,7 @@ namespace NenFocus.Infrastructure.Migrations
                         new
                         {
                             Id = new Guid("a0000001-0000-0000-0000-000000000001"),
-                            Name = "Focus — Allowlist",
+                            Name = "AI & Dev Tools Only",
                             PresetType = "Focus",
                             TagsSerialized = "",
                             WebsiteFilterType = "Allowlist"
@@ -59,7 +59,7 @@ namespace NenFocus.Infrastructure.Migrations
                         new
                         {
                             Id = new Guid("a0000001-0000-0000-0000-000000000002"),
-                            Name = "Focus — Blocklist",
+                            Name = "Social Media Blocked",
                             PresetType = "Focus",
                             TagsSerialized = "",
                             WebsiteFilterType = "Blocklist"
@@ -67,7 +67,7 @@ namespace NenFocus.Infrastructure.Migrations
                         new
                         {
                             Id = new Guid("a0000001-0000-0000-0000-000000000003"),
-                            Name = "Background — Blocklist",
+                            Name = "Social Media Blocked",
                             PresetType = "Background",
                             TagsSerialized = "",
                             WebsiteFilterType = "Blocklist"
@@ -75,7 +75,7 @@ namespace NenFocus.Infrastructure.Migrations
                         new
                         {
                             Id = new Guid("a0000001-0000-0000-0000-000000000004"),
-                            Name = "Background — Allowlist",
+                            Name = "Work & Music Only",
                             PresetType = "Background",
                             TagsSerialized = "",
                             WebsiteFilterType = "Allowlist"

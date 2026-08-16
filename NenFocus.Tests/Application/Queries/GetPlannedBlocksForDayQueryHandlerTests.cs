@@ -90,6 +90,60 @@ public class GetPlannedBlocksForDayQueryHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_FocusBlockMissed_IsMissedIsTrue()
+    {
+        _clock.UtcNow.Returns(End.AddMinutes(1));
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End);
+        _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
+        _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
+
+        var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
+
+        var dto = result.Should().ContainSingle().Subject;
+        dto.IsMissed.Should().BeTrue();
+        dto.End.Should().Be(End); // full original span still displayed — only the color changes
+    }
+
+    [Fact]
+    public async Task HandleAsync_FocusBlockRitualCompletedButWindowClosed_IsMissedIsFalse()
+    {
+        _clock.UtcNow.Returns(End.AddMinutes(1));
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End);
+        block.MarkRitualCompleted(Start);
+        _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
+        _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
+
+        var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
+
+        result.Should().ContainSingle().Subject.IsMissed.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task HandleAsync_FocusBlockStillPending_WindowNotYetClosed_IsMissedIsFalse()
+    {
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End);
+        _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
+        _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
+
+        var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
+
+        result.Should().ContainSingle().Subject.IsMissed.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task HandleAsync_BackgroundBlockWindowClosed_IsMissedIsFalse()
+    {
+        _clock.UtcNow.Returns(End.AddMinutes(1));
+        var block = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End);
+        _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
+        _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
+
+        var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
+
+        result.Should().ContainSingle().Subject.IsMissed.Should().BeFalse();
+    }
+
+    [Fact]
     public async Task HandleAsync_BackgroundBlock_MapsBlockPresetType()
     {
         var block = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End);

@@ -10,15 +10,18 @@ public sealed class CreatePlannedBlockCommandHandler : ICommandHandler<CreatePla
     private readonly IPlannedBlockRepository _blocks;
     private readonly IBlockPresetRepository _presets;
     private readonly ISessionRepository _sessions;
+    private readonly ISystemClock _clock;
 
     public CreatePlannedBlockCommandHandler(
         IPlannedBlockRepository blocks,
         IBlockPresetRepository presets,
-        ISessionRepository sessions)
+        ISessionRepository sessions,
+        ISystemClock clock)
     {
         _blocks = blocks;
         _presets = presets;
         _sessions = sessions;
+        _clock = clock;
     }
 
     public async Task<CreatePlannedBlockResult> HandleAsync(CreatePlannedBlockCommand command, CancellationToken cancellationToken = default)
@@ -31,7 +34,7 @@ public sealed class CreatePlannedBlockCommandHandler : ICommandHandler<CreatePla
 
         if (command.BlockPresetType == BlockPresetType.Focus)
         {
-            var overlapping = await _blocks.GetOverlappingAsync(startTime, endTime, ritualOnly: true, cancellationToken: cancellationToken);
+            var overlapping = await _blocks.GetOverlappingAsync(startTime, endTime, _clock.UtcNow, ritualOnly: true, cancellationToken: cancellationToken);
             if (overlapping.Count > 0) return CreatePlannedBlockResult.Fail("A Focus block already exists here.");
 
             var activeSession = await _sessions.GetActiveAsync(cancellationToken);

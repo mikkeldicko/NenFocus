@@ -12,19 +12,22 @@ public class UpdatePlannedBlockCommandHandlerTests
 {
     private static readonly DateTime Start = new(2026, 1, 2, 10, 0, 0, DateTimeKind.Utc);
     private static readonly DateTime End = new(2026, 1, 2, 11, 0, 0, DateTimeKind.Utc);
+    private static readonly DateTime Now = new(2026, 1, 2, 9, 0, 0, DateTimeKind.Utc);
 
     private readonly IPlannedBlockRepository _blocks = Substitute.For<IPlannedBlockRepository>();
     private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
     private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
+    private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
 
     public UpdatePlannedBlockCommandHandlerTests()
     {
-        _blocks.GetOverlappingAsync(Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<bool>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>())
+        _clock.UtcNow.Returns(Now);
+        _blocks.GetOverlappingAsync(Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<bool>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[]);
         _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns((Session?)null);
     }
 
-    private UpdatePlannedBlockCommandHandler CreateHandler() => new(_blocks, _presets, _sessions);
+    private UpdatePlannedBlockCommandHandler CreateHandler() => new(_blocks, _presets, _sessions, _clock);
 
     private static UpdatePlannedBlockCommand ValidCommand(Guid blockId, Guid presetId) => new()
     {
@@ -68,7 +71,7 @@ public class UpdatePlannedBlockCommandHandlerTests
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
             .Returns(FocusBlock.Create(blockId, presetId, Start, End));
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>()).Returns(FocusPreset(presetId));
-        _blocks.GetOverlappingAsync(Start, End, true, blockId, Arg.Any<CancellationToken>())
+        _blocks.GetOverlappingAsync(Start, End, Now, true, blockId, Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[FocusBlock.Create(Guid.NewGuid(), presetId, Start, End)]);
 
         var result = await CreateHandler().HandleAsync(ValidCommand(blockId, presetId));
@@ -111,7 +114,7 @@ public class UpdatePlannedBlockCommandHandlerTests
 
         result.Success.Should().BeTrue();
         await _blocks.DidNotReceive().GetOverlappingAsync(
-            Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<bool>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>());
+            Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<bool>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]

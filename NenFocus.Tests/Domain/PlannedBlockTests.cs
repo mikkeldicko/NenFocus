@@ -100,6 +100,65 @@ public class PlannedBlockTests
     }
 
     [Fact]
+    public void EffectiveEnd_PendingBlock_ReturnsEnd()
+        => CreateFocusBlock().EffectiveEnd(Start.AddMinutes(10)).Should().Be(End);
+
+    [Fact]
+    public void EffectiveEnd_RitualCompleted_StillRunning_ReturnsEnd()
+    {
+        var block = CreateFocusBlock();
+        block.MarkRitualCompleted(Start);
+
+        block.EffectiveEnd(Start.AddMinutes(30)).Should().Be(End);
+    }
+
+    [Fact]
+    public void EffectiveEnd_SessionEndedEarly_ReturnsSessionEndedAt()
+    {
+        var block = CreateFocusBlock();
+        block.MarkRitualCompleted(Start);
+        var endedEarly = Start.AddMinutes(20);
+        block.MarkSessionEnded(endedEarly);
+
+        block.EffectiveEnd(endedEarly.AddMinutes(5)).Should().Be(endedEarly);
+    }
+
+    [Fact]
+    public void EffectiveEnd_RanFullDuration_NoSessionEndedStamp_ReturnsEnd()
+    {
+        var block = CreateFocusBlock();
+        block.MarkRitualCompleted(Start);
+
+        block.EffectiveEnd(End.AddMinutes(5)).Should().Be(End);
+    }
+
+    [Fact]
+    public void EffectiveEnd_FullyMissed_WindowAlreadyClosed_ReturnsStart_WholeWindowFreed()
+        => CreateFocusBlock().EffectiveEnd(End.AddMinutes(1)).Should().Be(Start);
+
+    [Fact]
+    public void EffectiveEnd_FullyMissed_ExactlyAtEnd_ReturnsStart()
+        => CreateFocusBlock().EffectiveEnd(End).Should().Be(Start);
+
+    [Fact]
+    public void EffectiveEnd_NotYetMissed_RitualStillPending_ReturnsEnd()
+        => CreateFocusBlock().EffectiveEnd(End.AddMinutes(-1)).Should().Be(End);
+
+    [Fact]
+    public void EffectiveEnd_DoesNotMutateEnd()
+    {
+        var block = CreateFocusBlock();
+
+        block.EffectiveEnd(End.AddMinutes(1));
+
+        block.End.Should().Be(End);
+    }
+
+    [Fact]
+    public void BackgroundBlock_EffectiveEnd_AlwaysReturnsEnd()
+        => CreateBackgroundBlock().EffectiveEnd(End.AddYears(1)).Should().Be(End);
+
+    [Fact]
     public void BackgroundBlock_Create_EndBeforeStart_Throws()
     {
         var act = () => BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(), End, Start);

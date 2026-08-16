@@ -9,10 +9,17 @@ namespace NenFocus.Tests.Application.Queries;
 public class CheckFocusBlockBatchOverlapQueryHandlerTests
 {
     private static readonly Guid PresetId = Guid.NewGuid();
+    private static readonly DateTime Now = new(2026, 1, 1, 8, 0, 0);
 
     private readonly IPlannedBlockRepository _blocks = Substitute.For<IPlannedBlockRepository>();
+    private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
 
-    private CheckFocusBlockBatchOverlapQueryHandler CreateHandler() => new(_blocks);
+    public CheckFocusBlockBatchOverlapQueryHandlerTests()
+    {
+        _clock.UtcNow.Returns(Now);
+    }
+
+    private CheckFocusBlockBatchOverlapQueryHandler CreateHandler() => new(_blocks, _clock);
 
     [Fact]
     public async Task HandleAsync_EmptyBatch_ReturnsFalse()
@@ -28,7 +35,7 @@ public class CheckFocusBlockBatchOverlapQueryHandlerTests
     {
         var block = FocusBlock.Create(Guid.NewGuid(), PresetId,
             new DateTime(2026, 1, 1, 9, 0, 0), new DateTime(2026, 1, 1, 10, 0, 0));
-        _blocks.GetOverlappingAsync(block.Start, block.End, ritualOnly: true, cancellationToken: Arg.Any<CancellationToken>())
+        _blocks.GetOverlappingAsync(block.Start, block.End, Now, ritualOnly: true, cancellationToken: Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[]);
 
         var result = await CreateHandler().HandleAsync(
@@ -43,7 +50,7 @@ public class CheckFocusBlockBatchOverlapQueryHandlerTests
         var block = FocusBlock.Create(Guid.NewGuid(), PresetId,
             new DateTime(2026, 1, 1, 9, 0, 0), new DateTime(2026, 1, 1, 10, 0, 0));
         var existing = FocusBlock.Create(Guid.NewGuid(), PresetId, block.Start, block.End);
-        _blocks.GetOverlappingAsync(block.Start, block.End, ritualOnly: true, cancellationToken: Arg.Any<CancellationToken>())
+        _blocks.GetOverlappingAsync(block.Start, block.End, Now, ritualOnly: true, cancellationToken: Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[existing]);
 
         var result = await CreateHandler().HandleAsync(
@@ -59,9 +66,9 @@ public class CheckFocusBlockBatchOverlapQueryHandlerTests
             new DateTime(2026, 1, 1, 9, 0, 0), new DateTime(2026, 1, 1, 10, 0, 0));
         var second = FocusBlock.Create(Guid.NewGuid(), PresetId,
             new DateTime(2026, 1, 1, 12, 0, 0), new DateTime(2026, 1, 1, 13, 0, 0));
-        _blocks.GetOverlappingAsync(first.Start, first.End, ritualOnly: true, cancellationToken: Arg.Any<CancellationToken>())
+        _blocks.GetOverlappingAsync(first.Start, first.End, Now, ritualOnly: true, cancellationToken: Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[]);
-        _blocks.GetOverlappingAsync(second.Start, second.End, ritualOnly: true, cancellationToken: Arg.Any<CancellationToken>())
+        _blocks.GetOverlappingAsync(second.Start, second.End, Now, ritualOnly: true, cancellationToken: Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[FocusBlock.Create(Guid.NewGuid(), PresetId, second.Start, second.End)]);
 
         var result = await CreateHandler().HandleAsync(
@@ -77,7 +84,7 @@ public class CheckFocusBlockBatchOverlapQueryHandlerTests
         var block = FocusBlock.Create(Guid.NewGuid(), PresetId,
             new DateTime(2026, 1, 1, 9, 0, 0), new DateTime(2026, 1, 1, 10, 0, 0));
         var ownPriorBlock = FocusBlock.Create(Guid.NewGuid(), PresetId, block.Start, block.End, contractId: contractId);
-        _blocks.GetOverlappingAsync(block.Start, block.End, ritualOnly: true, cancellationToken: Arg.Any<CancellationToken>())
+        _blocks.GetOverlappingAsync(block.Start, block.End, Now, ritualOnly: true, cancellationToken: Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[ownPriorBlock]);
 
         var result = await CreateHandler().HandleAsync(
@@ -93,7 +100,7 @@ public class CheckFocusBlockBatchOverlapQueryHandlerTests
         var block = FocusBlock.Create(Guid.NewGuid(), PresetId,
             new DateTime(2026, 1, 1, 9, 0, 0), new DateTime(2026, 1, 1, 10, 0, 0));
         var someoneElsesBlock = FocusBlock.Create(Guid.NewGuid(), PresetId, block.Start, block.End, contractId: Guid.NewGuid());
-        _blocks.GetOverlappingAsync(block.Start, block.End, ritualOnly: true, cancellationToken: Arg.Any<CancellationToken>())
+        _blocks.GetOverlappingAsync(block.Start, block.End, Now, ritualOnly: true, cancellationToken: Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[someoneElsesBlock]);
 
         var result = await CreateHandler().HandleAsync(

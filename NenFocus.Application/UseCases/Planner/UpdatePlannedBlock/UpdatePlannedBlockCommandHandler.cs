@@ -9,15 +9,18 @@ public sealed class UpdatePlannedBlockCommandHandler : ICommandHandler<UpdatePla
     private readonly IPlannedBlockRepository _blocks;
     private readonly IBlockPresetRepository _presets;
     private readonly ISessionRepository _sessions;
+    private readonly ISystemClock _clock;
 
     public UpdatePlannedBlockCommandHandler(
         IPlannedBlockRepository blocks,
         IBlockPresetRepository presets,
-        ISessionRepository sessions)
+        ISessionRepository sessions,
+        ISystemClock clock)
     {
         _blocks = blocks;
         _presets = presets;
         _sessions = sessions;
+        _clock = clock;
     }
 
     public async Task<UpdatePlannedBlockResult> HandleAsync(UpdatePlannedBlockCommand command, CancellationToken cancellationToken = default)
@@ -38,6 +41,7 @@ public sealed class UpdatePlannedBlockCommandHandler : ICommandHandler<UpdatePla
             var overlapping = await _blocks.GetOverlappingAsync(
                 startTime,
                 endTime,
+                _clock.UtcNow,
                 ritualOnly: true,
                 excludeId: command.BlockId,
                 cancellationToken: cancellationToken);

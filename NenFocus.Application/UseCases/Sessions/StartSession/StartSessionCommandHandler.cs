@@ -40,6 +40,7 @@ public sealed class StartSessionCommandHandler
         var conflictingBlock = upcomingBlocks
             .OfType<FocusBlock>()
             .Where(b => b.Id != command.OriginatingBlockId)
+            .Where(b => b.EffectiveEnd(now) > now)
             .OrderBy(b => b.Start)
             .FirstOrDefault();
 

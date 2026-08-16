@@ -32,5 +32,13 @@ public sealed record PlannedBlockDto
     /// </summary>
     public bool IsUnderInEffectContract { get; init; }
 
+    /// <summary>
+    /// True for a FocusBlock whose Ritual was never completed and whose scheduled window
+    /// has already closed — mirrors FocusBlock.EffectiveEnd's own Missed condition. The tile
+    /// still renders at its full original span (its time already passed, so nothing new can
+    /// practically be scheduled over it) — this only drives a distinct visual treatment.
+    /// </summary>
+    public bool IsMissed { get; init; }
+
     public int DurationMinutes => (int)(End - Start).TotalMinutes;
 }

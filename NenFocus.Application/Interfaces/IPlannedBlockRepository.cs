@@ -20,13 +20,17 @@ public interface IPlannedBlockRepository
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Returns any planned blocks that overlap with the given time window.
+    /// Returns any planned blocks that still reserve some part of the given time window as of
+    /// <paramref name="asOf"/> — checked via each candidate's <see cref="PlannedBlock.EffectiveEnd"/>,
+    /// not its raw <see cref="PlannedBlock.End"/>, so a block that's already freed part or all of
+    /// its window (e.g. a Focus session that ended early) doesn't block new scheduling there.
     /// If ritualOnly is true, only FocusBlocks are checked — used to
     /// enforce the Focus+Focus overlap rule at planning time.
     /// </summary>
     Task<IReadOnlyList<PlannedBlock>> GetOverlappingAsync(
         DateTime start,
         DateTime end,
+        DateTime asOf,
         bool ritualOnly = false,
         Guid? excludeId = null,
         CancellationToken cancellationToken = default);

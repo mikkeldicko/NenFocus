@@ -29,6 +29,9 @@ public partial class PlannedBlockTileViewModel : ViewModelBase
     /// <summary>True for an unsealed Nen Contract draft block — never persisted, styled distinctly.</summary>
     public bool IsDraft { get; }
 
+    /// <summary>True for a FocusBlock whose Ritual was never completed and whose window already closed.</summary>
+    public bool IsMissed { get; }
+
     public PlannedBlockTileViewModel(
         PlannedBlockDto dto,
         BlockPresetType blockPresetType,
@@ -47,5 +50,6 @@ public partial class PlannedBlockTileViewModel : ViewModelBase
         Top = top;
         Height = height;
         IsDraft = isDraft;
+        IsMissed = dto.IsMissed;
     }
 }

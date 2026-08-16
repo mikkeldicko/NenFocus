@@ -227,6 +227,9 @@ public partial class PlannerPageView : UserControl
             DataContext  = tile
         };
 
+        if (tile.IsMissed)
+            btn.Classes.Add("missedTile");
+
         // Unsealed Nen Contract draft blocks render distinctly — dashed white outline
         // (via a StrokeDashArray overlay, since Border has no native dash support) plus
         // a small "Draft" tag — until the contract is sealed and it becomes a real block.
