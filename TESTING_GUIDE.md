@@ -24,19 +24,32 @@ dotnet test NenFocus.Tests/NenFocus.Tests.csproj --collect:"XPlat Code Coverage"
 
 ## Project Structure
 
+**Corrected 2026-08-18** — the tree below previously showed a 2-file skeleton and claimed Infrastructure tests didn't exist yet; both are stale. Actual current shape (~90 test files):
+
 ```
 NenFocus.Tests/
 ├── Domain/
-│   └── SessionTests.cs              ← Entity state-machine tests (zero mocks)
+│   ├── SessionTests.cs, BlockPresetTests.cs, NenContractTests.cs, PolicyEngineTests.cs, ...  ← entity/service state-machine tests (zero mocks)
+│   ├── ValueObjects/          ← WorkHoursTests.cs, DailyFloorTests.cs, BreakSettingsTests.cs, etc.
+│   └── Services/              ← ContractBlockBatchPreparerTests.cs, PlannedFocusHoursCalculatorTests.cs
 ├── Application/
-│   └── StartSessionCommandHandlerTests.cs  ← Handler tests with NSubstitute mocks
+│   ├── UseCases/{BlockPresets,ContractPresets,NenContracts,Planner,Sessions}/  ← one *CommandHandlerTests.cs + *ValidatorTests.cs pair per vertical slice
+│   ├── Queries/                ← one *QueryHandlerTests.cs per query
+│   └── EventHandlers/          ← SessionStartedEventHandlerTests.cs, NenContractActivatedEventHandlerTests.cs, etc.
+├── Infrastructure/
+│   ├── Persistence/
+│   │   ├── SqliteRepositoryTestBase.cs   ← shared base: real SQLite via an in-memory connection, not a fake/InMemory provider
+│   │   ├── Repositories/                 ← BlockPresetRepositoryTests.cs, SessionRepositoryTests.cs, NenContractRepositoryTests.cs, PlannedBlockRepositoryTests.cs
+│   │   └── EfCoreUnitOfWorkTests.cs
+│   ├── Services/               ← BlockedAttemptTrackerTests.cs, SessionStateServiceTests.cs, TransactionalCommandHandlerTests.cs, InProcessDomainEventPublisherTests.cs
+│   └── CompositionRootTests.cs ← confirms every handler/service resolves from DI with no missing registrations
 └── NenFocus.Tests.csproj
 ```
 
 **Rules:**
 - `Domain/` tests never use mocks. Domain is pure logic.
 - `Application/` tests mock all interfaces (`ISessionRepository`, `ISessionStateService`, etc.) with NSubstitute.
-- Infrastructure tests are integration tests and live outside this project (not yet built).
+- `Infrastructure/` tests **are built** — they run against a real SQLite database (via `SqliteRepositoryTestBase`'s in-memory connection, not a fake in-memory EF provider), not mocks. This is the correct place for repository/EF Core behavior and DI composition tests.
 - No ViewModel tests — ViewModels are tested via the Application layer they delegate to.
 
 ---
@@ -170,6 +183,8 @@ public async Task HandleAsync_ValidDurations_AllSucceed(int durationMinutes)
 | Command handler failure paths | Verify validation gates work (session not found, wrong status, etc.) |
 | Value object construction | Verify invalid inputs throw `ArgumentException` |
 | Policy computation logic | The `ComputeActivePolicySliceQuery` merge logic is complex enough to need tests |
+| EF Core repositories | **Built** — `Infrastructure/Persistence/Repositories/` tests each repository against a real SQLite database (via `SqliteRepositoryTestBase`'s in-memory connection), not mocks. This row was previously listed under "Do not test these"; corrected 2026-08-18 now that the suite exists. |
+| DI composition | `Infrastructure/CompositionRootTests.cs` resolves every registered handler/service to catch missing DI registrations before runtime. |
 
 ### Do not test these:
 
@@ -177,14 +192,13 @@ public async Task HandleAsync_ValidDurations_AllSucceed(int durationMinutes)
 |--------|-----|
 | ViewModels | They delegate everything; test the service they call instead |
 | `WindowsEnforcementService` | Windows API calls; use integration tests in a real process |
-| EF Core repositories | Test against a real SQLite in-memory DB, not worth mocking |
 | XAML bindings | Visual; use manual testing or a UI test framework |
 
 ---
 
 ## Adding a New Test File
 
-1. Create the file in the correct folder (`Domain/` or `Application/`).
+1. Create the file in the correct folder (`Domain/`, `Application/`, or `Infrastructure/`).
 2. Follow the naming convention: `<SubjectName>Tests.cs`.
 3. Use `private readonly` substitutes declared at the class level (not inside each test method).
 4. Add a `CreateHandler()` or `CreateEntity()` helper to avoid repetition in `[Fact]` methods.

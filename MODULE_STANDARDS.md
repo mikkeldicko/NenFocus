@@ -132,7 +132,7 @@ Every new service must have its interface defined in `NenFocus.Application/Inter
 
 ## Converter Catalogue
 
-These converters are approved and registered in `MainPageView.axaml`. Reuse before creating new ones.
+These converters are approved. Reuse before creating new ones. **Registration is per-view, not centralized** (corrected 2026-08-18 — this table previously claimed all converters are "registered in `MainPageView.axaml`"; in practice only `TimeSpanConverter`/`DateTimeConverter` still are, and every converter added since (Planner, Nen Contract wizard) is registered as a resource in whichever `.axaml` view actually uses it, e.g. `ContractWizardView.axaml`, `RitualShellView.axaml`, `PlannerPageView.axaml`).
 
 | Converter | Key | Input → Output | Format Parameter |
 |-----------|-----|----------------|-----------------|
@@ -142,10 +142,18 @@ These converters are approved and registered in `MainPageView.axaml`. Reuse befo
 | `DateTimeToUpperStringConverter` | `DateTimeUpperConverter` | `DateTime` → uppercase `string` | Optional format string, default `ddd`. Result is `.ToUpperInvariant()`. Use for day-name headers. |
 | `BoolToDotFillConverter` | _(inline)_ | `bool` → brush | — |
 | `BoolToOpacityConverter` | _(inline)_ | `bool` → opacity | — |
+| `BoolToChevronConverter` | `Instance` | `bool` → `string` | None. `true` → "▾", `false` → "▸" (expand/collapse chevron). |
+| `BoolToFloorStatusBrushConverter` | `Instance` | `bool` (day floor `IsMet`) → brush | None. Planner drafting bar's day-floor chip: met/rest day → green, short → amber. |
 | `CountToBoolConverter` | _(inline)_ | `int` → `bool` | — |
 | `CountToVisibilityConverter` | _(inline)_ | `int` → visibility | — |
 | `StringEqualConverter` | _(inline)_ | `string` → `bool` | Comparison value |
 | `IntEqualConverter` | _(inline)_ | `int` → `bool` | Comparison value |
+| `StringToVisibilityConverter` | `IsNonEmpty` | `string` → `bool` | None. `true` when non-null/non-empty. |
+| `WeekRangeToStringConverter` | _(inline)_ | `DateTime` (week start) → `string` | None. Formats a week as "MMM d – d, yyyy" (or "MMM d – MMM d, yyyy" across month boundaries) for the Planner's week header. |
+| `BlockPresetTypeToColorConverter` | `Instance` | `BlockPresetType` → brush | None. Background color for a Planner tile — distinct Focus/Background fill. |
+| `BlockPresetTypeToForegroundConverter` | `Instance` | `BlockPresetType` → brush | None. Companion foreground color to `BlockPresetTypeToColorConverter`. |
+| `BlockPresetTypeToLabelConverter` | `Instance` | `BlockPresetType` → `string` | None. "Focus" / "Background". |
+| `StrictnessRuleToLabelConverter` | `Instance` | `StrictnessRule` → `string` | None. "Lockdown" / "Daily Flex" / "Period Study". |
 
 ---
 
