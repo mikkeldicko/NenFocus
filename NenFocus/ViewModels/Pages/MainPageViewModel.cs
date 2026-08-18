@@ -105,12 +105,13 @@ public partial class MainPageViewModel : ViewModelBase
         _monitor.Tick += OnMonitorTick;
         _monitor.SessionAutoEnded += OnSessionAutoEnded;
 
-        _ = InitializeAsync();
-    }
-
-    private async Task InitializeAsync()
-    {
-        await _sessionState.InitializeAsync();
+        // SessionStateService.InitializeAsync() now runs once, awaited, during app
+        // startup (Program.Main) before this ViewModel is ever constructed — calling it
+        // again here would re-run the DB read and the missed-focus-block sweep a second
+        // time for nothing. Catch up directly on whatever it already loaded instead,
+        // since the SessionChanged event it fires already happened before the
+        // subscription above existed to hear it.
+        OnSessionChanged(this, _sessionState.ActiveSession);
     }
 
     private void OnSessionChanged(object? sender, SessionDto? session)

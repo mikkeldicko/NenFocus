@@ -27,6 +27,15 @@ internal sealed class Program
     {
         AppHost = CreateHostBuilder(args).Build();
         AppHost.EnsureDatabase();
+
+        // Must complete before AppHost.StartAsync() (which starts
+        // ScheduledEnforcementService's heartbeat) and before the Avalonia app builds
+        // below (which constructs ShellViewModel/MainPageViewModel) — otherwise both can
+        // observe ISessionStateService.ActiveSession as null even when a session is
+        // genuinely active in the DB, momentarily triggering the Ritual overlay on
+        // startup before rehydration catches up a few hundred milliseconds later.
+        await AppHost.Services.GetRequiredService<ISessionStateService>().InitializeAsync();
+
         await AppHost.StartAsync();
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
     }

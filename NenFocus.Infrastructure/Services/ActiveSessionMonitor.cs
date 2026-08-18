@@ -35,6 +35,16 @@ public sealed class ActiveSessionMonitor : IActiveSessionMonitor, IDisposable
         _scopeFactory = scopeFactory;
         _clock = clock;
         sessionState.SessionChanged += OnSessionChanged;
+
+        // SessionStateService.InitializeAsync() now runs once, awaited, during app
+        // startup (Program.Main) before any DI singleton — including this one — is ever
+        // constructed. Its SessionChanged notification for an already-active session
+        // fired before the subscription above existed to hear it, and unlike a plain
+        // UI refresh, this monitor only ever populates _sessionEnd/_sessionDurationSeconds
+        // and starts its countdown timer inside OnSessionChanged — missing that one
+        // notification means the timer never starts at all, not just a stale display.
+        // Catch up directly on whatever session is already active.
+        OnSessionChanged(this, sessionState.ActiveSession);
     }
 
     private void OnSessionChanged(object? sender, SessionDto? session)
