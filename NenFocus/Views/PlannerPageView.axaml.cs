@@ -319,6 +319,8 @@ public partial class PlannerPageView : UserControl
         // Tile button presses set e.Handled = true, so they never reach here.
         if (e.Source is not Canvas) return;
 
+        _vm.DragError = null;
+
         _dragKind       = DragKind.CreatePending;
         _dragStartPoint = e.GetPosition(canvas);
         _dragCanvas     = canvas;
@@ -538,6 +540,8 @@ public partial class PlannerPageView : UserControl
         if (_vm is null || sender is not Button btn) return;
         if (!e.GetCurrentPoint(btn).Properties.IsLeftButtonPressed) return;
         if (_vm.IsTileFullyLocked(tile.Id)) { e.Handled = true; return; }
+
+        _vm.DragError = null;
 
         var posInBtn    = e.GetPosition(btn);
         var posInCanvas = e.GetPosition(ownerCanvas);

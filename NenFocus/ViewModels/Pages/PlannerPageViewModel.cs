@@ -25,6 +25,7 @@ using NenFocus.Application.UseCases.Planner.CreatePlannedBlock;
 using NenFocus.Application.UseCases.Planner.DeletePlannedBlock;
 using NenFocus.Application.UseCases.Planner.UpdatePlannedBlock;
 using NenFocus.Domain.Enums;
+using NenFocus.Domain.ValueObjects;
 using NenFocus.ViewModels.Components;
 using NenFocus.ViewModels.Contracts;
 
@@ -582,7 +583,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     {
         if (IsDraftingContract)
         {
-            SaveDraftBlock();
+            if (!SaveDraftBlock()) return;
             await RefreshDayFloorPreviewsAsync();
             CloseForm();
             return;
@@ -655,28 +656,30 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     }
 
     // Validates and commits a draft block into the in-memory _draftBlocks list — no
-    // repository call, nothing persists until the contract is sealed.
-    private void SaveDraftBlock()
+    // repository call, nothing persists until the contract is sealed. Returns false (and
+    // leaves FormError set) on a rejected placement — callers must not close the form or
+    // clear FormError in that case, or the rejection message is wiped before it's seen.
+    private bool SaveDraftBlock()
     {
         FormError = null;
-        if (SelectedPreset is null) { FormError = "Please select a block preset."; return; }
+        if (SelectedPreset is null) { FormError = "Please select a block preset."; return false; }
         if (!TryParseFormTime(FormStartTime, out var startTime) || !TryParseFormTime(FormEndTime, out var endTime))
         {
             FormError = "Invalid time format. Use HH:mm.";
-            return;
+            return false;
         }
-        if (endTime <= startTime) { FormError = "End time must be after start time."; return; }
+        if (endTime <= startTime) { FormError = "End time must be after start time."; return false; }
 
         var dayDate = FormDate.Date;
         var localStart = DateTime.SpecifyKind(dayDate.Add(startTime), DateTimeKind.Local);
         var localEnd = DateTime.SpecifyKind(dayDate.Add(endTime), DateTimeKind.Local);
 
-        var placementError = ValidateDraftPlacement(localStart, localEnd);
-        if (placementError is not null) { FormError = placementError; return; }
+        bool isFocus = IsFocusBlock;
+        var placementError = ValidateDraftPlacement(localStart, localEnd, isFocus);
+        if (placementError is not null) { FormError = placementError; return false; }
 
         var startUtc = localStart.ToUniversalTime();
         var endUtc = localEnd.ToUniversalTime();
-        bool isFocus = IsFocusBlock;
 
         var columnIndex = (dayDate - WeekStart.Date).Days;
         if (columnIndex is >= 0 and <= 6)
@@ -686,7 +689,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
             if (PlannerDragMath.WouldCollide(excludeId, isFocus, startUtc, endUtc, dayTiles))
             {
                 FormError = "Focus blocks cannot overlap — choose a different time.";
-                return;
+                return false;
             }
         }
 
@@ -702,6 +705,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         }
 
         RebuildDraftTilesInPlace();
+        return true;
     }
 
     [RelayCommand]
@@ -801,11 +805,15 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         var draftIndex = _draftBlocks.FindIndex(d => d.Id == result.BlockId);
         if (draftIndex >= 0)
         {
-            var placementError = ValidateDraftPlacement(result.NewStartUtc.ToLocalTime(), result.NewEndUtc.ToLocalTime());
+            var placementError = ValidateDraftPlacement(
+                result.NewStartUtc.ToLocalTime(), result.NewEndUtc.ToLocalTime(), _draftBlocks[draftIndex].IsFocus);
             if (placementError is not null)
             {
+                // No rebuild needed: _draftBlocks is untouched, and the code-behind's
+                // ClearDragState() already removed the drag ghost and restored the real
+                // tile's opacity before this command ran — Tiles already reflects the
+                // unchanged, correct position.
                 DragError = placementError;
-                RebuildDraftTilesInPlace(); // _draftBlocks untouched — snaps the ghosted tile back
                 return;
             }
 
@@ -964,10 +972,15 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     }
 
     // Shared by SaveDraftBlock (create/edit-via-form) and MoveOrResizeBlockAsync's draft
-    // branch (drag-move/resize of an already-placed draft tile) — same two rules, same
+    // branch (drag-move/resize of an already-placed draft tile) — same rules, same
     // reject-after-the-fact mechanism every other Planner rule already uses (Focus-overlap,
     // Work Hours, past-date for ordinary blocks). Returns null when the placement is valid.
-    private string? ValidateDraftPlacement(DateTime localStart, DateTime localEnd)
+    // Work Hours mirrors NenContract.AllowsBlockPlacement (same WorkHours.ContainsRange
+    // domain check the sealed-contract guard uses) so drafting and post-seal editing enforce
+    // the identical rule — no NenContract exists yet during drafting to delegate to directly,
+    // but the wizard's flat Default-only window (no per-day exceptions in the UI) is enough
+    // to reconstruct it locally. Focus-only: Background blocks are never Work-Hours constrained.
+    private string? ValidateDraftPlacement(DateTime localStart, DateTime localEnd, bool isFocus)
     {
         if (localStart <= _clockService.LocalNow)
             return "Blocks cannot start in the past.";
@@ -978,6 +991,13 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
             var endDate = DateOnly.FromDateTime(localEnd);
             if (startDate < _draftRules.StartDate || endDate > _draftRules.EndDate)
                 return $"Blocks must be placed within the contract's date range ({_draftRules.StartDate:MMM d} – {_draftRules.EndDate:MMM d}).";
+
+            if (isFocus && _draftRules.WorkHoursStart is { } workHoursStart && _draftRules.WorkHoursEnd is { } workHoursEnd)
+            {
+                var workHours = new WorkHours(workHoursStart, workHoursEnd);
+                if (!workHours.ContainsRange(localStart, localEnd))
+                    return $"This block falls outside the contract's Work Hours ({workHoursStart:h:mm tt} – {workHoursEnd:h:mm tt}).";
+            }
         }
 
         return null;

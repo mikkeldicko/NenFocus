@@ -27,6 +27,7 @@ public class WorkHoursTests
     [InlineData(2026, 1, 1, 8, 59, 2026, 1, 1, 12, 0, false)] // starts before window opens
     [InlineData(2026, 1, 1, 9, 0, 2026, 1, 1, 17, 1, false)]  // ends after window closes
     [InlineData(2026, 1, 1, 17, 0, 2026, 1, 1, 18, 0, false)] // starts exactly at the window's close
+    [InlineData(2026, 1, 1, 15, 0, 2026, 1, 2, 0, 0, false)]  // ends at midnight (next day 00:00) — must not wrap to 00:00 and read as "before" End
     public void ContainsRange_VariousBlocks(
         int sy, int sm, int sd, int sh, int smin,
         int ey, int em, int ed, int eh, int emin,
