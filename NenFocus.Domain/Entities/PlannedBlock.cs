@@ -1,8 +1,9 @@
+using NenFocus.Domain.Events;
 using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Domain.Entities;
 
-public abstract class PlannedBlock
+public abstract class PlannedBlock : AggregateRoot
 {
     public Guid Id { get; protected set; }
     public Guid BlockPresetId { get; protected set; }
@@ -12,6 +13,10 @@ public abstract class PlannedBlock
 
     /// <summary>Null means an ordinary, uncommitted block; set means the block is under that Nen Contract.</summary>
     public Guid? ContractId { get; protected set; }
+
+    /// <summary>Null means still scheduled/live; set means the owning Nen Contract was broken and this
+    /// block was cut short before it ran. Applies uniformly to FocusBlock and BackgroundBlock.</summary>
+    public DateTime? CancelledAt { get; protected set; }
 
     /// <summary>
     /// Empty means an ordinary block. Populated means this is a make-up block covering
@@ -72,5 +77,15 @@ public abstract class PlannedBlock
     public void AssignContract(Guid? contractId)
     {
         ContractId = contractId;
+    }
+
+    public void MarkCancelled(DateTime cancelledAt)
+    {
+        if (CancelledAt.HasValue)
+            throw new InvalidOperationException(
+                "This block has already been marked cancelled.");
+
+        CancelledAt = cancelledAt;
+        Raise(new PlannedBlockCancelledEvent(Id, cancelledAt));
     }
 }

@@ -199,6 +199,9 @@ namespace NenFocus.Infrastructure.Migrations
                     b.Property<Guid>("BlockPresetId")
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime?>("CancelledAt")
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid?>("ContractId")
                         .HasColumnType("TEXT");
 

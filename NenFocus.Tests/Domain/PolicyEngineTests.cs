@@ -261,6 +261,59 @@ public class PolicyEngineTests
     }
 
     [Fact]
+    public void ComputeSlice_CancelledFocusBlock_ExcludedFromActiveBlockPresetType()
+    {
+        var preset = CreatePreset(WebsiteFilterType.Blocklist);
+        var focusBlock = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At, At.AddHours(1));
+        focusBlock.MarkCancelled(At);
+
+        var slice = _engine.ComputeSlice(At, [preset], [], [focusBlock]);
+
+        slice.ActiveBlockPresetType.Should().BeNull();
+        slice.ActiveFocusBlockId.Should().BeNull();
+    }
+
+    [Fact]
+    public void ComputeSlice_CancelledBlock_ExcludedFromSliceEnd()
+    {
+        var preset = CreatePreset(WebsiteFilterType.Blocklist);
+        var cancelledBlock = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At, At.AddHours(3));
+        cancelledBlock.MarkCancelled(At);
+        var liveBlock = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At, At.AddHours(1));
+
+        var slice = _engine.ComputeSlice(At, [preset], [], [cancelledBlock, liveBlock]);
+
+        slice.SliceEnd.Should().Be(At.AddHours(1));
+    }
+
+    [Fact]
+    public void ComputeSlice_OnlyBlockIsCancelled_SliceEndFallsBackToOneMinute()
+    {
+        var preset = CreatePreset(WebsiteFilterType.Blocklist);
+        var cancelledBlock = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At, At.AddHours(3));
+        cancelledBlock.MarkCancelled(At);
+
+        var slice = _engine.ComputeSlice(At, [preset], [], [cancelledBlock]);
+
+        slice.SliceEnd.Should().Be(At.AddMinutes(1));
+    }
+
+    [Fact]
+    public void ComputeSlice_CancelledFocusBlockRitualCompleted_FocusSessionCompletedIsFalse()
+    {
+        // A cancelled block is excluded from consideration entirely, so it can no longer
+        // drive FocusSessionCompleted true (there's no "focus block" left to look at).
+        var preset = CreatePreset(WebsiteFilterType.Blocklist);
+        var focusBlock = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At, At.AddHours(1));
+        focusBlock.MarkRitualCompleted(At);
+        focusBlock.MarkCancelled(At);
+
+        var slice = _engine.ComputeSlice(At, [preset], [], [focusBlock]);
+
+        slice.FocusSessionCompleted.Should().BeFalse();
+    }
+
+    [Fact]
     public void ComputeSlice_ActiveSessionPresent_SetsActiveSessionId()
     {
         var preset = CreatePreset(WebsiteFilterType.Blocklist);

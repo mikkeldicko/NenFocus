@@ -29,7 +29,9 @@ public sealed class GetPlannedBlocksForDayQueryHandler
         GetPlannedBlocksForDayQuery query,
         CancellationToken cancellationToken = default)
     {
-        var blocks = await _blocks.GetForDayAsync(query.Date, cancellationToken);
+        var blocks = (await _blocks.GetForDayAsync(query.Date, cancellationToken))
+            .Where(b => !b.CancelledAt.HasValue)
+            .ToList();
 
         var allPresets = await _presets.GetAllAsync(cancellationToken);
         var presetMap = allPresets.ToDictionary(p => p.Id);

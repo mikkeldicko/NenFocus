@@ -15,7 +15,7 @@ public sealed class PolicyEngine : IPolicyEngine
     {
         var activePresets = presets.ToList();
         var activeSessions = sessions.ToList();
-        var activeBlocks = blocks.ToList();
+        var activeBlocks = blocks.Where(b => !b.CancelledAt.HasValue).ToList();
 
         if (activePresets.Count == 0 && activeSessions.Count == 0 && activeBlocks.Count == 0)
             return new ActivePolicySlice { SliceStart = at, SliceEnd = at.AddMinutes(1) };

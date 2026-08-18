@@ -77,6 +77,26 @@ public class ComputeActivePolicySliceQueryHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_CancelledBlock_ExcludedFromPresetsAndFromBlocksPassedToPolicyEngine()
+    {
+        var cancelledPresetId = Guid.NewGuid();
+        var liveBlock = FocusBlock.Create(Guid.NewGuid(), cancelledPresetId, At, At.AddHours(1));
+        liveBlock.MarkCancelled(At);
+
+        _blocks.GetForRangeAsync(Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyList<PlannedBlock>)[liveBlock]);
+
+        await CreateHandler().HandleAsync(new ComputeActivePolicySliceQuery(At), CancellationToken.None);
+
+        await _presets.DidNotReceive().GetByIdAsync(cancelledPresetId, Arg.Any<CancellationToken>());
+        _policyEngine.Received(1).ComputeSlice(
+            At,
+            Arg.Any<IEnumerable<BlockPreset>>(),
+            Arg.Any<IEnumerable<Session>>(),
+            Arg.Is<IEnumerable<PlannedBlock>>(b => !b.Any()));
+    }
+
+    [Fact]
     public async Task HandleAsync_UnresolvablePreset_IsOmittedNotThrown()
     {
         var presetId = Guid.NewGuid();

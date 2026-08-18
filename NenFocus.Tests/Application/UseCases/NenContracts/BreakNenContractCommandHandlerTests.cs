@@ -16,14 +16,29 @@ public class BreakNenContractCommandHandlerTests
 
     private readonly INenContractRepository _contracts = Substitute.For<INenContractRepository>();
     private readonly IPlannedBlockRepository _blocks = Substitute.For<IPlannedBlockRepository>();
+    private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
     private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
 
     public BreakNenContractCommandHandlerTests()
     {
         _clock.UtcNow.Returns(Now);
+        _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns((Session?)null);
     }
 
-    private BreakNenContractCommandHandler CreateHandler() => new(_contracts, _blocks, _clock);
+    private BreakNenContractCommandHandler CreateHandler() => new(_contracts, _blocks, _sessions, _clock);
+
+    private static Session CreatePlannedSession(Guid originatingBlockId)
+    {
+        var session = Session.Create(
+            Guid.NewGuid(),
+            new SessionGoal("Focus"),
+            new SessionDuration(TimeSpan.FromMinutes(30)),
+            Guid.NewGuid(),
+            SessionOrigin.Planned,
+            originatingBlockId: originatingBlockId);
+        session.Start(Now.AddMinutes(-10));
+        return session;
+    }
 
     private static NenContract ActiveCancellableContract() => NenContract.Seal(
         id: Guid.NewGuid(),
@@ -67,7 +82,7 @@ public class BreakNenContractCommandHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_DeletesOnlyBlocksThatHaveNotEnded()
+    public async Task HandleAsync_CancelsOnlyBlocksThatHaveNotEnded()
     {
         var contract = ActiveCancellableContract();
         _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
@@ -84,13 +99,17 @@ public class BreakNenContractCommandHandlerTests
 
         await CreateHandler().HandleAsync(new BreakNenContractCommand { ContractId = contract.Id }, CancellationToken.None);
 
-        await _blocks.DidNotReceive().DeleteAsync(pastBlock.Id, Arg.Any<CancellationToken>());
-        await _blocks.Received(1).DeleteAsync(currentBlock.Id, Arg.Any<CancellationToken>());
-        await _blocks.Received(1).DeleteAsync(futureBlock.Id, Arg.Any<CancellationToken>());
+        pastBlock.CancelledAt.Should().BeNull();
+        currentBlock.CancelledAt.Should().Be(Now);
+        futureBlock.CancelledAt.Should().Be(Now);
+        await _blocks.DidNotReceive().SaveAsync(pastBlock, Arg.Any<CancellationToken>());
+        await _blocks.Received(1).SaveAsync(currentBlock, Arg.Any<CancellationToken>());
+        await _blocks.Received(1).SaveAsync(futureBlock, Arg.Any<CancellationToken>());
+        await _blocks.DidNotReceive().DeleteAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task HandleAsync_NoLinkedBlocks_DeletesNothing()
+    public async Task HandleAsync_NoLinkedBlocks_CancelsNothing()
     {
         var contract = ActiveCancellableContract();
         _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
@@ -99,6 +118,58 @@ public class BreakNenContractCommandHandlerTests
 
         await CreateHandler().HandleAsync(new BreakNenContractCommand { ContractId = contract.Id }, CancellationToken.None);
 
-        await _blocks.DidNotReceive().DeleteAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        await _blocks.DidNotReceive().SaveAsync(Arg.Any<PlannedBlock>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task HandleAsync_ActiveSessionOriginatingFromCancelledBlock_ForceCompletesSession()
+    {
+        var contract = ActiveCancellableContract();
+        _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
+
+        var currentBlock = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),
+            Now.AddHours(-1), Now.AddHours(1), contractId: contract.Id);
+        _blocks.GetForContractAsync(contract.Id, Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyList<PlannedBlock>)[currentBlock]);
+
+        var session = CreatePlannedSession(currentBlock.Id);
+        _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns(session);
+
+        await CreateHandler().HandleAsync(new BreakNenContractCommand { ContractId = contract.Id }, CancellationToken.None);
+
+        session.Status.Should().Be(SessionStatus.Completed);
+        session.EndedAt.Should().Be(Now);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ActiveSessionOnBlockNotUnderThisContract_LeftUntouched()
+    {
+        var contract = ActiveCancellableContract();
+        _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
+        _blocks.GetForContractAsync(contract.Id, Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyList<PlannedBlock>)[]);
+
+        var unrelatedBlockId = Guid.NewGuid();
+        var session = CreatePlannedSession(unrelatedBlockId);
+        _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns(session);
+
+        await CreateHandler().HandleAsync(new BreakNenContractCommand { ContractId = contract.Id }, CancellationToken.None);
+
+        session.Status.Should().Be(SessionStatus.Active);
+    }
+
+    [Fact]
+    public async Task HandleAsync_NoActiveSession_CompletesWithoutError()
+    {
+        var contract = ActiveCancellableContract();
+        _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
+        _blocks.GetForContractAsync(contract.Id, Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyList<PlannedBlock>)[]);
+        _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns((Session?)null);
+
+        var result = await CreateHandler().HandleAsync(
+            new BreakNenContractCommand { ContractId = contract.Id }, CancellationToken.None);
+
+        result.Success.Should().BeTrue();
     }
 }

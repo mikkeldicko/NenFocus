@@ -276,6 +276,8 @@ public class NenFocusDbContext : DbContext
 
             entity.Property(b => b.ContractId);
 
+            entity.Property(b => b.CancelledAt);
+
             entity.Property(b => b.MakeUpForEntries)
                 .HasConversion(
                     entries => SerializeMakeUpForEntries(entries),

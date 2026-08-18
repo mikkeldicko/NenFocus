@@ -65,6 +65,19 @@ public class GetPlannedBlocksForDayQueryHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_CancelledBlock_ExcludedFromResults()
+    {
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End);
+        block.MarkCancelled(Start);
+        _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
+        _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
+
+        var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
+
+        result.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task HandleAsync_FocusBlockWithoutSessionEnded_DisplayEndIsScheduledEnd()
     {
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End);

@@ -1,5 +1,6 @@
 using FluentAssertions;
 using NenFocus.Domain.Entities;
+using NenFocus.Domain.Events;
 using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Tests.Domain;
@@ -392,5 +393,87 @@ public class PlannedBlockTests
         block.AssignMakeUpForEntries([]);
 
         block.MakeUpForEntries.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void FocusBlock_Create_Valid_HasNoCancelledAtYet()
+    {
+        CreateFocusBlock().CancelledAt.Should().BeNull();
+    }
+
+    [Fact]
+    public void FocusBlock_MarkCancelled_SetsTimestamp()
+    {
+        var block = CreateFocusBlock();
+        var cancelledAt = DateTime.UtcNow;
+
+        block.MarkCancelled(cancelledAt);
+
+        block.CancelledAt.Should().Be(cancelledAt);
+    }
+
+    [Fact]
+    public void FocusBlock_MarkCancelled_Twice_Throws()
+    {
+        var block = CreateFocusBlock();
+        block.MarkCancelled(DateTime.UtcNow);
+
+        var act = () => block.MarkCancelled(DateTime.UtcNow);
+
+        act.Should().Throw<InvalidOperationException>();
+    }
+
+    [Fact]
+    public void FocusBlock_MarkCancelled_RaisesPlannedBlockCancelledEvent()
+    {
+        var block = CreateFocusBlock();
+        var cancelledAt = DateTime.UtcNow;
+
+        block.MarkCancelled(cancelledAt);
+
+        block.DomainEvents.Should().ContainSingle()
+            .Which.Should().BeOfType<PlannedBlockCancelledEvent>()
+            .Which.Should().Match<PlannedBlockCancelledEvent>(e =>
+                e.PlannedBlockId == block.Id && e.OccurredAt == cancelledAt);
+    }
+
+    [Fact]
+    public void BackgroundBlock_Create_Valid_HasNoCancelledAtYet()
+    {
+        CreateBackgroundBlock().CancelledAt.Should().BeNull();
+    }
+
+    [Fact]
+    public void BackgroundBlock_MarkCancelled_SetsTimestamp()
+    {
+        var block = CreateBackgroundBlock();
+        var cancelledAt = DateTime.UtcNow;
+
+        block.MarkCancelled(cancelledAt);
+
+        block.CancelledAt.Should().Be(cancelledAt);
+    }
+
+    [Fact]
+    public void BackgroundBlock_MarkCancelled_Twice_Throws()
+    {
+        var block = CreateBackgroundBlock();
+        block.MarkCancelled(DateTime.UtcNow);
+
+        var act = () => block.MarkCancelled(DateTime.UtcNow);
+
+        act.Should().Throw<InvalidOperationException>();
+    }
+
+    [Fact]
+    public void BackgroundBlock_MarkCancelled_RaisesPlannedBlockCancelledEvent()
+    {
+        var block = CreateBackgroundBlock();
+        var cancelledAt = DateTime.UtcNow;
+
+        block.MarkCancelled(cancelledAt);
+
+        block.DomainEvents.Should().ContainSingle()
+            .Which.Should().BeOfType<PlannedBlockCancelledEvent>();
     }
 }
