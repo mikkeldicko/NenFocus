@@ -58,8 +58,8 @@ public sealed class MarkFocusBlockMissedCommandHandler
             PresetName = presetName,
             StartedAt = session.StartedAt!.Value,
             EndedAt = session.EndedAt!.Value,
-            PlannedDurationMinutes = (int)session.Duration.Value.TotalMinutes,
-            ActualDurationMinutes = (int)(session.GetElapsedTime(session.EndedAt.Value)?.TotalMinutes ?? 0),
+            PlannedDurationMinutes = session.Duration.Value.TotalMinutes,
+            ActualDurationMinutes = session.GetElapsedTime(session.EndedAt.Value)?.TotalMinutes ?? 0,
             BreaksTaken = 0
         };
 

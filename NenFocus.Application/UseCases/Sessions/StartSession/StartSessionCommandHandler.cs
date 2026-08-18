@@ -84,10 +84,22 @@ public sealed class StartSessionCommandHandler
             ? SessionOrigin.Planned
             : SessionOrigin.Spontaneous;
 
+        // For a Planned session, Duration ("Planned") is the block's full nominal
+        // length — a fixed fact about the schedule, independent of exactly when the
+        // Ritual completes — not "time remaining from Ritual completion." This is the
+        // invariant that makes CreditedFocusMinutes (EndSessionCommandHandler) always
+        // produce a "Duration" ≤ "Planned": a graced-within-5-minutes credit maxes out at
+        // exactly this same (End - Start) figure, and actual elapsed time can never
+        // exceed it either, since StartedAt ≥ Start and EndedAt ≤ End by construction. A
+        // planned block can't be credited for longer than it was ever planned to run.
+        var duration = originatingBlock is not null
+            ? originatingBlock.End - originatingBlock.Start
+            : TimeSpan.FromMinutes(command.DurationMinutes);
+
         var session = Session.Create(
             id: Guid.NewGuid(),
             goal: new SessionGoal(command.Goal),
-            duration: new SessionDuration(TimeSpan.FromMinutes(command.DurationMinutes)),
+            duration: new SessionDuration(duration),
             blockPresetId: command.PresetId ?? Guid.Empty,
             origin: origin,
             originatingBlockId: command.OriginatingBlockId,
@@ -118,7 +130,7 @@ public sealed class StartSessionCommandHandler
             Goal = session.Goal.Value,
             PresetName = presetName,
             BlockPresetId = session.BlockPresetId,
-            DurationMinutes = command.DurationMinutes,
+            DurationMinutes = (int)duration.TotalMinutes,
             StartedAt = session.StartedAt ?? now,
             EndAt = session.EndAt ?? now,
             Status = session.Status,

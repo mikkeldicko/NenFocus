@@ -2,6 +2,7 @@
 using NenFocus.Application.Interfaces;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
+using NenFocus.Domain.Services;
 
 namespace NenFocus.Application.UseCases.Sessions.EndSession;
 
@@ -13,19 +14,22 @@ public sealed class EndSessionCommandHandler
     private readonly IPlannedBlockRepository _plannedBlocks;
     private readonly IBlockedAttemptTracker _attemptTracker;
     private readonly ISystemClock _clock;
+    private readonly IFocusBlockOutcomeClassifier _classifier;
 
     public EndSessionCommandHandler(
         ISessionRepository sessions,
         IBlockPresetRepository presets,
         IPlannedBlockRepository plannedBlocks,
         IBlockedAttemptTracker attemptTracker,
-        ISystemClock clock)
+        ISystemClock clock,
+        IFocusBlockOutcomeClassifier classifier)
     {
         _sessions = sessions;
         _presets = presets;
         _plannedBlocks = plannedBlocks;
         _attemptTracker = attemptTracker;
         _clock = clock;
+        _classifier = classifier;
     }
 
     public async Task<EndSessionResult> HandleAsync(
@@ -57,13 +61,18 @@ public sealed class EndSessionCommandHandler
 
         await _sessions.SaveAsync(session, ct);
 
+        FocusBlock? originatingFocusBlock = null;
         if (session.OriginatingBlockId.HasValue)
         {
             var block = await _plannedBlocks.GetByIdAsync(session.OriginatingBlockId.Value, ct);
-            if (block is FocusBlock focusBlock && endedAt < focusBlock.End)
+            if (block is FocusBlock focusBlock)
             {
-                focusBlock.MarkSessionEnded(endedAt);
-                await _plannedBlocks.SaveAsync(focusBlock, ct);
+                originatingFocusBlock = focusBlock;
+                if (endedAt < focusBlock.End)
+                {
+                    focusBlock.MarkSessionEnded(endedAt);
+                    await _plannedBlocks.SaveAsync(focusBlock, ct);
+                }
             }
         }
 
@@ -74,6 +83,23 @@ public sealed class EndSessionCommandHandler
             presetName = preset?.Name ?? string.Empty;
         }
 
+        var actualElapsedMinutes = session.GetElapsedTime(session.EndedAt!.Value)?.TotalMinutes ?? 0;
+
+        // Reuses the exact same rule Daily Floor credit already applies (Gap H) — a
+        // ritual completed within the grace period credits the block's full scheduled
+        // duration, not (EndTime - RitualCompletedAt); one source of truth for "how much
+        // focus time does this session count for," not a second copy of the rule invented
+        // for display. Only applies to a Planned session with a resolved originating
+        // block — an impromptu session has no scheduled window to be graced against.
+        var creditedMinutes = originatingFocusBlock is not null
+            ? _classifier.CreditedFocusMinutes(
+                originatingFocusBlock.Start,
+                originatingFocusBlock.End,
+                originatingFocusBlock.RitualCompletedAt,
+                session.EndedAt,
+                actualElapsedMinutes)
+            : actualElapsedMinutes;
+
         var postSession = new PostSessionDto
         {
             SessionId = session.Id,
@@ -82,8 +108,8 @@ public sealed class EndSessionCommandHandler
             PresetName = presetName,
             StartedAt = session.StartedAt!.Value,
             EndedAt = session.EndedAt!.Value,
-            PlannedDurationMinutes = (int)session.Duration.Value.TotalMinutes,
-            ActualDurationMinutes = (int)(session.GetElapsedTime(session.EndedAt.Value)?.TotalMinutes ?? 0),
+            PlannedDurationMinutes = session.Duration.Value.TotalMinutes,
+            ActualDurationMinutes = creditedMinutes,
             BreaksTaken = session.BreaksTaken,
             BlockedAppAttempts = appAttempts,
             BlockedWebsiteAttempts = websiteAttempts,

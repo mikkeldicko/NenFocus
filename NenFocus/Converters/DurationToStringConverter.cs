@@ -12,7 +12,11 @@ public sealed class DurationToStringConverter : IValueConverter
         {
             if (ts.TotalHours >= 1)
                 return $"{(int)ts.TotalHours}h {ts.Minutes}m";
-            return $"{(int)ts.TotalMinutes}m";
+            if (ts.TotalMinutes >= 1)
+                return $"{(int)ts.TotalMinutes}m";
+            // Sub-minute: showing "0m" would silently discard a real (if short) session
+            // or credited duration — show the seconds instead.
+            return $"{Math.Max(0, (int)ts.TotalSeconds)}s";
         }
         return string.Empty;
     }

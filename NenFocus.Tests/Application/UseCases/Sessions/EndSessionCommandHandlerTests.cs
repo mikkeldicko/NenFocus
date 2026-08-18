@@ -3,6 +3,7 @@ using NenFocus.Application.Interfaces;
 using NenFocus.Application.UseCases.Sessions.EndSession;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
+using NenFocus.Domain.Services;
 using NenFocus.Domain.ValueObjects;
 using NSubstitute;
 
@@ -18,6 +19,11 @@ public class EndSessionCommandHandlerTests
     private readonly IBlockedAttemptTracker _attemptTracker = Substitute.For<IBlockedAttemptTracker>();
     private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
 
+    // Real instance, not mocked — it's a pure, dependency-free domain service, and the
+    // grace-period-crediting tests below exist specifically to verify its actual
+    // arithmetic end-to-end through this handler, not just that the handler calls it.
+    private readonly IFocusBlockOutcomeClassifier _classifier = new FocusBlockOutcomeClassifier();
+
     public EndSessionCommandHandlerTests()
     {
         _clock.UtcNow.Returns(Now);
@@ -25,7 +31,7 @@ public class EndSessionCommandHandlerTests
     }
 
     private EndSessionCommandHandler CreateHandler()
-        => new(_sessions, _presets, _plannedBlocks, _attemptTracker, _clock);
+        => new(_sessions, _presets, _plannedBlocks, _attemptTracker, _clock, _classifier);
 
     private static Session CreateActiveSession(Guid? originatingBlockId = null)
     {
@@ -170,5 +176,110 @@ public class EndSessionCommandHandlerTests
         var result = await CreateHandler().HandleAsync(new EndSessionCommand { SessionId = session.Id });
 
         result.PostSession!.PresetName.Should().BeEmpty();
+    }
+
+    // ── Grace-period duration crediting ─────────────────────────────────────────
+    // A Planned session's block runs blockStart..blockEnd == Now (ends exactly on
+    // schedule); the Ritual completes some minutes after blockStart, which is also
+    // when the session actually starts.
+
+    private (FocusBlock block, Session session) PlannedSessionEndingNow(TimeSpan ritualDelayAfterBlockStart)
+    {
+        var blockId = Guid.NewGuid();
+        var blockStart = Now.AddHours(-1);
+        var blockEnd = Now;
+        var ritualCompletedAt = blockStart + ritualDelayAfterBlockStart;
+
+        var block = FocusBlock.Create(blockId, Guid.NewGuid(), blockStart, blockEnd);
+        block.MarkRitualCompleted(ritualCompletedAt);
+        _plannedBlocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns(block);
+
+        var session = Session.Create(
+            Guid.NewGuid(), new SessionGoal("Deep work"), new SessionDuration(blockEnd - ritualCompletedAt),
+            Guid.NewGuid(), SessionOrigin.Planned, originatingBlockId: blockId);
+        session.Start(ritualCompletedAt, blockEnd);
+        _sessions.GetByIdAsync(session.Id, Arg.Any<CancellationToken>()).Returns(session);
+
+        return (block, session);
+    }
+
+    [Theory]
+    [InlineData(2)] // 2 minutes after block start — within the 5-minute grace period
+    [InlineData(4)] // 4 minutes after — still within grace
+    public async Task HandleAsync_Planned_RitualCompletedWithinGracePeriod_CreditsFullBlockDuration(int minutesAfterBlockStart)
+    {
+        var (_, session) = PlannedSessionEndingNow(TimeSpan.FromMinutes(minutesAfterBlockStart));
+
+        var result = await CreateHandler().HandleAsync(new EndSessionCommand { SessionId = session.Id });
+
+        result.PostSession!.ActualDurationMinutes.Should().Be(60); // full 1-hour block, not (blockEnd - ritualCompletedAt)
+    }
+
+    [Fact]
+    public async Task HandleAsync_Planned_RitualCompletedOutsideGracePeriod_CreditsActualElapsedOnly()
+    {
+        var (_, session) = PlannedSessionEndingNow(TimeSpan.FromMinutes(6)); // outside the 5-minute grace period
+
+        var result = await CreateHandler().HandleAsync(new EndSessionCommand { SessionId = session.Id });
+
+        result.PostSession!.ActualDurationMinutes.Should().Be(54); // 60 - 6, no grace credit
+    }
+
+    [Fact]
+    public async Task HandleAsync_Spontaneous_NeverGetsGracePeriodCredit()
+    {
+        // No originating block — no scheduled window exists to be graced against, so
+        // this must always reflect actual elapsed time, however the session started.
+        var session = CreateActiveSession(); // Spontaneous, started Now.AddMinutes(-10)
+        _sessions.GetByIdAsync(session.Id, Arg.Any<CancellationToken>()).Returns(session);
+
+        var result = await CreateHandler().HandleAsync(new EndSessionCommand { SessionId = session.Id });
+
+        result.PostSession!.ActualDurationMinutes.Should().Be(10);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ShortBlock_CreditedDurationNeverExceedsFullBlockLength()
+    {
+        // A 2-minute block where the Ritual itself takes 1 minute — the exact scenario
+        // that exposed the old, wrong "Planned = remaining time" fix. The grace-period
+        // credit here must cap at the block's own full length (2 minutes), matching
+        // exactly what StartSessionCommandHandler now computes as "Planned" for the
+        // same block — Duration must never exceed Planned for a Planned session.
+        var blockId = Guid.NewGuid();
+        var blockStart = Now.AddMinutes(-1); // block: 1 min ago .. 1 min from now = 2 min total
+        var blockEnd = Now.AddMinutes(1);
+        var ritualCompletedAt = Now; // Ritual took the full first minute — still within 5-min grace
+
+        var block = FocusBlock.Create(blockId, Guid.NewGuid(), blockStart, blockEnd);
+        block.MarkRitualCompleted(ritualCompletedAt);
+        _plannedBlocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns(block);
+
+        var session = Session.Create(
+            Guid.NewGuid(), new SessionGoal("Deep work"), new SessionDuration(blockEnd - blockStart),
+            Guid.NewGuid(), SessionOrigin.Planned, originatingBlockId: blockId);
+        session.Start(ritualCompletedAt, blockEnd);
+        _sessions.GetByIdAsync(session.Id, Arg.Any<CancellationToken>()).Returns(session);
+
+        _clock.UtcNow.Returns(blockEnd); // session runs to its natural end
+
+        var result = await CreateHandler().HandleAsync(new EndSessionCommand { SessionId = session.Id });
+
+        result.PostSession!.ActualDurationMinutes.Should().Be(2);
+        result.PostSession.ActualDurationMinutes.Should().BeLessThanOrEqualTo(result.PostSession.PlannedDurationMinutes);
+    }
+
+    [Fact]
+    public async Task HandleAsync_SubMinuteSession_PreservesFractionalMinutes_DoesNotTruncateToZero()
+    {
+        var session = Session.Create(
+            Guid.NewGuid(), new SessionGoal("Quick check"), new SessionDuration(TimeSpan.FromMinutes(1)),
+            Guid.NewGuid(), SessionOrigin.Spontaneous);
+        session.Start(Now.AddSeconds(-45));
+        _sessions.GetByIdAsync(session.Id, Arg.Any<CancellationToken>()).Returns(session);
+
+        var result = await CreateHandler().HandleAsync(new EndSessionCommand { SessionId = session.Id });
+
+        result.PostSession!.ActualDuration.Should().BeCloseTo(TimeSpan.FromSeconds(45), TimeSpan.FromSeconds(1));
     }
 }

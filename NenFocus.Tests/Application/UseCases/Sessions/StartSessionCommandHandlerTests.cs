@@ -170,6 +170,55 @@ public class StartSessionCommandHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_Planned_DurationIsFullBlockLength_NotFromCommandDurationMinutesOrRemainingTime()
+    {
+        // "Planned" must always be the block's fixed, full nominal length — a schedule
+        // fact independent of when the Ritual actually completes — never "however much
+        // is left" and never the caller's DurationMinutes (an earlier, Hatsu click-time
+        // clock read). This is the invariant that keeps EndSessionCommandHandler's
+        // credited "Duration" always ≤ "Planned": a block can't be credited for longer
+        // than it was ever scheduled to run.
+        var blockId = Guid.NewGuid();
+        var blockStart = Now.AddMinutes(-2); // Ritual took 2 minutes
+        var blockEnd = Now.AddMinutes(58);
+        var focusBlock = FocusBlock.Create(blockId, Guid.NewGuid(), blockStart, blockEnd);
+        _plannedBlocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns(focusBlock);
+
+        // Deliberately stale/wrong DurationMinutes, as if Hatsu computed it earlier.
+        var command = SpontaneousCommand() with { OriginatingBlockId = blockId, DurationMinutes = 999 };
+        var result = await CreateHandler().HandleAsync(command, CancellationToken.None);
+
+        result.Success.Should().BeTrue();
+        await _sessions.Received(1).SaveAsync(
+            Arg.Is<Session>(s => s.Duration.Value == TimeSpan.FromMinutes(60)), // full block: blockEnd - blockStart
+            Arg.Any<CancellationToken>());
+        _sessionState.Received(1).SetActive(Arg.Is<SessionDto>(d => d.DurationMinutes == 60));
+    }
+
+    [Fact]
+    public async Task HandleAsync_Planned_ShortBlock_RitualTakingHalfTheBlock_StillPlansFullBlockLength()
+    {
+        // The exact scenario that exposed the old (wrong) fix: a 2-minute block where
+        // the Ritual itself takes a full minute. "Planned" must show the block's full
+        // 2 minutes, not "1 minute remaining" — otherwise a within-grace credited
+        // Duration of 2 minutes would exceed a 1-minute Planned figure, which can't
+        // make sense for a block that was never scheduled to run more than 2 minutes.
+        var blockId = Guid.NewGuid();
+        var blockStart = Now.AddMinutes(-1); // Ritual took 1 minute
+        var blockEnd = Now.AddMinutes(1);
+        var focusBlock = FocusBlock.Create(blockId, Guid.NewGuid(), blockStart, blockEnd);
+        _plannedBlocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns(focusBlock);
+
+        var command = SpontaneousCommand() with { OriginatingBlockId = blockId };
+        var result = await CreateHandler().HandleAsync(command, CancellationToken.None);
+
+        result.Success.Should().BeTrue();
+        await _sessions.Received(1).SaveAsync(
+            Arg.Is<Session>(s => s.Duration.Value == TimeSpan.FromMinutes(2)),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task HandleAsync_Planned_OriginatingBlockNoLongerExists_Fails()
     {
         var blockId = Guid.NewGuid();
