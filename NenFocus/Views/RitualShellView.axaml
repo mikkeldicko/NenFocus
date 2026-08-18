@@ -89,11 +89,11 @@
                                Foreground="#1A1A2E"/>
                     <TextBlock TextWrapping="Wrap" Foreground="#888899">
                         <Run Text="You have a scheduled focus block ("/>
-                        <Run Text="{Binding LateBlockStart, Converter={StaticResource DateTimeConverter}}"/>
+                        <Run Text="{Binding LateBlockStart, Converter={StaticResource DateTimeConverter}, Mode=OneWay}"/>
                         <Run Text=" – "/>
-                        <Run Text="{Binding LateBlockEnd, Converter={StaticResource DateTimeConverter}}"/>
+                        <Run Text="{Binding LateBlockEnd, Converter={StaticResource DateTimeConverter}, Mode=OneWay}"/>
                         <Run Text=") that started "/>
-                        <Run Text="{Binding LateBy, Converter={x:Static conv:TimeSpanToHumanReadableConverter.Instance}}"/>
+                        <Run Text="{Binding LateBy, Converter={x:Static conv:TimeSpanToHumanReadableConverter.Instance}, Mode=OneWay}"/>
                         <Run Text=" ago. Complete the ritual to begin your session."/>
                     </TextBlock>
                     <Button Content="Continue to Ritual"
