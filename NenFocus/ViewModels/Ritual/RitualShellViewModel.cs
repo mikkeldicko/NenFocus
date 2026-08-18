@@ -32,6 +32,24 @@ public partial class RitualShellViewModel : ViewModelBase
     [ObservableProperty]
     private bool _isBackVisible = true;
 
+    // Late-to-block modal — Ritual-level pre-condition, not step-specific, so it lives
+    // here rather than on TenPageViewModel: if steps are reordered or added later, the
+    // modal stays in the right place regardless. Raw values only (DateTime/TimeSpan,
+    // already computed by GetFocusBlockRitualContextQueryHandler) — no math or string
+    // formatting here, per MODULE_STANDARDS.md's ViewModel Forbidden Zone; the View
+    // formats BlockStart/BlockEnd/LateBy through converters.
+    [ObservableProperty]
+    private bool _isLateToBlock;
+
+    [ObservableProperty]
+    private DateTime _lateBlockStart;
+
+    [ObservableProperty]
+    private DateTime _lateBlockEnd;
+
+    [ObservableProperty]
+    private TimeSpan _lateBy;
+
     private Action _currentBackAction = () => { };
 
     public bool IsDot0Active => StepIndex == 0;
@@ -58,7 +76,9 @@ public partial class RitualShellViewModel : ViewModelBase
         BlockPresetDto? lockedPreset,
         FocusBlockSchedule? lockedSchedule,
         Action onComplete,
-        Action onCancel)
+        Action onCancel,
+        bool isLateToBlock = false,
+        TimeSpan lateBy = default)
     {
         _presetsQuery = presetsQuery;
         _startSession = startSession;
@@ -70,11 +90,25 @@ public partial class RitualShellViewModel : ViewModelBase
         _onComplete = onComplete;
         _onCancel = onCancel;
 
+        // Only ever true for a Planned ritual (lockedSchedule is null for an impromptu
+        // session, so there's nothing to be "late" against) — guard here too rather
+        // than trusting the caller never to pass isLateToBlock=true without a schedule.
+        if (isLateToBlock && lockedSchedule is not null)
+        {
+            IsLateToBlock = true;
+            LateBlockStart = lockedSchedule.Start.ToLocalTime();
+            LateBlockEnd = lockedSchedule.End.ToLocalTime();
+            LateBy = lateBy;
+        }
+
         NavigateToTen();
     }
 
     [RelayCommand]
     private void GoBack() => _currentBackAction();
+
+    [RelayCommand]
+    private void DismissLateNotice() => IsLateToBlock = false;
 
     private void NavigateToTen()
     {

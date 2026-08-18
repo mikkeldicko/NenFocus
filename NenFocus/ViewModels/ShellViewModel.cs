@@ -146,6 +146,19 @@ public partial class ShellViewModel : ViewModelBase
 
         NavItems[0].IsSelected = true;
         CurrentPage = NavItems[0].PageViewModel;
+
+        // Startup race: ScheduledEnforcementService's heartbeat starts (via
+        // AppHost.StartAsync() in Program.Main) before this constructor runs and
+        // subscribes to RitualRequirementChanged above. If a Focus Block is already
+        // active at launch, the very first heartbeat tick can call
+        // SetRitualRequired(true, ...) with no subscriber listening — and since that
+        // method only raises its event on a required-state transition (a later tick
+        // for the same still-pending block is a no-op), that notification is lost for
+        // good once the block's block ID stops changing. Catch up here on whatever
+        // ritual requirement already exists by the time this Shell finishes
+        // constructing, rather than only ever reacting to future transitions.
+        if (_sessionState.IsRitualRequired)
+            EnqueueOrStartRitual(_sessionState.PendingFocusBlockId);
     }
 
     private void BringToForeground()
@@ -171,6 +184,8 @@ public partial class ShellViewModel : ViewModelBase
     {
         BlockPresetDto? lockedPreset = null;
         FocusBlockSchedule? lockedSchedule = null;
+        bool isLateToBlock = false;
+        TimeSpan lateBy = default;
 
         if (focusBlockId.HasValue)
         {
@@ -178,6 +193,8 @@ public partial class ShellViewModel : ViewModelBase
                 new GetFocusBlockRitualContextQuery { FocusBlockId = focusBlockId.Value });
             lockedPreset = context?.Preset;
             lockedSchedule = context?.Schedule;
+            isLateToBlock = context?.IsLate ?? false;
+            lateBy = context?.LateBy ?? default;
         }
 
         bool isPlanned = lockedPreset is not null;
@@ -190,7 +207,9 @@ public partial class ShellViewModel : ViewModelBase
             lockedPreset: lockedPreset,
             lockedSchedule: lockedSchedule,
             onComplete: ExitRitualAndGoToMain,
-            onCancel: isPlanned ? () => { } : ExitRitual);
+            onCancel: isPlanned ? () => { } : ExitRitual,
+            isLateToBlock: isLateToBlock,
+            lateBy: lateBy);
         IsRitualActive = true;
     }
 

@@ -138,6 +138,7 @@ These converters are approved. Reuse before creating new ones. **Registration is
 |-----------|-----|----------------|-----------------|
 | `TimeSpanToStringConverter` | `TimeSpanConverter` | `TimeSpan` → `string` | Optional format string, default `hh\:mm\:ss`. Automatically escapes unescaped `:` in the format string before falling back to the default — never throws in a binding. |
 | `DurationToStringConverter` | _(inline)_ | `TimeSpan` → `string` | None. Produces human-readable "Xh Ym" (e.g. "2h 30m") or "Xm" (e.g. "45m") for display in the post-session summary. Use instead of `TimeSpanToStringConverter` when the compact human-readable form is needed rather than a clock format. |
+| `TimeSpanToHumanReadableConverter` | `Instance` | `TimeSpan` → `string` | None. Spells out a duration in words ("5 minutes", "1 hour", "1h 30m") for prose contexts — e.g. the Ritual's late-to-block notice — where `DurationToStringConverter`'s compact "5m" form reads fine in a stat chip but not mid-sentence. |
 | `DateTimeToStringConverter` | `DateTimeConverter` | `DateTime` → `string` | Optional format string, default `h:mm tt`. |
 | `DateTimeToUpperStringConverter` | `DateTimeUpperConverter` | `DateTime` → uppercase `string` | Optional format string, default `ddd`. Result is `.ToUpperInvariant()`. Use for day-name headers. |
 | `BoolToDotFillConverter` | _(inline)_ | `bool` → brush | — |
