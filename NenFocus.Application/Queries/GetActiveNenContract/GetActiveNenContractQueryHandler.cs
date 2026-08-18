@@ -1,5 +1,6 @@
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
+using NenFocus.Application.Queries.ComputePlannedFocusHours;
 using NenFocus.Application.Queries.GetNenContractCompletedFocusHours;
 using NenFocus.Application.Queries.GetNenContractDeficits;
 using NenFocus.Domain.Enums;
@@ -11,17 +12,20 @@ public sealed class GetActiveNenContractQueryHandler : IQueryHandler<GetActiveNe
     private readonly INenContractRepository _contracts;
     private readonly IQueryHandler<GetNenContractDeficitsQuery, IReadOnlyList<FocusBlockDeficitDto>> _deficits;
     private readonly IQueryHandler<GetNenContractCompletedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> _completedHours;
+    private readonly IQueryHandler<ComputePlannedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> _plannedHours;
     private readonly ISystemClock _clock;
 
     public GetActiveNenContractQueryHandler(
         INenContractRepository contracts,
         IQueryHandler<GetNenContractDeficitsQuery, IReadOnlyList<FocusBlockDeficitDto>> deficits,
         IQueryHandler<GetNenContractCompletedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> completedHours,
+        IQueryHandler<ComputePlannedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> plannedHours,
         ISystemClock clock)
     {
         _contracts = contracts;
         _deficits = deficits;
         _completedHours = completedHours;
+        _plannedHours = plannedHours;
         _clock = clock;
     }
 
@@ -62,6 +66,29 @@ public sealed class GetActiveNenContractQueryHandler : IQueryHandler<GetActiveNe
         var deficits = await _deficits.HandleAsync(new GetNenContractDeficitsQuery(contract.Id), cancellationToken);
         var deficitHours = deficits.Sum(d => d.RemainingDeficitMinutes) / 60.0;
 
+        var plannedHoursByDay = await _plannedHours.HandleAsync(
+            new ComputePlannedFocusHoursQuery(contract.Id, DraftFocusBlockRanges: []), cancellationToken);
+
+        var dayStatuses = new List<NenContractDayStatusDto>();
+        for (var date = contract.StartDate; date <= contract.EndDate; date = date.AddDays(1))
+        {
+            var timing = date == today ? DayTiming.Today : date < today ? DayTiming.Past : DayTiming.Future;
+            var isRestDay = contract.IsRestDay(date);
+            var currentHours = isRestDay ? 0
+                : timing != DayTiming.Future ? completedHoursByDay.GetValueOrDefault(date)
+                : plannedHoursByDay.GetValueOrDefault(date);
+
+            dayStatuses.Add(new NenContractDayStatusDto
+            {
+                Date = date,
+                CurrentHours = currentHours,
+                FloorHours = contract.FloorHoursFor(date) ?? 0,
+                IsMet = contract.IsDayMet(date, currentHours),
+                IsRestDay = isRestDay,
+                Timing = timing
+            });
+        }
+
         return new ActiveNenContractDto
         {
             Id = contract.Id,
@@ -74,7 +101,8 @@ public sealed class GetActiveNenContractQueryHandler : IQueryHandler<GetActiveNe
             DaysBehind = daysBehind,
             DaysConsidered = daysConsidered,
             DeficitHours = deficitHours,
-            AllowCancellation = contract.AllowCancellation
+            AllowCancellation = contract.AllowCancellation,
+            DayStatuses = dayStatuses
         };
     }
 }

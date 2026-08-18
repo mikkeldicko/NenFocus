@@ -143,7 +143,8 @@ These converters are approved. Reuse before creating new ones. **Registration is
 | `BoolToDotFillConverter` | _(inline)_ | `bool` → brush | — |
 | `BoolToOpacityConverter` | _(inline)_ | `bool` → opacity | — |
 | `BoolToChevronConverter` | `Instance` | `bool` → `string` | None. `true` → "▾", `false` → "▸" (expand/collapse chevron). |
-| `BoolToFloorStatusBrushConverter` | `Instance` | `bool` (day floor `IsMet`) → brush | None. Planner drafting bar's day-floor chip: met/rest day → green, short → amber. |
+| `DayFloorStatusToBrushConverter` | `Instance` | `DayFloorPreviewViewModel?` → brush | None. Planner day-header floor badge background, 7 states: rest → gray; today/past met → dark green; today unmet → amber (day isn't over, not a real miss yet); past unmet → dark red (a real miss); future met/unmet (planned, not yet resolved) → blue/light-red tints. |
+| `DayFloorStatusToForegroundConverter` | `Instance` | `DayFloorPreviewViewModel?` → brush | None. Pairs with `DayFloorStatusToBrushConverter` — white text on the saturated today/past colors (green/amber/red), dark `#1A1A2E` text on the light rest/future tints. |
 | `CountToBoolConverter` | _(inline)_ | `int` → `bool` | — |
 | `CountToVisibilityConverter` | _(inline)_ | `int` → visibility | — |
 | `StringEqualConverter` | _(inline)_ | `string` → `bool` | Comparison value |

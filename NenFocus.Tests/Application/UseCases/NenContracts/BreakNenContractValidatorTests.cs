@@ -74,14 +74,15 @@ public class BreakNenContractValidatorTests
     }
 
     [Fact]
-    public async Task Validate_CancellationNotAllowed_IsInvalid()
+    public async Task Validate_CancellationNotAllowed_StillValid_InterimUntilStrictModeExists()
     {
+        // AllowCancellation is deliberately not enforced right now — see BreakNenContractValidator's own comment.
         var contract = Seal(allowCancellation: false, sealedAt: StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)); // Active
         _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
 
         var result = await CreateValidator().ValidateAsync(new BreakNenContractCommand { ContractId = contract.Id });
 
-        result.IsValid.Should().BeFalse();
+        result.IsValid.Should().BeTrue();
     }
 
     [Fact]

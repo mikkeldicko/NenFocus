@@ -104,7 +104,7 @@ public partial class ContractRulesStepViewModel : ViewModelBase
                 TimeOptions.Add($"{h:D2}:{m:D2}");
         TimeOptions.Add("24:00");
 
-        SimpleOptions.Add(new SimpleContractOptionViewModel("Lockdown", "This schedule is law. I will not touch it.", StrictnessRule.Locked, false));
+        SimpleOptions.Add(new SimpleContractOptionViewModel("Lockdown", "This schedule is law. I will not touch it.", StrictnessRule.Locked, true));
         SimpleOptions.Add(new SimpleContractOptionViewModel("Daily Flex", "I can shuffle blocks around within each day.", StrictnessRule.DailyFlexibility, true));
         SimpleOptions.Add(new SimpleContractOptionViewModel("Period Study", "Blocks can shift around during the contract, but the total hours I seal stay fixed.", StrictnessRule.PeriodTimeBudget, true));
         SelectedSimpleOption = (!isAdvanced && initialStrictnessRule.HasValue

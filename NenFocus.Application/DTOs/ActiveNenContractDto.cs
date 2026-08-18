@@ -29,4 +29,11 @@ public sealed record ActiveNenContractDto
 
     /// <summary>Mirrors NenContract.AllowCancellation — drives whether the Planner's Cancel button is shown.</summary>
     public bool AllowCancellation { get; init; }
+
+    /// <summary>
+    /// One entry per day across the contract's full [StartDate, EndDate] range (unlike
+    /// DaysBehind/DaysConsidered, which only ever look at StartDate..today) — feeds the
+    /// Planner's per-day floor badges, including future/planned days.
+    /// </summary>
+    public IReadOnlyList<NenContractDayStatusDto> DayStatuses { get; init; } = [];
 }

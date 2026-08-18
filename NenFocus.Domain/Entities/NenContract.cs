@@ -136,13 +136,16 @@ public class NenContract : AggregateRoot
         Raise(new NenContractCompletedEvent(Id, completedAt));
     }
 
+    // AllowCancellation is deliberately not enforced here (interim, 2026-08-18) — see
+    // DOMAIN_DICTIONARY.md's Nen Contract section. The real intended gate for "you can't
+    // cancel this" is a future global Strict Mode Settings toggle, not this per-contract
+    // flag; until Strict Mode exists, every in-effect contract can be broken regardless of
+    // AllowCancellation. AllowCancellation itself is kept (still stored, still
+    // user-configurable in Advanced) so Strict Mode has a real value to read once it lands.
     public void Break(DateTime brokenAt)
     {
         if (!IsInEffect)
             throw new InvalidOperationException("Only a contract that is still in effect (Scheduled or Active) can be broken.");
-
-        if (!AllowCancellation)
-            throw new InvalidOperationException("This contract does not allow cancellation.");
 
         Status = NenContractStatus.Broken;
         Raise(new NenContractBrokenEvent(Id, brokenAt));
@@ -166,6 +169,13 @@ public class NenContract : AggregateRoot
     /// banner's days-behind count) never reach into DailyFloorPolicy directly.
     /// </summary>
     public bool IsRestDay(DateOnly date) => DailyFloorPolicy.For(date) is null;
+
+    /// <summary>
+    /// The resolved floor's raw hour value for display — null means rest day. Exists
+    /// for the same reason as IsRestDay: Application-layer callers never reach into
+    /// DailyFloorPolicy directly.
+    /// </summary>
+    public double? FloorHoursFor(DateOnly date) => DailyFloorPolicy.For(date)?.Hours;
 
     /// <summary>
     /// Whether a missed Focus block due on <paramref name="missedBlockDate"/> can be

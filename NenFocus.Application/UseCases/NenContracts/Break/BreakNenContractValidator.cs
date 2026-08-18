@@ -28,13 +28,7 @@ public sealed class BreakNenContractValidator : AbstractValidator<BreakNenContra
             })
             .WithMessage("Only a contract that is still in effect (Scheduled or Active) can be broken.");
 
-        RuleFor(x => x)
-            .MustAsync(async (command, ct) =>
-            {
-                if (command.ContractId == Guid.Empty) return true;
-                var contract = await contracts.GetByIdAsync(command.ContractId, ct);
-                return contract is null || contract.AllowCancellation;
-            })
-            .WithMessage("This contract does not allow cancellation.");
+        // AllowCancellation is deliberately not enforced here (interim, 2026-08-18) —
+        // mirrors NenContract.Break's own comment. Strict Mode is the real intended gate.
     }
 }

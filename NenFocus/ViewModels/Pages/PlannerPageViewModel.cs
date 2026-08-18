@@ -91,7 +91,33 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     public ObservableCollection<PlannedBlockTileViewModel> Tiles { get; } = new();
     public ObservableCollection<BlockPresetDto> AvailablePresets { get; } = new();
     public ObservableCollection<string> TimeOptions { get; } = new();
-    public ObservableCollection<DayFloorPreviewViewModel> DayFloorPreviews { get; } = new();
+    // Per-day floor badge lookup, keyed by date — feeds the day-header badges. Populated
+    // either by RefreshDayFloorPreviewsAsync (drafting) or RefreshActiveContractAsync
+    // (sealed/active contract); the two are mutually exclusive for any viewed week, since
+    // an in-effect contract can never overlap the date range being drafted. Not an
+    // ObservableCollection — the whole dictionary is replaced on refresh so day-header
+    // bindings (which look up by key) see one atomic update instead of N incremental ones.
+    [ObservableProperty] private Dictionary<DateOnly, DayFloorPreviewViewModel> _dayFloorByDate = new();
+
+    // "X of Y met" / "All daily floors met", excluding rest days — shown in the drafting
+    // action bar. Purely a rephrasing of DayFloorByDate's own IsMet/IsRestDay flags.
+    public string DraftFloorSummaryText
+    {
+        get
+        {
+            var relevant = DayFloorByDate.Values.Where(d => !d.IsRestDay).ToList();
+            if (relevant.Count == 0) return string.Empty;
+            var met = relevant.Count(d => d.IsMet);
+            return met == relevant.Count ? "All daily floors met" : $"{met} of {relevant.Count} met";
+        }
+    }
+
+    partial void OnDayFloorByDateChanged(Dictionary<DateOnly, DayFloorPreviewViewModel> value)
+    {
+        OnPropertyChanged(nameof(DraftFloorSummaryText));
+        foreach (var header in DayHeaders)
+            header.DayFloorStatus = value.GetValueOrDefault(DateOnly.FromDateTime(header.Date));
+    }
 
     [ObservableProperty] private bool _isLoading;
 
@@ -144,15 +170,25 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
     public bool HasActiveContract => ActiveContract is not null;
 
-    // Mirrors NenContract.AllowCancellation via the DTO — the button is hidden rather than
-    // shown-then-rejected, same "UI references the Application-computed answer" precedent
-    // CanDeleteFromForm already follows for HasEnded/IsUnderInEffectContract.
-    public bool CanCancelActiveContract => ActiveContract?.AllowCancellation ?? false;
+    // AllowCancellation is deliberately not enforced here (interim, 2026-08-18) — mirrors
+    // NenContract.Break's own comment; every active contract can be cancelled until Strict
+    // Mode exists as the real gate. Only presence of an active contract matters now.
+    public bool CanCancelActiveContract => HasActiveContract;
 
     public string ActiveContractBannerText => ActiveContract is null
         ? string.Empty
         : $"Contract: {ActiveContract.Name} — Day {ActiveContract.DayNumber}/{ActiveContract.TotalDays} — " +
-          $"{ActiveContract.DaysBehind} of {ActiveContract.DaysConsidered} days behind — {ActiveContract.DeficitHours:0.#}h deficit";
+          $"{ActiveContract.DaysBehind} of {ActiveContract.DaysConsidered} days behind — {ActiveContract.DeficitHours:0.#}h deficit — " +
+          $"{ActiveContract.DaysConsidered - ActiveContract.DaysBehind} of {ActiveContract.DaysConsidered} days met";
+
+    // 3-second live poll for the day-header floor badges while an active contract is in
+    // view — so today's badge reflects an in-progress session's elapsed hours without
+    // waiting for the next week-nav/seal/session-end refresh. No page-visibility gating:
+    // this ViewModel already lives for the app's whole lifetime (not recreated on
+    // navigation, and there's no such hook anywhere in this codebase), and the cost is
+    // comparable to ScheduledEnforcementService's own always-on 5s heartbeat. Started/
+    // stopped by OnActiveContractChanged, not by a page-visible/hidden signal.
+    private readonly System.Timers.Timer _floorStatusPollTimer = new(3000) { AutoReset = true };
 
     partial void OnActiveContractChanged(ActiveNenContractDto? value)
     {
@@ -160,6 +196,9 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(ActiveContractBannerText));
         OnPropertyChanged(nameof(CanCancelActiveContract));
         OnPropertyChanged(nameof(HasNoContracts));
+
+        if (value is not null) _floorStatusPollTimer.Start();
+        else _floorStatusPollTimer.Stop();
     }
 
     // Scoped to the currently viewed week — the banner only shows when a contract's date
@@ -170,6 +209,17 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         var weekStartDate = DateOnly.FromDateTime(WeekStart);
         var weekEndDate = weekStartDate.AddDays(6);
         ActiveContract = await _getActiveContract.HandleAsync(new GetActiveNenContractQuery(weekStartDate, weekEndDate));
+
+        // Drafting owns DayFloorByDate while it's active (RefreshDayFloorPreviewsAsync) —
+        // an in-effect contract can never overlap the date range being drafted, so this
+        // never runs concurrently with a real draft, but skip anyway rather than relying
+        // on that invariant holding forever.
+        if (IsDraftingContract) return;
+
+        DayFloorByDate = ActiveContract?.DayStatuses.ToDictionary(
+            d => d.Date,
+            d => new DayFloorPreviewViewModel(d.Date, d.CurrentHours, d.IsRestDay ? null : d.FloorHours, d.IsRestDay, d.Timing))
+            ?? new Dictionary<DateOnly, DayFloorPreviewViewModel>();
     }
 
     [RelayCommand]
@@ -312,12 +362,19 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         _clockService.Tick += OnClockTick;
         UpdateCurrentTimePosition();
 
+        _floorStatusPollTimer.Elapsed += OnFloorStatusPollTick;
+
         _ = InitAsync();
     }
 
     private void OnClockTick(object? sender, EventArgs e)
     {
         Dispatcher.UIThread.Post(UpdateCurrentTimePosition);
+    }
+
+    private void OnFloorStatusPollTick(object? sender, System.Timers.ElapsedEventArgs e)
+    {
+        Dispatcher.UIThread.Post(() => _ = RefreshActiveContractAsync());
     }
 
     private void OnSessionChanged(object? sender, SessionDto? session)
@@ -1005,8 +1062,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
     private async Task RefreshDayFloorPreviewsAsync()
     {
-        DayFloorPreviews.Clear();
-        if (_draftRules is null) return;
+        if (_draftRules is null) { DayFloorByDate = new(); return; }
 
         var focusRanges = _draftBlocks
             .Where(d => d.IsFocus)
@@ -1016,6 +1072,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         var hoursByDay = await _computePlannedFocusHours.HandleAsync(
             new ComputePlannedFocusHoursQuery(ContractId: null, DraftFocusBlockRanges: focusRanges));
 
+        var byDate = new Dictionary<DateOnly, DayFloorPreviewViewModel>();
         for (int i = 0; i < 7; i++)
         {
             var date = DateOnly.FromDateTime(WeekStart.AddDays(i));
@@ -1029,8 +1086,10 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
                 ? _draftRules.FixedDailyFloorHours
                 : null;
 
-            DayFloorPreviews.Add(new DayFloorPreviewViewModel(date, scheduled, requiredFloor, isRestDay));
+            byDate[date] = new DayFloorPreviewViewModel(date, scheduled, requiredFloor, isRestDay);
         }
+
+        DayFloorByDate = byDate;
     }
 
     [RelayCommand]
@@ -1125,6 +1184,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         IsConfirmDiscardDraftVisible = false;
         ExitDraftingMode();
         await LoadWeekAsync();
+        await RefreshActiveContractAsync();
     }
 
     [RelayCommand]
@@ -1136,7 +1196,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         DraftContractName = null;
         _draftRules = null;
         _draftBlocks.Clear();
-        DayFloorPreviews.Clear();
+        DayFloorByDate = new();
         SealErrorMessage = null;
         _editingContractPayload = null;
     }
@@ -1202,5 +1262,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     {
         _clockService.Tick -= OnClockTick;
         _sessionState.SessionChanged -= OnSessionChanged;
+        _floorStatusPollTimer.Elapsed -= OnFloorStatusPollTick;
+        _floorStatusPollTimer.Dispose();
     }
 }

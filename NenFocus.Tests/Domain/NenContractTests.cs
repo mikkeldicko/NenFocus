@@ -234,13 +234,17 @@ public class NenContractTests
     }
 
     [Fact]
-    public void Break_WhenCancellationNotAllowed_Throws()
+    public void Break_WhenCancellationNotAllowed_StillSucceeds_InterimUntilStrictModeExists()
     {
+        // AllowCancellation is deliberately not enforced by Break right now — see the
+        // comment on Break itself. This will change once Strict Mode is the real gate.
         var contract = Seal(sealedAt: SealedOnStart, allowCancellation: false);
+        contract.ClearDomainEvents();
 
-        var act = () => contract.Break(SealedOnStart.AddDays(2));
+        contract.Break(SealedOnStart.AddDays(2));
 
-        act.Should().Throw<InvalidOperationException>();
+        contract.Status.Should().Be(NenContractStatus.Broken);
+        contract.DomainEvents.Should().ContainSingle(e => e is NenContractBrokenEvent);
     }
 
     [Fact]
@@ -679,6 +683,23 @@ public class NenContractTests
         var contract = Seal(dailyFloorPolicy: policy);
 
         contract.IsRestDay(StartDate).Should().BeTrue();
+    }
+
+    [Fact]
+    public void FloorHoursFor_DayWithResolvedFloor_ReturnsHours()
+    {
+        var contract = Seal(dailyFloorPolicy: new DailyFloorPolicy(new DailyFloor(4)));
+
+        contract.FloorHoursFor(StartDate).Should().Be(4);
+    }
+
+    [Fact]
+    public void FloorHoursFor_RestDay_ReturnsNull()
+    {
+        var policy = new DailyFloorPolicy(new DailyFloor(4), new Dictionary<DateOnly, DailyFloor?> { [StartDate] = null });
+        var contract = Seal(dailyFloorPolicy: policy);
+
+        contract.FloorHoursFor(StartDate).Should().BeNull();
     }
 
     [Fact]

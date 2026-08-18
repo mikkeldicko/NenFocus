@@ -214,24 +214,8 @@
 							<TextBlock Text="Drafting:" FontSize="13" FontWeight="SemiBold" Foreground="#1A1A2E"/>
 							<TextBlock Text="{Binding DraftContractName}" FontSize="13" FontWeight="SemiBold" Foreground="#1A1A2E"/>
 						</StackPanel>
-						<ItemsControl ItemsSource="{Binding DayFloorPreviews}">
-							<ItemsControl.ItemsPanel>
-								<ItemsPanelTemplate>
-									<WrapPanel/>
-								</ItemsPanelTemplate>
-							</ItemsControl.ItemsPanel>
-							<ItemsControl.ItemTemplate>
-								<DataTemplate DataType="comp:DayFloorPreviewViewModel">
-									<Border Background="{Binding IsMet, Converter={x:Static conv:BoolToFloorStatusBrushConverter.Instance}}"
-                                            CornerRadius="4" Padding="6,3" Margin="0,0,6,4">
-										<StackPanel Orientation="Horizontal" Spacing="4">
-											<TextBlock Text="{Binding Date, StringFormat='ddd d'}" FontSize="10" FontWeight="SemiBold" Foreground="#1A1A2E"/>
-											<TextBlock Text="{Binding Label}" FontSize="10" Foreground="#1A1A2E"/>
-										</StackPanel>
-									</Border>
-								</DataTemplate>
-							</ItemsControl.ItemTemplate>
-						</ItemsControl>
+						<TextBlock Text="{Binding DraftFloorSummaryText}" FontSize="12" Foreground="#5A5A6C"
+                                   IsVisible="{Binding DraftFloorSummaryText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
 						<TextBlock Text="{Binding SealErrorMessage}"
                                    IsVisible="{Binding SealErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                                    FontSize="12" Foreground="#C03A2B" TextWrapping="Wrap"/>
@@ -265,6 +249,13 @@
 										<StackPanel HorizontalAlignment="Center" Spacing="2">
 											<TextBlock Text="{Binding Date, Converter={StaticResource DateTimeUpperConverter}, ConverterParameter='ddd'}" FontSize="11" FontWeight="Medium" Foreground="#7A7A8C" HorizontalAlignment="Center"/>
 											<TextBlock Text="{Binding Date.Day}" FontSize="18" FontWeight="SemiBold" Foreground="#1A1A2E" HorizontalAlignment="Center"/>
+											<Border Background="{Binding DayFloorStatus, Converter={x:Static conv:DayFloorStatusToBrushConverter.Instance}}"
+                                                    IsVisible="{Binding DayFloorStatus, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                                    CornerRadius="3" Padding="5,2" Margin="0,2,0,0">
+												<TextBlock Text="{Binding DayFloorStatus.Label}"
+                                                           Foreground="{Binding DayFloorStatus, Converter={x:Static conv:DayFloorStatusToForegroundConverter.Instance}}"
+                                                           FontSize="9" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+											</Border>
 										</StackPanel>
 									</Border>
 								</DataTemplate>
