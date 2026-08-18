@@ -212,31 +212,19 @@ public class SessionStateServiceTests
     }
 
     [Fact]
-    public async Task InitializeAsync_SweepFindsMissedSessions_RaisesMissedSessionsDiscovered()
+    public async Task InitializeAsync_AlwaysRunsMissedFocusBlockSweep()
     {
+        // The sweep still has to run — it's what creates the Missed Session records in
+        // the first place. Nothing reacts to its result here anymore (no event); the
+        // Shell discovers whatever it created afterward via GetUnacknowledgedPostSessionsQuery.
         _sessions.GetActiveAsync().Returns((Session?)null);
         var missed = new PostSessionDto { SessionId = Guid.NewGuid(), Status = SessionStatus.Missed };
         _sweep.HandleAsync(Arg.Any<SweepMissedFocusBlocksCommand>(), Arg.Any<CancellationToken>())
             .Returns(new SweepMissedFocusBlocksResult { MissedSessions = [missed] });
         var service = CreateService();
-        IReadOnlyList<PostSessionDto>? raisedWith = null;
-        service.MissedSessionsDiscovered += (_, sessions) => raisedWith = sessions;
 
         await service.InitializeAsync();
 
-        raisedWith.Should().ContainSingle().Which.Should().Be(missed);
-    }
-
-    [Fact]
-    public async Task InitializeAsync_SweepFindsNothing_DoesNotRaiseMissedSessionsDiscovered()
-    {
-        _sessions.GetActiveAsync().Returns((Session?)null);
-        var service = CreateService();
-        var raised = false;
-        service.MissedSessionsDiscovered += (_, _) => raised = true;
-
-        await service.InitializeAsync();
-
-        raised.Should().BeFalse();
+        await _sweep.Received(1).HandleAsync(Arg.Any<SweepMissedFocusBlocksCommand>(), Arg.Any<CancellationToken>());
     }
 }

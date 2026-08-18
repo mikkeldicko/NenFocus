@@ -266,6 +266,9 @@ namespace NenFocus.Infrastructure.Migrations
                     b.Property<Guid?>("OriginatingBlockId")
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime?>("PostSessionAcknowledgedAt")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Reflection")
                         .HasMaxLength(2000)
                         .HasColumnType("TEXT");

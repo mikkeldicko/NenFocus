@@ -279,7 +279,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     // Shell renders the wizard as a full-screen overlay (mirrors the Ritual overlay), so it
     // needs to know when one opens/closes even though this ViewModel still owns construction
     // and the drafting handoff — same event-bridge shape as ISessionStateService's
-    // RitualRequirementChanged/MissedSessionsDiscovered, which ShellViewModel already consumes.
+    // RitualRequirementChanged, which ShellViewModel already consumes.
     public event Action<ContractWizardViewModel>? ContractWizardOpened;
     public event Action? ContractWizardClosed;
 

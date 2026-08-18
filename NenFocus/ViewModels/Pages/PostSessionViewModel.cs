@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
+using NenFocus.Application.UseCases.Sessions.AcknowledgePostSession;
 using NenFocus.Application.UseCases.Sessions.SaveReflection;
 using NenFocus.Domain.Enums;
 
@@ -14,6 +15,7 @@ namespace NenFocus.ViewModels.Pages;
 public partial class PostSessionViewModel : ViewModelBase
 {
     private readonly ICommandHandler<SaveReflectionCommand, SaveReflectionResult> _saveReflection;
+    private readonly ICommandHandler<AcknowledgePostSessionCommand, AcknowledgePostSessionResult> _acknowledgePostSession;
     private readonly Action _onDone;
     private readonly PostSessionDto _data;
 
@@ -49,10 +51,12 @@ public partial class PostSessionViewModel : ViewModelBase
     public PostSessionViewModel(
         PostSessionDto data,
         ICommandHandler<SaveReflectionCommand, SaveReflectionResult> saveReflection,
+        ICommandHandler<AcknowledgePostSessionCommand, AcknowledgePostSessionResult> acknowledgePostSession,
         Action onDone)
     {
         _data = data;
         _saveReflection = saveReflection;
+        _acknowledgePostSession = acknowledgePostSession;
         _onDone = onDone;
 
         Goal = data.Goal;
@@ -103,6 +107,11 @@ public partial class PostSessionViewModel : ViewModelBase
                     return;
                 }
             }
+
+            await _acknowledgePostSession.HandleAsync(new AcknowledgePostSessionCommand
+            {
+                SessionId = _data.SessionId
+            });
 
             _onDone();
         }

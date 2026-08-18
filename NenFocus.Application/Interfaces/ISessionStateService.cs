@@ -11,7 +11,6 @@ public interface ISessionStateService
 
     event EventHandler<SessionDto?>? SessionChanged;
     event EventHandler<RitualRequirementChange>? RitualRequirementChanged;
-    event EventHandler<IReadOnlyList<PostSessionDto>>? MissedSessionsDiscovered;
 
     void SetActive(SessionDto session);
     void SetRitualRequired(bool required, Guid? focusBlockId = null);

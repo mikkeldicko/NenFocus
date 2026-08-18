@@ -33,4 +33,12 @@ public interface ISessionRepository
     /// elapsed time for deficit and completed-hours computation.
     /// </summary>
     Task<Session?> GetByOriginatingBlockIdAsync(Guid focusBlockId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Returns every Completed or Missed session whose post-session screen has
+    /// never been dismissed (PostSessionAcknowledgedAt is null), ordered by
+    /// EndedAt ascending — oldest first, so pending post-sessions can be replayed
+    /// to the user in the order they actually happened.
+    /// </summary>
+    Task<IReadOnlyList<Session>> GetUnacknowledgedPostSessionsAsync(CancellationToken ct = default);
 }

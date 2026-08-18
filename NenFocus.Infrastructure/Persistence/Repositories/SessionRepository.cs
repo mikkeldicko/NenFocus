@@ -85,4 +85,14 @@ public sealed class SessionRepository : ISessionRepository
         return await _context.Sessions
             .FirstOrDefaultAsync(s => s.OriginatingBlockId == focusBlockId, ct);
     }
+
+    public async Task<IReadOnlyList<Session>> GetUnacknowledgedPostSessionsAsync(CancellationToken ct = default)
+    {
+        return await _context.Sessions
+            .Where(s =>
+                (s.Status == SessionStatus.Completed || s.Status == SessionStatus.Missed) &&
+                s.PostSessionAcknowledgedAt == null)
+            .OrderBy(s => s.EndedAt)
+            .ToListAsync(ct);
+    }
 }

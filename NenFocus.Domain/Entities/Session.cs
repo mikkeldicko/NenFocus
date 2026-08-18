@@ -20,6 +20,7 @@ public class Session : AggregateRoot
     public int BreaksTaken { get; private set; }
     public DateTime? BreakStartedAt { get; private set; }
     public string? Reflection { get; private set; }
+    public DateTime? PostSessionAcknowledgedAt { get; private set; }
     public IReadOnlyList<string> TemporaryBlockedApps { get; private set; } = [];
     public IReadOnlyList<string> TemporaryBlockedSites { get; private set; } = [];
 
@@ -132,6 +133,23 @@ public class Session : AggregateRoot
         Reflection = string.IsNullOrWhiteSpace(reflection)
             ? null
             : reflection.Trim();
+    }
+
+    /// <summary>
+    /// Stamped when the user dismisses the post-session screen (clicking Done),
+    /// regardless of whether they wrote a reflection — mirrors RitualCompletedAt/
+    /// SessionEndedAt's idiom. A missed or blank reflection is a valid, deliberate
+    /// outcome and must not be confused with "never saw the screen at all"; this is
+    /// the one fact that distinguishes the two, letting a startup query find any
+    /// Completed or Missed session whose post-session screen was never dismissed.
+    /// </summary>
+    public void MarkPostSessionAcknowledged(DateTime acknowledgedAt)
+    {
+        if (Status != SessionStatus.Completed && Status != SessionStatus.Missed)
+            throw new InvalidOperationException(
+                "Post-session can only be acknowledged for a completed or missed session.");
+
+        PostSessionAcknowledgedAt = acknowledgedAt;
     }
 
     public TimeSpan? GetElapsedTime(DateTime asOf)

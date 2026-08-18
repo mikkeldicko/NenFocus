@@ -20,7 +20,6 @@ public sealed class SessionStateService : ISessionStateService
 
     public event EventHandler<SessionDto?>? SessionChanged;
     public event EventHandler<RitualRequirementChange>? RitualRequirementChanged;
-    public event EventHandler<IReadOnlyList<PostSessionDto>>? MissedSessionsDiscovered;
 
     // Takes IServiceScopeFactory, not the scoped repositories directly — this service is
     // a Singleton (it must outlive any single operation to hold in-memory session state
@@ -56,9 +55,13 @@ public sealed class SessionStateService : ISessionStateService
             SessionChanged?.Invoke(this, _activeSession);
         }
 
-        var sweepResult = await sweepMissedFocusBlocks.HandleAsync(new SweepMissedFocusBlocksCommand());
-        if (sweepResult.MissedSessions.Count > 0)
-            MissedSessionsDiscovered?.Invoke(this, sweepResult.MissedSessions);
+        // Still creates the Missed Session records — that's still required regardless of
+        // who discovers them afterward. What's gone is the event: ShellViewModel now finds
+        // every unacknowledged post-session (missed or completed-but-undismissed alike) via
+        // GetUnacknowledgedPostSessionsQuery at its own startup, ordered by EndedAt — a
+        // freshly-swept Missed session has PostSessionAcknowledgedAt == null by construction,
+        // so it surfaces there with no event needed to announce it.
+        await sweepMissedFocusBlocks.HandleAsync(new SweepMissedFocusBlocksCommand());
     }
 
     public void SetActive(SessionDto session)

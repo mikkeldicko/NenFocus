@@ -287,6 +287,44 @@ public class SessionTests
     }
 
     [Fact]
+    public void MarkPostSessionAcknowledged_OnCompletedSession_StampsTimestamp()
+    {
+        var session = CreateSpontaneousSession();
+        session.Start(DateTime.UtcNow);
+        session.Complete(DateTime.UtcNow);
+        var acknowledgedAt = DateTime.UtcNow;
+
+        session.MarkPostSessionAcknowledged(acknowledgedAt);
+
+        session.PostSessionAcknowledgedAt.Should().Be(acknowledgedAt);
+    }
+
+    [Fact]
+    public void MarkPostSessionAcknowledged_OnMissedSession_Succeeds()
+    {
+        var blockId = Guid.NewGuid();
+        var session = CreatePlannedSession(blockId);
+        var scheduledStart = new DateTime(2026, 1, 1, 9, 0, 0, DateTimeKind.Utc);
+        session.Miss(scheduledStart, scheduledStart.AddHours(1));
+        var acknowledgedAt = DateTime.UtcNow;
+
+        session.MarkPostSessionAcknowledged(acknowledgedAt);
+
+        session.PostSessionAcknowledgedAt.Should().Be(acknowledgedAt);
+    }
+
+    [Fact]
+    public void MarkPostSessionAcknowledged_NotCompletedOrMissed_Throws()
+    {
+        var session = CreateSpontaneousSession();
+        session.Start(DateTime.UtcNow);
+
+        var act = () => session.MarkPostSessionAcknowledged(DateTime.UtcNow);
+
+        act.Should().Throw<InvalidOperationException>();
+    }
+
+    [Fact]
     public void Miss_FromNotStarted_TransitionsAndRaisesEvent()
     {
         var blockId = Guid.NewGuid();
