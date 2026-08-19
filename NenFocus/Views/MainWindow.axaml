@@ -8,6 +8,10 @@
         MinWidth="900" MinHeight="580"
         Background="#F5F5F7">
 
+	<Window.KeyBindings>
+		<KeyBinding Gesture="Ctrl+Shift+T" Command="{Binding DebugClockViewModel.ToggleVisibleCommand}"/>
+	</Window.KeyBindings>
+
 	<Window.Styles>
 		<Style Selector="Button.nav-item">
 			<Setter Property="Background" Value="Transparent"/>
@@ -124,6 +128,10 @@
 		<!-- Nen Contract wizard full-screen overlay -->
 		<ContentControl Content="{Binding ContractWizardViewModel}"
                         IsVisible="{Binding IsContractWizardActive}"/>
+
+		<!-- Debug clock overlay: hidden by default, toggled by Ctrl+Shift+T -->
+		<ContentControl Content="{Binding DebugClockViewModel}"
+                        IsVisible="{Binding DebugClockViewModel.IsVisible}"/>
 
 	</Grid>
 </Window>

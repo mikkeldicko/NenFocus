@@ -67,6 +67,23 @@ public class PlannedBlockRepositoryTests : SqliteRepositoryTestBase
     }
 
     [Fact]
+    public async Task GetForRangeAsync_CancelledBlock_IsExcluded()
+    {
+        // Mirrors GetOverlappingAsync_CancelledBlock_IsExcluded — a cancelled block
+        // (its owning contract was broken) has vacated its schedule entirely and must
+        // never count as a live block to any caller of this method either.
+        var repo = CreateRepository();
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End);
+        block.MarkCancelled(Start.AddMinutes(-10));
+        await repo.AddAsync(block);
+        await Context.SaveChangesAsync();
+
+        var result = await CreateRepository().GetForRangeAsync(Start.AddMinutes(-30), End.AddHours(3));
+
+        result.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task GetOverlappingAsync_RitualOnly_ExcludesBackgroundBlocks()
     {
         var repo = CreateRepository();
@@ -252,6 +269,21 @@ public class PlannedBlockRepositoryTests : SqliteRepositoryTestBase
     }
 
     [Fact]
+    public async Task HasFutureBlocksForPresetAsync_CancelledBlock_IsExcluded()
+    {
+        var presetId = Guid.NewGuid();
+        var repo = CreateRepository();
+        var block = FocusBlock.Create(Guid.NewGuid(), presetId, Start, End);
+        block.MarkCancelled(Start.AddMinutes(-10));
+        await repo.AddAsync(block);
+        await Context.SaveChangesAsync();
+
+        var result = await CreateRepository().HasFutureBlocksForPresetAsync(presetId, Start.AddMinutes(-1));
+
+        result.Should().BeFalse();
+    }
+
+    [Fact]
     public async Task HasActiveFocusBlockAsync_WithinWindow_ReturnsTrue()
     {
         var repo = CreateRepository();
@@ -268,6 +300,20 @@ public class PlannedBlockRepositoryTests : SqliteRepositoryTestBase
     {
         var repo = CreateRepository();
         await repo.AddAsync(BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End));
+        await Context.SaveChangesAsync();
+
+        var result = await CreateRepository().HasActiveFocusBlockAsync(Start.AddMinutes(30));
+
+        result.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task HasActiveFocusBlockAsync_CancelledBlock_IsExcluded()
+    {
+        var repo = CreateRepository();
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End);
+        block.MarkCancelled(Start.AddMinutes(-10));
+        await repo.AddAsync(block);
         await Context.SaveChangesAsync();
 
         var result = await CreateRepository().HasActiveFocusBlockAsync(Start.AddMinutes(30));
@@ -318,6 +364,22 @@ public class PlannedBlockRepositoryTests : SqliteRepositoryTestBase
     {
         var repo = CreateRepository();
         await repo.AddAsync(BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End));
+        await Context.SaveChangesAsync();
+
+        var result = await CreateRepository().GetUnresolvedFocusBlocksAsync(End.AddMinutes(1));
+
+        result.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetUnresolvedFocusBlocksAsync_CancelledBlock_IsExcluded()
+    {
+        // A block cancelled by breaking its contract never ran its Ritual by design —
+        // it must never surface as Missed once its original window passes.
+        var repo = CreateRepository();
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End);
+        block.MarkCancelled(Start.AddMinutes(-10));
+        await repo.AddAsync(block);
         await Context.SaveChangesAsync();
 
         var result = await CreateRepository().GetUnresolvedFocusBlocksAsync(End.AddMinutes(1));

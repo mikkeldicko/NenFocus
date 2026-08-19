@@ -39,6 +39,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using NenFocus.ViewModels.Contracts;
+using NenFocus.ViewModels.DevTools;
 using NenFocus.ViewModels.Pages;
 using NenFocus.ViewModels.Ritual;
 using Avalonia.Controls;
@@ -80,6 +81,8 @@ public partial class ShellViewModel : ViewModelBase
     [ObservableProperty] private bool _isContractWizardActive;
     [ObservableProperty] private ContractWizardViewModel? _contractWizardViewModel;
 
+    public DebugClockViewModel DebugClockViewModel { get; }
+
     public ObservableCollection<NavItemViewModel> NavItems { get; } = new();
 
     public ShellViewModel(
@@ -97,6 +100,7 @@ public partial class ShellViewModel : ViewModelBase
        IActiveSessionMonitor monitor,
        IPlannerClockService plannerClock,
        ISystemClock clock,
+       IDebugClockController debugClockController,
        ICommandHandler<CreateBlockPresetCommand, CreateBlockPresetResult> createPreset,
        ICommandHandler<UpdateBlockPresetCommand, UpdateBlockPresetResult> updatePreset,
        ICommandHandler<DeleteBlockPresetCommand, DeleteBlockPresetResult> deletePreset,
@@ -132,6 +136,7 @@ public partial class ShellViewModel : ViewModelBase
         _monitor = monitor;
         _plannerClock = plannerClock;
         _clock = clock;
+        DebugClockViewModel = new DebugClockViewModel(clock, debugClockController);
 
         _sessionState.RitualRequirementChanged += (s, change) =>
             Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => OnRitualRequirementChanged(change));

@@ -37,7 +37,9 @@ public static class DependencyInjection
         services.AddSingleton<IBlockedAttemptTracker, BlockedAttemptTracker>();
         services.AddSingleton<IEnforcementService, WindowsEnforcementService>();
 
-        services.AddSingleton<ISystemClock, SystemClock>();
+        services.AddSingleton<SystemClock>();
+        services.AddSingleton<ISystemClock>(sp => sp.GetRequiredService<SystemClock>());
+        services.AddSingleton<IDebugClockController>(sp => sp.GetRequiredService<SystemClock>());
         services.AddSingleton<ISessionStateService, SessionStateService>();
         services.AddSingleton<IActiveSessionMonitor, ActiveSessionMonitor>();
         services.AddSingleton<IPlannerClockService, PlannerClockService>();

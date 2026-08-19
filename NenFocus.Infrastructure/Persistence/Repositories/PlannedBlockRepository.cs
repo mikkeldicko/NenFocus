@@ -29,8 +29,14 @@ public sealed class PlannedBlockRepository : IPlannedBlockRepository
         DateTime to,
         CancellationToken ct = default)
     {
+        // Excludes cancelled blocks for the same reason GetOverlappingAsync does — a
+        // cancelled block (its owning contract was broken) has vacated its schedule
+        // entirely and must never count as a live block to any caller. Without this,
+        // StartSessionCommandHandler would refuse a spontaneous session because a
+        // cancelled block "conflicts" with it, and ScheduledEnforcementService would
+        // warn about a block that will never actually enforce.
         var blocks = await _context.PlannedBlocks
-            .Where(b => b.Start < to && b.End > from)
+            .Where(b => b.Start < to && b.End > from && b.CancelledAt == null)
             .OrderBy(b => b.Start)
             .ToListAsync(ct);
 
@@ -121,26 +127,33 @@ public sealed class PlannedBlockRepository : IPlannedBlockRepository
         DateTime after,
         CancellationToken cancellationToken = default)
     {
+        // Cancelled excluded: a broken contract's leftover block must not keep a preset
+        // locked from editing/deletion just because it still has a future End date.
         return _context.PlannedBlocks
-            .AnyAsync(b => b.BlockPresetId == presetId && b.End > after, cancellationToken);
+            .AnyAsync(b => b.BlockPresetId == presetId && b.End > after && b.CancelledAt == null, cancellationToken);
     }
 
     public Task<bool> HasActiveFocusBlockAsync(
         DateTime at,
         CancellationToken cancellationToken = default)
     {
+        // Cancelled excluded: a cancelled block's window overlapping "now" must not be
+        // read as real enforcement to preserve on shutdown.
         return _context.PlannedBlocks
             .OfType<FocusBlock>()
-            .AnyAsync(b => b.Start <= at && b.End > at, cancellationToken);
+            .AnyAsync(b => b.Start <= at && b.End > at && b.CancelledAt == null, cancellationToken);
     }
 
     public async Task<IReadOnlyList<FocusBlock>> GetUnresolvedFocusBlocksAsync(
         DateTime asOf,
         CancellationToken cancellationToken = default)
     {
+        // Cancelled excluded: a block cancelled by breaking its contract never ran its
+        // Ritual by design, not by oversight — it must never be swept in as Missed once
+        // its original window passes.
         return await _context.PlannedBlocks
             .OfType<FocusBlock>()
-            .Where(b => b.End < asOf && b.RitualCompletedAt == null)
+            .Where(b => b.End < asOf && b.RitualCompletedAt == null && b.CancelledAt == null)
             .OrderBy(b => b.Start)
             .ToListAsync(cancellationToken);
     }
