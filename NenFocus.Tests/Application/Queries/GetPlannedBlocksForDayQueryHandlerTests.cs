@@ -243,4 +243,34 @@ public class GetPlannedBlocksForDayQueryHandlerTests
 
         result.Should().ContainSingle().Subject.IsUnderInEffectContract.Should().BeFalse();
     }
+
+    [Fact]
+    public async Task HandleAsync_BlockUnderDailyFlexibilityContract_ContractStrictnessRuleIsDailyFlexibility()
+    {
+        var contractId = Guid.NewGuid();
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End, contractId: contractId);
+        _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
+        _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
+        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>()).Returns(
+            NenContract.Seal(contractId, "Contract", new NenContractGoal("Goal"),
+                DateOnly.FromDateTime(Start), DateOnly.FromDateTime(Start).AddDays(7),
+                StrictnessRule.DailyFlexibility, new DailyFloorPolicy(DailyFloor.None), null, false,
+                new Dictionary<DateOnly, double>(), sealedAt: Start));
+
+        var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
+
+        result.Should().ContainSingle().Subject.ContractStrictnessRule.Should().Be(StrictnessRule.DailyFlexibility);
+    }
+
+    [Fact]
+    public async Task HandleAsync_BlockWithNoContract_ContractStrictnessRuleIsNull()
+    {
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End);
+        _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
+        _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
+
+        var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
+
+        result.Should().ContainSingle().Subject.ContractStrictnessRule.Should().BeNull();
+    }
 }

@@ -29,7 +29,8 @@ public class NenContractTests
         ChangeWindow? changeWindow = null,
         StrictnessRule strictnessRule = StrictnessRule.Locked,
         WorkHoursPolicy? workHoursPolicy = null,
-        Guid? contractPresetId = null)
+        Guid? contractPresetId = null,
+        ContractFloor? contractFloor = null)
         => NenContract.Seal(
             id: Guid.NewGuid(),
             name: "Focused January",
@@ -37,13 +38,14 @@ public class NenContractTests
             startDate: StartDate,
             endDate: EndDate,
             strictnessRule: strictnessRule,
-            dailyFloorPolicy: dailyFloorPolicy ?? new DailyFloorPolicy(new DailyFloor(4)),
+            dailyFloorPolicy: dailyFloorPolicy ?? (contractFloor is not null ? DailyFloorPolicy.None : new DailyFloorPolicy(new DailyFloor(4))),
             changeWindow: changeWindow,
             allowCancellation: allowCancellation,
             plannedFocusHoursByDay: plannedFocusHoursByDay ?? FullyPlanned(),
             sealedAt: sealedAt ?? SealedOnStart,
             workHoursPolicy: workHoursPolicy,
-            contractPresetId: contractPresetId);
+            contractPresetId: contractPresetId,
+            contractFloor: contractFloor);
 
     [Fact]
     public void Seal_EndBeforeStart_Throws()
@@ -757,5 +759,82 @@ public class NenContractTests
         var contract = Seal(strictnessRule: StrictnessRule.PeriodTimeBudget);
 
         contract.AllowsBlockTimeChange(StartDate, EndDate, EndDate.AddDays(1)).Should().BeFalse();
+    }
+
+    // ── ContractFloor ────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Seal_ContractFloorWithRealDailyFloorPolicyDefault_Throws()
+    {
+        var act = () => Seal(
+            dailyFloorPolicy: new DailyFloorPolicy(new DailyFloor(4)),
+            contractFloor: new ContractFloor(9));
+
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
+    public void Seal_ContractFloorWithRealPerDayException_Throws()
+    {
+        var policy = new DailyFloorPolicy(null, new Dictionary<DateOnly, DailyFloor?> { [StartDate] = new DailyFloor(2) });
+
+        var act = () => Seal(dailyFloorPolicy: policy, contractFloor: new ContractFloor(9));
+
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
+    public void Seal_ContractFloorWithDailyFloorPolicyNone_Succeeds()
+    {
+        var act = () => Seal(dailyFloorPolicy: DailyFloorPolicy.None, contractFloor: new ContractFloor(9));
+
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void Seal_ContractFloorWithRestDayOnlyExceptions_Succeeds()
+    {
+        // Per-day exceptions that are all explicit rest days (null) carry no real
+        // obligation — only a non-null exception should conflict with ContractFloor.
+        var policy = new DailyFloorPolicy(null, new Dictionary<DateOnly, DailyFloor?> { [StartDate] = null });
+
+        var act = () => Seal(dailyFloorPolicy: policy, contractFloor: new ContractFloor(9));
+
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void ContractFloorHours_WhenSet_ReturnsHours()
+    {
+        var contract = Seal(contractFloor: new ContractFloor(9));
+
+        contract.ContractFloorHours.Should().Be(9);
+    }
+
+    [Fact]
+    public void ContractFloorHours_WhenNotSet_ReturnsNull()
+    {
+        var contract = Seal();
+
+        contract.ContractFloorHours.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData(8.9, false)]
+    [InlineData(9, true)]
+    [InlineData(10, true)]
+    public void IsPeriodMet_ComparesTotalAgainstContractFloor(double totalHours, bool expectedMet)
+    {
+        var contract = Seal(contractFloor: new ContractFloor(9));
+
+        contract.IsPeriodMet(totalHours).Should().Be(expectedMet);
+    }
+
+    [Fact]
+    public void IsPeriodMet_NoContractFloor_AlwaysMet()
+    {
+        var contract = Seal();
+
+        contract.IsPeriodMet(0).Should().BeTrue();
     }
 }

@@ -30,10 +30,18 @@ public sealed class SealNenContractValidator : AbstractValidator<SealNenContract
                         $"This date range overlaps with your existing contract '{overlapping}'.");
             });
 
+        // Null means no fixed floor — a deliberate, unambiguous choice. When present it
+        // must be a whole number and at least 1: zero would mean "no floor" by another
+        // name, reintroducing the exact 0-vs-blank confusion leaving it unset already avoids.
         RuleFor(x => x.FixedDailyFloorHours)
-            .InclusiveBetween(0, 24)
+            .Must(f => f % 1 == 0)
             .When(x => x.FixedDailyFloorHours.HasValue)
-            .WithMessage("Daily floor must be between 0 and 24 hours.");
+            .WithMessage("Daily floor must be a whole number of hours.");
+
+        RuleFor(x => x.FixedDailyFloorHours)
+            .InclusiveBetween(1, 24)
+            .When(x => x.FixedDailyFloorHours.HasValue)
+            .WithMessage("Daily floor must be between 1 and 24 hours.");
 
         RuleFor(x => x)
             .Must(x => x.WorkHoursStart.HasValue == x.WorkHoursEnd.HasValue)
@@ -43,6 +51,13 @@ public sealed class SealNenContractValidator : AbstractValidator<SealNenContract
             .GreaterThan(x => x.WorkHoursStart)
             .When(x => x.WorkHoursStart.HasValue && x.WorkHoursEnd.HasValue)
             .WithMessage("Work hours end must be after start.");
+
+        // A floor that can never be satisfied within the enforced work hours window makes
+        // no sense to allow — e.g. a 5h window can never fit a 6h daily floor.
+        RuleFor(x => x)
+            .Must(x => x.FixedDailyFloorHours!.Value <= (x.WorkHoursEnd!.Value - x.WorkHoursStart!.Value).TotalHours)
+            .When(x => x.FixedDailyFloorHours.HasValue && x.WorkHoursStart.HasValue && x.WorkHoursEnd.HasValue)
+            .WithMessage("Daily floor cannot exceed the total work hours window.");
 
         RuleForEach(x => x.Blocks)
             .Must(b => b.End > b.Start)

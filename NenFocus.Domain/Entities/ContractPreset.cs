@@ -16,7 +16,7 @@ public sealed class ContractPreset : AggregateRoot
     public Guid Id { get; private set; }
     public string Name { get; private set; } = null!;
     public StrictnessRule StrictnessRule { get; private set; }
-    public DailyFloor DailyFloor { get; private set; } = null!;
+    public DailyFloor? DailyFloor { get; private set; }
     public WorkHours? WorkHours { get; private set; }
     public bool AllowCancellation { get; private set; }
 
@@ -26,7 +26,7 @@ public sealed class ContractPreset : AggregateRoot
         Guid id,
         string name,
         StrictnessRule strictnessRule,
-        DailyFloor dailyFloor,
+        DailyFloor? dailyFloor,
         WorkHours? workHours,
         bool allowCancellation)
     {
@@ -53,7 +53,7 @@ public sealed class ContractPreset : AggregateRoot
     public void Update(
         string name,
         StrictnessRule strictnessRule,
-        DailyFloor dailyFloor,
+        DailyFloor? dailyFloor,
         WorkHours? workHours,
         bool allowCancellation)
     {

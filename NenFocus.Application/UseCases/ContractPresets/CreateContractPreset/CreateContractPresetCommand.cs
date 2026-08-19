@@ -7,7 +7,7 @@ public sealed record CreateContractPresetCommand : ICommand<CreateContractPreset
 {
     public string Name { get; init; } = string.Empty;
     public StrictnessRule StrictnessRule { get; init; }
-    public double DailyFloorHours { get; init; }
+    public double? DailyFloorHours { get; init; }
     public TimeOnly? WorkHoursStart { get; init; }
     public TimeOnly? WorkHoursEnd { get; init; }
     public bool AllowCancellation { get; init; }

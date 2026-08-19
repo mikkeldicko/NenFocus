@@ -71,6 +71,13 @@ public class GetActiveNenContractQueryHandlerTests
         return map;
     }
 
+    private static NenContract ContractFloorContract(double contractFloorHours) =>
+        NenContract.Seal(
+            Guid.NewGuid(), "Period Contract", new NenContractGoal("Ship it"),
+            StartDate, EndDate, StrictnessRule.PeriodTimeBudget, DailyFloorPolicy.None,
+            null, false, new Dictionary<DateOnly, double>(), StartDate.ToDateTime(TimeOnly.MinValue),
+            contractFloor: new ContractFloor(contractFloorHours));
+
     [Fact]
     public async Task HandleAsync_NoContractInEffect_ReturnsNull()
     {
@@ -396,5 +403,155 @@ public class GetActiveNenContractQueryHandlerTests
 
         result!.DayStatuses.Single(d => d.Date == StartDate).FloorHours.Should().Be(2);
         result.DayStatuses.Single(d => d.Date == StartDate.AddDays(1)).FloorHours.Should().Be(5);
+    }
+
+    // ── ContractFloor mode (Period Time Budget, no per-day floor) ──────────────────
+
+    [Fact]
+    public async Task HandleAsync_OrdinaryContract_ContractFloorHoursIsNull()
+    {
+        var contract = Contract();
+        SetInEffect(contract);
+
+        var result = await CreateHandler().HandleAsync(AnyWeek);
+
+        result!.ContractFloorHours.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task HandleAsync_ContractFloorMode_MapsTargetAndTotalCompletedHours()
+    {
+        SetInEffect(ContractFloorContract(9));
+        _completedHours.HandleAsync(Arg.Any<GetNenContractCompletedFocusHoursQuery>(), Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyDictionary<DateOnly, double>)new Dictionary<DateOnly, double>
+            {
+                [StartDate] = 3, [StartDate.AddDays(1)] = 1.5
+            });
+
+        var result = await CreateHandler().HandleAsync(AnyWeek);
+
+        result!.ContractFloorHours.Should().Be(9);
+        result.TotalFloorHours.Should().Be(9);
+        result.TotalCompletedHours.Should().Be(4.5);
+    }
+
+    [Fact]
+    public async Task HandleAsync_OrdinaryContract_TotalFloorHoursSumsEveryDaysFloor()
+    {
+        var contract = Contract(
+            dailyFloorPolicy: new DailyFloorPolicy(new DailyFloor(2)),
+            plannedFocusHoursByDay: FullyPlanned(StartDate, EndDate, 2));
+        SetInEffect(contract);
+
+        var result = await CreateHandler().HandleAsync(AnyWeek);
+
+        result!.TotalFloorHours.Should().Be(20); // 2h * 10 days
+    }
+
+    [Fact]
+    public async Task HandleAsync_OrdinaryContract_TotalCompletedHoursSumsCompletedAcrossAllDays()
+    {
+        var contract = Contract(
+            dailyFloorPolicy: new DailyFloorPolicy(new DailyFloor(2)),
+            plannedFocusHoursByDay: FullyPlanned(StartDate, EndDate, 2));
+        SetInEffect(contract);
+        _completedHours.HandleAsync(Arg.Any<GetNenContractCompletedFocusHoursQuery>(), Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyDictionary<DateOnly, double>)new Dictionary<DateOnly, double>
+            {
+                [StartDate] = 2, [StartDate.AddDays(1)] = 1.5
+            });
+
+        var result = await CreateHandler().HandleAsync(AnyWeek);
+
+        result!.TotalCompletedHours.Should().Be(3.5);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ContractFloorMode_NoDayIsEverRestDay()
+    {
+        // Nothing planned or completed anywhere — an ordinary contract would resolve
+        // every day to a rest day (no floor); ContractFloor mode never does.
+        SetInEffect(ContractFloorContract(9));
+
+        var result = await CreateHandler().HandleAsync(AnyWeek);
+
+        result!.DayStatuses.Should().OnlyContain(d => !d.IsRestDay);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ContractFloorMode_PastDayFullyCompleted_IsMet()
+    {
+        SetInEffect(ContractFloorContract(9));
+        _plannedHours.HandleAsync(Arg.Any<ComputePlannedFocusHoursQuery>(), Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyDictionary<DateOnly, double>)new Dictionary<DateOnly, double> { [StartDate] = 2 });
+        _completedHours.HandleAsync(Arg.Any<GetNenContractCompletedFocusHoursQuery>(), Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyDictionary<DateOnly, double>)new Dictionary<DateOnly, double> { [StartDate] = 2 });
+
+        var result = await CreateHandler().HandleAsync(AnyWeek);
+
+        var day = result!.DayStatuses.Single(d => d.Date == StartDate);
+        day.CurrentHours.Should().Be(2);
+        day.FloorHours.Should().Be(2); // that day's planned hours, not a real floor
+        day.IsMet.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task HandleAsync_ContractFloorMode_PastDayPartiallyMissed_IsNotMet()
+    {
+        SetInEffect(ContractFloorContract(9));
+        _plannedHours.HandleAsync(Arg.Any<ComputePlannedFocusHoursQuery>(), Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyDictionary<DateOnly, double>)new Dictionary<DateOnly, double> { [StartDate] = 2 });
+        _completedHours.HandleAsync(Arg.Any<GetNenContractCompletedFocusHoursQuery>(), Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyDictionary<DateOnly, double>)new Dictionary<DateOnly, double> { [StartDate] = 1 });
+
+        var result = await CreateHandler().HandleAsync(AnyWeek);
+
+        var day = result!.DayStatuses.Single(d => d.Date == StartDate);
+        day.CurrentHours.Should().Be(1);
+        day.IsMet.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task HandleAsync_ContractFloorMode_DayWithNothingPlannedOrCompleted_StillMet()
+    {
+        // A day emptied on purpose (hours moved elsewhere) shows as met, not a failure —
+        // 0 completed against 0 planned is trivially satisfied.
+        SetInEffect(ContractFloorContract(9));
+
+        var result = await CreateHandler().HandleAsync(AnyWeek);
+
+        var day = result!.DayStatuses.Single(d => d.Date == StartDate);
+        day.CurrentHours.Should().Be(0);
+        day.FloorHours.Should().Be(0);
+        day.IsMet.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task HandleAsync_ContractFloorMode_FutureDay_UsesPlannedHours()
+    {
+        var futureDate = StartDate.AddDays(5); // today is Jan 4
+        SetInEffect(ContractFloorContract(9));
+        _plannedHours.HandleAsync(Arg.Any<ComputePlannedFocusHoursQuery>(), Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyDictionary<DateOnly, double>)new Dictionary<DateOnly, double> { [futureDate] = 4 });
+
+        var result = await CreateHandler().HandleAsync(AnyWeek);
+
+        var day = result!.DayStatuses.Single(d => d.Date == futureDate);
+        day.CurrentHours.Should().Be(4);
+        day.FloorHours.Should().Be(4);
+        day.Timing.Should().Be(DayTiming.Future);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ContractFloorMode_DaysBehindAndDaysConsideredAreZero()
+    {
+        // Day-Met scoring is fully removed for ContractFloor contracts — the days-behind
+        // loop naturally yields zero since every day resolves to "no per-day obligation."
+        SetInEffect(ContractFloorContract(9));
+
+        var result = await CreateHandler().HandleAsync(AnyWeek);
+
+        result!.DaysBehind.Should().Be(0);
+        result.DaysConsidered.Should().Be(0);
     }
 }

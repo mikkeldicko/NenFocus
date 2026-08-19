@@ -46,12 +46,59 @@ public class CreateContractPresetTests
 
     [Theory]
     [InlineData(-1)]
+    [InlineData(0)] // zero would mean "no floor" by another name — leave it unset instead
     [InlineData(25)]
     public async Task Validate_DailyFloorOutOfRange_IsInvalid(double hours)
     {
         var result = await CreateValidator().ValidateAsync(ValidCommand() with { DailyFloorHours = hours });
 
         result.IsValid.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Validate_DailyFloorNotWholeNumber_IsInvalid()
+    {
+        var result = await CreateValidator().ValidateAsync(ValidCommand() with { DailyFloorHours = 3.5 });
+
+        result.IsValid.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Validate_DailyFloorNull_IsValid()
+    {
+        var result = await CreateValidator().ValidateAsync(ValidCommand() with { DailyFloorHours = null });
+
+        result.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Validate_DailyFloorExceedsWorkHoursWindow_IsInvalid()
+    {
+        var command = ValidCommand() with
+        {
+            DailyFloorHours = 6,
+            WorkHoursStart = new TimeOnly(10, 0),
+            WorkHoursEnd = new TimeOnly(15, 0) // 5h window — a 6h floor could never fit
+        };
+
+        var result = await CreateValidator().ValidateAsync(command);
+
+        result.IsValid.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Validate_DailyFloorExactlyFillsWorkHoursWindow_IsValid()
+    {
+        var command = ValidCommand() with
+        {
+            DailyFloorHours = 5,
+            WorkHoursStart = new TimeOnly(10, 0),
+            WorkHoursEnd = new TimeOnly(15, 0)
+        };
+
+        var result = await CreateValidator().ValidateAsync(command);
+
+        result.IsValid.Should().BeTrue();
     }
 
     [Fact]
@@ -123,7 +170,7 @@ public class CreateContractPresetTests
         saved.Should().NotBeNull();
         saved!.Name.Should().Be("Study Month");
         saved.StrictnessRule.Should().Be(StrictnessRule.PeriodTimeBudget);
-        saved.DailyFloor.Hours.Should().Be(6);
+        saved.DailyFloor!.Hours.Should().Be(6);
         saved.WorkHours!.Start.Should().Be(new TimeOnly(9, 0));
         saved.WorkHours.End.Should().Be(new TimeOnly(17, 0));
         saved.AllowCancellation.Should().BeTrue();

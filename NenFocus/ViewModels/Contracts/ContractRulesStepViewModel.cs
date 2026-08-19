@@ -61,6 +61,7 @@ public partial class ContractRulesStepViewModel : ViewModelBase
     public IReadOnlyList<StrictnessRule> StrictnessOptions { get; } = Enum.GetValues<StrictnessRule>();
 
     [ObservableProperty] private StrictnessRule _strictnessRule = StrictnessRule.DailyFlexibility;
+    [ObservableProperty] private bool _isDailyFloorEnabled;
     [ObservableProperty] private string _dailyFloorHoursText = "3";
     [ObservableProperty] private bool _allowCancellation = true;
     [ObservableProperty] private bool _isWorkHoursEnabled;
@@ -118,6 +119,7 @@ public partial class ContractRulesStepViewModel : ViewModelBase
         if (isAdvanced)
         {
             if (initialStrictnessRule.HasValue) StrictnessRule = initialStrictnessRule.Value;
+            IsDailyFloorEnabled = initialFixedDailyFloorHours.HasValue;
             if (initialFixedDailyFloorHours.HasValue) DailyFloorHoursText = initialFixedDailyFloorHours.Value.ToString("0.##");
             AllowCancellation = initialAllowCancellation;
             IsWorkHoursEnabled = initialIsWorkHoursEnabled;
@@ -148,7 +150,8 @@ public partial class ContractRulesStepViewModel : ViewModelBase
     {
         if (value is null) return;
         StrictnessRule = value.StrictnessRule;
-        DailyFloorHoursText = value.DailyFloorHours.ToString("0.##");
+        IsDailyFloorEnabled = value.DailyFloorHours.HasValue;
+        if (value.DailyFloorHours.HasValue) DailyFloorHoursText = value.DailyFloorHours.Value.ToString("0.##");
         AllowCancellation = value.AllowCancellation;
         IsWorkHoursEnabled = value.WorkHoursStart.HasValue && value.WorkHoursEnd.HasValue;
         if (value.WorkHoursStart.HasValue) WorkHoursStartText = FormatTime(value.WorkHoursStart.Value);
@@ -175,12 +178,26 @@ public partial class ContractRulesStepViewModel : ViewModelBase
             return;
         }
 
-        if (!double.TryParse(DailyFloorHoursText, out var floor) || floor < 0 || floor > 24)
+        // The checkbox is the deliberate on/off switch for "no fixed floor" — mirrors
+        // "Enforce work hours" exactly, rather than relying on a blank text field (which
+        // looked too similar to typing 0, a mistake that produces a very different,
+        // nonsensical result: a floor that's already satisfied by doing nothing).
+        // What "no fixed floor" resolves to depends on strictness (Application-side):
+        // Daily Flexibility/Locked fall back to a per-day floor derived from whatever's
+        // scheduled each day (same as Simple mode); Period Time Budget gets a single
+        // whole-period ContractFloor instead.
+        double? floor = null;
+        if (IsDailyFloorEnabled)
         {
-            Error = "Daily floor must be between 0 and 24 hours.";
-            return;
+            if (!double.TryParse(DailyFloorHoursText, out var parsedFloor) || parsedFloor % 1 != 0 || parsedFloor < 1 || parsedFloor > 24)
+            {
+                Error = "Daily floor must be a whole number between 1 and 24 hours.";
+                return;
+            }
+            floor = parsedFloor;
         }
 
+        TimeOnly? workHoursStart = null, workHoursEnd = null;
         if (IsWorkHoursEnabled)
         {
             if (!TryParseTime(WorkHoursStartText, out var start) || !TryParseTime(WorkHoursEndText, out var end) || end <= start)
@@ -188,6 +205,15 @@ public partial class ContractRulesStepViewModel : ViewModelBase
                 Error = "Work hours must have a valid start and end, with end after start.";
                 return;
             }
+            workHoursStart = start;
+            workHoursEnd = end;
+        }
+
+        if (floor.HasValue && workHoursStart.HasValue && workHoursEnd.HasValue
+            && floor.Value > (workHoursEnd.Value - workHoursStart.Value).TotalHours)
+        {
+            Error = "Daily floor cannot exceed the total work hours window.";
+            return;
         }
 
         if (SaveAsPreset && string.IsNullOrWhiteSpace(PresetNameToSave))
@@ -214,7 +240,7 @@ public partial class ContractRulesStepViewModel : ViewModelBase
         : SelectedSimpleOption?.AllowCancellation ?? true;
 
     public double? ResolvedFixedDailyFloorHours =>
-        IsAdvanced && double.TryParse(DailyFloorHoursText, out var floor) ? floor : null;
+        IsAdvanced && IsDailyFloorEnabled && double.TryParse(DailyFloorHoursText, out var floor) ? floor : null;
 
     public IReadOnlyList<DateOnly> ResolvedRestDays => IsAdvanced
         ? RestDayChips.Where(c => c.IsRestDay).Select(c => c.Date).ToList()

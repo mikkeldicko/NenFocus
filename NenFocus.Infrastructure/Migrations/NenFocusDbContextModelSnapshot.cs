@@ -119,7 +119,7 @@ namespace NenFocus.Infrastructure.Migrations
                     b.Property<bool>("AllowCancellation")
                         .HasColumnType("INTEGER");
 
-                    b.Property<double>("DailyFloor")
+                    b.Property<double?>("DailyFloor")
                         .HasColumnType("REAL")
                         .HasColumnName("DailyFloorHours");
 
@@ -144,6 +144,10 @@ namespace NenFocus.Infrastructure.Migrations
 
                     b.Property<bool>("AllowCancellation")
                         .HasColumnType("INTEGER");
+
+                    b.Property<double?>("ContractFloor")
+                        .HasColumnType("REAL")
+                        .HasColumnName("ContractFloor");
 
                     b.Property<Guid?>("ContractPresetId")
                         .HasColumnType("TEXT");

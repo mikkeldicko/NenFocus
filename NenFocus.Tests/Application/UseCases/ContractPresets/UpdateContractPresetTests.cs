@@ -48,10 +48,42 @@ public class UpdateContractPresetTests
 
     [Theory]
     [InlineData(-1)]
+    [InlineData(0)] // zero would mean "no floor" by another name — leave it unset instead
     [InlineData(25)]
     public async Task Validate_DailyFloorOutOfRange_IsInvalid(double hours)
     {
         var result = await CreateValidator().ValidateAsync(ValidCommand(Guid.NewGuid()) with { DailyFloorHours = hours });
+
+        result.IsValid.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Validate_DailyFloorNotWholeNumber_IsInvalid()
+    {
+        var result = await CreateValidator().ValidateAsync(ValidCommand(Guid.NewGuid()) with { DailyFloorHours = 3.5 });
+
+        result.IsValid.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Validate_DailyFloorNull_IsValid()
+    {
+        var result = await CreateValidator().ValidateAsync(ValidCommand(Guid.NewGuid()) with { DailyFloorHours = null });
+
+        result.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Validate_DailyFloorExceedsWorkHoursWindow_IsInvalid()
+    {
+        var command = ValidCommand(Guid.NewGuid()) with
+        {
+            DailyFloorHours = 6,
+            WorkHoursStart = new TimeOnly(10, 0),
+            WorkHoursEnd = new TimeOnly(15, 0)
+        };
+
+        var result = await CreateValidator().ValidateAsync(command);
 
         result.IsValid.Should().BeFalse();
     }
@@ -111,7 +143,7 @@ public class UpdateContractPresetTests
         result.Success.Should().BeTrue();
         existing.Name.Should().Be("Renamed");
         existing.StrictnessRule.Should().Be(StrictnessRule.DailyFlexibility);
-        existing.DailyFloor.Hours.Should().Be(5);
+        existing.DailyFloor!.Hours.Should().Be(5);
         existing.WorkHours!.Start.Should().Be(new TimeOnly(9, 0));
         existing.AllowCancellation.Should().BeTrue();
         await _presets.Received(1).UpdateAsync(existing, Arg.Any<CancellationToken>());

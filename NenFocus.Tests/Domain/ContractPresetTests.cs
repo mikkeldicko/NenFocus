@@ -12,8 +12,9 @@ public class ContractPresetTests
         StrictnessRule strictnessRule = StrictnessRule.Locked,
         DailyFloor? dailyFloor = null,
         WorkHours? workHours = null,
-        bool allowCancellation = false)
-        => ContractPreset.Create(Guid.NewGuid(), name, strictnessRule, dailyFloor ?? new DailyFloor(4), workHours, allowCancellation);
+        bool allowCancellation = false,
+        bool omitDailyFloor = false)
+        => ContractPreset.Create(Guid.NewGuid(), name, strictnessRule, omitDailyFloor ? null : dailyFloor ?? new DailyFloor(4), workHours, allowCancellation);
 
     [Fact]
     public void Create_ValidInputs_Succeeds()
@@ -22,9 +23,17 @@ public class ContractPresetTests
 
         preset.Name.Should().Be("Study Month");
         preset.StrictnessRule.Should().Be(StrictnessRule.Locked);
-        preset.DailyFloor.Hours.Should().Be(4);
+        preset.DailyFloor!.Hours.Should().Be(4);
         preset.WorkHours.Should().BeNull();
         preset.AllowCancellation.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Create_NoDailyFloor_StoresNull()
+    {
+        var preset = Create(omitDailyFloor: true);
+
+        preset.DailyFloor.Should().BeNull();
     }
 
     [Fact]
@@ -63,9 +72,19 @@ public class ContractPresetTests
 
         preset.Name.Should().Be("Renamed");
         preset.StrictnessRule.Should().Be(StrictnessRule.PeriodTimeBudget);
-        preset.DailyFloor.Hours.Should().Be(6);
+        preset.DailyFloor!.Hours.Should().Be(6);
         preset.WorkHours.Should().Be(newWorkHours);
         preset.AllowCancellation.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Update_ToNoDailyFloor_StoresNull()
+    {
+        var preset = Create();
+
+        preset.Update("Renamed", StrictnessRule.PeriodTimeBudget, null, null, false);
+
+        preset.DailyFloor.Should().BeNull();
     }
 
     [Fact]

@@ -47,9 +47,13 @@ public sealed class PlannedBlockRepository : IPlannedBlockRepository
     {
         // Filters on raw Start/End first — a safe superset, since EffectiveEnd(asOf) is
         // never later than End — then refines in-memory against EffectiveEnd, which needs
-        // the materialized FocusBlock/BackgroundBlock type to evaluate.
+        // the materialized FocusBlock/BackgroundBlock type to evaluate. A cancelled block
+        // (its owning contract was broken) has vacated its schedule entirely — same
+        // "stops enforcing, stops appearing" treatment CancelledAt already gets in
+        // ComputeActivePolicySliceQueryHandler and GetPlannedBlocksForDayQueryHandler —
+        // so it must never count as a scheduling collision for new/moved blocks either.
         var query = _context.PlannedBlocks
-            .Where(b => b.Start < end && b.End > start);
+            .Where(b => b.Start < end && b.End > start && b.CancelledAt == null);
 
         if (excludeId.HasValue)
             query = query.Where(b => b.Id != excludeId.Value);

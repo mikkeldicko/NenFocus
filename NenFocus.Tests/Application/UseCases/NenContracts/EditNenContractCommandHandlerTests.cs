@@ -245,4 +245,28 @@ public class EditNenContractCommandHandlerTests
 
         saved!.ContractPresetId.Should().Be(presetId);
     }
+
+    [Fact]
+    public async Task HandleAsync_PeriodTimeBudgetNoFixedFloor_DerivesContractFloorFromTotalPlannedHours()
+    {
+        var contract = ScheduledContract(Guid.NewGuid());
+        _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
+        var block = new NenContractBlockSpec(Guid.NewGuid(),
+            StartDate.ToDateTime(new TimeOnly(9, 0)), StartDate.ToDateTime(new TimeOnly(11, 0)), IsFocus: true);
+        _calculator.Calculate(Arg.Any<IEnumerable<(DateTime, DateTime)>>())
+            .Returns(new Dictionary<DateOnly, double> { [StartDate] = 3, [StartDate.AddDays(1)] = 4, [StartDate.AddDays(2)] = 2 });
+        NenContract? saved = null;
+        await _contracts.AddAsync(Arg.Do<NenContract>(c => saved = c), Arg.Any<CancellationToken>());
+        var command = BaseCommand(contract.Id, fixedFloor: null, blocks: [block])
+            with
+        { StrictnessRule = StrictnessRule.PeriodTimeBudget };
+
+        var result = await CreateHandler().HandleAsync(command, CancellationToken.None);
+
+        result.Success.Should().BeTrue();
+        saved.Should().NotBeNull();
+        saved!.ContractFloorHours.Should().Be(9); // 3 + 4 + 2
+        saved.DailyFloorPolicy.Default.Should().BeNull();
+        saved.DailyFloorPolicy.PerDayExceptions.Should().BeEmpty();
+    }
 }

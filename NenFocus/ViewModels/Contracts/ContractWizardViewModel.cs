@@ -177,7 +177,7 @@ public partial class ContractWizardViewModel : ViewModelBase
             {
                 Name = rules.PresetNameToSave,
                 StrictnessRule = strictness,
-                DailyFloorHours = fixedFloor ?? 0,
+                DailyFloorHours = fixedFloor,
                 WorkHoursStart = workHoursStart,
                 WorkHoursEnd = workHoursEnd,
                 AllowCancellation = allowCancellation

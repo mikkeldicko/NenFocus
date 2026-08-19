@@ -33,6 +33,13 @@ public sealed record PlannedBlockDto
     public bool IsUnderInEffectContract { get; init; }
 
     /// <summary>
+    /// The owning contract's StrictnessRule, or null when ContractId is null or doesn't
+    /// resolve. Drives Split Block eligibility on the Planner (Daily Flexibility only) —
+    /// the UI never re-derives strictness independently of this Application-computed value.
+    /// </summary>
+    public StrictnessRule? ContractStrictnessRule { get; init; }
+
+    /// <summary>
     /// True for a FocusBlock whose Ritual was never completed and whose scheduled window
     /// has already closed — mirrors FocusBlock.EffectiveEnd's own Missed condition. The tile
     /// still renders at its full original span (its time already passed, so nothing new can

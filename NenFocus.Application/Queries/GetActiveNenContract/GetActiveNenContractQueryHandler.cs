@@ -69,25 +69,41 @@ public sealed class GetActiveNenContractQueryHandler : IQueryHandler<GetActiveNe
         var plannedHoursByDay = await _plannedHours.HandleAsync(
             new ComputePlannedFocusHoursQuery(contract.Id, DraftFocusBlockRanges: []), cancellationToken);
 
+        // Period Time Budget using a whole-period ContractFloor has no per-day obligation
+        // at all — DailyFloorPolicy is None for these contracts, so IsRestDay/IsDayMet
+        // would trivially resolve "rest"/"always met" for every day. Each day's badge
+        // instead compares completed-so-far against that day's own currently-planned
+        // hours (a live number, not a frozen seal-time value — reflects any moves), and
+        // no day is ever a rest day since none is ever individually "off."
+        var isContractFloorMode = contract.ContractFloorHours.HasValue;
+
         var dayStatuses = new List<NenContractDayStatusDto>();
         for (var date = contract.StartDate; date <= contract.EndDate; date = date.AddDays(1))
         {
             var timing = date == today ? DayTiming.Today : date < today ? DayTiming.Past : DayTiming.Future;
-            var isRestDay = contract.IsRestDay(date);
+            var isRestDay = !isContractFloorMode && contract.IsRestDay(date);
+            var plannedForDay = plannedHoursByDay.GetValueOrDefault(date);
             var currentHours = isRestDay ? 0
                 : timing != DayTiming.Future ? completedHoursByDay.GetValueOrDefault(date)
-                : plannedHoursByDay.GetValueOrDefault(date);
+                : plannedForDay;
 
             dayStatuses.Add(new NenContractDayStatusDto
             {
                 Date = date,
                 CurrentHours = currentHours,
-                FloorHours = contract.FloorHoursFor(date) ?? 0,
-                IsMet = contract.IsDayMet(date, currentHours),
+                FloorHours = isContractFloorMode ? plannedForDay : contract.FloorHoursFor(date) ?? 0,
+                IsMet = isContractFloorMode ? currentHours >= plannedForDay : contract.IsDayMet(date, currentHours),
                 IsRestDay = isRestDay,
                 Timing = timing
             });
         }
+
+        // The banner's numerator/denominator, uniform across every strictness rule: total
+        // completed hours is always a straight sum; the target is either this contract's
+        // ContractFloor or the sum of every day's resolved floor (dayStatuses.FloorHours
+        // already holds exactly that per-day number for a non-ContractFloor contract).
+        var totalCompletedHours = completedHoursByDay.Values.Sum();
+        var totalFloorHours = contract.ContractFloorHours ?? dayStatuses.Sum(d => d.FloorHours);
 
         return new ActiveNenContractDto
         {
@@ -102,7 +118,10 @@ public sealed class GetActiveNenContractQueryHandler : IQueryHandler<GetActiveNe
             DaysConsidered = daysConsidered,
             DeficitHours = deficitHours,
             AllowCancellation = contract.AllowCancellation,
-            DayStatuses = dayStatuses
+            DayStatuses = dayStatuses,
+            ContractFloorHours = contract.ContractFloorHours,
+            TotalFloorHours = totalFloorHours,
+            TotalCompletedHours = totalCompletedHours
         };
     }
 }

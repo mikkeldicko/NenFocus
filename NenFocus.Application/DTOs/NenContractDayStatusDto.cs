@@ -11,6 +11,13 @@ namespace NenFocus.Application.DTOs;
 /// gives "today, not yet met" its own distinct treatment from "past, missed" — the day
 /// isn't over yet, so it isn't a real miss — without allowing the impossible
 /// Today-and-Past combination two loose bools would.
+///
+/// For a Period Time Budget contract using ContractFloor (see ActiveNenContractDto),
+/// there is no real per-day floor — FloorHours instead carries that day's currently-
+/// planned hours (a comparison baseline, not an obligation) and IsMet compares
+/// CurrentHours directly against it rather than through IsDayMet, which would trivially
+/// always be true (DailyFloorPolicy is None for these contracts). IsRestDay is always
+/// false for these contracts — no day is ever "off" when only the period total matters.
 /// </summary>
 public sealed record NenContractDayStatusDto
 {

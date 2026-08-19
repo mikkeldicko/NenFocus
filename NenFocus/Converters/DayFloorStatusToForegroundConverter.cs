@@ -9,9 +9,10 @@ namespace NenFocus.Converters;
 
 /// <summary>
 /// Foreground for a day-header floor badge, paired with DayFloorStatusToBrushConverter.
-/// White on the saturated today/past verdict colors (dark green, amber, dark red);
-/// dark #1A1A2E on the light rest/future tints — matches UI_UX_STANDARDS.md's
-/// established convention of dark text on light backgrounds throughout the app.
+/// White on every saturated background (today/past verdict colors, and a future "met"
+/// badge's medium blue — including ShowSimplifiedFuture, always met by construction);
+/// dark #1A1A2E on the light rest tint and the pale future-unmet pink, matching
+/// UI_UX_STANDARDS.md's established convention of dark text on light backgrounds.
 /// </summary>
 public sealed class DayFloorStatusToForegroundConverter : IValueConverter
 {
@@ -23,7 +24,9 @@ public sealed class DayFloorStatusToForegroundConverter : IValueConverter
     {
         if (value is not DayFloorPreviewViewModel status) return null;
         if (status.IsRestDay) return DarkText;
-        return status.Timing is DayTiming.Today or DayTiming.Past ? Brushes.White : DarkText;
+
+        var isSaturatedBackground = status.Timing is DayTiming.Today or DayTiming.Past || status.IsMet;
+        return isSaturatedBackground ? Brushes.White : DarkText;
     }
 
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)

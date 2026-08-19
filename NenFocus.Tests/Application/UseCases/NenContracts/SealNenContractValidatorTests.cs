@@ -55,7 +55,9 @@ public class SealNenContractValidatorTests
 
     [Theory]
     [InlineData(-1)]
+    [InlineData(0)] // zero would mean "no floor" by another name — leave it unset instead
     [InlineData(24.1)]
+    [InlineData(25)]
     public async Task Validate_FixedDailyFloorHoursOutOfRange_IsInvalid(double floor)
     {
         var result = await CreateValidator().ValidateAsync(ValidCommand() with { FixedDailyFloorHours = floor });
@@ -64,9 +66,47 @@ public class SealNenContractValidatorTests
     }
 
     [Fact]
+    public async Task Validate_FixedDailyFloorHoursNotWholeNumber_IsInvalid()
+    {
+        var result = await CreateValidator().ValidateAsync(ValidCommand() with { FixedDailyFloorHours = 3.5 });
+
+        result.IsValid.Should().BeFalse();
+    }
+
+    [Fact]
     public async Task Validate_FixedDailyFloorHoursNull_IsValid()
     {
         var result = await CreateValidator().ValidateAsync(ValidCommand() with { FixedDailyFloorHours = null });
+
+        result.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Validate_FixedDailyFloorExceedsWorkHoursWindow_IsInvalid()
+    {
+        var command = ValidCommand() with
+        {
+            FixedDailyFloorHours = 6,
+            WorkHoursStart = new TimeOnly(10, 0),
+            WorkHoursEnd = new TimeOnly(15, 0) // 5h window — a 6h floor could never fit
+        };
+
+        var result = await CreateValidator().ValidateAsync(command);
+
+        result.IsValid.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Validate_FixedDailyFloorExactlyFillsWorkHoursWindow_IsValid()
+    {
+        var command = ValidCommand() with
+        {
+            FixedDailyFloorHours = 5,
+            WorkHoursStart = new TimeOnly(10, 0),
+            WorkHoursEnd = new TimeOnly(15, 0)
+        };
+
+        var result = await CreateValidator().ValidateAsync(command);
 
         result.IsValid.Should().BeTrue();
     }

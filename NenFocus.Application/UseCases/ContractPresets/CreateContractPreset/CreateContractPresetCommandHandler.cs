@@ -32,7 +32,7 @@ public sealed class CreateContractPresetCommandHandler
                 Guid.NewGuid(),
                 command.Name,
                 command.StrictnessRule,
-                new DailyFloor(command.DailyFloorHours),
+                command.DailyFloorHours is { } floor ? new DailyFloor(floor) : null,
                 workHours,
                 command.AllowCancellation);
         }

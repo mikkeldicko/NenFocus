@@ -26,6 +26,14 @@ public class NenContract : AggregateRoot
     public WorkHoursPolicy? WorkHoursPolicy { get; private set; }
     public Guid? ContractPresetId { get; private set; }
 
+    /// <summary>
+    /// A whole-period minimum, as an alternative to DailyFloorPolicy's per-day
+    /// resolution — mutually exclusive with a real (non-empty) DailyFloorPolicy, enforced
+    /// in Seal. Null for every contract except a Period Time Budget contract that opted
+    /// out of a per-day obligation entirely.
+    /// </summary>
+    public ContractFloor? ContractFloor { get; private set; }
+
     private NenContract() { } // EF Core
 
     /// <param name="dailyFloorPolicy">
@@ -52,13 +60,18 @@ public class NenContract : AggregateRoot
         IReadOnlyDictionary<DateOnly, double> plannedFocusHoursByDay,
         DateTime sealedAt,
         WorkHoursPolicy? workHoursPolicy = null,
-        Guid? contractPresetId = null)
+        Guid? contractPresetId = null,
+        ContractFloor? contractFloor = null)
     {
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Contract name cannot be empty.", nameof(name));
 
         if (endDate < startDate)
             throw new ArgumentException("End date must be on or after the start date.");
+
+        if (contractFloor is not null && HasAnyRealFloor(dailyFloorPolicy))
+            throw new ArgumentException(
+                "A contract cannot have both a daily floor and a whole-contract floor.");
 
         for (var date = startDate; date <= endDate; date = date.AddDays(1))
         {
@@ -85,6 +98,7 @@ public class NenContract : AggregateRoot
             AllowCancellation = allowCancellation,
             WorkHoursPolicy = workHoursPolicy,
             ContractPresetId = contractPresetId,
+            ContractFloor = contractFloor,
             Status = DateOnly.FromDateTime(sealedAt) >= startDate
                 ? NenContractStatus.Active
                 : NenContractStatus.Scheduled
@@ -94,6 +108,12 @@ public class NenContract : AggregateRoot
 
         return contract;
     }
+
+    /// <summary>True when the policy carries a real obligation somewhere — a Default, or
+    /// any non-null per-day exception — as opposed to DailyFloorPolicy.None, which
+    /// carries neither and is the only shape allowed alongside a ContractFloor.</summary>
+    private static bool HasAnyRealFloor(DailyFloorPolicy policy)
+        => policy.Default is not null || policy.PerDayExceptions.Values.Any(floor => floor is not null);
 
     /// <summary>
     /// Canonical definition of "ready to activate" — the repository query behind the
@@ -176,6 +196,23 @@ public class NenContract : AggregateRoot
     /// DailyFloorPolicy directly.
     /// </summary>
     public double? FloorHoursFor(DateOnly date) => DailyFloorPolicy.For(date)?.Hours;
+
+    /// <summary>
+    /// The whole-period target's raw hour value for display — null when this contract
+    /// has no ContractFloor. Exists for the same reason as FloorHoursFor: Application-
+    /// layer callers never reach into ContractFloor directly.
+    /// </summary>
+    public double? ContractFloorHours => ContractFloor?.Hours;
+
+    /// <summary>
+    /// Whether the given total Focus hours satisfy this contract's whole-period target —
+    /// trivially true when there is no ContractFloor. Mirrors IsDayMet's shape exactly,
+    /// scoped to the whole period instead of one day; used both for the period-total-
+    /// protection edit guard (against total currently-planned hours) and the active-
+    /// contract banner (against total completed hours).
+    /// </summary>
+    public bool IsPeriodMet(double totalFocusHours)
+        => ContractFloor is null || ContractFloor.IsSatisfiedBy(totalFocusHours);
 
     /// <summary>
     /// Whether a missed Focus block due on <paramref name="missedBlockDate"/> can be

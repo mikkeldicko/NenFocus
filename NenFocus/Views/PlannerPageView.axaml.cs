@@ -268,15 +268,28 @@ public partial class PlannerPageView : UserControl
             FontSize          = 12,
             FontWeight        = FontWeight.SemiBold,
             TextTrimming      = TextTrimming.CharacterEllipsis,
+            TextDecorations   = tile.IsMissed ? TextDecorations.Strikethrough : null,
             VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center
         });
         stack.Children.Add(titleRow);
         stack.Children.Add(new TextBlock
         {
-            Text     = $"{tile.Start:HH:mm} – {tile.End:HH:mm}",
-            FontSize = 10,
-            Opacity  = 0.85
+            Text            = $"{tile.Start:HH:mm} – {tile.End:HH:mm}",
+            FontSize        = 10,
+            Opacity         = 0.85,
+            TextDecorations = tile.IsMissed ? TextDecorations.Strikethrough : null
         });
+
+        if (tile.IsMissed)
+        {
+            stack.Children.Add(new TextBlock
+            {
+                Text       = "MISSED",
+                FontSize   = 9,
+                FontWeight = FontWeight.Bold,
+                Opacity    = 0.9
+            });
+        }
 
         if (tile.IsDraft)
         {

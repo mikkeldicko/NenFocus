@@ -90,9 +90,12 @@
                               HorizontalAlignment="Stretch"/>
                 </StackPanel>
 
-                <StackPanel Spacing="4">
-                    <TextBlock Text="Daily floor (hours)" FontSize="12" Foreground="#7A7A8C"/>
-                    <TextBox Text="{Binding DailyFloorHoursText}" Classes="formInput" Watermark="e.g. 3"/>
+                <StackPanel Spacing="6">
+                    <CheckBox Content="Enforce a fixed daily floor" IsChecked="{Binding IsDailyFloorEnabled}"/>
+                    <StackPanel Spacing="4" IsVisible="{Binding IsDailyFloorEnabled}">
+                        <TextBlock Text="Daily floor (whole hours)" FontSize="12" Foreground="#7A7A8C"/>
+                        <TextBox Text="{Binding DailyFloorHoursText}" Classes="formInput" Watermark="e.g. 3"/>
+                    </StackPanel>
                 </StackPanel>
 
                 <StackPanel Spacing="6">

@@ -38,12 +38,9 @@ public sealed class GetPlannedBlocksForDayQueryHandler
         var now = _clock.UtcNow;
 
         var contractIds = blocks.Select(b => b.ContractId).Where(id => id.HasValue).Select(id => id!.Value).Distinct();
-        var inEffectByContractId = new Dictionary<Guid, bool>();
+        var contractsById = new Dictionary<Guid, NenContract?>();
         foreach (var contractId in contractIds)
-        {
-            var contract = await _contracts.GetByIdAsync(contractId, cancellationToken);
-            inEffectByContractId[contractId] = contract?.IsInEffect ?? false;
-        }
+            contractsById[contractId] = await _contracts.GetByIdAsync(contractId, cancellationToken);
 
         return blocks.Select(b =>
         {
@@ -62,7 +59,8 @@ public sealed class GetPlannedBlocksForDayQueryHandler
                 ContractId = b.ContractId,
                 IsCompleted = b is FocusBlock fb && fb.RitualCompletedAt.HasValue,
                 HasEnded = b.HasEnded(now),
-                IsUnderInEffectContract = b.ContractId.HasValue && inEffectByContractId.GetValueOrDefault(b.ContractId.Value),
+                IsUnderInEffectContract = b.ContractId.HasValue && (contractsById.GetValueOrDefault(b.ContractId.Value)?.IsInEffect ?? false),
+                ContractStrictnessRule = b.ContractId.HasValue ? contractsById.GetValueOrDefault(b.ContractId.Value)?.StrictnessRule : null,
                 IsMissed = b is FocusBlock missedCheck && missedCheck.RitualCompletedAt is null && b.HasEnded(now)
             };
         }).ToList();

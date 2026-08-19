@@ -23,6 +23,7 @@ using NenFocus.Application.UseCases.NenContracts.Edit;
 using NenFocus.Application.UseCases.NenContracts.Seal;
 using NenFocus.Application.UseCases.Planner.CreatePlannedBlock;
 using NenFocus.Application.UseCases.Planner.DeletePlannedBlock;
+using NenFocus.Application.UseCases.Planner.SplitPlannedBlock;
 using NenFocus.Application.UseCases.Planner.UpdatePlannedBlock;
 using NenFocus.Domain.Enums;
 using NenFocus.Domain.ValueObjects;
@@ -44,6 +45,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     private readonly ICommandHandler<CreatePlannedBlockCommand, CreatePlannedBlockResult> _createBlock;
     private readonly ICommandHandler<UpdatePlannedBlockCommand, UpdatePlannedBlockResult> _updateBlock;
     private readonly ICommandHandler<DeletePlannedBlockCommand, DeletePlannedBlockResult> _deleteBlock;
+    private readonly ICommandHandler<SplitPlannedBlockCommand, SplitPlannedBlockResult> _splitBlock;
     private readonly ICommandHandler<SealNenContractCommand, SealNenContractResult> _sealContract;
     private readonly ICommandHandler<BreakNenContractCommand, BreakNenContractResult> _breakContract;
     private readonly IQueryHandler<ComputePlannedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> _computePlannedFocusHours;
@@ -139,7 +141,16 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     [ObservableProperty] private bool _isEditingCompleted;
     [ObservableProperty] private bool _isEditingBlockEnded;
     [ObservableProperty] private bool _isEditingBlockContractLocked;
+    [ObservableProperty] private bool _isEditingBlockDailyFlexibility;
     [ObservableProperty] private string? _dragError;
+
+    // ── Split Block ────────────────────────────────────────────────────────────
+    [ObservableProperty] private bool _isSplitDialogVisible;
+    [ObservableProperty] private string _splitFirstStartTime = "09:00";
+    [ObservableProperty] private string _splitFirstEndTime = "10:00";
+    [ObservableProperty] private string _splitSecondStartTime = "10:00";
+    [ObservableProperty] private string _splitSecondEndTime = "11:00";
+    [ObservableProperty] private string? _splitError;
 
     // ── Nen Contract wizard + drafting mode ───────────────────────────────────
     [ObservableProperty] private bool _isWizardVisible;
@@ -175,11 +186,14 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     // Mode exists as the real gate. Only presence of an active contract matters now.
     public bool CanCancelActiveContract => HasActiveContract;
 
-    public string ActiveContractBannerText => ActiveContract is null
+    // One format for every strictness rule — total completed vs. total committed hours,
+    // plus outstanding deficit. Uniform across Locked/DailyFlexibility/PeriodTimeBudget
+    // (with or without ContractFloor) since TotalFloorHours/TotalCompletedHours are
+    // already computed the same way for all of them.
+    public string ActiveContractBannerText => ActiveContract is not { } c
         ? string.Empty
-        : $"Contract: {ActiveContract.Name} — Day {ActiveContract.DayNumber}/{ActiveContract.TotalDays} — " +
-          $"{ActiveContract.DaysBehind} of {ActiveContract.DaysConsidered} days behind — {ActiveContract.DeficitHours:0.#}h deficit — " +
-          $"{ActiveContract.DaysConsidered - ActiveContract.DaysBehind} of {ActiveContract.DaysConsidered} days met";
+        : $"Contract: {c.Name} — Day {c.DayNumber}/{c.TotalDays} — " +
+          $"{c.TotalCompletedHours:0.#}h / {c.TotalFloorHours:0.#}h completed — {c.DeficitHours:0.#}h deficit";
 
     // 3-second live poll for the day-header floor badges while an active contract is in
     // view — so today's badge reflects an in-progress session's elapsed hours without
@@ -218,7 +232,9 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
         DayFloorByDate = ActiveContract?.DayStatuses.ToDictionary(
             d => d.Date,
-            d => new DayFloorPreviewViewModel(d.Date, d.CurrentHours, d.IsRestDay ? null : d.FloorHours, d.IsRestDay, d.Timing))
+            d => new DayFloorPreviewViewModel(
+                d.Date, d.CurrentHours, d.IsRestDay ? null : d.FloorHours, d.IsRestDay, d.Timing,
+                ActiveContract.StrictnessRule, ActiveContract.ContractFloorHours.HasValue))
             ?? new Dictionary<DateOnly, DayFloorPreviewViewModel>();
     }
 
@@ -269,6 +285,18 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
     public bool CanSaveBlock => !IsBlockLocked;
 
+    // Mirrors SplitPlannedBlockValidator's gating conditions exactly — sourced from
+    // dto.IsUnderInEffectContract + dto.ContractStrictnessRule (Application-computed),
+    // IsStartLocked (the future-only guard — a block that hasn't started yet always has
+    // Start > now), IsEditingCompleted (a completed ritual means a session ran), and the
+    // live active-session noticeboard. The validator remains the sole authority; this only
+    // gates button visibility, same relationship CanDeleteFromForm has to its validator.
+    public bool CanSplitBlock =>
+        IsEditing && !_editingIsDraft
+        && _isEditingBlockContractLocked && _isEditingBlockDailyFlexibility
+        && !IsStartLocked && !_isEditingCompleted
+        && _sessionState.ActiveSession?.OriginatingBlockId != _editingBlockId;
+
     // Deliberately NOT gated on session-active — confirmed with the architect: the only
     // reason to disable Make/Edit is a genuine overlay collision (a form or the wizard
     // already open), not merely a session running. This differs from the old top-right
@@ -289,12 +317,14 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(CanDeleteFromForm));
         OnPropertyChanged(nameof(IsBlockLocked));
         OnPropertyChanged(nameof(CanSaveBlock));
+        OnPropertyChanged(nameof(CanSplitBlock));
     }
 
     partial void OnIsEditingCompletedChanged(bool value)
     {
         OnPropertyChanged(nameof(IsBlockLocked));
         OnPropertyChanged(nameof(CanSaveBlock));
+        OnPropertyChanged(nameof(CanSplitBlock));
     }
 
     partial void OnIsEditingBlockEndedChanged(bool value)
@@ -305,6 +335,17 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     partial void OnIsEditingBlockContractLockedChanged(bool value)
     {
         OnPropertyChanged(nameof(CanDeleteFromForm));
+        OnPropertyChanged(nameof(CanSplitBlock));
+    }
+
+    partial void OnIsEditingBlockDailyFlexibilityChanged(bool value)
+    {
+        OnPropertyChanged(nameof(CanSplitBlock));
+    }
+
+    partial void OnIsStartLockedChanged(bool value)
+    {
+        OnPropertyChanged(nameof(CanSplitBlock));
     }
 
     partial void OnIsFormVisibleChanged(bool value) => OnPropertyChanged(nameof(CanOpenContractWizard));
@@ -317,6 +358,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         ICommandHandler<CreatePlannedBlockCommand, CreatePlannedBlockResult> createBlock,
         ICommandHandler<UpdatePlannedBlockCommand, UpdatePlannedBlockResult> updateBlock,
         ICommandHandler<DeletePlannedBlockCommand, DeletePlannedBlockResult> deleteBlock,
+        ICommandHandler<SplitPlannedBlockCommand, SplitPlannedBlockResult> splitBlock,
         ICommandHandler<SealNenContractCommand, SealNenContractResult> sealContract,
         ICommandHandler<BreakNenContractCommand, BreakNenContractResult> breakContract,
         IQueryHandler<ComputePlannedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> computePlannedFocusHours,
@@ -336,6 +378,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         _createBlock = createBlock;
         _updateBlock = updateBlock;
         _deleteBlock = deleteBlock;
+        _splitBlock = splitBlock;
         _sealContract = sealContract;
         _getScheduledContracts = getScheduledContracts;
         _getContractForEdit = getContractForEdit;
@@ -577,6 +620,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
             IsEditingCompleted = false;
             IsEditingBlockEnded = false;
             IsEditingBlockContractLocked = false;
+            IsEditingBlockDailyFlexibility = false;
             FormTitle = "Edit Draft Block";
             ResetForm();
 
@@ -604,6 +648,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         IsEditingCompleted = dto.IsCompleted;
         IsEditingBlockEnded = dto.HasEnded;
         IsEditingBlockContractLocked = dto.IsUnderInEffectContract;
+        IsEditingBlockDailyFlexibility = dto.ContractStrictnessRule == StrictnessRule.DailyFlexibility;
         FormTitle = "Edit Block";
         ResetForm();
 
@@ -709,6 +754,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
             if (!result.Success) { FormError = result.ErrorMessage; return; }
         }
         await LoadWeekAsync();
+        await RefreshActiveContractAsync();
         CloseForm();
     }
 
@@ -784,6 +830,76 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         else { FormError = result.ErrorMessage; }
     }
 
+    // ── Split Block ────────────────────────────────────────────────────────────
+
+    // Pre-fills a 50/50 split of the block currently open in the edit form — the two
+    // resulting ranges are placed back-to-back; repositioning either half afterward is a
+    // separate, ordinary drag/move operation, not part of this command.
+    [RelayCommand]
+    private void OpenSplitDialog()
+    {
+        if (!CanSplitBlock || !_editingBlockId.HasValue) return;
+        if (!_blocksInWeek.TryGetValue(_editingBlockId.Value, out var dto)) return;
+
+        SplitError = null;
+        var localStart = dto.Start.ToLocalTime();
+        var localEnd = dto.End.ToLocalTime();
+        var midpoint = localStart + TimeSpan.FromTicks((localEnd - localStart).Ticks / 2);
+
+        SplitFirstStartTime = $"{localStart.Hour:D2}:{localStart.Minute:D2}";
+        SplitFirstEndTime = $"{midpoint.Hour:D2}:{midpoint.Minute:D2}";
+        SplitSecondStartTime = $"{midpoint.Hour:D2}:{midpoint.Minute:D2}";
+        SplitSecondEndTime = $"{localEnd.Hour:D2}:{localEnd.Minute:D2}";
+        IsSplitDialogVisible = true;
+    }
+
+    [RelayCommand]
+    private void CloseSplitDialog()
+    {
+        IsSplitDialogVisible = false;
+        SplitError = null;
+    }
+
+    [RelayCommand]
+    private async Task ConfirmSplitAsync()
+    {
+        if (!_editingBlockId.HasValue) return;
+        SplitError = null;
+
+        if (!TryParseFormTime(SplitFirstStartTime, out var firstStart) || !TryParseFormTime(SplitFirstEndTime, out var firstEnd)
+            || !TryParseFormTime(SplitSecondStartTime, out var secondStart) || !TryParseFormTime(SplitSecondEndTime, out var secondEnd))
+        {
+            SplitError = "Invalid time format. Use HH:mm.";
+            return;
+        }
+
+        var dayDate = FormDate.Date;
+        var firstStartUtc = DateTime.SpecifyKind(dayDate.Add(firstStart), DateTimeKind.Local).ToUniversalTime();
+        var firstEndUtc = DateTime.SpecifyKind(dayDate.Add(firstEnd), DateTimeKind.Local).ToUniversalTime();
+        var secondStartUtc = DateTime.SpecifyKind(dayDate.Add(secondStart), DateTimeKind.Local).ToUniversalTime();
+        var secondEndUtc = DateTime.SpecifyKind(dayDate.Add(secondEnd), DateTimeKind.Local).ToUniversalTime();
+
+        var result = await _splitBlock.HandleAsync(new SplitPlannedBlockCommand
+        {
+            OriginalBlockId = _editingBlockId.Value,
+            FirstBlockStart = firstStartUtc,
+            FirstBlockEnd = firstEndUtc,
+            SecondBlockStart = secondStartUtc,
+            SecondBlockEnd = secondEndUtc
+        });
+
+        if (!result.Success)
+        {
+            SplitError = result.ErrorMessage;
+            return;
+        }
+
+        IsSplitDialogVisible = false;
+        await LoadWeekAsync();
+        await RefreshActiveContractAsync(); // badge refresh — same mechanism drag-end and form-save now also use
+        CloseForm();
+    }
+
     [RelayCommand]
     private void CloseForm()
     {
@@ -793,6 +909,9 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         IsEditingCompleted = false;
         IsEditingBlockEnded = false;
         IsEditingBlockContractLocked = false;
+        IsEditingBlockDailyFlexibility = false;
+        IsSplitDialogVisible = false;
+        SplitError = null;
         _editingBlockId = null;
         _editingIsDraft = false;
     }
@@ -908,6 +1027,9 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         // moved it visually, and without this it would stay stuck at the rejected drop
         // point until some unrelated reload happened to fire.
         await LoadWeekAsync();
+        // Badge/banner refresh — previously only caught up on the next 3s poll tick,
+        // which read as a laggy update right after the drag that actually caused it.
+        await RefreshActiveContractAsync();
     }
 
     // ── Nen Contract wizard + drafting mode ───────────────────────────────────

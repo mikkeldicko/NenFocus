@@ -64,9 +64,24 @@ public sealed class EditNenContractCommandHandler : ICommandHandler<EditNenContr
                 new CheckFocusBlockBatchOverlapQuery(preparation.FocusBlocks, ExcludeContractId: contractId), ct))
             return EditNenContractResult.Fail("A Focus block already exists here.");
 
-        var dailyFloorPolicy = command.FixedDailyFloorHours is { } fixedHours
-            ? DailyFloorPolicy.Fixed(new DailyFloor(fixedHours), command.RestDays)
-            : DailyFloorPolicy.PerDay(preparation.PlannedFocusHoursByDay);
+        // Mirrors SealNenContractCommandHandler's identical branch exactly — see its
+        // comment for the Period Time Budget / ContractFloor rationale.
+        DailyFloorPolicy dailyFloorPolicy;
+        ContractFloor? contractFloor = null;
+
+        if (command.FixedDailyFloorHours is { } fixedHours)
+        {
+            dailyFloorPolicy = DailyFloorPolicy.Fixed(new DailyFloor(fixedHours), command.RestDays);
+        }
+        else if (command.StrictnessRule == StrictnessRule.PeriodTimeBudget)
+        {
+            dailyFloorPolicy = DailyFloorPolicy.None;
+            contractFloor = new ContractFloor(preparation.PlannedFocusHoursByDay.Values.Sum());
+        }
+        else
+        {
+            dailyFloorPolicy = DailyFloorPolicy.PerDay(preparation.PlannedFocusHoursByDay);
+        }
 
         var workHoursPolicy = command.WorkHoursStart is { } workHoursStart && command.WorkHoursEnd is { } workHoursEnd
             ? new WorkHoursPolicy(new WorkHours(workHoursStart, workHoursEnd), WorkHoursPolicy.NoConstraintExceptions(command.NoWorkHoursDays))
@@ -88,7 +103,8 @@ public sealed class EditNenContractCommandHandler : ICommandHandler<EditNenContr
                 plannedFocusHoursByDay: preparation.PlannedFocusHoursByDay,
                 sealedAt: _clock.UtcNow,
                 workHoursPolicy: workHoursPolicy,
-                contractPresetId: command.ContractPresetId);
+                contractPresetId: command.ContractPresetId,
+                contractFloor: contractFloor);
         }
         catch (ArgumentException ex)
         {

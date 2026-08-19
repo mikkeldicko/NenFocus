@@ -340,10 +340,9 @@ public class NenFocusDbContext : DbContext
 
             entity.Property(p => p.DailyFloor)
                 .HasConversion(
-                    f => f.Hours,
-                    v => new DailyFloor(v))
-                .HasColumnName("DailyFloorHours")
-                .IsRequired();
+                    f => f == null ? (double?)null : f.Hours,
+                    v => v == null ? null : new DailyFloor(v.Value))
+                .HasColumnName("DailyFloorHours");
 
             entity.OwnsOne(p => p.WorkHours, w =>
             {
@@ -405,6 +404,14 @@ public class NenFocusDbContext : DbContext
                     policy => policy == null ? null : SerializeWorkHoursPolicy(policy),
                     json => json == null ? null : DeserializeWorkHoursPolicy(json))
                 .HasColumnName("WorkHoursPolicy");
+
+            // Single-value object — a direct double? conversion needs no JSON, unlike
+            // DailyFloorPolicy/WorkHoursPolicy which carry a shape worth serializing.
+            entity.Property(c => c.ContractFloor)
+                .HasConversion(
+                    floor => floor == null ? (double?)null : floor.Hours,
+                    hours => hours == null ? null : new ContractFloor(hours.Value))
+                .HasColumnName("ContractFloor");
 
             // ChangeWindow stays unmapped — parked for v1, no Application-layer consumer
             // exists yet (see ARCHITECT_GOVERNANCE.md), unlike WorkHoursPolicy/DailyFloorPolicy

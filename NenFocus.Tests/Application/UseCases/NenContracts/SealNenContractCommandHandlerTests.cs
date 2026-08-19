@@ -240,4 +240,43 @@ public class SealNenContractCommandHandlerTests
         saved.Should().NotBeNull();
         saved!.ContractId.Should().Be(result.ContractId);
     }
+
+    // ── Period Time Budget: no fixed floor -> ContractFloor ─────────────────────
+
+    [Fact]
+    public async Task HandleAsync_PeriodTimeBudgetNoFixedFloor_DerivesContractFloorFromTotalPlannedHours()
+    {
+        var block = new NenContractBlockSpec(Guid.NewGuid(),
+            new DateTime(2026, 1, 1, 9, 0, 0), new DateTime(2026, 1, 1, 11, 0, 0), IsFocus: true);
+        _calculator.Calculate(Arg.Any<IEnumerable<(DateTime, DateTime)>>())
+            .Returns(new Dictionary<DateOnly, double> { [StartDate] = 3, [StartDate.AddDays(1)] = 4, [StartDate.AddDays(2)] = 2 });
+        NenContract? saved = null;
+        await _contracts.AddAsync(Arg.Do<NenContract>(c => saved = c), Arg.Any<CancellationToken>());
+        var command = BaseCommand(blocks: [block]) with { StrictnessRule = StrictnessRule.PeriodTimeBudget, FixedDailyFloorHours = null };
+
+        var result = await CreateHandler().HandleAsync(command, CancellationToken.None);
+
+        result.Success.Should().BeTrue();
+        saved.Should().NotBeNull();
+        saved!.ContractFloorHours.Should().Be(9); // 3 + 4 + 2
+        saved.DailyFloorPolicy.Default.Should().BeNull();
+        saved.DailyFloorPolicy.PerDayExceptions.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task HandleAsync_PeriodTimeBudgetWithFixedFloor_UsesFixedDailyFloorPolicy_NotContractFloor()
+    {
+        _calculator.Calculate(Arg.Any<IEnumerable<(DateTime, DateTime)>>())
+            .Returns(new Dictionary<DateOnly, double>());
+        NenContract? saved = null;
+        await _contracts.AddAsync(Arg.Do<NenContract>(c => saved = c), Arg.Any<CancellationToken>());
+        var command = BaseCommand(fixedFloor: 0) with { StrictnessRule = StrictnessRule.PeriodTimeBudget };
+
+        var result = await CreateHandler().HandleAsync(command, CancellationToken.None);
+
+        result.Success.Should().BeTrue();
+        saved.Should().NotBeNull();
+        saved!.ContractFloorHours.Should().BeNull();
+        saved.DailyFloorPolicy.Default!.Hours.Should().Be(0);
+    }
 }

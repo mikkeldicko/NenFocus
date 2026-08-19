@@ -1,6 +1,7 @@
 using FluentValidation;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.CheckMakeUpForEntry;
+using NenFocus.Application.Queries.ComputePlannedFocusHours;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
 
@@ -16,7 +17,8 @@ public sealed class UpdatePlannedBlockValidator : AbstractValidator<UpdatePlanne
         IBlockPresetRepository presets,
         INenContractRepository contracts,
         ISystemClock clock,
-        IQueryHandler<CheckMakeUpForEntryQuery, MakeUpForEntryCheckResult> checkMakeUpForEntry)
+        IQueryHandler<CheckMakeUpForEntryQuery, MakeUpForEntryCheckResult> checkMakeUpForEntry,
+        IQueryHandler<ComputePlannedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> computePlannedFocusHours)
     {
         _blocks = blocks;
         _clock = clock;
@@ -100,10 +102,85 @@ public sealed class UpdatePlannedBlockValidator : AbstractValidator<UpdatePlanne
 
                 var originalDate = DateOnly.FromDateTime(block.Start.ToLocalTime());
                 var newStartDate = DateOnly.FromDateTime(command.Start.ToLocalTime());
-                var newEndDate = DateOnly.FromDateTime(command.End.ToLocalTime());
+                // A block ending exactly at midnight (e.g. 22:00-24:00) has no actual
+                // presence on the next calendar day — resolve End's boundary to the day it
+                // closes out, mirroring the [start, end) exclusive-end semantics
+                // PlannedBlock.IsActive already uses everywhere else. Subtracting one tick
+                // only changes the resolved date when End lands exactly on a day boundary.
+                var newEndDate = DateOnly.FromDateTime(command.End.ToLocalTime().AddTicks(-1));
 
                 if (contract.AllowsBlockTimeChange(originalDate, newStartDate, newEndDate))
+                {
+                    if (block is FocusBlock)
+                    {
+                        // Floor-protection: a Daily Flexibility contract lets you shrink a
+                        // Focus block freely as long as the day's total doesn't drop below
+                        // its own floor. A pure same-duration move never changes the day's
+                        // total, so this only ever bites an actual shrink. Reuses IsDayMet
+                        // (the same domain rule Day-Met scoring already uses) rather than
+                        // re-deriving the comparison here.
+                        if (contract.StrictnessRule == StrictnessRule.DailyFlexibility)
+                        {
+                            var plannedByDay = await computePlannedFocusHours.HandleAsync(
+                                new ComputePlannedFocusHoursQuery(
+                                    contractId,
+                                    DraftFocusBlockRanges: [(command.Start, command.End)],
+                                    ExcludeBlockId: command.BlockId),
+                                ct);
+                            var newDayTotal = plannedByDay.GetValueOrDefault(originalDate);
+
+                            if (!contract.IsDayMet(originalDate, newDayTotal))
+                            {
+                                var floorHours = contract.FloorHoursFor(originalDate);
+                                context.AddFailure(nameof(UpdatePlannedBlockCommand.End),
+                                    $"This would drop {originalDate:MMM d}'s total below its {floorHours:0.#}h daily floor.");
+                            }
+                        }
+                        else if (contract.StrictnessRule == StrictnessRule.PeriodTimeBudget)
+                        {
+                            var plannedByDay = await computePlannedFocusHours.HandleAsync(
+                                new ComputePlannedFocusHoursQuery(
+                                    contractId,
+                                    DraftFocusBlockRanges: [(command.Start, command.End)],
+                                    ExcludeBlockId: command.BlockId),
+                                ct);
+
+                            // Period-total-protection: a Period Time Budget contract using a
+                            // whole-period ContractFloor instead of a per-day floor. Only
+                            // ever fires when ContractFloor is actually set (IsPeriodMet is
+                            // trivially true otherwise).
+                            if (contract.ContractFloor is not null)
+                            {
+                                var newPeriodTotal = plannedByDay.Values.Sum();
+                                if (!contract.IsPeriodMet(newPeriodTotal))
+                                {
+                                    context.AddFailure(nameof(UpdatePlannedBlockCommand.End),
+                                        $"This would drop the contract's total planned hours below its {contract.ContractFloorHours:0.#}h target.");
+                                }
+                            }
+                            // Ordinary per-day floor: unlike Daily Flexibility, a Period move
+                            // can land on a different day entirely — both the day being
+                            // vacated and the day being landed on (if different) need their
+                            // own floor re-checked, since plannedByDay already reflects this
+                            // block's move out of one and into the other.
+                            else
+                            {
+                                foreach (var date in new[] { originalDate, newStartDate }.Distinct())
+                                {
+                                    var total = plannedByDay.GetValueOrDefault(date);
+                                    if (!contract.IsDayMet(date, total))
+                                    {
+                                        var floorHours = contract.FloorHoursFor(date);
+                                        context.AddFailure(nameof(UpdatePlannedBlockCommand.End),
+                                            $"This would drop {date:MMM d}'s total below its {floorHours:0.#}h daily floor.");
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
                     return;
+                }
 
                 var message = contract.StrictnessRule switch
                 {

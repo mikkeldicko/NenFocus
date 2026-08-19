@@ -93,6 +93,22 @@ public class PlannedBlockRepositoryTests : SqliteRepositoryTestBase
     }
 
     [Fact]
+    public async Task GetOverlappingAsync_CancelledBlock_IsExcluded()
+    {
+        // A cancelled block (its owning contract was broken) has vacated its schedule
+        // entirely and must never block new/moved scheduling into its old time slot.
+        var repo = CreateRepository();
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End);
+        block.MarkCancelled(Start.AddMinutes(-10));
+        await repo.AddAsync(block);
+        await Context.SaveChangesAsync();
+
+        var result = await CreateRepository().GetOverlappingAsync(Start, End, Start);
+
+        result.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task GetOverlappingAsync_SessionEndedEarly_FreedTailIsNotReported()
     {
         var repo = CreateRepository();
