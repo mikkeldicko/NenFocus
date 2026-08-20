@@ -161,6 +161,20 @@
 			<Setter Property="Background" Value="#B8922A"/>
 			<Setter Property="Foreground" Value="White"/>
 		</Style>
+
+		<Style Selector="Button.makeUpToggle">
+			<Setter Property="Background" Value="#FDECEA"/>
+			<Setter Property="Foreground" Value="#C0392B"/>
+			<Setter Property="BorderThickness" Value="0"/>
+			<Setter Property="CornerRadius" Value="6"/>
+			<Setter Property="Padding" Value="10,8"/>
+			<Setter Property="FontSize" Value="12"/>
+			<Setter Property="Cursor" Value="Hand"/>
+		</Style>
+		<Style Selector="Button.makeUpToggle.active">
+			<Setter Property="Background" Value="#C0392B"/>
+			<Setter Property="Foreground" Value="White"/>
+		</Style>
 	</UserControl.Styles>
 
 	<Grid>
@@ -370,16 +384,30 @@
 
 							<StackPanel Spacing="4">
 								<TextBlock Text="Block Preset" FontSize="12" Foreground="#7A7A8C"/>
-								<ComboBox ItemsSource="{Binding AvailablePresets}"
-                                          SelectedItem="{Binding SelectedPreset}"
-                                          HorizontalAlignment="Stretch"
-                                          IsEnabled="{Binding !IsBlockLocked}">
-									<ComboBox.ItemTemplate>
-										<DataTemplate DataType="dto:BlockPresetDto">
-											<TextBlock Text="{Binding Name}"/>
-										</DataTemplate>
-									</ComboBox.ItemTemplate>
-								</ComboBox>
+								<Grid ColumnDefinitions="*,Auto">
+									<ComboBox Grid.Column="0" ItemsSource="{Binding AvailablePresets}"
+                                              SelectedItem="{Binding SelectedPreset}"
+                                              HorizontalAlignment="Stretch"
+                                              IsEnabled="{Binding !IsBlockLocked}">
+										<ComboBox.ItemTemplate>
+											<DataTemplate DataType="dto:BlockPresetDto">
+												<TextBlock Text="{Binding Name}"/>
+											</DataTemplate>
+										</ComboBox.ItemTemplate>
+									</ComboBox>
+									<Button Grid.Column="1" Classes="makeUpToggle" Classes.active="{Binding IsMarkedAsMakeUp}"
+                                            Content="Makeup"
+                                            ToolTip.Tip="Mark this block as covering the incomplete block's deficit"
+                                            IsVisible="{Binding EligibleMakeUpTarget, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                            Command="{Binding ToggleMarkAsMakeUpCommand}"
+                                            Margin="8,0,0,0"/>
+								</Grid>
+								<TextBlock Text="{Binding SelectedPreset.Name, StringFormat='Marked as a makeup for the incomplete {0} block.'}"
+                                           IsVisible="{Binding IsMarkedAsMakeUp}"
+                                           FontSize="11" Foreground="#7A5C00" TextWrapping="Wrap"/>
+								<TextBlock Text="{Binding MakeUpSuggestionNotice}"
+                                           IsVisible="{Binding MakeUpSuggestionNotice, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                           FontSize="11" Foreground="#B8860B" TextWrapping="Wrap"/>
 							</StackPanel>
 
 							<TextBlock Text="{Binding FormError}"

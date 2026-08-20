@@ -48,6 +48,21 @@ public class GetPlannedBlocksForDayQueryHandlerTests
         dto.End.Should().Be(End);
         dto.IsCompleted.Should().BeFalse();
         dto.HasEnded.Should().BeFalse();
+        dto.IsMakeUp.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task HandleAsync_FocusBlockWithMakeUpForEntries_IsMakeUpTrue()
+    {
+        var presetId = Guid.NewGuid();
+        var block = FocusBlock.Create(Guid.NewGuid(), presetId, Start, End,
+            makeUpForEntries: [new MakeUpForEntry(Guid.NewGuid(), 30)]);
+        _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
+        _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
+
+        var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
+
+        result.Should().ContainSingle().Subject.IsMakeUp.Should().BeTrue();
     }
 
     [Fact]

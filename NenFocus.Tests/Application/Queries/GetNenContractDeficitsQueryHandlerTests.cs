@@ -77,6 +77,8 @@ public class GetNenContractDeficitsQueryHandlerTests
         dto.FocusBlockId.Should().Be(block.Id);
         dto.Outcome.Should().Be(FocusBlockOutcome.Missed);
         dto.RemainingDeficitMinutes.Should().Be(120);
+        dto.PlannedMinutes.Should().Be(120);
+        dto.CompletedMinutes.Should().Be(0);
     }
 
     [Fact]
@@ -91,10 +93,14 @@ public class GetNenContractDeficitsQueryHandlerTests
         session.Start(block.Start.AddMinutes(20), block.End);
         session.Complete(block.Start.AddMinutes(20 + 90)); // 90 minutes actually completed
         _sessions.GetByOriginatingBlockIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns(session);
+        _classifier.CreditedFocusMinutes(block.Start, block.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Arg.Any<double>()).Returns(90);
 
         var result = await CreateHandler().HandleAsync(new GetNenContractDeficitsQuery(ContractId), CancellationToken.None);
 
-        result.Should().ContainSingle().Subject.RemainingDeficitMinutes.Should().Be(30); // 120 - 90
+        var dto = result.Should().ContainSingle().Subject;
+        dto.RemainingDeficitMinutes.Should().Be(30); // 120 - 90
+        dto.PlannedMinutes.Should().Be(120);
+        dto.CompletedMinutes.Should().Be(90);
     }
 
     [Fact]
@@ -109,12 +115,46 @@ public class GetNenContractDeficitsQueryHandlerTests
         session.Start(block.Start); // started right on time
         session.Complete(block.Start.AddMinutes(45)); // but quit after 45 of the 120 scheduled minutes
         _sessions.GetByOriginatingBlockIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns(session);
+        _classifier.CreditedFocusMinutes(block.Start, block.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Arg.Any<double>()).Returns(45);
 
         var result = await CreateHandler().HandleAsync(new GetNenContractDeficitsQuery(ContractId), CancellationToken.None);
 
         var dto = result.Should().ContainSingle().Subject;
         dto.Outcome.Should().Be(FocusBlockOutcome.EndedEarly);
         dto.RemainingDeficitMinutes.Should().Be(75); // 120 - 45 — the early-end gap is no longer silently lost
+        dto.PlannedMinutes.Should().Be(120);
+        dto.CompletedMinutes.Should().Be(45);
+    }
+
+    [Fact]
+    public async Task HandleAsync_StartedLateSessionRanPastBlocksScheduledEnd_DeficitUsesCreditedNotRawElapsed()
+    {
+        // Block scheduled for 120 minutes; ritual completed 40 min late. The session then
+        // ran a full 150 minutes from that late start, extending 70 minutes past the
+        // block's own scheduled end. Raw elapsed (150) exceeds scheduled (120) — the bug
+        // this reproduces let that raw excess silently zero out a real remaining deficit.
+        var block = MissedBlock(Now.AddHours(-3), Now.AddHours(-1)); // 2-hour block, 120 min
+        _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
+        _classifier.Classify(block.Start, block.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Now).Returns(FocusBlockOutcome.StartedLate);
+
+        var ritualCompletedAt = block.Start.AddMinutes(40);
+        var session = Session.Create(Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(150)),
+            block.BlockPresetId, SessionOrigin.Planned, originatingBlockId: block.Id);
+        session.Start(ritualCompletedAt, block.End);
+        session.Complete(ritualCompletedAt.AddMinutes(150)); // 70 minutes past block.End
+        _sessions.GetByOriginatingBlockIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns(session);
+
+        // Credited is capped at scheduledEnd - completedAt (120 - 40 = 80), same rule
+        // Daily Floor crediting already applies — the deficit query must reuse it, not
+        // re-derive its own number from raw elapsed time.
+        _classifier.CreditedFocusMinutes(block.Start, block.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Arg.Any<double>())
+            .Returns(80);
+
+        var result = await CreateHandler().HandleAsync(new GetNenContractDeficitsQuery(ContractId), CancellationToken.None);
+
+        var dto = result.Should().ContainSingle().Subject;
+        dto.RemainingDeficitMinutes.Should().Be(40); // 120 - 80
+        dto.CompletedMinutes.Should().Be(80);
     }
 
     [Fact]

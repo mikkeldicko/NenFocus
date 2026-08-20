@@ -42,6 +42,9 @@ public partial class PlannedBlockTileViewModel : ViewModelBase
     /// </summary>
     public bool WasStartedLate { get; }
 
+    /// <summary>True for a Focus block created to cover another block's deficit — renders with a dashed border.</summary>
+    public bool IsMakeUp { get; }
+
     public PlannedBlockTileViewModel(
         PlannedBlockDto dto,
         BlockPresetType blockPresetType,
@@ -62,5 +65,6 @@ public partial class PlannedBlockTileViewModel : ViewModelBase
         IsDraft = isDraft;
         Outcome = dto.Outcome;
         WasStartedLate = dto.WasStartedLate;
+        IsMakeUp = dto.IsMakeUp;
     }
 }

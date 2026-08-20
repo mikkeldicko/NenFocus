@@ -10,6 +10,7 @@ using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.CheckNenContractDateRangeOverlap;
 using NenFocus.Application.Queries.ComputePlannedFocusHours;
+using NenFocus.Application.Queries.FindMakeUpEligibleBlock;
 using NenFocus.Application.Queries.GetActiveNenContract;
 using NenFocus.Application.Queries.GetAllBlockPresets;
 using NenFocus.Application.Queries.GetAllContractPresets;
@@ -52,6 +53,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     private readonly IQueryHandler<GetAllContractPresetsQuery, IReadOnlyList<ContractPresetDto>> _getContractPresets;
     private readonly ICommandHandler<CreateContractPresetCommand, CreateContractPresetResult> _createContractPreset;
     private readonly IQueryHandler<GetActiveNenContractQuery, ActiveNenContractDto?> _getActiveContract;
+    private readonly IQueryHandler<FindMakeUpEligibleBlockQuery, FocusBlockDeficitDto?> _findMakeUpEligibleBlock;
     private readonly IQueryHandler<CheckNenContractDateRangeOverlapQuery, string?> _checkOverlap;
     private readonly IQueryHandler<GetScheduledNenContractsQuery, IReadOnlyList<ScheduledNenContractDto>> _getScheduledContracts;
     private readonly IQueryHandler<GetNenContractForEditQuery, NenContractEditDto?> _getContractForEdit;
@@ -144,6 +146,13 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     [ObservableProperty] private bool _isEditingBlockDailyFlexibility;
     [ObservableProperty] private string? _dragError;
 
+    // The incomplete block (if any) the currently selected preset + date is eligible to
+    // cover — refreshed whenever either changes. Null means no "mark as makeup" affordance
+    // applies to what's currently in the form.
+    [ObservableProperty] private FocusBlockDeficitDto? _eligibleMakeUpTarget;
+    [ObservableProperty] private bool _isMarkedAsMakeUp;
+    [ObservableProperty] private string? _makeUpSuggestionNotice;
+
     // ── Split Block ────────────────────────────────────────────────────────────
     [ObservableProperty] private bool _isSplitDialogVisible;
     [ObservableProperty] private string _splitFirstStartTime = "09:00";
@@ -177,6 +186,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     [ObservableProperty] private bool _isConfirmDeleteContractVisible;
     [ObservableProperty] private string _confirmDeleteContractMessage = string.Empty;
     [ObservableProperty] private string? _deleteContractErrorMessage;
+
     private Guid? _contractIdPendingDelete;
 
     public bool HasActiveContract => ActiveContract is not null;
@@ -365,6 +375,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         IQueryHandler<GetAllContractPresetsQuery, IReadOnlyList<ContractPresetDto>> getContractPresets,
         ICommandHandler<CreateContractPresetCommand, CreateContractPresetResult> createContractPreset,
         IQueryHandler<GetActiveNenContractQuery, ActiveNenContractDto?> getActiveContract,
+        IQueryHandler<FindMakeUpEligibleBlockQuery, FocusBlockDeficitDto?> findMakeUpEligibleBlock,
         IQueryHandler<CheckNenContractDateRangeOverlapQuery, string?> checkOverlap,
         IQueryHandler<GetScheduledNenContractsQuery, IReadOnlyList<ScheduledNenContractDto>> getScheduledContracts,
         IQueryHandler<GetNenContractForEditQuery, NenContractEditDto?> getContractForEdit,
@@ -389,6 +400,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         _getContractPresets = getContractPresets;
         _createContractPreset = createContractPreset;
         _getActiveContract = getActiveContract;
+        _findMakeUpEligibleBlock = findMakeUpEligibleBlock;
         _checkOverlap = checkOverlap;
         _clockService = clockService;
         _sessionState = sessionState;
@@ -550,6 +562,65 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     {
         RefreshAvailablePresets();
         SelectedPreset = AvailablePresets.FirstOrDefault();
+    }
+
+    partial void OnSelectedPresetChanged(BlockPresetDto? value) => _ = RefreshEligibleMakeUpTargetAsync();
+    partial void OnFormDateChanged(DateTimeOffset value) => _ = RefreshEligibleMakeUpTargetAsync();
+
+    // Only offered when creating a brand-new block (not editing one, not drafting a
+    // contract) under the currently active contract — composes the existing deficit
+    // ledger via the domain's own CheckMakeUpEligibility rule (FindMakeUpEligibleBlock),
+    // never re-deriving the day/period eligibility rule here.
+    private async Task RefreshEligibleMakeUpTargetAsync()
+    {
+        IsMarkedAsMakeUp = false; // preset/date changed — any previous mark no longer applies
+        EligibleMakeUpTarget = null;
+        MakeUpSuggestionNotice = null;
+
+        if (!IsFocusBlock || SelectedPreset is null || ActiveContract is null || IsEditing || IsDraftingContract)
+            return;
+
+        EligibleMakeUpTarget = await _findMakeUpEligibleBlock.HandleAsync(
+            new FindMakeUpEligibleBlockQuery(ActiveContract.Id, SelectedPreset.Id, FormDate.Date));
+    }
+
+    [RelayCommand]
+    private void ToggleMarkAsMakeUp()
+    {
+        if (EligibleMakeUpTarget is not { } target) return;
+        IsMarkedAsMakeUp = !IsMarkedAsMakeUp;
+        MakeUpSuggestionNotice = null;
+        if (!IsMarkedAsMakeUp) return;
+
+        // Suggest an End time sized to the remaining deficit from whatever Start is
+        // already set — a starting point, not a lock; still editable afterward. Rounds
+        // UP to the next whole minute (never down): the deficit is rarely a whole number
+        // of minutes (e.g. 53.18), and TimeSpan.Minutes truncates the fractional part —
+        // suggesting a floor-rounded duration would leave the day a few seconds short of
+        // actually closing the deficit even when completed exactly as suggested.
+        if (TryParseFormTime(FormStartTime, out var startTime))
+        {
+            var suggestedMinutes = Math.Ceiling(target.RemainingDeficitMinutes);
+            var suggestedEnd = startTime + TimeSpan.FromMinutes(suggestedMinutes);
+
+            // Clamped at calendar midnight, not a real time otherwise — "24:28" isn't just
+            // an ugly display, TimeSpan.TryParse silently accepts it as 1 day + 28 minutes,
+            // which would schedule the block a full day later than intended if saved as-is.
+            // Work Hours (if the contract has any) is deliberately NOT accounted for here —
+            // that stays the server-side CreatePlannedBlockValidator's job, same as every
+            // other block creation in this app; teaching the client that rule too would mean
+            // re-deriving it in a second place for a display suggestion, not an actual need.
+            var endOfDay = TimeSpan.FromHours(24);
+            if (suggestedEnd > endOfDay)
+            {
+                var coveredMinutes = (endOfDay - startTime).TotalMinutes;
+                MakeUpSuggestionNotice =
+                    $"Only {coveredMinutes:0.#} min left today — this covers {coveredMinutes:0.#} of the {target.RemainingDeficitMinutes:0.#} min needed; the rest will still show as an incomplete deficit.";
+                suggestedEnd = endOfDay;
+            }
+
+            FormEndTime = suggestedEnd == endOfDay ? "24:00" : $"{(int)suggestedEnd.TotalHours:D2}:{suggestedEnd.Minutes:D2}";
+        }
     }
 
     private async Task LoadWeekAsync()
@@ -756,12 +827,32 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         }
         else
         {
+            var markedAsMakeUp = IsMarkedAsMakeUp && EligibleMakeUpTarget is not null;
+
+            // MinutesCovered is a ledger claim against the missed block's deficit, not a
+            // restatement of this block's own duration — the two are allowed to differ.
+            // The suggested End time is deliberately rounded UP to the next whole minute
+            // (ToggleMarkAsMakeUp) so the day's total credited time comfortably reaches the
+            // floor, but the real deficit is almost never a whole number of minutes (it comes
+            // from precise timestamp subtraction). Claiming the block's own rounded-up
+            // duration would then exceed the real deficit and get rejected by
+            // CheckMakeUpForEntryQuery's "MinutesCovered > remainingDeficit" guard — capping
+            // the claim at the real remaining deficit keeps the claim valid while letting the
+            // block itself stay long enough to actually close the gap.
+            IReadOnlyList<MakeUpForEntryDto> makeUpForEntries = markedAsMakeUp
+                ? [new MakeUpForEntryDto(
+                    EligibleMakeUpTarget!.FocusBlockId,
+                    Math.Min((endUtc - startUtc).TotalMinutes, EligibleMakeUpTarget.RemainingDeficitMinutes))]
+                : [];
+
             var result = await _createBlock.HandleAsync(new CreatePlannedBlockCommand
             {
                 PresetId = SelectedPreset.Id,
                 BlockPresetType = blockPresetType,
                 Start = startUtc,
-                End = endUtc
+                End = endUtc,
+                ContractId = markedAsMakeUp ? ActiveContract?.Id : null,
+                MakeUpForEntries = makeUpForEntries
             });
             if (!result.Success) { FormError = result.ErrorMessage; return; }
         }
@@ -924,6 +1015,9 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         IsEditingBlockDailyFlexibility = false;
         IsSplitDialogVisible = false;
         SplitError = null;
+        EligibleMakeUpTarget = null;
+        IsMarkedAsMakeUp = false;
+        MakeUpSuggestionNotice = null;
         _editingBlockId = null;
         _editingIsDraft = false;
     }

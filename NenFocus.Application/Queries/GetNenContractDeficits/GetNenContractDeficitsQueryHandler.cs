@@ -44,9 +44,20 @@ public sealed class GetNenContractDeficitsQueryHandler
             if (outcome is not (FocusBlockOutcome.Missed or FocusBlockOutcome.StartedLate or FocusBlockOutcome.EndedEarly))
                 continue;
 
+            // Credited, not raw elapsed: a StartedLate session that keeps running past the
+            // block's own scheduled end (e.g. a fixed-duration session started late) can
+            // rack up more raw elapsed minutes than the block was ever scheduled for. Raw
+            // elapsed would then make rawDeficit collapse to zero — hiding a real deficit —
+            // purely because of time spent *after* the block's window closed. Credited
+            // minutes is already the correct, capped answer (same rule Daily Floor scoring
+            // uses via GetNenContractCompletedFocusHoursQueryHandler), reused here rather
+            // than re-derived, so the two can never disagree about "how much of this block
+            // was actually honored."
             var actualElapsedMinutes = session?.GetElapsedTime(now)?.TotalMinutes ?? 0;
+            var creditedMinutes = _classifier.CreditedFocusMinutes(
+                block.Start, block.End, block.RitualCompletedAt, session?.EndedAt, actualElapsedMinutes);
             var scheduledMinutes = block.GetDuration().TotalMinutes;
-            var rawDeficit = Math.Max(0, scheduledMinutes - actualElapsedMinutes);
+            var rawDeficit = Math.Max(0, scheduledMinutes - creditedMinutes);
 
             var coveredMinutes = focusBlocks
                 .SelectMany(b => b.MakeUpForEntries)
@@ -64,7 +75,9 @@ public sealed class GetNenContractDeficitsQueryHandler
                 ScheduledStart = block.Start,
                 ScheduledEnd = block.End,
                 Outcome = outcome.Value,
-                RemainingDeficitMinutes = remainingDeficit
+                RemainingDeficitMinutes = remainingDeficit,
+                PlannedMinutes = scheduledMinutes,
+                CompletedMinutes = creditedMinutes
             });
         }
 

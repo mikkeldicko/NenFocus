@@ -15,6 +15,7 @@ public class CreatePlannedBlockValidatorTests
 
     private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
     private readonly INenContractRepository _contracts = Substitute.For<INenContractRepository>();
+    private readonly IPlannedBlockRepository _blocks = Substitute.For<IPlannedBlockRepository>();
     private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
     private readonly IQueryHandler<CheckMakeUpForEntryQuery, MakeUpForEntryCheckResult> _checkMakeUpForEntry =
         Substitute.For<IQueryHandler<CheckMakeUpForEntryQuery, MakeUpForEntryCheckResult>>();
@@ -26,7 +27,7 @@ public class CreatePlannedBlockValidatorTests
             .Returns(MakeUpForEntryCheckResult.Valid);
     }
 
-    private CreatePlannedBlockValidator CreateValidator() => new(_presets, _contracts, _clock, _checkMakeUpForEntry);
+    private CreatePlannedBlockValidator CreateValidator() => new(_presets, _contracts, _blocks, _clock, _checkMakeUpForEntry);
 
     private static CreatePlannedBlockCommand ValidCommand(Guid presetId) => new()
     {
@@ -256,5 +257,56 @@ public class CreatePlannedBlockValidatorTests
         await _checkMakeUpForEntry.Received(1).HandleAsync(
             Arg.Is<CheckMakeUpForEntryQuery>(q => q.MissedBlockId == missedBlockId && q.ExcludeBlockId == null),
             Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Validate_MakeUpForEntry_DifferentContractThanMissedBlock_IsInvalid()
+    {
+        var presetId = Guid.NewGuid();
+        var missedBlockContractId = Guid.NewGuid();
+        var makeUpContractId = Guid.NewGuid();
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Now));
+        var missedBlockId = Guid.NewGuid();
+        _blocks.GetByIdAsync(missedBlockId, Arg.Any<CancellationToken>())
+            .Returns(FocusBlock.Create(missedBlockId, presetId, Now.AddHours(-3), Now.AddHours(-1), contractId: missedBlockContractId));
+        var command = ValidCommand(presetId) with { ContractId = makeUpContractId, MakeUpForEntries = [new(missedBlockId, 30)] };
+
+        var result = await CreateValidator().ValidateAsync(command);
+
+        result.IsValid.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Validate_MakeUpForEntry_SameContractAsMissedBlock_IsValid()
+    {
+        var presetId = Guid.NewGuid();
+        var contractId = Guid.NewGuid();
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Now));
+        var missedBlockId = Guid.NewGuid();
+        _blocks.GetByIdAsync(missedBlockId, Arg.Any<CancellationToken>())
+            .Returns(FocusBlock.Create(missedBlockId, presetId, Now.AddHours(-3), Now.AddHours(-1), contractId: contractId));
+        var command = ValidCommand(presetId) with { ContractId = contractId, MakeUpForEntries = [new(missedBlockId, 30)] };
+
+        var result = await CreateValidator().ValidateAsync(command);
+
+        result.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Validate_MakeUpForEntry_MissedBlockNotFound_SkipsContractCheck()
+    {
+        var presetId = Guid.NewGuid();
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Now));
+        var missedBlockId = Guid.NewGuid();
+        _blocks.GetByIdAsync(missedBlockId, Arg.Any<CancellationToken>()).Returns((PlannedBlock?)null);
+        var command = ValidCommand(presetId) with { MakeUpForEntries = [new(missedBlockId, 30)] };
+
+        var result = await CreateValidator().ValidateAsync(command);
+
+        // CheckMakeUpForEntryQuery (mocked Valid) is the rule that owns "not found" reporting.
+        result.IsValid.Should().BeTrue();
     }
 }

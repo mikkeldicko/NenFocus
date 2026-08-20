@@ -10,6 +10,7 @@ public sealed class CreatePlannedBlockValidator : AbstractValidator<CreatePlanne
     public CreatePlannedBlockValidator(
         IBlockPresetRepository presets,
         INenContractRepository contracts,
+        IPlannedBlockRepository blocks,
         ISystemClock clock,
         IQueryHandler<CheckMakeUpForEntryQuery, MakeUpForEntryCheckResult> checkMakeUpForEntry)
     {
@@ -64,6 +65,18 @@ public sealed class CreatePlannedBlockValidator : AbstractValidator<CreatePlanne
                 var message = MakeUpForEntryMessages.For(result);
                 if (message is not null)
                     context.AddFailure(nameof(CreatePlannedBlockCommand.MakeUpForEntries), message);
+            });
+
+        RuleForEach(x => x.MakeUpForEntries)
+            .CustomAsync(async (entry, context, ct) =>
+            {
+                var command = context.InstanceToValidate;
+                if (command.BlockPresetType != BlockPresetType.Focus) return; // already reported above
+
+                var missedBlock = await blocks.GetByIdAsync(entry.MissedBlockId, ct);
+                if (missedBlock is not null && missedBlock.ContractId != command.ContractId)
+                    context.AddFailure(nameof(CreatePlannedBlockCommand.MakeUpForEntries),
+                        "A make-up block must belong to the same contract as the block it covers.");
             });
     }
 }

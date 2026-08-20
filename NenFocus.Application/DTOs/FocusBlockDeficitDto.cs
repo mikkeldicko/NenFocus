@@ -15,4 +15,6 @@ public sealed record FocusBlockDeficitDto
     public DateTime ScheduledEnd { get; init; }
     public FocusBlockOutcome Outcome { get; init; }
     public double RemainingDeficitMinutes { get; init; }
+    public double PlannedMinutes { get; init; }
+    public double CompletedMinutes { get; init; }
 }

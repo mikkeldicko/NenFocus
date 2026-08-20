@@ -322,18 +322,23 @@ public partial class PlannerPageView : UserControl
                 Opacity    = 0.9
             });
 
-            var content = new Grid();
-            content.Children.Add(stack);
-            content.Children.Add(new Rectangle
+            btn.Content = stack;
+            return btn;
+        }
+
+        // A make-up block stays in its normal outcome/preset color family — a small
+        // "MAKEUP" tag is the only distinguishing mark, no border treatment.
+        if (tile.IsMakeUp)
+        {
+            stack.Children.Add(new TextBlock
             {
-                Stroke          = Brushes.White,
-                StrokeThickness = 1.5,
-                StrokeDashArray = new AvaloniaList<double> { 4, 2 },
-                RadiusX         = 6,
-                RadiusY         = 6,
-                IsHitTestVisible = false
+                Text       = "MAKEUP",
+                FontSize   = 9,
+                FontWeight = FontWeight.Bold,
+                Opacity    = 0.9
             });
-            btn.Content = content;
+
+            btn.Content = stack;
             return btn;
         }
 
