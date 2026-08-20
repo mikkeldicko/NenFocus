@@ -12,6 +12,28 @@ public class FocusBlockOutcomeClassifierTests
     private readonly FocusBlockOutcomeClassifier _classifier = new();
 
     [Fact]
+    public void IsLateStart_AtGraceBoundary_IsFalse()
+    {
+        var moment = ScheduledStart.AddMinutes(FocusBlockOutcomeClassifier.GracePeriodMinutes);
+
+        _classifier.IsLateStart(ScheduledStart, moment).Should().BeFalse();
+    }
+
+    [Fact]
+    public void IsLateStart_JustPastGraceBoundary_IsTrue()
+    {
+        var moment = ScheduledStart.AddMinutes(FocusBlockOutcomeClassifier.GracePeriodMinutes).AddMinutes(1);
+
+        _classifier.IsLateStart(ScheduledStart, moment).Should().BeTrue();
+    }
+
+    [Fact]
+    public void IsLateStart_BeforeScheduledStart_IsFalse()
+    {
+        _classifier.IsLateStart(ScheduledStart, ScheduledStart.AddMinutes(-10)).Should().BeFalse();
+    }
+
+    [Fact]
     public void RitualCompletedAtStart_IsCompletedOnTime()
     {
         _classifier.Classify(ScheduledStart, ScheduledEnd, ritualCompletedAt: ScheduledStart, sessionEndedAt: null, asOf: ScheduledStart)
@@ -206,5 +228,33 @@ public class FocusBlockOutcomeClassifierTests
             ScheduledStart, ScheduledEnd, ritualCompletedAt: ScheduledStart, sessionEndedAt: sessionEndedAt, actualElapsedMinutes: 20);
 
         credited.Should().Be(20);
+    }
+
+    [Fact]
+    public void CreditedFocusMinutes_StartedLateAndRanPastScheduledEnd_CapsAtScheduledEnd()
+    {
+        // Ritual completed 19 minutes late (12:19 for a 12:00–15:00 block); the session
+        // wasn't ended until well past the block's own scheduled end (e.g. via debug clock
+        // skip). Credit must never exceed what was actually scheduled from the late start —
+        // scheduledEnd (15:00) minus completedAt (12:19) = 161 minutes, not the raw elapsed
+        // 180 minutes to the artificially-late EndedAt.
+        var ritualAt = ScheduledStart.AddMinutes(19);
+
+        var credited = _classifier.CreditedFocusMinutes(
+            ScheduledStart, ScheduledEnd, ritualCompletedAt: ritualAt, sessionEndedAt: null, actualElapsedMinutes: 180);
+
+        credited.Should().Be((ScheduledEnd - ritualAt).TotalMinutes);
+    }
+
+    [Fact]
+    public void CreditedFocusMinutes_StartedLateAndEndedBeforeScheduledEnd_CreditsActualElapsed()
+    {
+        // Ordinary StartedLate case, ending within the scheduled window — unaffected by the cap.
+        var ritualAt = ScheduledStart.AddMinutes(FocusBlockOutcomeClassifier.GracePeriodMinutes + 1);
+
+        var credited = _classifier.CreditedFocusMinutes(
+            ScheduledStart, ScheduledEnd, ritualCompletedAt: ritualAt, sessionEndedAt: null, actualElapsedMinutes: 90);
+
+        credited.Should().Be(90);
     }
 }

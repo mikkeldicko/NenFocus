@@ -218,6 +218,26 @@ public partial class PlannerPageView : UserControl
             _tileGhost.Width = width;
     }
 
+    private static readonly IReadOnlyList<string> NoBadges = Array.Empty<string>();
+
+    /// <summary>
+    /// Maps a resolved Focus block outcome to its tile style class and badge text(s) — null
+    /// class / no badges for a still-pending block (default focusTile gold). StartedLate and
+    /// EndedEarly share one class deliberately: both are "something went off-schedule," same
+    /// amber treatment, distinguished only by badge text. CompletedOnTime gets color with no
+    /// badge — green alone is enough to read as "on time." wasStartedLate is independent of
+    /// outcome (Classify gives EndedEarly priority when a block is both late and early), so an
+    /// EndedEarly block that was also started late shows both badges stacked.
+    /// </summary>
+    private static (string? TileClass, IReadOnlyList<string> BadgeTexts) GetOutcomeVisual(FocusBlockOutcome? outcome, bool wasStartedLate) => outcome switch
+    {
+        FocusBlockOutcome.Missed => ("missedTile", new[] { "MISSED" }),
+        FocusBlockOutcome.StartedLate => ("lateOrEarlyTile", new[] { "STARTED LATE" }),
+        FocusBlockOutcome.EndedEarly => ("lateOrEarlyTile", wasStartedLate ? new[] { "STARTED LATE", "ENDED EARLY" } : new[] { "ENDED EARLY" }),
+        FocusBlockOutcome.CompletedOnTime => ("completedOnTimeTile", NoBadges),
+        _ => (null, NoBadges)
+    };
+
     private Button BuildTileButton(PlannedBlockTileViewModel tile, Canvas ownerCanvas)
     {
         var btn = new Button
@@ -227,8 +247,9 @@ public partial class PlannerPageView : UserControl
             DataContext  = tile
         };
 
-        if (tile.IsMissed)
-            btn.Classes.Add("missedTile");
+        var (outcomeTileClass, outcomeBadgeTexts) = GetOutcomeVisual(tile.Outcome, tile.WasStartedLate);
+        if (outcomeTileClass is not null)
+            btn.Classes.Add(outcomeTileClass);
 
         // Unsealed Nen Contract draft blocks render distinctly — dashed white outline
         // (via a StrokeDashArray overlay, since Border has no native dash support) plus
@@ -280,11 +301,11 @@ public partial class PlannerPageView : UserControl
             TextDecorations = tile.IsMissed ? TextDecorations.Strikethrough : null
         });
 
-        if (tile.IsMissed)
+        foreach (var badgeText in outcomeBadgeTexts)
         {
             stack.Children.Add(new TextBlock
             {
-                Text       = "MISSED",
+                Text       = badgeText,
                 FontSize   = 9,
                 FontWeight = FontWeight.Bold,
                 Opacity    = 0.9

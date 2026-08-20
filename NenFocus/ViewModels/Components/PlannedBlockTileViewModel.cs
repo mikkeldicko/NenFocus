@@ -29,8 +29,18 @@ public partial class PlannedBlockTileViewModel : ViewModelBase
     /// <summary>True for an unsealed Nen Contract draft block — never persisted, styled distinctly.</summary>
     public bool IsDraft { get; }
 
-    /// <summary>True for a FocusBlock whose Ritual was never completed and whose window already closed.</summary>
-    public bool IsMissed { get; }
+    /// <summary>FocusBlockOutcomeClassifier.Classify's result — null for Background blocks or a still-pending Focus block.</summary>
+    public FocusBlockOutcome? Outcome { get; }
+
+    /// <summary>True only for Missed — the sole outcome whose tile text is struck through (nothing happened at all).</summary>
+    public bool IsMissed => Outcome == FocusBlockOutcome.Missed;
+
+    /// <summary>
+    /// True when the ritual completed past the grace period, independent of Outcome — a block
+    /// can be both StartedLate and EndedEarly (Outcome favors EndedEarly), so this lets the
+    /// tile show both facts.
+    /// </summary>
+    public bool WasStartedLate { get; }
 
     public PlannedBlockTileViewModel(
         PlannedBlockDto dto,
@@ -50,6 +60,7 @@ public partial class PlannedBlockTileViewModel : ViewModelBase
         Top = top;
         Height = height;
         IsDraft = isDraft;
-        IsMissed = dto.IsMissed;
+        Outcome = dto.Outcome;
+        WasStartedLate = dto.WasStartedLate;
     }
 }

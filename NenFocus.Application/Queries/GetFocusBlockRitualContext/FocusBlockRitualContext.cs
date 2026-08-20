@@ -15,4 +15,13 @@ public sealed record FocusBlockRitualContext
     public required FocusBlockSchedule Schedule { get; init; }
     public required TimeSpan LateBy { get; init; }
     public required bool IsLate { get; init; }
+
+    /// <summary>
+    /// True when a Session already exists for this block (e.g. the sweep already marked it
+    /// Missed under a different "now" than whatever triggered this ritual request — see
+    /// DESIGN_GAP_HISTORY.md Gap 21's addenda). The caller must not open the Ritual in this
+    /// case: a session can never be started for a block that already has one, so showing the
+    /// Ritual here would only guarantee a rejection at Hatsu.
+    /// </summary>
+    public required bool AlreadyHasSession { get; init; }
 }

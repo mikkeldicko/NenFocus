@@ -10,16 +10,22 @@ public sealed class GetFocusBlockRitualContextQueryHandler
 {
     private readonly IPlannedBlockRepository _blocks;
     private readonly IBlockPresetRepository _presets;
+    private readonly ISessionRepository _sessions;
     private readonly ISystemClock _clock;
+    private readonly IFocusBlockOutcomeClassifier _classifier;
 
     public GetFocusBlockRitualContextQueryHandler(
         IPlannedBlockRepository blocks,
         IBlockPresetRepository presets,
-        ISystemClock clock)
+        ISessionRepository sessions,
+        ISystemClock clock,
+        IFocusBlockOutcomeClassifier classifier)
     {
         _blocks = blocks;
         _presets = presets;
+        _sessions = sessions;
         _clock = clock;
+        _classifier = classifier;
     }
 
     public async Task<FocusBlockRitualContext?> HandleAsync(GetFocusBlockRitualContextQuery query, CancellationToken ct)
@@ -30,17 +36,18 @@ public sealed class GetFocusBlockRitualContextQueryHandler
         var preset = await _presets.GetByIdAsync(block.BlockPresetId, ct);
         if (preset is null) return null;
 
-        // Reuses the same grace period FocusBlockOutcomeClassifier already applies to a
-        // late ritual completion — one definition of "late enough to matter," not a
-        // second one invented for this modal.
-        var lateBy = _clock.UtcNow - block.Start;
+        // Reuses IFocusBlockOutcomeClassifier.IsLateStart — one definition of "late enough
+        // to matter," not a second one invented for this modal — against a live "if the
+        // ritual completed right now" check, since the ritual hasn't happened yet.
+        var now = _clock.UtcNow;
 
         return new FocusBlockRitualContext
         {
             Preset = BlockPresetDto.FromEntity(preset),
             Schedule = new FocusBlockSchedule { Start = block.Start, End = block.End },
-            LateBy = lateBy,
-            IsLate = lateBy.TotalMinutes > FocusBlockOutcomeClassifier.GracePeriodMinutes
+            LateBy = now - block.Start,
+            IsLate = _classifier.IsLateStart(block.Start, now),
+            AlreadyHasSession = await _sessions.ExistsForOriginatingBlockAsync(block.Id, ct)
         };
     }
 }

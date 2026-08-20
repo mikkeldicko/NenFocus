@@ -3,6 +3,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.ComputeActivePolicySlice;
+using NenFocus.Application.UseCases.Sessions.SweepMissedFocusBlocks;
 using NenFocus.Domain.Enums;
 using NenFocus.Domain.ValueObjects;
 
@@ -48,6 +49,31 @@ public sealed class ScheduledEnforcementService : BackgroundService
                     .GetRequiredService<IQueryHandler<ComputeActivePolicySliceQuery, ActivePolicySlice>>();
 
                 var now = _clock.UtcNow;
+
+                // Backstop for the case where this heartbeat's own edge-triggered ritual-
+                // required tracking never observed a block go active — e.g. the system slept
+                // through the block's entire window, or (in dev) the debug clock jumped past
+                // it in one step. SweepMissedFocusBlocksCommandHandler is the same level-based
+                // "block's End has passed with no ritual" check SessionStateService.
+                // InitializeAsync already runs once at startup; running it every tick too means
+                // a block can never sit unresolved for longer than one heartbeat interval.
+                // Unlike the startup sweep, anything this one finds was never announced to
+                // anyone live — NotifyPostSessionsReady is what lets ShellViewModel surface it
+                // as a Post-Session popup immediately instead of only at next app restart.
+                //
+                // AsOf = now (the same value passed to ComputeActivePolicySliceQuery below) is
+                // deliberate, not incidental: without it, the sweep would read its own fresh
+                // ISystemClock.UtcNow, which can drift from `now` by however long DI/DB/
+                // debugger overhead takes between the two reads. A block whose End falls in
+                // that gap could then get two different verdicts in the same tick — the sweep
+                // (later clock) marks it Missed while the policy computation (earlier `now`)
+                // still sees it inside its active window and fires SetRitualRequired for the
+                // same block, sending the user into a Ritual for a block that already has a
+                // Missed session. One "now" per tick closes that race entirely.
+                var sweepHandler = scope.ServiceProvider
+                    .GetRequiredService<ICommandHandler<SweepMissedFocusBlocksCommand, SweepMissedFocusBlocksResult>>();
+                var sweepResult = await sweepHandler.HandleAsync(new SweepMissedFocusBlocksCommand { AsOf = now }, stoppingToken);
+                _sessionState.NotifyPostSessionsReady(sweepResult.MissedSessions);
 
                 await CheckForUpcomingBlocksAsync(scope, now, stoppingToken);
 

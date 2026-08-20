@@ -408,6 +408,20 @@ Built in `UpdatePlannedBlockValidator`: for a `DailyFlexibility` contract, shrin
 
 \---
 
+### Open Gap J — System Clock Tampering: Detect and Nudge, Not Block (raised 2026-08-20; parked, not interrogated)
+
+**The gap:** `ScheduledEnforcementService`'s heartbeat, and every consumer of `ISystemClock.UtcNow`, currently trusts the OS wall clock unconditionally. A user could manually set their system clock backward (before a block's `Start`, dropping enforcement entirely) or forward (skipping through a block's remaining time) to bypass a block they set for themselves. No detection or response exists today.
+
+**Explicitly not a timezone concern.** The app is internally UTC-consistent throughout (`SystemClock.UtcNow`, `PlannedBlock.Start`/`End`, etc. — confirmed repeatedly during today's session). A timezone change alone never moves `DateTime.UtcNow`; only a manual date/time change does.
+
+**Threat model, framed deliberately narrow:** NenFocus is a self-discipline tool — the person who might tamper with the clock and the person the app is protecting are the same user. Bulletproof anti-tamper (kernel-level clock hooks, etc.) would be disproportionate for a personal focus tool and was explicitly rejected as the goal. **The architect's own framing, which settles the intended response:** don't block further or otherwise punish — just remind the user not to cheat. A nudge, not an escalation.
+
+**Candidate detection mechanism (sketched, not designed):** compare elapsed wall-clock time (`DateTime.UtcNow` deltas between heartbeat ticks) against elapsed monotonic time (`Environment.TickCount64`/`Stopwatch`, driven by system uptime and unaffected by manual clock changes). A large mismatch — wall clock jumped backward, or forward by far more than the ~5s tick interval could explain — is a strong signal of manual tampering. The open design problem is distinguishing that from two legitimate causes of the same kind of discontinuity: sleep/hibernate (large forward jump, expected — adjacent to Open Gap B's already-tracked territory) and ordinary NTP drift correction (small, should be tolerated, not flagged).
+
+**Must be closed before:** Nothing — parked for later. Not yet interrogated: no decision on where the check lives (`ScheduledEnforcementService` heartbeat is the obvious candidate, already the sole per-tick observer of both `now` and elapsed time), what the nudge actually says, whether it's rate-limited (once per detected event? once per day?), or how sleep/wake and NTP-drift get reliably excluded from triggering a false nudge.
+
+\---
+
 ## Minor Cleanups
 
 Trivial style or consistency fixes that don't rise to the level of a Design Gap. Deferred until the relevant file is next edited for other reasons. Items here should be deletable in a single line change.

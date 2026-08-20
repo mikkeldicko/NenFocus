@@ -5,6 +5,15 @@ namespace NenFocus.Domain.Services;
 public interface IFocusBlockOutcomeClassifier
 {
     /// <summary>
+    /// True once momentToCheck is more than the grace period past scheduledStart — the one
+    /// definition of "late enough to matter," reused wherever lateness is checked, whether
+    /// against an already-completed ritual (Classify, CreditedFocusMinutes, a StartedLate
+    /// tile badge) or a live "if the ritual completed right now" check before it's happened
+    /// (the Ritual page's own late warning).
+    /// </summary>
+    bool IsLateStart(DateTime scheduledStart, DateTime momentToCheck);
+
+    /// <summary>
     /// Classifies a Focus block's outcome from its scheduled window, ritual
     /// completion state, and (if the session ended before scheduledEnd) when the
     /// session ended. Returns null if no verdict has been reached yet — the

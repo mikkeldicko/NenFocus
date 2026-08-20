@@ -3,6 +3,7 @@ using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.GetPlannedBlocksForDay;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
+using NenFocus.Domain.Services;
 using NenFocus.Domain.ValueObjects;
 using NSubstitute;
 
@@ -18,6 +19,7 @@ public class GetPlannedBlocksForDayQueryHandlerTests
     private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
     private readonly INenContractRepository _contracts = Substitute.For<INenContractRepository>();
     private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
+    private readonly IFocusBlockOutcomeClassifier _classifier = new FocusBlockOutcomeClassifier();
 
     public GetPlannedBlocksForDayQueryHandlerTests()
     {
@@ -25,7 +27,7 @@ public class GetPlannedBlocksForDayQueryHandlerTests
         _contracts.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((NenContract?)null);
     }
 
-    private GetPlannedBlocksForDayQueryHandler CreateHandler() => new(_blocks, _presets, _contracts, _clock);
+    private GetPlannedBlocksForDayQueryHandler CreateHandler() => new(_blocks, _presets, _contracts, _clock, _classifier);
 
     [Fact]
     public async Task HandleAsync_FocusBlock_MapsPresetNameAndBlockPresetType()
@@ -62,6 +64,76 @@ public class GetPlannedBlocksForDayQueryHandlerTests
         dto.End.Should().Be(Start.AddMinutes(20)); // tile visually shortened, underlying block.End untouched
         dto.Start.Should().Be(Start);
         block.End.Should().Be(End);
+    }
+
+    [Fact]
+    public async Task HandleAsync_FocusBlockStartedLate_DisplayStartIsRitualCompletedAt()
+    {
+        var ritualCompletedAt = Start.AddMinutes(FocusBlockOutcomeClassifier.GracePeriodMinutes + 1);
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End);
+        block.MarkRitualCompleted(ritualCompletedAt);
+        _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
+        _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
+
+        var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
+
+        var dto = result.Should().ContainSingle().Subject;
+        dto.Start.Should().Be(ritualCompletedAt); // tile visually shortened from the front
+        dto.End.Should().Be(End);
+        block.Start.Should().Be(Start); // underlying scheduled start untouched
+    }
+
+    [Fact]
+    public async Task HandleAsync_FocusBlockRitualCompletedWithinGracePeriod_DisplayStartIsScheduledStart()
+    {
+        var ritualCompletedAt = Start.AddMinutes(FocusBlockOutcomeClassifier.GracePeriodMinutes);
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End);
+        block.MarkRitualCompleted(ritualCompletedAt);
+        _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
+        _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
+
+        var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
+
+        // Full credit within grace means full-width display too — no trim.
+        result.Should().ContainSingle().Subject.Start.Should().Be(Start);
+    }
+
+    [Fact]
+    public async Task HandleAsync_FocusBlockStartedLateAndEndedEarly_DisplayShortenedFromBothEnds()
+    {
+        var ritualCompletedAt = Start.AddMinutes(10);
+        var sessionEndedAt = Start.AddMinutes(30);
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End);
+        block.MarkRitualCompleted(ritualCompletedAt);
+        block.MarkSessionEnded(sessionEndedAt);
+        _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
+        _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
+
+        var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
+
+        var dto = result.Should().ContainSingle().Subject;
+        dto.Start.Should().Be(ritualCompletedAt);
+        dto.End.Should().Be(sessionEndedAt);
+        // Classify gives EndedEarly priority, but WasStartedLate is independent — the block
+        // was genuinely both, and the badge needs to be able to say so.
+        dto.Outcome.Should().Be(FocusBlockOutcome.EndedEarly);
+        dto.WasStartedLate.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task HandleAsync_FocusBlockEndedEarlyButRitualWasOnTime_WasStartedLateIsFalse()
+    {
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End);
+        block.MarkRitualCompleted(Start);
+        block.MarkSessionEnded(Start.AddMinutes(20));
+        _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
+        _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
+
+        var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
+
+        var dto = result.Should().ContainSingle().Subject;
+        dto.Outcome.Should().Be(FocusBlockOutcome.EndedEarly);
+        dto.WasStartedLate.Should().BeFalse();
     }
 
     [Fact]
@@ -103,7 +175,7 @@ public class GetPlannedBlocksForDayQueryHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_FocusBlockMissed_IsMissedIsTrue()
+    public async Task HandleAsync_FocusBlockMissed_OutcomeIsMissed()
     {
         _clock.UtcNow.Returns(End.AddMinutes(1));
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End);
@@ -113,12 +185,12 @@ public class GetPlannedBlocksForDayQueryHandlerTests
         var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
 
         var dto = result.Should().ContainSingle().Subject;
-        dto.IsMissed.Should().BeTrue();
+        dto.Outcome.Should().Be(FocusBlockOutcome.Missed);
         dto.End.Should().Be(End); // full original span still displayed — only the color changes
     }
 
     [Fact]
-    public async Task HandleAsync_FocusBlockRitualCompletedButWindowClosed_IsMissedIsFalse()
+    public async Task HandleAsync_FocusBlockRitualCompletedButWindowClosed_OutcomeIsCompletedOnTime()
     {
         _clock.UtcNow.Returns(End.AddMinutes(1));
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End);
@@ -128,11 +200,26 @@ public class GetPlannedBlocksForDayQueryHandlerTests
 
         var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
 
-        result.Should().ContainSingle().Subject.IsMissed.Should().BeFalse();
+        result.Should().ContainSingle().Subject.Outcome.Should().Be(FocusBlockOutcome.CompletedOnTime);
     }
 
     [Fact]
-    public async Task HandleAsync_FocusBlockStillPending_WindowNotYetClosed_IsMissedIsFalse()
+    public async Task HandleAsync_FocusBlockRitualCompletedLate_OutcomeIsStartedLate()
+    {
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End);
+        block.MarkRitualCompleted(Start.AddMinutes(FocusBlockOutcomeClassifier.GracePeriodMinutes + 1));
+        _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
+        _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
+
+        var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
+
+        var dto = result.Should().ContainSingle().Subject;
+        dto.Outcome.Should().Be(FocusBlockOutcome.StartedLate);
+        dto.WasStartedLate.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task HandleAsync_FocusBlockStillPending_WindowNotYetClosed_OutcomeIsNull()
     {
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End);
         _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
@@ -140,11 +227,11 @@ public class GetPlannedBlocksForDayQueryHandlerTests
 
         var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
 
-        result.Should().ContainSingle().Subject.IsMissed.Should().BeFalse();
+        result.Should().ContainSingle().Subject.Outcome.Should().BeNull();
     }
 
     [Fact]
-    public async Task HandleAsync_BackgroundBlockWindowClosed_IsMissedIsFalse()
+    public async Task HandleAsync_BackgroundBlockWindowClosed_OutcomeIsNull()
     {
         _clock.UtcNow.Returns(End.AddMinutes(1));
         var block = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End);
@@ -153,7 +240,7 @@ public class GetPlannedBlocksForDayQueryHandlerTests
 
         var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
 
-        result.Should().ContainSingle().Subject.IsMissed.Should().BeFalse();
+        result.Should().ContainSingle().Subject.Outcome.Should().BeNull();
     }
 
     [Fact]

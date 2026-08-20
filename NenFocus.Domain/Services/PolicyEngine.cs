@@ -15,7 +15,13 @@ public sealed class PolicyEngine : IPolicyEngine
     {
         var activePresets = presets.ToList();
         var activeSessions = sessions.ToList();
-        var activeBlocks = blocks.Where(b => !b.CancelledAt.HasValue).ToList();
+        // IsActive(at) is the authoritative boundary check, independent of whatever window
+        // the caller's own block query used to fetch candidates. ComputeActivePolicySliceQueryHandler's
+        // range query deliberately over-fetches with a buffer around "now" (SQLite datetime
+        // comparison slop) — PolicyEngine is what narrows that down precisely, so a block
+        // whose window has already closed relative to `at` can never become ActiveFocusBlockId,
+        // even if the caller's looser query still returned it.
+        var activeBlocks = blocks.Where(b => !b.CancelledAt.HasValue && b.IsActive(at)).ToList();
 
         if (activePresets.Count == 0 && activeSessions.Count == 0 && activeBlocks.Count == 0)
             return new ActivePolicySlice { SliceStart = at, SliceEnd = at.AddMinutes(1) };

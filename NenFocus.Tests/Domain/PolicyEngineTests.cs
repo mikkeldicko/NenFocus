@@ -299,6 +299,24 @@ public class PolicyEngineTests
     }
 
     [Fact]
+    public void ComputeSlice_FocusBlockAlreadyEnded_ExcludedFromActiveFocusBlockId()
+    {
+        // ComputeActivePolicySliceQueryHandler's range query uses a ±1s buffer around "now"
+        // (SQLite datetime comparison slop), so a block whose End fell in that buffer window
+        // could still be handed to ComputeSlice even though it's genuinely past its own
+        // scheduled end. PolicyEngine must be the final, precise authority — a block the
+        // caller's loose query still returned must not become ActiveFocusBlockId (and
+        // trigger the Ritual) once it's actually ended relative to `at`.
+        var preset = CreatePreset(WebsiteFilterType.Blocklist, type: BlockPresetType.Focus);
+        var endedBlock = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.AddHours(-1), At.AddSeconds(-1));
+
+        var slice = _engine.ComputeSlice(At, [preset], [], [endedBlock]);
+
+        slice.ActiveFocusBlockId.Should().BeNull();
+        slice.ActiveBlockPresetType.Should().BeNull();
+    }
+
+    [Fact]
     public void ComputeSlice_CancelledFocusBlockRitualCompleted_FocusSessionCompletedIsFalse()
     {
         // A cancelled block is excluded from consideration entirely, so it can no longer

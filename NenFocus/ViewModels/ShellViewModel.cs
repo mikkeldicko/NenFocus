@@ -140,6 +140,8 @@ public partial class ShellViewModel : ViewModelBase
 
         _sessionState.RitualRequirementChanged += (s, change) =>
             Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => OnRitualRequirementChanged(change));
+        _sessionState.PostSessionsReady += (s, postSessions) =>
+            Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => OnPostSessionsReady(postSessions));
 
         void Select(NavItemViewModel selected)
         {
@@ -232,6 +234,18 @@ public partial class ShellViewModel : ViewModelBase
         {
             var context = await _getFocusBlockRitualContext.HandleAsync(
                 new GetFocusBlockRitualContextQuery { FocusBlockId = focusBlockId.Value });
+
+            if (context is not null && context.AlreadyHasSession)
+            {
+                // A Session already exists for this block — its ritual requirement is
+                // stale (e.g. the sweep already marked it Missed under a different "now"
+                // than whatever triggered this call, see DESIGN_GAP_HISTORY.md Gap 21's
+                // addenda). Opening the Ritual here would only guarantee a rejection at
+                // Hatsu; decline silently and let whatever else is queued proceed instead.
+                TryDrainQueue();
+                return;
+            }
+
             lockedPreset = context?.Preset;
             lockedSchedule = context?.Schedule;
             isLateToBlock = context?.IsLate ?? false;
@@ -336,6 +350,18 @@ public partial class ShellViewModel : ViewModelBase
             // still proceeds to TryDrainQueue() after this returns.
             return null;
         }
+    }
+
+    // Fires when the enforcement heartbeat's periodic sweep catches a block whose window
+    // closed with no ritual done — a case the live edge-triggered ritual-required tracking
+    // never had a chance to observe (see ScheduledEnforcementService). Same queue, same
+    // triage batching as every other post-session; the only difference from the live path
+    // is where the PostSessionDto came from.
+    private void OnPostSessionsReady(IReadOnlyList<PostSessionDto> postSessions)
+    {
+        foreach (var postSession in postSessions)
+            _pendingOverlays.Enqueue(new PendingPostSession(postSession));
+        TryDrainQueue();
     }
 
     private void TryDrainQueue()
@@ -487,6 +513,7 @@ public partial class ShellViewModel : ViewModelBase
     {
         IsPostSessionActive = false;
         PostSessionViewModel = null;
+        _sessionState.NotifyPostSessionAcknowledged();
         TryDrainQueue();
     }
 }

@@ -21,6 +21,8 @@ public sealed class SessionStateService : ISessionStateService
 
     public event EventHandler<SessionDto?>? SessionChanged;
     public event EventHandler<RitualRequirementChange>? RitualRequirementChanged;
+    public event EventHandler<IReadOnlyList<PostSessionDto>>? PostSessionsReady;
+    public event EventHandler? PostSessionAcknowledged;
 
     // Takes IServiceScopeFactory, not the scoped repositories directly — this service is
     // a Singleton (it must outlive any single operation to hold in-memory session state
@@ -97,6 +99,17 @@ public sealed class SessionStateService : ISessionStateService
         _pendingFocusBlockId = focusBlockId;
         _isRitualRequired = true;
         RitualRequirementChanged?.Invoke(this, new RitualRequirementChange(true, focusBlockId, handoffFromBlockId));
+    }
+
+    public void NotifyPostSessionsReady(IReadOnlyList<PostSessionDto> postSessions)
+    {
+        if (postSessions.Count == 0) return;
+        PostSessionsReady?.Invoke(this, postSessions);
+    }
+
+    public void NotifyPostSessionAcknowledged()
+    {
+        PostSessionAcknowledged?.Invoke(this, EventArgs.Empty);
     }
 
     public void Clear()

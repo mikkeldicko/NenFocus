@@ -61,6 +61,24 @@ public class SweepMissedFocusBlocksCommandHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_AsOfProvided_UsesItInsteadOfClock()
+    {
+        // ScheduledEnforcementService passes its own already-captured "now" so the sweep
+        // and the same tick's policy computation can never disagree about what "now" means
+        // — closes a TOCTOU race where a stale ComputeActivePolicySliceQuery "now" could
+        // still see a block as active after this handler's own independent clock read had
+        // already moved past its End, triggering the Ritual for a block already marked Missed.
+        var asOf = Now.AddHours(1);
+        _blocks.GetUnresolvedFocusBlocksAsync(asOf, Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyList<FocusBlock>)[]);
+
+        await CreateHandler().HandleAsync(new SweepMissedFocusBlocksCommand { AsOf = asOf });
+
+        await _blocks.Received(1).GetUnresolvedFocusBlocksAsync(asOf, Arg.Any<CancellationToken>());
+        await _blocks.DidNotReceive().GetUnresolvedFocusBlocksAsync(Now, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task HandleAsync_MarkMissedFails_SkipsThatBlockButContinues()
     {
         var failing = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Now.AddHours(-3), Now.AddHours(-2));

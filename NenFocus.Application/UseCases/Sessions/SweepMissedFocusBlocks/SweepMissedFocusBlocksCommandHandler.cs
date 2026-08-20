@@ -25,7 +25,7 @@ public sealed class SweepMissedFocusBlocksCommandHandler
         SweepMissedFocusBlocksCommand command,
         CancellationToken ct = default)
     {
-        var unresolved = await _blocks.GetUnresolvedFocusBlocksAsync(_clock.UtcNow, ct);
+        var unresolved = await _blocks.GetUnresolvedFocusBlocksAsync(command.AsOf ?? _clock.UtcNow, ct);
 
         var missedSessions = new List<PostSessionDto>();
         foreach (var block in unresolved.OrderBy(b => b.Start))

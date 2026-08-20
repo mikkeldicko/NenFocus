@@ -214,6 +214,43 @@ public class SessionStateServiceTests
     }
 
     [Fact]
+    public void NotifyPostSessionsReady_NonEmptyList_RaisesEvent()
+    {
+        var service = CreateService();
+        IReadOnlyList<PostSessionDto>? raisedWith = null;
+        service.PostSessionsReady += (_, postSessions) => raisedWith = postSessions;
+        var missed = new PostSessionDto { SessionId = Guid.NewGuid(), Status = SessionStatus.Missed };
+
+        service.NotifyPostSessionsReady([missed]);
+
+        raisedWith.Should().ContainSingle().Which.Should().Be(missed);
+    }
+
+    [Fact]
+    public void NotifyPostSessionsReady_EmptyList_DoesNotRaiseEvent()
+    {
+        var service = CreateService();
+        var raised = false;
+        service.PostSessionsReady += (_, _) => raised = true;
+
+        service.NotifyPostSessionsReady([]);
+
+        raised.Should().BeFalse();
+    }
+
+    [Fact]
+    public void NotifyPostSessionAcknowledged_RaisesEvent()
+    {
+        var service = CreateService();
+        var raised = false;
+        service.PostSessionAcknowledged += (_, _) => raised = true;
+
+        service.NotifyPostSessionAcknowledged();
+
+        raised.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task InitializeAsync_AlwaysRunsMissedFocusBlockSweep()
     {
         // The sweep still has to run — it's what creates the Missed Session records in

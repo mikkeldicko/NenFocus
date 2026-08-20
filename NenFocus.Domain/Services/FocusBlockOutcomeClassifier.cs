@@ -12,6 +12,9 @@ public sealed class FocusBlockOutcomeClassifier : IFocusBlockOutcomeClassifier
     /// </summary>
     public const int GracePeriodMinutes = 5;
 
+    public bool IsLateStart(DateTime scheduledStart, DateTime momentToCheck)
+        => momentToCheck > scheduledStart.AddMinutes(GracePeriodMinutes);
+
     public FocusBlockOutcome? Classify(
         DateTime scheduledStart,
         DateTime scheduledEnd,
@@ -22,7 +25,7 @@ public sealed class FocusBlockOutcomeClassifier : IFocusBlockOutcomeClassifier
         if (ritualCompletedAt is { } completedAt)
         {
             if (sessionEndedAt is { } endedEarly && endedEarly < scheduledEnd) return FocusBlockOutcome.EndedEarly;
-            if (completedAt <= scheduledStart.AddMinutes(GracePeriodMinutes)) return FocusBlockOutcome.CompletedOnTime;
+            if (!IsLateStart(scheduledStart, completedAt)) return FocusBlockOutcome.CompletedOnTime;
             if (completedAt < scheduledEnd) return FocusBlockOutcome.StartedLate;
             return FocusBlockOutcome.Missed;
         }
@@ -40,8 +43,16 @@ public sealed class FocusBlockOutcomeClassifier : IFocusBlockOutcomeClassifier
         if (sessionEndedAt is { } endedEarly && endedEarly < scheduledEnd)
             return actualElapsedMinutes;
 
-        if (ritualCompletedAt is { } completedAt && completedAt <= scheduledStart.AddMinutes(GracePeriodMinutes))
-            return (scheduledEnd - scheduledStart).TotalMinutes;
+        if (ritualCompletedAt is { } completedAt)
+        {
+            if (!IsLateStart(scheduledStart, completedAt))
+                return (scheduledEnd - scheduledStart).TotalMinutes;
+
+            // Started late: credit is bounded by the block's own scheduled end — a session
+            // that ran (or was force-ended, e.g. via the debug clock) past scheduledEnd earns
+            // no more credit than a full-length, on-time completion would have.
+            return Math.Min(actualElapsedMinutes, (scheduledEnd - completedAt).TotalMinutes);
+        }
 
         return actualElapsedMinutes;
     }

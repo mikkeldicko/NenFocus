@@ -15,9 +15,11 @@ public class GetFocusBlockRitualContextQueryHandlerTests
 
     private readonly IPlannedBlockRepository _blocks = Substitute.For<IPlannedBlockRepository>();
     private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
+    private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
     private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
+    private readonly IFocusBlockOutcomeClassifier _classifier = new FocusBlockOutcomeClassifier();
 
-    private GetFocusBlockRitualContextQueryHandler CreateHandler() => new(_blocks, _presets, _clock);
+    private GetFocusBlockRitualContextQueryHandler CreateHandler() => new(_blocks, _presets, _sessions, _clock, _classifier);
 
     [Fact]
     public async Task HandleAsync_BlockNotFound_ReturnsNull()
@@ -76,6 +78,30 @@ public class GetFocusBlockRitualContextQueryHandlerTests
         result!.Preset.Name.Should().Be("Deep Work");
         result.Schedule.Start.Should().Be(Start);
         result.Schedule.End.Should().Be(End);
+        result.AlreadyHasSession.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task HandleAsync_SessionAlreadyExistsForBlock_AlreadyHasSessionIsTrue()
+    {
+        // Confirms the guard ShellViewModel.StartRitual relies on to decline opening the
+        // Ritual for a block that already has a resolved Session — e.g. one the sweep
+        // marked Missed under a different "now" than whatever triggered this ritual
+        // request (see DESIGN_GAP_HISTORY.md Gap 21's addenda). Without this, the user
+        // could walk through the entire Ritual only to be rejected at Hatsu.
+        var blockId = Guid.NewGuid();
+        var presetId = Guid.NewGuid();
+        _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
+            .Returns(FocusBlock.Create(blockId, presetId, Start, End));
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Start));
+        _sessions.ExistsForOriginatingBlockAsync(blockId, Arg.Any<CancellationToken>()).Returns(true);
+        _clock.UtcNow.Returns(Start);
+
+        var result = await CreateHandler().HandleAsync(
+            new GetFocusBlockRitualContextQuery { FocusBlockId = blockId }, CancellationToken.None);
+
+        result!.AlreadyHasSession.Should().BeTrue();
     }
 
     [Theory]

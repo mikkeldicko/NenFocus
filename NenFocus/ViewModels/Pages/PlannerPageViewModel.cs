@@ -393,6 +393,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         _clockService = clockService;
         _sessionState = sessionState;
         _sessionState.SessionChanged += OnSessionChanged;
+        _sessionState.PostSessionAcknowledged += OnPostSessionAcknowledged;
 
         for (int h = FirstHour; h < LastHour; h++)
             HourLabels.Add(new HourLabelViewModel(h));
@@ -428,12 +429,23 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
             OnPropertyChanged(nameof(CanSaveBlock));
             OnPropertyChanged(nameof(CanDeleteFromForm));
             OnPropertyChanged(nameof(CanOpenContractWizard));
+            // Reload on both transitions: a session starting stamps the originating block's
+            // RitualCompletedAt (its Outcome/tile display changes even though the block
+            // hasn't ended yet), a session ending may resolve EndedEarly. Only a finished
+            // session can move Day Met/deficit, so that refresh stays end-only.
+            _ = LoadWeekAsync();
             if (session is null)
-            {
-                _ = LoadWeekAsync();
-                _ = RefreshActiveContractAsync(); // a finished session may move Day Met/deficit
-            }
+                _ = RefreshActiveContractAsync();
         });
+    }
+
+    // The heartbeat's background sweep can mark a block Missed with nobody watching live —
+    // ShellViewModel surfaces it as a Post-Session popup (see ISessionStateService.
+    // PostSessionsReady); this is the signal that its dismissal ("Done") is the right moment
+    // to reload, since that's when the underlying data is actually known to have changed.
+    private void OnPostSessionAcknowledged(object? sender, EventArgs e)
+    {
+        Dispatcher.UIThread.Post(() => _ = LoadWeekAsync());
     }
 
     private void UpdateCurrentTimePosition()
@@ -1385,6 +1397,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     {
         _clockService.Tick -= OnClockTick;
         _sessionState.SessionChanged -= OnSessionChanged;
+        _sessionState.PostSessionAcknowledged -= OnPostSessionAcknowledged;
         _floorStatusPollTimer.Elapsed -= OnFloorStatusPollTick;
         _floorStatusPollTimer.Dispose();
     }

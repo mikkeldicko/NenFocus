@@ -11,6 +11,12 @@ public sealed record PlannedBlockDto
     public BlockPresetType BlockPresetType { get; init; }
     public WebsiteFilterType WebsiteFilterType { get; init; }
 
+    /// <summary>
+    /// Display span, not the raw scheduled window: pulled forward to RitualCompletedAt for a
+    /// StartedLate block and back to SessionEndedAt for an EndedEarly one, so the tile always
+    /// reflects the actual worked window. A grace-period-late start is left untrimmed, since
+    /// it's credited as full duration.
+    /// </summary>
     public DateTime Start { get; init; }
     public DateTime End { get; init; }
 
@@ -40,12 +46,21 @@ public sealed record PlannedBlockDto
     public StrictnessRule? ContractStrictnessRule { get; init; }
 
     /// <summary>
-    /// True for a FocusBlock whose Ritual was never completed and whose scheduled window
-    /// has already closed — mirrors FocusBlock.EffectiveEnd's own Missed condition. The tile
-    /// still renders at its full original span (its time already passed, so nothing new can
-    /// practically be scheduled over it) — this only drives a distinct visual treatment.
+    /// FocusBlockOutcomeClassifier.Classify's result for a FocusBlock — null for a
+    /// BackgroundBlock (no ritual, no outcome concept) or a FocusBlock still pending. Drives
+    /// the Planner tile's Missed/StartedLate badge; a Missed block still renders at its full
+    /// original span (nothing new can practically be scheduled over already-passed time), but
+    /// StartedLate/EndedEarly are also reflected in Start/End above.
     /// </summary>
-    public bool IsMissed { get; init; }
+    public FocusBlockOutcome? Outcome { get; init; }
+
+    /// <summary>
+    /// True when the ritual completed past the grace period, independent of Outcome. Classify
+    /// gives EndedEarly priority over StartedLate — a block can only carry one Outcome — but a
+    /// block can genuinely be both, and this flag lets the tile badge say so even when Outcome
+    /// alone (EndedEarly) would hide the lateness.
+    /// </summary>
+    public bool WasStartedLate { get; init; }
 
     public int DurationMinutes => (int)(End - Start).TotalMinutes;
 }
