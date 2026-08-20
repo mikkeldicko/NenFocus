@@ -6,7 +6,7 @@
              HorizontalAlignment="Right"
              VerticalAlignment="Top">
 
-    <Border Background="#1A1A2EEE"
+    <Border Background="#1A1A2E"
             BorderBrush="#B8922A"
             BorderThickness="1"
             CornerRadius="10"

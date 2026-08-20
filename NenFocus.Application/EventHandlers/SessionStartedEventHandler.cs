@@ -10,15 +10,18 @@ public sealed class SessionStartedEventHandler : IDomainEventHandler<SessionStar
     private readonly IEnforcementService _enforcement;
     private readonly IQueryHandler<ComputeActivePolicySliceQuery, ActivePolicySlice> _policyQuery;
     private readonly INotificationService _notifications;
+    private readonly ISystemClock _clock;
 
     public SessionStartedEventHandler(
         IEnforcementService enforcement,
         IQueryHandler<ComputeActivePolicySliceQuery, ActivePolicySlice> policyQuery,
-        INotificationService notifications)
+        INotificationService notifications,
+        ISystemClock clock)
     {
         _enforcement = enforcement;
         _policyQuery = policyQuery;
         _notifications = notifications;
+        _clock = clock;
     }
 
     public async Task HandleAsync(
@@ -26,7 +29,7 @@ public sealed class SessionStartedEventHandler : IDomainEventHandler<SessionStar
         CancellationToken cancellationToken = default)
     {
         var policy = await _policyQuery.HandleAsync(
-            new ComputeActivePolicySliceQuery(DateTime.UtcNow),
+            new ComputeActivePolicySliceQuery(_clock.UtcNow),
             cancellationToken);
 
         if (policy is not null)

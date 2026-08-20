@@ -644,7 +644,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         _editingBlockId = dto.Id;
         _editingIsDraft = false;
         IsEditing = true;
-        IsStartLocked = dto.Start <= DateTime.UtcNow;
+        IsStartLocked = dto.Start <= _clockService.LocalNow.ToUniversalTime();
         IsEditingCompleted = dto.IsCompleted;
         IsEditingBlockEnded = dto.HasEnded;
         IsEditingBlockContractLocked = dto.IsUnderInEffectContract;
@@ -927,14 +927,15 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     // ── Drag lock checks (called from code-behind before starting a drag) ──────
 
     /// <summary>
-    /// True when the tile must not be dragged at all — it is either completed
-    /// or the active session's originating block. Draft blocks are never locked.
+    /// True when the tile must not be dragged at all — it is completed, has already
+    /// ended (covers Missed, EndedEarly, and any other resolved-in-the-past block), or
+    /// is the active session's originating block. Draft blocks are never locked.
     /// </summary>
     public bool IsTileFullyLocked(Guid blockId)
     {
         if (_draftBlocks.Any(d => d.Id == blockId)) return false;
         if (!_blocksInWeek.TryGetValue(blockId, out var dto)) return true;
-        return dto.IsCompleted || _sessionState.ActiveSession?.OriginatingBlockId == blockId;
+        return dto.IsCompleted || dto.HasEnded || _sessionState.ActiveSession?.OriginatingBlockId == blockId;
     }
 
     /// <summary>
@@ -946,7 +947,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     {
         if (_draftBlocks.Any(d => d.Id == blockId)) return false;
         if (!_blocksInWeek.TryGetValue(blockId, out var dto)) return true;
-        return dto.Start <= DateTime.UtcNow;
+        return dto.Start <= _clockService.LocalNow.ToUniversalTime();
     }
 
     // ── Drag-create: open the form pre-filled with the dragged range ──────────

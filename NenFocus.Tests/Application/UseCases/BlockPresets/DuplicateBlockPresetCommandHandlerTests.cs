@@ -10,8 +10,14 @@ namespace NenFocus.Tests.Application.UseCases.BlockPresets;
 public class DuplicateBlockPresetCommandHandlerTests
 {
     private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
+    private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
 
-    private DuplicateBlockPresetCommandHandler CreateHandler() => new(_presets);
+    public DuplicateBlockPresetCommandHandlerTests()
+    {
+        _clock.UtcNow.Returns(DateTime.UtcNow);
+    }
+
+    private DuplicateBlockPresetCommandHandler CreateHandler() => new(_presets, _clock);
 
     private static BlockPreset CreateSourcePreset(Guid id)
         => BlockPreset.Create(id, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, DateTime.UtcNow);
@@ -54,18 +60,37 @@ public class DuplicateBlockPresetCommandHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_NameCollision_AppendsTimestampSuffix()
+    public async Task HandleAsync_NameCollision_AppendsSequentialNumber()
     {
         var sourceId = Guid.NewGuid();
         _presets.GetByIdAsync(sourceId, Arg.Any<CancellationToken>()).Returns(CreateSourcePreset(sourceId));
         _presets.ExistsWithNameAsync("Copy of Deep Work", cancellationToken: Arg.Any<CancellationToken>())
             .Returns(true);
+        _presets.ExistsWithNameAsync("Copy of Deep Work (2)", cancellationToken: Arg.Any<CancellationToken>())
+            .Returns(false);
 
         await CreateHandler().HandleAsync(new DuplicateBlockPresetCommand { SourcePresetId = sourceId });
 
         await _presets.Received(1).AddAsync(
-            Arg.Is<BlockPreset>(p => p.Name.StartsWith("Copy of Deep Work (") && p.Name.EndsWith(")")),
-            Arg.Any<CancellationToken>());
+            Arg.Is<BlockPreset>(p => p.Name == "Copy of Deep Work (2)"), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task HandleAsync_MultipleCollisions_KeepsIncrementingUntilNameIsFree()
+    {
+        var sourceId = Guid.NewGuid();
+        _presets.GetByIdAsync(sourceId, Arg.Any<CancellationToken>()).Returns(CreateSourcePreset(sourceId));
+        _presets.ExistsWithNameAsync("Copy of Deep Work", cancellationToken: Arg.Any<CancellationToken>())
+            .Returns(true);
+        _presets.ExistsWithNameAsync("Copy of Deep Work (2)", cancellationToken: Arg.Any<CancellationToken>())
+            .Returns(true);
+        _presets.ExistsWithNameAsync("Copy of Deep Work (3)", cancellationToken: Arg.Any<CancellationToken>())
+            .Returns(false);
+
+        await CreateHandler().HandleAsync(new DuplicateBlockPresetCommand { SourcePresetId = sourceId });
+
+        await _presets.Received(1).AddAsync(
+            Arg.Is<BlockPreset>(p => p.Name == "Copy of Deep Work (3)"), Arg.Any<CancellationToken>());
     }
 
     [Fact]

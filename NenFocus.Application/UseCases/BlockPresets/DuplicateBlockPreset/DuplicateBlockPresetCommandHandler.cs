@@ -7,9 +7,13 @@ public sealed class DuplicateBlockPresetCommandHandler
     : ICommandHandler<DuplicateBlockPresetCommand, DuplicateBlockPresetResult>
 {
     private readonly IBlockPresetRepository _presets;
+    private readonly ISystemClock _clock;
 
-    public DuplicateBlockPresetCommandHandler(IBlockPresetRepository presets)
-        => _presets = presets;
+    public DuplicateBlockPresetCommandHandler(IBlockPresetRepository presets, ISystemClock clock)
+    {
+        _presets = presets;
+        _clock = clock;
+    }
 
     public async Task<DuplicateBlockPresetResult> HandleAsync(
         DuplicateBlockPresetCommand command,
@@ -19,16 +23,24 @@ public sealed class DuplicateBlockPresetCommandHandler
         if (source is null)
             return DuplicateBlockPresetResult.Fail($"Preset '{command.SourcePresetId}' not found.");
 
-        var newName = command.NewName ?? $"Copy of {source.Name}";
+        var baseName = command.NewName ?? $"Copy of {source.Name}";
 
-        var now = DateTime.UtcNow;
-        if (await _presets.ExistsWithNameAsync(newName, cancellationToken: cancellationToken))
-            newName = $"{newName} ({now:HH:mm})";
+        // Sequential numbering, same convention as Explorer/Finder/Google Docs — checked
+        // and incremented one at a time rather than a single existence check, since a
+        // timestamp suffix can't actually guarantee uniqueness (two duplicates within the
+        // same minute would collide) and this loop always finds a genuinely free name.
+        var newName = baseName;
+        var suffix = 2;
+        while (await _presets.ExistsWithNameAsync(newName, cancellationToken: cancellationToken))
+        {
+            newName = $"{baseName} ({suffix})";
+            suffix++;
+        }
 
         BlockPreset duplicate;
         try
         {
-            duplicate = source.Duplicate(newName, Guid.NewGuid(), now);
+            duplicate = source.Duplicate(newName, Guid.NewGuid(), _clock.UtcNow);
         }
         catch (ArgumentException ex)
         {

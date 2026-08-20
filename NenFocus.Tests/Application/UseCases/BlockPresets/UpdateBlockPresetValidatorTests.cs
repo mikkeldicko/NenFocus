@@ -13,15 +13,17 @@ public class UpdateBlockPresetValidatorTests
     private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
     private readonly IPlannedBlockRepository _plannedBlocks = Substitute.For<IPlannedBlockRepository>();
     private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
+    private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
 
     public UpdateBlockPresetValidatorTests()
     {
         _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns((Session?)null);
         _plannedBlocks.HasFutureBlocksForPresetAsync(Arg.Any<Guid>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
             .Returns(false);
+        _clock.UtcNow.Returns(DateTime.UtcNow);
     }
 
-    private UpdateBlockPresetValidator CreateValidator() => new(_sessions, _plannedBlocks, _presets);
+    private UpdateBlockPresetValidator CreateValidator() => new(_sessions, _plannedBlocks, _presets, _clock);
 
     private static BlockPreset ExistingPreset(Guid presetId, IEnumerable<string>? apps = null, IEnumerable<string>? sites = null)
     {

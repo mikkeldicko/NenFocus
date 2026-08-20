@@ -59,6 +59,25 @@ public class UpdatePlannedBlockValidatorTests
     }
 
     [Fact]
+    public async Task Validate_BlockAlreadyEnded_IsInvalid()
+    {
+        // Mirrors DeletePlannedBlockValidator's identical guard — a block whose window
+        // has already fully closed (e.g. Missed) is kept as a historical record and must
+        // be immutable to Update too, not just Delete.
+        var blockId = Guid.NewGuid();
+        var presetId = Guid.NewGuid();
+        var endedBlock = FocusBlock.Create(blockId, presetId, Now.AddHours(-3), Now.AddHours(-2));
+        _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns(endedBlock);
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Now));
+        var command = ValidCommand(blockId, presetId) with { Start = Now.AddHours(-3), End = Now.AddHours(-1) };
+
+        var result = await CreateValidator().ValidateAsync(command);
+
+        result.IsValid.Should().BeFalse();
+    }
+
+    [Fact]
     public async Task Validate_EmptyBlockId_IsInvalid()
     {
         var result = await CreateValidator().ValidateAsync(ValidCommand(Guid.Empty, Guid.NewGuid()));

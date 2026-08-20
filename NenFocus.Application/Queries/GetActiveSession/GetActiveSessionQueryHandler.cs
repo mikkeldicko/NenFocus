@@ -8,13 +8,16 @@ public sealed class GetActiveSessionQueryHandler
 {
     private readonly ISessionRepository _sessions;
     private readonly IBlockPresetRepository _presets;
+    private readonly ISystemClock _clock;
 
     public GetActiveSessionQueryHandler(
         ISessionRepository sessions,
-        IBlockPresetRepository presets)
+        IBlockPresetRepository presets,
+        ISystemClock clock)
     {
         _sessions = sessions;
         _presets = presets;
+        _clock = clock;
     }
 
     public async Task<SessionDto?> HandleAsync(
@@ -33,8 +36,8 @@ public sealed class GetActiveSessionQueryHandler
             PresetName = preset?.Name ?? "Unknown",
             DurationMinutes = (int)session.Duration.Value.TotalMinutes,
             Status = session.Status,
-            StartedAt = session.StartedAt ?? DateTime.UtcNow,
-            EndAt = session.EndAt ?? DateTime.UtcNow,
+            StartedAt = session.StartedAt ?? _clock.UtcNow,
+            EndAt = session.EndAt ?? _clock.UtcNow,
             EndedAt = session.EndedAt,
             BreakSettings = session.BreakSettings is null ? null : new BreakSettingsDto
             {

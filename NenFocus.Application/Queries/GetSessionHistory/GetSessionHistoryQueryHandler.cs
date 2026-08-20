@@ -9,13 +9,16 @@ public sealed class GetSessionHistoryQueryHandler
 {
     private readonly ISessionRepository _sessions;
     private readonly IBlockPresetRepository _presets;
+    private readonly ISystemClock _clock;
 
     public GetSessionHistoryQueryHandler(
         ISessionRepository sessions,
-        IBlockPresetRepository presets)
+        IBlockPresetRepository presets,
+        ISystemClock clock)
     {
         _sessions = sessions;
         _presets = presets;
+        _clock = clock;
     }
 
     public async Task<IReadOnlyList<SessionSummaryDto>> HandleAsync(
@@ -33,7 +36,7 @@ public sealed class GetSessionHistoryQueryHandler
 
         return sessions.Select(s =>
         {
-            var elapsed = s.GetElapsedTime(s.EndedAt ?? DateTime.UtcNow);
+            var elapsed = s.GetElapsedTime(s.EndedAt ?? _clock.UtcNow);
             return new SessionSummaryDto
             {
                 Id = s.Id,

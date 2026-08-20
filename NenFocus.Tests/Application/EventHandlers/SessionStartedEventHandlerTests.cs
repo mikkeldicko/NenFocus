@@ -14,8 +14,9 @@ public class SessionStartedEventHandlerTests
     private readonly IQueryHandler<ComputeActivePolicySliceQuery, ActivePolicySlice> _policyQuery =
         Substitute.For<IQueryHandler<ComputeActivePolicySliceQuery, ActivePolicySlice>>();
     private readonly INotificationService _notifications = Substitute.For<INotificationService>();
+    private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
 
-    private SessionStartedEventHandler CreateHandler() => new(_enforcement, _policyQuery, _notifications);
+    private SessionStartedEventHandler CreateHandler() => new(_enforcement, _policyQuery, _notifications, _clock);
 
     [Fact]
     public async Task HandleAsync_ComputesPolicyAndAppliesEnforcement()

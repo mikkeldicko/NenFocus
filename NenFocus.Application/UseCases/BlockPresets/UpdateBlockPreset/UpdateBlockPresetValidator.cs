@@ -10,13 +10,14 @@ public sealed class UpdateBlockPresetValidator : AbstractValidator<UpdateBlockPr
     public UpdateBlockPresetValidator(
         ISessionRepository sessions,
         IPlannedBlockRepository plannedBlocks,
-        IBlockPresetRepository presets)
+        IBlockPresetRepository presets,
+        ISystemClock clock)
     {
         RuleFor(x => x)
             .MustAsync(async (command, ct) =>
             {
                 var lockedByActiveSession = (await sessions.GetActiveAsync(ct))?.BlockPresetId == command.PresetId;
-                var lockedByFutureBlock = await plannedBlocks.HasFutureBlocksForPresetAsync(command.PresetId, DateTime.UtcNow, ct);
+                var lockedByFutureBlock = await plannedBlocks.HasFutureBlocksForPresetAsync(command.PresetId, clock.UtcNow, ct);
 
                 if (!lockedByActiveSession && !lockedByFutureBlock)
                     return true;

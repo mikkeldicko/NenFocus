@@ -12,8 +12,14 @@ public class GetSessionHistoryQueryHandlerTests
 {
     private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
     private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
+    private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
 
-    private GetSessionHistoryQueryHandler CreateHandler() => new(_sessions, _presets);
+    public GetSessionHistoryQueryHandlerTests()
+    {
+        _clock.UtcNow.Returns(DateTime.UtcNow);
+    }
+
+    private GetSessionHistoryQueryHandler CreateHandler() => new(_sessions, _presets, _clock);
 
     private static readonly DateOnly From = new(2026, 1, 1);
     private static readonly DateOnly To = new(2026, 1, 31);

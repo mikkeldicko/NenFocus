@@ -10,6 +10,7 @@ namespace NenFocus.Infrastructure.Services;
 public sealed class SessionStateService : ISessionStateService
 {
     private readonly IServiceScopeFactory _scopeFactory;
+    private readonly ISystemClock _clock;
     private SessionDto? _activeSession;
     private bool _isRitualRequired;
     private Guid? _pendingFocusBlockId;
@@ -28,9 +29,10 @@ public sealed class SessionStateService : ISessionStateService
     // the entire app run. Mirrors ActiveSessionMonitor's AutoEndAsync/AutoResumeBreakAsync
     // and ScheduledEnforcementService's heartbeat — both already resolve their scoped
     // dependencies from a fresh per-operation scope for exactly this reason.
-    public SessionStateService(IServiceScopeFactory scopeFactory)
+    public SessionStateService(IServiceScopeFactory scopeFactory, ISystemClock clock)
     {
         _scopeFactory = scopeFactory;
+        _clock = clock;
     }
 
     public async Task InitializeAsync()
@@ -51,7 +53,7 @@ public sealed class SessionStateService : ISessionStateService
                 presetName = preset?.Name ?? "Unknown Preset";
             }
 
-            _activeSession = MapToDto(session, presetName);
+            _activeSession = MapToDto(session, presetName, _clock.UtcNow);
             SessionChanged?.Invoke(this, _activeSession);
         }
 
@@ -106,7 +108,7 @@ public sealed class SessionStateService : ISessionStateService
         RitualRequirementChanged?.Invoke(this, new RitualRequirementChange(false, null));
     }
 
-    private static SessionDto MapToDto(Session s, string presetName) => new SessionDto
+    private static SessionDto MapToDto(Session s, string presetName, DateTime now) => new SessionDto
     {
         Id = s.Id,
         Goal = s.Goal?.Value ?? string.Empty,
@@ -114,8 +116,8 @@ public sealed class SessionStateService : ISessionStateService
         BlockPresetId = s.BlockPresetId,
         DurationMinutes = (int)s.Duration.Value.TotalMinutes,
         Status = s.Status,
-        StartedAt = s.StartedAt ?? DateTime.UtcNow,
-        EndAt = s.EndAt ?? DateTime.UtcNow,
+        StartedAt = s.StartedAt ?? now,
+        EndAt = s.EndAt ?? now,
         BreaksTaken = s.BreaksTaken,
         BreakStartedAt = s.BreakStartedAt,
         BreakSettings = s.BreakSettings is not null

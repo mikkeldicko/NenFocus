@@ -29,6 +29,18 @@ public sealed class UpdatePlannedBlockValidator : AbstractValidator<UpdatePlanne
         RuleFor(x => x.PresetId)
             .NotEmpty().WithMessage("Preset ID is required.");
 
+        // Mirrors DeletePlannedBlockValidator's identical guard — an already-ended block
+        // (Missed, EndedEarly, or otherwise resolved) is kept as a historical record and
+        // must be just as immutable to Update as it already is to Delete.
+        RuleFor(x => x)
+            .MustAsync(async (command, ct) =>
+            {
+                if (command.BlockId == Guid.Empty) return true;
+                var block = await _blocks.GetByIdAsync(command.BlockId, ct);
+                return block is null || !block.HasEnded(_clock.UtcNow);
+            })
+            .WithMessage("This block has already ended and is kept as a historical record — it cannot be edited.");
+
         RuleFor(x => x)
             .MustAsync(async (command, ct) =>
             {

@@ -17,11 +17,13 @@ public class SessionStateServiceTests
     private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
     private readonly ICommandHandler<SweepMissedFocusBlocksCommand, SweepMissedFocusBlocksResult> _sweep =
         Substitute.For<ICommandHandler<SweepMissedFocusBlocksCommand, SweepMissedFocusBlocksResult>>();
+    private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
 
     public SessionStateServiceTests()
     {
         _sweep.HandleAsync(Arg.Any<SweepMissedFocusBlocksCommand>(), Arg.Any<CancellationToken>())
             .Returns(new SweepMissedFocusBlocksResult());
+        _clock.UtcNow.Returns(DateTime.UtcNow);
     }
 
     // SessionStateService now takes IServiceScopeFactory, not the scoped dependencies
@@ -35,7 +37,7 @@ public class SessionStateServiceTests
         services.AddSingleton(_presets);
         services.AddSingleton(_sweep);
         var provider = services.BuildServiceProvider();
-        return new SessionStateService(provider.GetRequiredService<IServiceScopeFactory>());
+        return new SessionStateService(provider.GetRequiredService<IServiceScopeFactory>(), _clock);
     }
 
     private static Session CreateActiveSession(Guid presetId)

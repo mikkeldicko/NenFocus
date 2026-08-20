@@ -12,8 +12,9 @@ public class GetActiveSessionQueryHandlerTests
 {
     private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
     private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
+    private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
 
-    private GetActiveSessionQueryHandler CreateHandler() => new(_sessions, _presets);
+    private GetActiveSessionQueryHandler CreateHandler() => new(_sessions, _presets, _clock);
 
     [Fact]
     public async Task HandleAsync_NoActiveSession_ReturnsNull()
