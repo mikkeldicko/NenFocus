@@ -64,9 +64,9 @@ public class DuplicateBlockPresetCommandHandlerTests
     {
         var sourceId = Guid.NewGuid();
         _presets.GetByIdAsync(sourceId, Arg.Any<CancellationToken>()).Returns(CreateSourcePreset(sourceId));
-        _presets.ExistsWithNameAsync("Copy of Deep Work", cancellationToken: Arg.Any<CancellationToken>())
+        _presets.ExistsWithNameAsync("Copy of Deep Work", BlockPresetType.Focus, cancellationToken: Arg.Any<CancellationToken>())
             .Returns(true);
-        _presets.ExistsWithNameAsync("Copy of Deep Work (2)", cancellationToken: Arg.Any<CancellationToken>())
+        _presets.ExistsWithNameAsync("Copy of Deep Work (2)", BlockPresetType.Focus, cancellationToken: Arg.Any<CancellationToken>())
             .Returns(false);
 
         await CreateHandler().HandleAsync(new DuplicateBlockPresetCommand { SourcePresetId = sourceId });
@@ -80,11 +80,11 @@ public class DuplicateBlockPresetCommandHandlerTests
     {
         var sourceId = Guid.NewGuid();
         _presets.GetByIdAsync(sourceId, Arg.Any<CancellationToken>()).Returns(CreateSourcePreset(sourceId));
-        _presets.ExistsWithNameAsync("Copy of Deep Work", cancellationToken: Arg.Any<CancellationToken>())
+        _presets.ExistsWithNameAsync("Copy of Deep Work", BlockPresetType.Focus, cancellationToken: Arg.Any<CancellationToken>())
             .Returns(true);
-        _presets.ExistsWithNameAsync("Copy of Deep Work (2)", cancellationToken: Arg.Any<CancellationToken>())
+        _presets.ExistsWithNameAsync("Copy of Deep Work (2)", BlockPresetType.Focus, cancellationToken: Arg.Any<CancellationToken>())
             .Returns(true);
-        _presets.ExistsWithNameAsync("Copy of Deep Work (3)", cancellationToken: Arg.Any<CancellationToken>())
+        _presets.ExistsWithNameAsync("Copy of Deep Work (3)", BlockPresetType.Focus, cancellationToken: Arg.Any<CancellationToken>())
             .Returns(false);
 
         await CreateHandler().HandleAsync(new DuplicateBlockPresetCommand { SourcePresetId = sourceId });

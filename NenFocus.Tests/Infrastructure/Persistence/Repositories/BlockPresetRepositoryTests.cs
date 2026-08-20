@@ -69,14 +69,24 @@ public class BlockPresetRepositoryTests : SqliteRepositoryTestBase
     }
 
     [Theory]
-    [InlineData("focus — allowlist")]
-    [InlineData("FOCUS — ALLOWLIST")]
-    [InlineData("Focus — Allowlist")]
+    [InlineData("ai & dev tools only")]
+    [InlineData("AI & DEV TOOLS ONLY")]
+    [InlineData("AI & Dev Tools Only")]
     public async Task ExistsWithNameAsync_IsCaseInsensitive(string candidate)
     {
-        var exists = await CreateRepository().ExistsWithNameAsync(candidate);
+        var exists = await CreateRepository().ExistsWithNameAsync(candidate, BlockPresetType.Focus);
 
         exists.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task ExistsWithNameAsync_DifferentPresetType_ReturnsFalse()
+    {
+        // "AI & Dev Tools Only" is seeded as a Focus preset — a Background preset asking
+        // about the same name is a different scope entirely, not a collision.
+        var exists = await CreateRepository().ExistsWithNameAsync("AI & Dev Tools Only", BlockPresetType.Background);
+
+        exists.Should().BeFalse();
     }
 
     [Fact]
@@ -87,7 +97,7 @@ public class BlockPresetRepositoryTests : SqliteRepositoryTestBase
         await repo.AddAsync(preset);
         await Context.SaveChangesAsync();
 
-        var exists = await CreateRepository().ExistsWithNameAsync("Unique Name", excludeId: preset.Id);
+        var exists = await CreateRepository().ExistsWithNameAsync("Unique Name", BlockPresetType.Focus, excludeId: preset.Id);
 
         exists.Should().BeFalse();
     }

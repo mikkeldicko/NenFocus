@@ -50,7 +50,7 @@ public class UpdateBlockPresetCommandHandlerTests
     {
         var presetId = Guid.NewGuid();
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>()).Returns(CreatePreset(presetId));
-        _presets.ExistsWithNameAsync("New Name", excludeId: presetId, cancellationToken: Arg.Any<CancellationToken>())
+        _presets.ExistsWithNameAsync("New Name", BlockPresetType.Focus, excludeId: presetId, cancellationToken: Arg.Any<CancellationToken>())
             .Returns(true);
 
         var result = await CreateHandler().HandleAsync(ValidCommand(presetId));

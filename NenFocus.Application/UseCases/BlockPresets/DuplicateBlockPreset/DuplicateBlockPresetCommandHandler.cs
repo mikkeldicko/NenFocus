@@ -31,7 +31,7 @@ public sealed class DuplicateBlockPresetCommandHandler
         // same minute would collide) and this loop always finds a genuinely free name.
         var newName = baseName;
         var suffix = 2;
-        while (await _presets.ExistsWithNameAsync(newName, cancellationToken: cancellationToken))
+        while (await _presets.ExistsWithNameAsync(newName, source.PresetType, cancellationToken: cancellationToken))
         {
             newName = $"{baseName} ({suffix})";
             suffix++;

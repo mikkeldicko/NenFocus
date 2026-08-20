@@ -1,4 +1,5 @@
 using NenFocus.Domain.Entities;
+using NenFocus.Domain.Enums;
 
 namespace NenFocus.Application.Interfaces;
 
@@ -42,11 +43,15 @@ public interface IBlockPresetRepository
     Task DeleteAsync(Guid id, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Returns true if a preset with the given name already exists.
-    /// Used by validators to enforce unique preset names.
+    /// Returns true if a preset with the given name already exists for the given
+    /// PresetType. Scoped by type, not global — a Focus preset and a Background preset
+    /// are chosen from separate, type-filtered contexts and never compared against each
+    /// other, so sharing a name isn't a real collision (mirrors the (ResourceName,
+    /// ResourceType) composite-key idiom already used elsewhere in this codebase).
     /// </summary>
     Task<bool> ExistsWithNameAsync(
         string name,
+        BlockPresetType presetType,
         Guid? excludeId = null,
         CancellationToken cancellationToken = default);
 }

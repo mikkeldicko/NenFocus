@@ -181,7 +181,8 @@ public class NenFocusDbContext : DbContext
 
             entity.Property(p => p.Name)
                 .IsRequired()
-                .HasMaxLength(60);
+                .HasMaxLength(60)
+                .UseCollation("NOCASE");
 
             entity.Property(p => p.WebsiteFilterType)
                 .HasConversion<string>()
@@ -191,6 +192,12 @@ public class NenFocusDbContext : DbContext
                 .HasConversion<string>()
                 .IsRequired()
                 .HasDefaultValue(BlockPresetType.Focus);
+
+            // Scoped by PresetType, not global — a Focus preset and a Background preset
+            // are chosen from separate, type-filtered contexts and never compared against
+            // each other, so sharing a name isn't a real collision. Mirrors the seed data
+            // below, which already has "Social Media Blocked" once per type.
+            entity.HasIndex(p => new { p.Name, p.PresetType }).IsUnique();
 
             entity.Property<string>("TagsSerialized")
                 .HasColumnName("Tags")
@@ -332,7 +339,13 @@ public class NenFocusDbContext : DbContext
 
             entity.Property(p => p.Name)
                 .IsRequired()
-                .HasMaxLength(60);
+                .HasMaxLength(60)
+                .UseCollation("NOCASE");
+
+            // No PresetType-style discriminator here (unlike BlockPreset) — a Contract
+            // Preset has no scheduling-context split, so a single global unique name is
+            // the correct scope.
+            entity.HasIndex(p => p.Name).IsUnique();
 
             entity.Property(p => p.StrictnessRule)
                 .HasConversion<string>()

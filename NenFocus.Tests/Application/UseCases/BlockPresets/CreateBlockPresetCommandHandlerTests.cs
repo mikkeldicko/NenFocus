@@ -30,7 +30,7 @@ public class CreateBlockPresetCommandHandlerTests
     [Fact]
     public async Task HandleAsync_NameAlreadyExists_Fails()
     {
-        _presets.ExistsWithNameAsync("Deep Work", cancellationToken: Arg.Any<CancellationToken>()).Returns(true);
+        _presets.ExistsWithNameAsync("Deep Work", BlockPresetType.Focus, cancellationToken: Arg.Any<CancellationToken>()).Returns(true);
 
         var result = await CreateHandler().HandleAsync(ValidCommand());
 

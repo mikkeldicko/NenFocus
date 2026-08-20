@@ -22,7 +22,7 @@ public sealed class CreateBlockPresetCommandHandler
         CreateBlockPresetCommand command,
         CancellationToken cancellationToken = default)
     {
-        if (await _presets.ExistsWithNameAsync(command.Name, cancellationToken: cancellationToken))
+        if (await _presets.ExistsWithNameAsync(command.Name, command.PresetType, cancellationToken: cancellationToken))
             return CreateBlockPresetResult.Fail($"A preset named '{command.Name}' already exists.");
 
         BlockPreset preset;

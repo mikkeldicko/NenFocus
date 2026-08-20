@@ -1,4 +1,6 @@
 using FluentAssertions;
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.UseCases.Planner.DeletePlannedBlock;
 using NenFocus.Infrastructure.Services;
@@ -50,5 +52,35 @@ public class TransactionalCommandHandlerTests
         await CreateHandler().HandleAsync(new DeletePlannedBlockCommand { BlockId = Guid.NewGuid() });
 
         await _uow.Received(1).CommitAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task HandleAsync_CommitThrowsUniqueConstraintViolation_ReturnsFailResultInstead()
+    {
+        // A genuine race — two commands both passed the inner handler's own
+        // ExistsWithNameAsync-style check before either committed. Translated here,
+        // generically, rather than in every command that touches a unique column.
+        _inner.HandleAsync(Arg.Any<DeletePlannedBlockCommand>(), Arg.Any<CancellationToken>())
+            .Returns(DeletePlannedBlockResult.Ok());
+        var sqliteEx = new SqliteException("UNIQUE constraint failed", 19, 2067);
+        _uow.CommitAsync(Arg.Any<CancellationToken>())
+            .Returns(Task.FromException(new DbUpdateException("save failed", sqliteEx)));
+
+        var result = await CreateHandler().HandleAsync(new DeletePlannedBlockCommand { BlockId = Guid.NewGuid() });
+
+        result.Success.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task HandleAsync_CommitThrowsUnrelatedDbUpdateException_Rethrows()
+    {
+        _inner.HandleAsync(Arg.Any<DeletePlannedBlockCommand>(), Arg.Any<CancellationToken>())
+            .Returns(DeletePlannedBlockResult.Ok());
+        _uow.CommitAsync(Arg.Any<CancellationToken>())
+            .Returns(Task.FromException(new DbUpdateException("some other failure")));
+
+        var act = async () => await CreateHandler().HandleAsync(new DeletePlannedBlockCommand { BlockId = Guid.NewGuid() });
+
+        await act.Should().ThrowAsync<DbUpdateException>();
     }
 }

@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using NenFocus.Application.Interfaces;
 using NenFocus.Domain.Entities;
+using NenFocus.Domain.Enums;
 
 namespace NenFocus.Infrastructure.Persistence.Repositories;
 
@@ -78,11 +79,12 @@ public sealed class BlockPresetRepository : IBlockPresetRepository
 
     public async Task<bool> ExistsWithNameAsync(
         string name,
+        BlockPresetType presetType,
         Guid? excludeId = null,
         CancellationToken cancellationToken = default)
     {
         var query = _context.BlockPresets
-            .Where(p => p.Name.ToLower() == name.ToLower().Trim());
+            .Where(p => p.Name.ToLower() == name.ToLower().Trim() && p.PresetType == presetType);
 
         if (excludeId.HasValue)
             query = query.Where(p => p.Id != excludeId.Value);

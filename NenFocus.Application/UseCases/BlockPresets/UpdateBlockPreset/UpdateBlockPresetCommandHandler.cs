@@ -21,7 +21,7 @@ public sealed class UpdateBlockPresetCommandHandler
         if (preset is null)
             return UpdateBlockPresetResult.Fail($"Preset '{command.PresetId}' not found.");
 
-        if (await _presets.ExistsWithNameAsync(command.Name, excludeId: command.PresetId, cancellationToken: cancellationToken))
+        if (await _presets.ExistsWithNameAsync(command.Name, command.PresetType, excludeId: command.PresetId, cancellationToken: cancellationToken))
             return UpdateBlockPresetResult.Fail($"A preset named '{command.Name}' already exists.");
 
         // preset was loaded by this same DbContext (tracked), and TransactionalCommandHandler
