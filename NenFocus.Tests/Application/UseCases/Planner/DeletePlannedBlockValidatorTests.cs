@@ -2,7 +2,6 @@ using FluentAssertions;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.UseCases.Planner.DeletePlannedBlock;
 using NenFocus.Domain.Entities;
-using NenFocus.Domain.Enums;
 using NenFocus.Domain.ValueObjects;
 using NSubstitute;
 
@@ -14,36 +13,14 @@ public class DeletePlannedBlockValidatorTests
 
     private readonly IPlannedBlockRepository _blocks = Substitute.For<IPlannedBlockRepository>();
     private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
-    private readonly INenContractRepository _contracts = Substitute.For<INenContractRepository>();
-    private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
 
     public DeletePlannedBlockValidatorTests()
     {
-        _clock.UtcNow.Returns(Now);
         _blocks.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((PlannedBlock?)null);
         _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns((Session?)null);
-        _contracts.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((NenContract?)null);
     }
 
-    private DeletePlannedBlockValidator CreateValidator() => new(_blocks, _sessions, _contracts, _clock);
-
-    private static NenContract ActiveContract() =>
-        NenContract.Seal(
-            Guid.NewGuid(), "Study Month", new NenContractGoal("Ship it"),
-            startDate: DateOnly.FromDateTime(Now), endDate: DateOnly.FromDateTime(Now).AddDays(6),
-            StrictnessRule.Locked, new DailyFloorPolicy(DailyFloor.None), null, false,
-            new Dictionary<DateOnly, double>(), sealedAt: Now); // sealedAt >= startDate -> Active
-
-    private static NenContract CompletedContract()
-    {
-        var contract = NenContract.Seal(
-            Guid.NewGuid(), "Study Month", new NenContractGoal("Ship it"),
-            startDate: DateOnly.FromDateTime(Now).AddDays(-10), endDate: DateOnly.FromDateTime(Now).AddDays(-3),
-            StrictnessRule.Locked, new DailyFloorPolicy(DailyFloor.None), null, false,
-            new Dictionary<DateOnly, double>(), sealedAt: Now.AddDays(-10)); // Active on seal
-        contract.Complete(Now.AddDays(-2));
-        return contract;
-    }
+    private DeletePlannedBlockValidator CreateValidator() => new(_blocks, _sessions);
 
     [Fact]
     public async Task Validate_ValidBlockId_IsValid()
@@ -62,41 +39,42 @@ public class DeletePlannedBlockValidatorTests
     }
 
     [Fact]
-    public async Task Validate_FocusBlockAlreadyEnded_IsInvalid()
+    public async Task Validate_FocusBlockAlreadyEndedNotContractLinked_IsValid()
     {
+        // Ended blocks are no longer permanently protected — only contract-linkage protects
+        // a block from deletion now, so this one (no ContractId) is deletable from its
+        // Planner snapshot view.
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Now.AddHours(-3), Now.AddHours(-1));
         _blocks.GetByIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns(block);
 
         var result = await CreateValidator().ValidateAsync(new DeletePlannedBlockCommand { BlockId = block.Id });
 
-        result.IsValid.Should().BeFalse();
+        result.IsValid.Should().BeTrue();
     }
 
     [Fact]
-    public async Task Validate_BackgroundBlockAlreadyEnded_IsInvalid()
+    public async Task Validate_BackgroundBlockAlreadyEndedNotContractLinked_IsValid()
     {
-        // Background Blocks have no Ritual/RitualCompletedAt at all — HasEnded is the only
-        // signal that can protect their historical record, and it must apply here too.
         var block = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Now.AddHours(-3), Now.AddHours(-1));
         _blocks.GetByIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns(block);
 
         var result = await CreateValidator().ValidateAsync(new DeletePlannedBlockCommand { BlockId = block.Id });
 
-        result.IsValid.Should().BeFalse();
+        result.IsValid.Should().BeTrue();
     }
 
     [Fact]
-    public async Task Validate_MissedFocusBlock_IsInvalid()
+    public async Task Validate_MissedFocusBlockNotContractLinked_IsValid()
     {
-        // Ritual never completed, but the window has closed — this is a "missed" record
-        // the domain explicitly says must not be deleted or altered.
+        // Ritual never completed, window closed — deletable from the snapshot view just
+        // like a completed one, as long as it's not tied to a Nen Contract.
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Now.AddHours(-3), Now.AddHours(-1));
         _blocks.GetByIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns(block);
 
         var result = await CreateValidator().ValidateAsync(new DeletePlannedBlockCommand { BlockId = block.Id });
 
         block.RitualCompletedAt.Should().BeNull(); // confirms this is the "missed", not "completed", case
-        result.IsValid.Should().BeFalse();
+        result.IsValid.Should().BeTrue();
     }
 
     [Fact]
@@ -113,8 +91,6 @@ public class DeletePlannedBlockValidatorTests
     [Fact]
     public async Task Validate_CurrentlyActiveBlockNotYetEnded_IsValid()
     {
-        // Mid-window, no active session tied to it — HasEnded is false, so this rule alone
-        // does not block it (the active-session rule is a separate, independent check).
         var block = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Now.AddHours(-1), Now.AddHours(1));
         _blocks.GetByIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns(block);
 
@@ -174,10 +150,9 @@ public class DeletePlannedBlockValidatorTests
     [Fact]
     public async Task Validate_BlockUnderActiveContract_IsInvalid()
     {
-        var contract = ActiveContract();
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Now.AddHours(1), Now.AddHours(2), contractId: contract.Id);
+        var contractId = Guid.NewGuid();
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Now.AddHours(1), Now.AddHours(2), contractId: contractId);
         _blocks.GetByIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns(block);
-        _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
 
         var result = await CreateValidator().ValidateAsync(new DeletePlannedBlockCommand { BlockId = block.Id });
 
@@ -185,28 +160,17 @@ public class DeletePlannedBlockValidatorTests
     }
 
     [Fact]
-    public async Task Validate_BlockUnderCompletedContract_IsValid()
+    public async Task Validate_BlockUnderConcludedContract_IsStillInvalid()
     {
-        // Not in effect anymore — falls back to the ordinary HasEnded-based protection,
-        // which this future-dated block passes.
-        var contract = CompletedContract();
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Now.AddHours(1), Now.AddHours(2), contractId: contract.Id);
-        _blocks.GetByIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns(block);
-        _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
-
-        var result = await CreateValidator().ValidateAsync(new DeletePlannedBlockCommand { BlockId = block.Id });
-
-        result.IsValid.Should().BeTrue();
-    }
-
-    [Fact]
-    public async Task Validate_BlockWithContractIdButContractNoLongerResolvable_IsValid()
-    {
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Now.AddHours(1), Now.AddHours(2), contractId: Guid.NewGuid());
+        // Contract-linkage protection is permanent — once a block's ContractId is set, it
+        // stays undeletable forever, even after the contract itself has concluded, so a
+        // contract's historical stats can never silently change.
+        var contractId = Guid.NewGuid();
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Now.AddHours(-3), Now.AddHours(-1), contractId: contractId);
         _blocks.GetByIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns(block);
 
         var result = await CreateValidator().ValidateAsync(new DeletePlannedBlockCommand { BlockId = block.Id });
 
-        result.IsValid.Should().BeTrue();
+        result.IsValid.Should().BeFalse();
     }
 }

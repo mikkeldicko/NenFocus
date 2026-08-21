@@ -69,4 +69,11 @@ public sealed record PlannedBlockDto
     public bool IsRedemption { get; init; }
 
     public int DurationMinutes => (int)(End - Start).TotalMinutes;
+
+    /// <summary>
+    /// Same span as DurationMinutes, as a TimeSpan — lets the Planner snapshot view bind
+    /// through DurationToStringConverter without the ViewModel doing its own TimeSpan math
+    /// (the ViewModel Forbidden Zone's "No Math" rule).
+    /// </summary>
+    public TimeSpan Duration => End - Start;
 }

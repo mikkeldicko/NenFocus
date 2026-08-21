@@ -11,6 +11,7 @@ using NenFocus.Application.Queries.GetFocusBlockRitualContext;
 using NenFocus.Application.Queries.GetNenContractForEdit;
 using NenFocus.Application.Queries.GetPlannedBlocksForDay;
 using NenFocus.Application.Queries.GetScheduledNenContracts;
+using NenFocus.Application.Queries.GetSessionSnapshotForBlock;
 using NenFocus.Application.Queries.GetSuggestedRedemptionPlacements;
 using NenFocus.Application.Queries.GetUnacknowledgedPostSessions;
 using NenFocus.Application.UseCases.BlockPresets.CreateBlockPreset;
@@ -126,6 +127,7 @@ public partial class ShellViewModel : ViewModelBase
        IQueryHandler<GetSuggestedRedemptionPlacementsQuery, IReadOnlyList<SuggestedRedemptionPlacementDto>> getSuggestedRedemptionPlacements,
        IQueryHandler<CheckNenContractDateRangeOverlapQuery, string?> checkOverlap,
        IQueryHandler<GetScheduledNenContractsQuery, IReadOnlyList<ScheduledNenContractDto>> getScheduledContracts,
+       IQueryHandler<GetSessionSnapshotForBlockQuery, SessionSnapshotDto?> getSessionSnapshot,
        IQueryHandler<GetNenContractForEditQuery, NenContractEditDto?> getContractForEdit,
        ICommandHandler<EditNenContractCommand, EditNenContractResult> editContract,
        ICommandHandler<DeleteNenContractCommand, DeleteNenContractResult> deleteContract)
@@ -163,7 +165,7 @@ public partial class ShellViewModel : ViewModelBase
             new BlockPresetPageViewModel(presetsQuery, createPreset, updatePreset, deletePreset, duplicatePreset),
             new ContractPresetPageViewModel(getContractPresets, createContractPreset, updateContractPreset, deleteContractPreset));
         NavItems.Add(new NavItemViewModel("Presets", "◻", presetsPageViewModel, Select));
-        var plannerViewModel = new PlannerPageViewModel(presetsQuery, getBlocksForDay, createPlannedBlock, updatePlannedBlock, deletePlannedBlock, splitPlannedBlock, sealContract, breakContract, computePlannedFocusHours, getContractPresets, getActiveContract, computeRedemptionAttribution, getSuggestedRedemptionPlacements, checkOverlap, getScheduledContracts, getContractForEdit, editContract, deleteContract, _plannerClock, _sessionState);
+        var plannerViewModel = new PlannerPageViewModel(presetsQuery, getBlocksForDay, createPlannedBlock, updatePlannedBlock, deletePlannedBlock, splitPlannedBlock, sealContract, breakContract, computePlannedFocusHours, getContractPresets, getActiveContract, computeRedemptionAttribution, getSuggestedRedemptionPlacements, checkOverlap, getScheduledContracts, getSessionSnapshot, getContractForEdit, editContract, deleteContract, _plannerClock, _sessionState);
         plannerViewModel.ContractWizardOpened += OnContractWizardOpened;
         plannerViewModel.ContractWizardClosed += OnContractWizardClosed;
         NavItems.Add(new NavItemViewModel("Planner", "◫", plannerViewModel, Select));

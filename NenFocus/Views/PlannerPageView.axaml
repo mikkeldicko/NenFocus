@@ -11,6 +11,7 @@
 	<UserControl.Resources>
 		<conv:WeekRangeToStringConverter x:Key="WeekRangeConverter"/>
 		<conv:DateTimeToUpperStringConverter x:Key="DateTimeUpperConverter"/>
+		<conv:DurationToStringConverter x:Key="DurationConverter"/>
 	</UserControl.Resources>
 
 	<UserControl.Styles>
@@ -170,6 +171,17 @@
 			<Setter Property="Padding" Value="10,6"/>
 			<Setter Property="FontSize" Value="12"/>
 			<Setter Property="Cursor" Value="Hand"/>
+		</Style>
+
+		<Style Selector="TextBlock.snapshotSectionLabel">
+			<Setter Property="FontSize" Value="9"/>
+			<Setter Property="FontWeight" Value="Medium"/>
+			<Setter Property="LetterSpacing" Value="4"/>
+			<Setter Property="Foreground" Value="#AAAABC"/>
+		</Style>
+		<Style Selector="Border.snapshotBadge">
+			<Setter Property="CornerRadius" Value="4"/>
+			<Setter Property="Padding" Value="8,3"/>
 		</Style>
 	</UserControl.Styles>
 
@@ -451,6 +463,142 @@
 						<Button Grid.Column="4" Classes="primary" Content="{Binding SaveButtonLabel}" Command="{Binding SaveCommand}" Margin="8,0,0,0" IsVisible="{Binding CanSaveBlock}"/>
 					</Grid>
 				</Grid>
+			</Border>
+		</Border>
+
+		<Border Background="#80000000"
+                IsVisible="{Binding IsSnapshotVisible}"
+                IsHitTestVisible="{Binding IsSnapshotVisible}">
+			<Border Background="White" CornerRadius="12" Width="520" MaxHeight="680" HorizontalAlignment="Center" VerticalAlignment="Center"
+                    BoxShadow="0 12 48 0 #44000000">
+				<Grid RowDefinitions="Auto,Auto,*,Auto" IsVisible="{Binding SnapshotBlock, Converter={x:Static ObjectConverters.IsNotNull}}">
+
+					<StackPanel Grid.Row="0" Spacing="10" Margin="24,24,24,16">
+						<StackPanel Orientation="Horizontal" Spacing="8">
+							<Border Classes="snapshotBadge" Background="{Binding SnapshotBlock.BlockPresetType, Converter={x:Static conv:BlockPresetTypeToColorConverter.Instance}}">
+								<TextBlock Text="{Binding SnapshotBlock.BlockPresetType, Converter={x:Static conv:BlockPresetTypeToLabelConverter.Instance}}"
+                                           FontSize="10" FontWeight="Medium" LetterSpacing="1"
+                                           Foreground="{Binding SnapshotBlock.BlockPresetType, Converter={x:Static conv:BlockPresetTypeToForegroundConverter.Instance}}"/>
+							</Border>
+							<Border Classes="snapshotBadge"
+                                    Background="{Binding SnapshotBlock.Outcome, Converter={x:Static conv:FocusBlockOutcomeToBrushConverter.Instance}}"
+                                    IsVisible="{Binding SnapshotBlock.Outcome, Converter={x:Static ObjectConverters.IsNotNull}}">
+								<TextBlock Text="{Binding SnapshotBlock.Outcome, Converter={x:Static conv:FocusBlockOutcomeToLabelConverter.Instance}}"
+                                           FontSize="10" FontWeight="Medium" LetterSpacing="1" Foreground="White"/>
+							</Border>
+							<Border Classes="snapshotBadge" Background="#F5EDD8" IsVisible="{Binding SnapshotBlock.IsRedemption}">
+								<TextBlock Text="REDEMPTION" FontSize="10" FontWeight="Medium" LetterSpacing="1" Foreground="#8B7320"/>
+							</Border>
+						</StackPanel>
+
+						<TextBlock Text="{Binding SnapshotBlock.PresetName}" FontSize="18" FontWeight="SemiBold" Foreground="#1A1A2E"/>
+
+						<TextBlock FontSize="13" Foreground="#7A7A8C">
+							<Run Text="{Binding SnapshotBlock.Start, StringFormat='{}{0:MMMM d, yyyy}', Mode=OneWay}"/>
+							<Run Text=" · "/>
+							<Run Text="{Binding SnapshotBlock.Start, StringFormat='{}{0:h:mm tt}', Mode=OneWay}"/>
+							<Run Text=" – "/>
+							<Run Text="{Binding SnapshotBlock.End, StringFormat='{}{0:h:mm tt}', Mode=OneWay}"/>
+							<Run Text=" ("/>
+							<Run Text="{Binding SnapshotBlock.Duration, Converter={StaticResource DurationConverter}, Mode=OneWay}"/>
+							<Run Text=")"/>
+						</TextBlock>
+					</StackPanel>
+
+					<Border Grid.Row="1" Height="1" Background="#E8E8F0" Margin="24,0"/>
+
+					<ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Margin="24,16,24,16">
+						<StackPanel Spacing="18">
+
+							<TextBlock Text="No session was started during this block."
+                                       IsVisible="{Binding ShowSnapshotNoSessionMessage}"
+                                       FontSize="13" Foreground="#7A7A8C" FontStyle="Italic"/>
+
+							<StackPanel Spacing="18" IsVisible="{Binding HasSnapshotSession}">
+
+								<StackPanel Spacing="4">
+									<TextBlock Text="ZETSU GOAL" Classes="snapshotSectionLabel"/>
+									<TextBlock Text="{Binding SnapshotSession.Goal}" FontSize="14" Foreground="#1A1A2E" TextWrapping="Wrap"/>
+								</StackPanel>
+
+								<StackPanel Spacing="4">
+									<TextBlock Text="REFLECTION" Classes="snapshotSectionLabel"/>
+									<TextBlock Text="{Binding SnapshotSession.Reflection}"
+                                               IsVisible="{Binding SnapshotSession.Reflection, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                               FontSize="14" Foreground="#1A1A2E" TextWrapping="Wrap"/>
+									<TextBlock Text="No reflection was written."
+                                               IsVisible="{Binding SnapshotSession.Reflection, Converter={x:Static StringConverters.IsNullOrEmpty}}"
+                                               FontSize="13" Foreground="#AAAABC" FontStyle="Italic"/>
+								</StackPanel>
+
+								<StackPanel Spacing="6" IsVisible="{Binding SnapshotSession.RedemptionCoverage.Count, Converter={x:Static conv:CountToBoolConverter.IsNonZero}}">
+									<TextBlock Text="COVERED A MISSED BLOCK" Classes="snapshotSectionLabel"/>
+									<ItemsControl ItemsSource="{Binding SnapshotSession.RedemptionCoverage}">
+										<ItemsControl.ItemTemplate>
+											<DataTemplate DataType="dto:RedemptionCoverageDto">
+												<TextBlock FontSize="13" Foreground="#1A1A2E" Margin="0,2" TextWrapping="Wrap">
+													<Run Text="{Binding MinutesCovered, Converter={x:Static conv:MinutesToStringConverter.Instance}, Mode=OneWay}"/>
+													<Run Text=" of "/>
+													<Run Text="{Binding MissedBlockPresetName, Mode=OneWay}"/>
+													<Run Text=" missed on "/>
+													<Run Text="{Binding MissedBlockDate, StringFormat='{}{0:MMM d, yyyy}', Mode=OneWay}"/>
+												</TextBlock>
+											</DataTemplate>
+										</ItemsControl.ItemTemplate>
+									</ItemsControl>
+								</StackPanel>
+
+								<StackPanel Spacing="6">
+									<TextBlock Text="BLOCKED ATTEMPTS" Classes="snapshotSectionLabel"/>
+									<TextBlock Text="No blocked attempts during this block."
+                                               IsVisible="{Binding SnapshotSession.Attempts.Count, Converter={x:Static conv:CountToBoolConverter.IsZero}}"
+                                               FontSize="13" Foreground="#AAAABC" FontStyle="Italic"/>
+									<Expander Header="{Binding SnapshotSession.Attempts.Count, StringFormat='{}{0} blocked attempts'}"
+                                              IsVisible="{Binding SnapshotSession.Attempts.Count, Converter={x:Static conv:CountToBoolConverter.IsNonZero}}">
+										<ItemsControl ItemsSource="{Binding SnapshotSession.Attempts}" Margin="0,8,0,0">
+											<ItemsControl.ItemTemplate>
+												<DataTemplate DataType="dto:BlockedAttemptSnapshotDto">
+													<Grid ColumnDefinitions="52,*,Auto" Margin="0,4">
+														<TextBlock Grid.Column="0" Text="{Binding AttemptType}" FontSize="11" Foreground="#AAAABC"/>
+														<TextBlock Grid.Column="1" Text="{Binding ResourceName}" FontSize="13" Foreground="#1A1A2E" Margin="8,0"/>
+														<TextBlock Grid.Column="2" Text="{Binding OccurredAt, StringFormat='{}{0:h:mm tt}'}" FontSize="12" Foreground="#7A7A8C"/>
+													</Grid>
+												</DataTemplate>
+											</ItemsControl.ItemTemplate>
+										</ItemsControl>
+									</Expander>
+								</StackPanel>
+
+							</StackPanel>
+						</StackPanel>
+					</ScrollViewer>
+
+					<StackPanel Grid.Row="3" Spacing="8" Margin="24,0,24,24">
+						<TextBlock Text="{Binding DeleteSnapshotErrorMessage}"
+                                   IsVisible="{Binding DeleteSnapshotErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                   FontSize="12" Foreground="#C03A2B" TextWrapping="Wrap"/>
+						<Grid ColumnDefinitions="Auto,*,Auto">
+							<Button Grid.Column="0" Classes="danger" Content="Delete" Command="{Binding RequestDeleteSnapshotBlockCommand}" IsVisible="{Binding CanDeleteSnapshotBlock}"/>
+							<Button Grid.Column="2" Classes="primary" Content="Close" Command="{Binding CloseSnapshotCommand}"/>
+						</Grid>
+					</StackPanel>
+				</Grid>
+			</Border>
+		</Border>
+
+		<Border IsVisible="{Binding IsConfirmDeleteSnapshotVisible}" Background="#88000000">
+			<Border Background="#FFFFFF" CornerRadius="14" Width="400" Padding="32,28"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                    BoxShadow="0 12 48 0 #44000000">
+				<StackPanel Spacing="20">
+					<TextBlock Text="Delete this block?" FontSize="18" FontWeight="SemiBold" Foreground="#1A1A2E"/>
+					<TextBlock Text="This permanently removes it from the Planner, along with its session record. This cannot be undone."
+                               FontSize="14" Foreground="#888899" TextWrapping="Wrap"/>
+					<StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="12">
+						<Button Classes="secondary" Content="Keep It" Command="{Binding CancelDeleteSnapshotBlockCommand}"/>
+						<Button Classes="danger" Content="Delete" Command="{Binding ConfirmDeleteSnapshotBlockCommand}"/>
+					</StackPanel>
+				</StackPanel>
 			</Border>
 		</Border>
 

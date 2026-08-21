@@ -17,6 +17,7 @@ using NenFocus.Application.Queries.GetAllContractPresets;
 using NenFocus.Application.Queries.GetNenContractForEdit;
 using NenFocus.Application.Queries.GetPlannedBlocksForDay;
 using NenFocus.Application.Queries.GetScheduledNenContracts;
+using NenFocus.Application.Queries.GetSessionSnapshotForBlock;
 using NenFocus.Application.Queries.GetSuggestedRedemptionPlacements;
 using NenFocus.Application.UseCases.ContractPresets.CreateContractPreset;
 using NenFocus.Application.UseCases.NenContracts.Break;
@@ -57,6 +58,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     private readonly IQueryHandler<GetSuggestedRedemptionPlacementsQuery, IReadOnlyList<SuggestedRedemptionPlacementDto>> _getSuggestedRedemptionPlacements;
     private readonly IQueryHandler<CheckNenContractDateRangeOverlapQuery, string?> _checkOverlap;
     private readonly IQueryHandler<GetScheduledNenContractsQuery, IReadOnlyList<ScheduledNenContractDto>> _getScheduledContracts;
+    private readonly IQueryHandler<GetSessionSnapshotForBlockQuery, SessionSnapshotDto?> _getSessionSnapshot;
     private readonly IQueryHandler<GetNenContractForEditQuery, NenContractEditDto?> _getContractForEdit;
     private readonly ICommandHandler<EditNenContractCommand, EditNenContractResult> _editContract;
     private readonly ICommandHandler<DeleteNenContractCommand, DeleteNenContractResult> _deleteContract;
@@ -146,6 +148,12 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     [ObservableProperty] private bool _isEditingBlockContractLocked;
     [ObservableProperty] private bool _isEditingBlockDailyFlexibility;
     [ObservableProperty] private string? _dragError;
+
+    [ObservableProperty] private bool _isSnapshotVisible;
+    [ObservableProperty] private PlannedBlockDto? _snapshotBlock;
+    [ObservableProperty] private SessionSnapshotDto? _snapshotSession;
+    [ObservableProperty] private bool _isConfirmDeleteSnapshotVisible;
+    [ObservableProperty] private string? _deleteSnapshotErrorMessage;
 
     // Passive preview only, refreshed whenever preset/date/time change — no user action
     // needed and nothing sent on Save. CreatePlannedBlockCommandHandler runs the exact same
@@ -387,6 +395,18 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
     public bool CanSaveBlock => !IsBlockLocked;
 
+    // Mirrors DeletePlannedBlockValidator's sole remaining rejection condition for a done
+    // block: any Nen Contract linkage, permanent, regardless of the contract's own status.
+    public bool CanDeleteSnapshotBlock => SnapshotBlock is not null && SnapshotBlock.ContractId is null;
+
+    public bool HasSnapshotSession => SnapshotSession is not null;
+
+    // A Background block never has a Session (no Ritual) — the "no session was started"
+    // message only makes sense for a Focus block that was Missed (or Cancelled, though
+    // Cancelled blocks never reach the Planner tile list at all).
+    public bool ShowSnapshotNoSessionMessage =>
+        SnapshotBlock is not null && SnapshotBlock.BlockPresetType == BlockPresetType.Focus && SnapshotSession is null;
+
     // Mirrors SplitPlannedBlockValidator's gating conditions exactly — sourced from
     // dto.IsUnderInEffectContract + dto.ContractStrictnessRule (Application-computed),
     // IsStartLocked (the future-only guard — a block that hasn't started yet always has
@@ -470,6 +490,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         IQueryHandler<GetSuggestedRedemptionPlacementsQuery, IReadOnlyList<SuggestedRedemptionPlacementDto>> getSuggestedRedemptionPlacements,
         IQueryHandler<CheckNenContractDateRangeOverlapQuery, string?> checkOverlap,
         IQueryHandler<GetScheduledNenContractsQuery, IReadOnlyList<ScheduledNenContractDto>> getScheduledContracts,
+        IQueryHandler<GetSessionSnapshotForBlockQuery, SessionSnapshotDto?> getSessionSnapshot,
         IQueryHandler<GetNenContractForEditQuery, NenContractEditDto?> getContractForEdit,
         ICommandHandler<EditNenContractCommand, EditNenContractResult> editContract,
         ICommandHandler<DeleteNenContractCommand, DeleteNenContractResult> deleteContract,
@@ -484,6 +505,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         _splitBlock = splitBlock;
         _sealContract = sealContract;
         _getScheduledContracts = getScheduledContracts;
+        _getSessionSnapshot = getSessionSnapshot;
         _getContractForEdit = getContractForEdit;
         _editContract = editContract;
         _deleteContract = deleteContract;
@@ -792,6 +814,17 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
         if (_sessionState.ActiveSession?.OriginatingBlockId == tile.Id) return;
         if (!_blocksInWeek.TryGetValue(tile.Id, out var dto)) return;
+
+        // Done blocks (Focus: Outcome resolved; Background: no Outcome concept, HasEnded is
+        // the only "done" signal) get the read-only snapshot instead of the edit form — the
+        // active-session guard above already took priority, so nothing here is still running.
+        var isDone = dto.BlockPresetType == BlockPresetType.Focus ? dto.Outcome.HasValue : dto.HasEnded;
+        if (isDone)
+        {
+            await ShowSnapshotAsync(dto);
+            return;
+        }
+
         await EnsurePresetsLoadedAsync();
         _editingBlockId = dto.Id;
         _editingIsDraft = false;
@@ -815,6 +848,65 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         SelectedPreset = AvailablePresets.FirstOrDefault(p => p.Id == dto.PresetId)
                           ?? AvailablePresets.FirstOrDefault();
         IsFormVisible = true;
+    }
+
+    private async Task ShowSnapshotAsync(PlannedBlockDto dto)
+    {
+        SnapshotBlock = dto;
+        // Background blocks have no Ritual, so no Session is ever tied to one — skip the
+        // query entirely rather than asking it a question that's always null by construction.
+        SnapshotSession = dto.BlockPresetType == BlockPresetType.Focus
+            ? await _getSessionSnapshot.HandleAsync(new GetSessionSnapshotForBlockQuery { PlannedBlockId = dto.Id })
+            : null;
+        DeleteSnapshotErrorMessage = null;
+        IsSnapshotVisible = true;
+    }
+
+    [RelayCommand]
+    private void CloseSnapshot()
+    {
+        IsSnapshotVisible = false;
+        SnapshotBlock = null;
+        SnapshotSession = null;
+    }
+
+    [RelayCommand]
+    private void RequestDeleteSnapshotBlock()
+    {
+        DeleteSnapshotErrorMessage = null;
+        IsConfirmDeleteSnapshotVisible = true;
+    }
+
+    [RelayCommand]
+    private async Task ConfirmDeleteSnapshotBlockAsync()
+    {
+        IsConfirmDeleteSnapshotVisible = false;
+        if (SnapshotBlock is not { } block) return;
+
+        var result = await _deleteBlock.HandleAsync(new DeletePlannedBlockCommand { BlockId = block.Id });
+        if (!result.Success)
+        {
+            DeleteSnapshotErrorMessage = result.ErrorMessage;
+            return;
+        }
+
+        CloseSnapshot();
+        await LoadWeekAsync();
+    }
+
+    [RelayCommand]
+    private void CancelDeleteSnapshotBlock() => IsConfirmDeleteSnapshotVisible = false;
+
+    partial void OnSnapshotBlockChanged(PlannedBlockDto? value)
+    {
+        OnPropertyChanged(nameof(CanDeleteSnapshotBlock));
+        OnPropertyChanged(nameof(ShowSnapshotNoSessionMessage));
+    }
+
+    partial void OnSnapshotSessionChanged(SessionSnapshotDto? value)
+    {
+        OnPropertyChanged(nameof(HasSnapshotSession));
+        OnPropertyChanged(nameof(ShowSnapshotNoSessionMessage));
     }
 
     private async Task EnsurePresetsLoadedAsync()
