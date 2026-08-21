@@ -41,7 +41,7 @@ public sealed class GetNenContractDeficitsQueryHandler
         {
             var session = await _sessions.GetByOriginatingBlockIdAsync(block.Id, ct);
             var outcome = _classifier.Classify(block.Start, block.End, block.RitualCompletedAt, session?.EndedAt, now);
-            if (outcome is not (FocusBlockOutcome.Missed or FocusBlockOutcome.StartedLate or FocusBlockOutcome.EndedEarly))
+            if (!block.CanContributeOwnDeficit(outcome))
                 continue;
 
             // Credited, not raw elapsed: a StartedLate session that keeps running past the
@@ -60,6 +60,7 @@ public sealed class GetNenContractDeficitsQueryHandler
             var rawDeficit = Math.Max(0, scheduledMinutes - creditedMinutes);
 
             var coveredMinutes = focusBlocks
+                .Where(b => b.Id != query.ExcludeCoverageFromBlockId)
                 .SelectMany(b => b.RedemptionEntries)
                 .Where(e => e.MissedBlockId == block.Id)
                 .Sum(e => e.MinutesCovered);
@@ -74,7 +75,10 @@ public sealed class GetNenContractDeficitsQueryHandler
                 BlockPresetId = block.BlockPresetId,
                 ScheduledStart = block.Start,
                 ScheduledEnd = block.End,
-                Outcome = outcome.Value,
+                // CanContributeOwnDeficit already guarantees outcome is one of the three
+                // shortfall values, not null — the compiler just can't see that through the
+                // method call.
+                Outcome = outcome!.Value,
                 RemainingDeficitMinutes = remainingDeficit,
                 PlannedMinutes = scheduledMinutes,
                 CompletedMinutes = creditedMinutes

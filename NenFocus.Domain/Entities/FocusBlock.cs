@@ -1,3 +1,4 @@
+using NenFocus.Domain.Enums;
 using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Domain.Entities;
@@ -77,4 +78,19 @@ public sealed class FocusBlock : PlannedBlock
     {
         RedemptionEntries = entries;
     }
+
+    /// <summary>
+    /// True when this block's own outcome represents an unredeemed shortfall of its own —
+    /// Missed, StartedLate, or EndedEarly — and it isn't itself already serving as a
+    /// redemption for another block. A block actively covering someone else's deficit never
+    /// becomes a deficit source in its own right (e.g. a Ritual that ran a few minutes past
+    /// its own grace period, StartedLate against its own schedule): the commitment it exists
+    /// to redeem is what's tracked, not a second one layered on top of it. Takes the outcome
+    /// as a parameter rather than reclassifying — IFocusBlockOutcomeClassifier.Classify needs
+    /// "now" and session data the caller already has, and the two must never disagree about
+    /// what the outcome was.
+    /// </summary>
+    public bool CanContributeOwnDeficit(FocusBlockOutcome? outcome) =>
+        outcome is FocusBlockOutcome.Missed or FocusBlockOutcome.StartedLate or FocusBlockOutcome.EndedEarly
+        && RedemptionEntries.Count == 0;
 }

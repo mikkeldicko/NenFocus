@@ -57,7 +57,10 @@ public sealed class UpdatePlannedBlockCommandHandler : ICommandHandler<UpdatePla
             if (activeSession?.StartedAt is not null)
             {
                 var sessionStart = activeSession.StartedAt.Value;
-                var sessionEnd = sessionStart + activeSession.Duration.Value;
+                // EndAt, not StartedAt + Duration — see CreatePlannedBlockCommandHandler's
+                // identical check for the full explanation. Set together with StartedAt
+                // inside Session.Start(), so it's never null here.
+                var sessionEnd = activeSession.EndAt!.Value;
                 if (sessionStart < endTime && sessionEnd > startTime)
                 {
                     var localStart = sessionStart.ToLocalTime();

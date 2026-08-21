@@ -64,7 +64,7 @@ public sealed class StartSessionCommandHandler
             if (originatingBlock is null)
                 return StartSessionResult.Fail("The originating focus block was not found.");
 
-            if (now >= originatingBlock.End)
+            if (originatingBlock.HasEnded(now))
                 return StartSessionResult.Fail(
                     "This focus block's window has already closed. It will be recorded as missed instead.");
 

@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.UseCases.Sessions.EndSession;
@@ -13,6 +14,7 @@ public sealed class ActiveSessionMonitor : IActiveSessionMonitor, IDisposable
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ISystemClock _clock;
+    private readonly ILogger<ActiveSessionMonitor> _logger;
     private System.Timers.Timer? _timer;
 
     private Guid _sessionId;
@@ -30,10 +32,13 @@ public sealed class ActiveSessionMonitor : IActiveSessionMonitor, IDisposable
     public event EventHandler? Tick;
     public event EventHandler<PostSessionDto>? SessionAutoEnded;
 
-    public ActiveSessionMonitor(ISessionStateService sessionState, IServiceScopeFactory scopeFactory, ISystemClock clock)
+    public ActiveSessionMonitor(
+        ISessionStateService sessionState, IServiceScopeFactory scopeFactory, ISystemClock clock,
+        ILogger<ActiveSessionMonitor> logger)
     {
         _scopeFactory = scopeFactory;
         _clock = clock;
+        _logger = logger;
         sessionState.SessionChanged += OnSessionChanged;
 
         // SessionStateService.InitializeAsync() now runs once, awaited, during app
@@ -141,22 +146,45 @@ public sealed class ActiveSessionMonitor : IActiveSessionMonitor, IDisposable
         }
     }
 
+    // Fire-and-forget (`_ = AutoEndAsync()`) — an unhandled exception here becomes an
+    // unobserved task exception: silently discarded, with the countdown already stopped
+    // and _autoEndPending already latched true beforehand, so nothing would ever retry
+    // and the session would appear to hang at 00:00:00 forever with no error surfaced
+    // anywhere. Mirrors ScheduledEnforcementService's heartbeat catch-log-continue
+    // precedent, plus re-arming so the next tick retries automatically instead of the
+    // failure being permanent.
     private async Task AutoEndAsync()
     {
-        using var scope = _scopeFactory.CreateScope();
-        var handler = scope.ServiceProvider
-            .GetRequiredService<ICommandHandler<EndSessionCommand, EndSessionResult>>();
-        var result = await handler.HandleAsync(new EndSessionCommand { SessionId = _sessionId });
-        if (result.Success && result.PostSession is not null)
-            SessionAutoEnded?.Invoke(this, result.PostSession);
+        try
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var handler = scope.ServiceProvider
+                .GetRequiredService<ICommandHandler<EndSessionCommand, EndSessionResult>>();
+            var result = await handler.HandleAsync(new EndSessionCommand { SessionId = _sessionId });
+            if (result.Success && result.PostSession is not null)
+                SessionAutoEnded?.Invoke(this, result.PostSession);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Auto-end failed for session {SessionId}; retrying next tick", _sessionId);
+            _autoEndPending = false;
+            StartTimer();
+        }
     }
 
     private async Task AutoResumeBreakAsync()
     {
-        using var scope = _scopeFactory.CreateScope();
-        var handler = scope.ServiceProvider
-            .GetRequiredService<ICommandHandler<ResumeFromBreakCommand, ResumeFromBreakResult>>();
-        await handler.HandleAsync(new ResumeFromBreakCommand { SessionId = _sessionId });
+        try
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var handler = scope.ServiceProvider
+                .GetRequiredService<ICommandHandler<ResumeFromBreakCommand, ResumeFromBreakResult>>();
+            await handler.HandleAsync(new ResumeFromBreakCommand { SessionId = _sessionId });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Auto-resume-from-break failed for session {SessionId}", _sessionId);
+        }
     }
 
     public void Dispose() => StopTimer();

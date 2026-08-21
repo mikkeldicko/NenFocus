@@ -30,8 +30,18 @@ public abstract class PlannedBlock : AggregateRoot
     public bool OverlapsWith(PlannedBlock other)
         => Start < other.End && End > other.Start;
 
+    /// <summary>
+    /// True when <paramref name="atTime"/> falls within this block's still-actually-reserved
+    /// window — bounded by <see cref="EffectiveEnd"/>, not the raw <see cref="End"/>, so a
+    /// block whose session ended early stops being "active" the moment it actually ended,
+    /// not at its original scheduled end. Without this, a block that freed its tail for new
+    /// scheduling (the exact reason EffectiveEnd exists) could still be picked by
+    /// PolicyEngine as "the" active Focus block over a genuinely new one scheduled into that
+    /// freed tail, permanently suppressing the new block's Ritual trigger until the stale
+    /// block's raw window finally closed.
+    /// </summary>
     public bool IsActive(DateTime atTime)
-        => atTime >= Start && atTime < End;
+        => atTime >= Start && atTime < EffectiveEnd(atTime);
 
     /// <summary>
     /// True once this block's window has fully closed. Canonical definition of "past" —

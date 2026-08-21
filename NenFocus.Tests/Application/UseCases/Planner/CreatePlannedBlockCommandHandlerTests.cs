@@ -103,6 +103,29 @@ public class CreatePlannedBlockCommandHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_ActiveSessionStartedLate_UsesEndAtNotStartedAtPlusDuration()
+    {
+        // A Planned session's EndAt is pinned to its originating block's own scheduled end
+        // (Session.Start), while Duration is the block's full nominal length regardless of
+        // exactly when the Ritual completed. Starting 5 minutes late makes
+        // StartedAt + Duration overshoot the session's real EndAt by 5 minutes — the new
+        // block below fits cleanly right after the session's real end, and must not be
+        // rejected by a recomputed window that overshoots it.
+        var presetId = Guid.NewGuid();
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, DateTime.UtcNow));
+        var activeSession = Session.Create(
+            Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromHours(1)),
+            Guid.NewGuid(), SessionOrigin.Planned, originatingBlockId: Guid.NewGuid());
+        activeSession.Start(Start.AddMinutes(-55), scheduledEnd: Start); // started 5 min "late", EndAt pinned to Start
+        _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns(activeSession);
+
+        var result = await CreateHandler().HandleAsync(FocusCommand(presetId)); // new block: Start–End
+
+        result.Success.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task HandleAsync_Focus_HappyPath_CreatesFocusBlock()
     {
         var presetId = Guid.NewGuid();

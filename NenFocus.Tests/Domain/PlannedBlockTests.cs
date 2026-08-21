@@ -1,5 +1,6 @@
 using FluentAssertions;
 using NenFocus.Domain.Entities;
+using NenFocus.Domain.Enums;
 using NenFocus.Domain.Events;
 using NenFocus.Domain.ValueObjects;
 
@@ -220,6 +221,29 @@ public class PlannedBlockTests
         => CreateFocusBlock().IsActive(Start.AddMinutes(30)).Should().BeTrue();
 
     [Fact]
+    public void IsActive_SessionEndedEarly_AfterActualEnd_IsFalse()
+    {
+        // The bug this guards: IsActive used to compare against raw End, so a block whose
+        // session ended early still looked "active" all the way to its original scheduled
+        // end — letting PolicyEngine pick a stale, already-resolved block over a genuinely
+        // new one scheduled into the freed tail, permanently suppressing the new block's
+        // Ritual trigger.
+        var block = CreateFocusBlock();
+        block.MarkSessionEnded(Start.AddMinutes(20));
+
+        block.IsActive(Start.AddMinutes(21)).Should().BeFalse();
+    }
+
+    [Fact]
+    public void IsActive_SessionEndedEarly_BeforeActualEnd_IsStillTrue()
+    {
+        var block = CreateFocusBlock();
+        block.MarkSessionEnded(Start.AddMinutes(20));
+
+        block.IsActive(Start.AddMinutes(10)).Should().BeTrue();
+    }
+
+    [Fact]
     public void HasEnded_BeforeEnd_IsFalse()
         => CreateFocusBlock().HasEnded(End.AddMinutes(-1)).Should().BeFalse();
 
@@ -393,6 +417,43 @@ public class PlannedBlockTests
         block.AssignRedemptionEntries([]);
 
         block.RedemptionEntries.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData(FocusBlockOutcome.Missed)]
+    [InlineData(FocusBlockOutcome.StartedLate)]
+    [InlineData(FocusBlockOutcome.EndedEarly)]
+    public void FocusBlock_CanContributeOwnDeficit_ShortfallOutcomeNotARedemption_True(FocusBlockOutcome outcome)
+    {
+        CreateFocusBlock().CanContributeOwnDeficit(outcome).Should().BeTrue();
+    }
+
+    [Fact]
+    public void FocusBlock_CanContributeOwnDeficit_CompletedOnTime_False()
+    {
+        CreateFocusBlock().CanContributeOwnDeficit(FocusBlockOutcome.CompletedOnTime).Should().BeFalse();
+    }
+
+    [Fact]
+    public void FocusBlock_CanContributeOwnDeficit_StillOpen_False()
+    {
+        CreateFocusBlock().CanContributeOwnDeficit(null).Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(FocusBlockOutcome.Missed)]
+    [InlineData(FocusBlockOutcome.StartedLate)]
+    [InlineData(FocusBlockOutcome.EndedEarly)]
+    public void FocusBlock_CanContributeOwnDeficit_AlreadyARedemption_False(FocusBlockOutcome outcome)
+    {
+        // A block covering someone else's deficit never becomes a deficit source of its
+        // own, no matter how its own completion turned out — this is the exact bug the
+        // "Cover Deficit" flow used to hit: a redemption block that ran a few minutes past
+        // its own grace period would otherwise spawn a fresh, uncoverable deficit.
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End,
+            redemptionEntries: [new RedemptionEntry(Guid.NewGuid(), 30)]);
+
+        block.CanContributeOwnDeficit(outcome).Should().BeFalse();
     }
 
     [Fact]

@@ -25,9 +25,11 @@ public class UpdateBlockPresetValidatorTests
 
     private UpdateBlockPresetValidator CreateValidator() => new(_sessions, _plannedBlocks, _presets, _clock);
 
-    private static BlockPreset ExistingPreset(Guid presetId, IEnumerable<string>? apps = null, IEnumerable<string>? sites = null)
+    private static BlockPreset ExistingPreset(
+        Guid presetId, IEnumerable<string>? apps = null, IEnumerable<string>? sites = null,
+        WebsiteFilterType filterType = WebsiteFilterType.Blocklist)
     {
-        var preset = BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, DateTime.UtcNow);
+        var preset = BlockPreset.Create(presetId, "Deep Work", filterType, BlockPresetType.Focus, DateTime.UtcNow);
         foreach (var app in apps ?? []) preset.AddBlockedApp(new BlockedApp(app));
         foreach (var site in sites ?? []) preset.AddWebsite(new BlockedSite(site));
         return preset;
@@ -118,6 +120,50 @@ public class UpdateBlockPresetValidatorTests
             .Returns(ExistingPreset(presetId, sites: ["reddit.com", "youtube.com"]));
 
         var command = ValidCommand(presetId); // Websites empty — drops both existing sites
+
+        var result = await CreateValidator().ValidateAsync(command);
+
+        result.IsValid.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Validate_LockedAllowlistPreset_RemovingASiteOnly_IsValid()
+    {
+        // Under Allowlist, removing a site narrows what's let through — that's the
+        // "stricter" direction, the inverse of Blocklist.
+        var presetId = Guid.NewGuid();
+        LockByFutureBlock(presetId);
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
+            .Returns(ExistingPreset(presetId, sites: ["allowed-a.com", "allowed-b.com"], filterType: WebsiteFilterType.Allowlist));
+
+        var command = ValidCommand(presetId) with
+        {
+            WebsiteFilterType = WebsiteFilterType.Allowlist,
+            BlockedApps = [],
+            Websites = ["allowed-a.com"] // allowed-b.com dropped
+        };
+
+        var result = await CreateValidator().ValidateAsync(command);
+
+        result.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Validate_LockedAllowlistPreset_AddingASite_IsInvalid()
+    {
+        // Adding a site to an Allowlist widens what's let through — that's the "weaker"
+        // direction and must be rejected while locked, even though it's an addition.
+        var presetId = Guid.NewGuid();
+        LockByActiveSession(presetId);
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
+            .Returns(ExistingPreset(presetId, sites: ["allowed-a.com"], filterType: WebsiteFilterType.Allowlist));
+
+        var command = ValidCommand(presetId) with
+        {
+            WebsiteFilterType = WebsiteFilterType.Allowlist,
+            BlockedApps = [],
+            Websites = ["allowed-a.com", "allowed-b.com"]
+        };
 
         var result = await CreateValidator().ValidateAsync(command);
 

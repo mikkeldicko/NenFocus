@@ -263,6 +263,22 @@ public class StartSessionCommandHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_Planned_OriginatingBlockEndsExactlyNow_StillAllowed()
+    {
+        // PlannedBlock.HasEnded(asOf) is the codebase's one canonical "is this past"
+        // definition (End < asOf, strict) — this check must match it exactly rather than
+        // its own now >= End (inclusive of the exact-equality instant).
+        var blockId = Guid.NewGuid();
+        var block = FocusBlock.Create(blockId, Guid.NewGuid(), Now.AddHours(-1), Now);
+        _plannedBlocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns(block);
+
+        var command = SpontaneousCommand() with { OriginatingBlockId = blockId };
+        var result = await CreateHandler().HandleAsync(command, CancellationToken.None);
+
+        result.Success.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task HandleAsync_Planned_SessionAlreadyExistsForBlock_Fails()
     {
         var blockId = Guid.NewGuid();

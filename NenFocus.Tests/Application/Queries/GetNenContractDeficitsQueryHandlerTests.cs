@@ -176,6 +176,54 @@ public class GetNenContractDeficitsQueryHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_RedemptionBlockItselfStartedLate_DoesNotAppearAsItsOwnDeficit()
+    {
+        // Reproduces the reported bug: a redemption block that itself runs a few minutes
+        // past its own grace period (e.g. the Ritual took a moment) must not become a
+        // second, uncoverable deficit — it fully covered the block it exists to redeem,
+        // and that's the only fact that matters.
+        var missed = MissedBlock(Now.AddHours(-3), Now.AddHours(-1)); // 120 min deficit
+        var presetId = missed.BlockPresetId;
+        var redemption = FocusBlock.Create(Guid.NewGuid(), presetId, Now.AddHours(-2), Now,
+            contractId: ContractId, redemptionEntries: [new RedemptionEntry(missed.Id, 120)]);
+
+        _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyList<PlannedBlock>)[missed, redemption]);
+        _classifier.Classify(missed.Start, missed.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Now).Returns(FocusBlockOutcome.Missed);
+        // If the fix regresses, the handler starts calling Classify for the redemption
+        // block too — stubbing StartedLate here means a regression shows up as a second,
+        // real deficit entry in the result instead of silently passing either way.
+        _classifier.Classify(redemption.Start, redemption.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Now).Returns(FocusBlockOutcome.StartedLate);
+
+        var result = await CreateHandler().HandleAsync(new GetNenContractDeficitsQuery(ContractId), CancellationToken.None);
+
+        result.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task HandleAsync_ExcludeCoverageFromBlockId_ThatBlocksOwnEntryIsIgnored()
+    {
+        // Reproduces the live bug: recomputing a redemption block's coverage on edit must
+        // not see the block's own stale, pre-edit RedemptionEntry as coverage from someone
+        // else — without the exclusion, remainingDeficit collapses toward zero (floating-
+        // point noise, not a clean 0) instead of the true 120-minute deficit.
+        var missed = MissedBlock(Now.AddHours(-3), Now.AddHours(-1)); // 120 min deficit
+        var presetId = missed.BlockPresetId;
+        var editingBlockId = Guid.NewGuid();
+        var redemption = FocusBlock.Create(editingBlockId, presetId, Now.AddHours(1), Now.AddHours(3),
+            contractId: ContractId, redemptionEntries: [new RedemptionEntry(missed.Id, 120)]);
+
+        _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyList<PlannedBlock>)[missed, redemption]);
+        _classifier.Classify(missed.Start, missed.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Now).Returns(FocusBlockOutcome.Missed);
+
+        var result = await CreateHandler().HandleAsync(
+            new GetNenContractDeficitsQuery(ContractId, ExcludeCoverageFromBlockId: editingBlockId), CancellationToken.None);
+
+        result.Should().ContainSingle().Subject.RemainingDeficitMinutes.Should().Be(120);
+    }
+
+    [Fact]
     public async Task HandleAsync_MissedBlockPartiallyCoveredByRedemption_RemainingDeficitReduced()
     {
         var missed = MissedBlock(Now.AddHours(-3), Now.AddHours(-1)); // 120 min deficit

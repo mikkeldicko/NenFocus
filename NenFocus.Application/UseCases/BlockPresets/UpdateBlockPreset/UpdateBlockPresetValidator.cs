@@ -34,8 +34,9 @@ public sealed class UpdateBlockPresetValidator : AbstractValidator<UpdateBlockPr
 
     /// <summary>
     /// True only if every field but BlockedApps/Websites is unchanged from the currently
-    /// persisted preset, and both lists are supersets of their current contents — nothing
-    /// already blocked may be dropped while the preset is locked.
+    /// persisted preset, and the proposed lists keep it at least as strict — the strictness
+    /// direction itself (which depends on WebsiteFilterType) is BlockPreset's own rule, not
+    /// re-derived here.
     /// </summary>
     private static bool IsAddOnlyChange(UpdateBlockPresetCommand command, BlockPreset current)
     {
@@ -44,14 +45,8 @@ public sealed class UpdateBlockPresetValidator : AbstractValidator<UpdateBlockPr
         if (command.PresetType != current.PresetType) return false;
         if (!command.Tags.Select(t => t.Trim()).ToHashSet().SetEquals(current.Tags)) return false;
 
-        var currentApps = current.BlockedApps.Select(a => a.ProcessName).ToHashSet();
         var newApps = command.BlockedApps.Select(a => a.Trim()).ToHashSet();
-        if (!currentApps.IsSubsetOf(newApps)) return false;
-
-        var currentSites = current.Websites.Select(s => s.Url).ToHashSet();
         var newSites = command.Websites.Select(u => u.Trim().ToLowerInvariant()).ToHashSet();
-        if (!currentSites.IsSubsetOf(newSites)) return false;
-
-        return true;
+        return current.IsAtLeastAsStrict(newApps, newSites);
     }
 }

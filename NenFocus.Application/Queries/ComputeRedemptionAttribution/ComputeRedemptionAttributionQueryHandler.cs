@@ -33,7 +33,8 @@ public sealed class ComputeRedemptionAttributionQueryHandler
 
         foreach (var contract in candidates)
         {
-            var deficits = await _deficits.HandleAsync(new GetNenContractDeficitsQuery(contract.Id), ct);
+            var deficits = await _deficits.HandleAsync(
+                new GetNenContractDeficitsQuery(contract.Id, ExcludeCoverageFromBlockId: query.ExcludeBlockId), ct);
             foreach (var deficit in deficits)
             {
                 if (deficit.BlockPresetId != query.PresetId) continue;

@@ -211,4 +211,65 @@ public class BlockPresetTests
         original.BlockedApps.Should().ContainSingle();
         copy.BlockedApps.Should().HaveCount(2);
     }
+
+    [Fact]
+    public void IsAtLeastAsStrict_BlocklistAddingApp_True()
+    {
+        var preset = CreatePreset();
+        preset.AddBlockedApp(new BlockedApp("chrome"));
+
+        preset.IsAtLeastAsStrict(new HashSet<string> { "chrome", "firefox" }, new HashSet<string>()).Should().BeTrue();
+    }
+
+    [Fact]
+    public void IsAtLeastAsStrict_RemovingApp_False()
+    {
+        var preset = CreatePreset();
+        preset.AddBlockedApp(new BlockedApp("chrome"));
+        preset.AddBlockedApp(new BlockedApp("firefox"));
+
+        preset.IsAtLeastAsStrict(new HashSet<string> { "chrome" }, new HashSet<string>()).Should().BeFalse();
+    }
+
+    [Fact]
+    public void IsAtLeastAsStrict_BlocklistAddingSite_True()
+    {
+        var preset = CreatePreset(policy: WebsiteFilterType.Blocklist);
+        preset.AddWebsite(new BlockedSite("reddit.com"));
+
+        preset.IsAtLeastAsStrict(new HashSet<string>(), new HashSet<string> { "reddit.com", "youtube.com" }).Should().BeTrue();
+    }
+
+    [Fact]
+    public void IsAtLeastAsStrict_BlocklistRemovingSite_False()
+    {
+        var preset = CreatePreset(policy: WebsiteFilterType.Blocklist);
+        preset.AddWebsite(new BlockedSite("reddit.com"));
+        preset.AddWebsite(new BlockedSite("youtube.com"));
+
+        preset.IsAtLeastAsStrict(new HashSet<string>(), new HashSet<string> { "reddit.com" }).Should().BeFalse();
+    }
+
+    [Fact]
+    public void IsAtLeastAsStrict_AllowlistRemovingSite_True()
+    {
+        // Removing an allowed site narrows what's let through — the "stricter" direction,
+        // the inverse of Blocklist.
+        var preset = CreatePreset(policy: WebsiteFilterType.Allowlist);
+        preset.AddWebsite(new BlockedSite("allowed-a.com"));
+        preset.AddWebsite(new BlockedSite("allowed-b.com"));
+
+        preset.IsAtLeastAsStrict(new HashSet<string>(), new HashSet<string> { "allowed-a.com" }).Should().BeTrue();
+    }
+
+    [Fact]
+    public void IsAtLeastAsStrict_AllowlistAddingSite_False()
+    {
+        // Adding an allowed site widens what's let through — the "weaker" direction, even
+        // though it's technically an addition.
+        var preset = CreatePreset(policy: WebsiteFilterType.Allowlist);
+        preset.AddWebsite(new BlockedSite("allowed-a.com"));
+
+        preset.IsAtLeastAsStrict(new HashSet<string>(), new HashSet<string> { "allowed-a.com", "allowed-b.com" }).Should().BeFalse();
+    }
 }

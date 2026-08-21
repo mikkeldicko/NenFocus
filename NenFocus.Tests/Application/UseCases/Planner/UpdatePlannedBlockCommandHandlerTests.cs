@@ -107,6 +107,27 @@ public class UpdatePlannedBlockCommandHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_ActiveSessionStartedLate_UsesEndAtNotStartedAtPlusDuration()
+    {
+        // Same fix as CreatePlannedBlockCommandHandler's identical check — see there for
+        // the full explanation.
+        var blockId = Guid.NewGuid();
+        var presetId = Guid.NewGuid();
+        _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
+            .Returns(FocusBlock.Create(blockId, presetId, Start, End));
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>()).Returns(FocusPreset(presetId));
+        var activeSession = Session.Create(
+            Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromHours(1)),
+            Guid.NewGuid(), SessionOrigin.Planned, originatingBlockId: Guid.NewGuid());
+        activeSession.Start(Start.AddMinutes(-55), scheduledEnd: Start); // started 5 min "late", EndAt pinned to Start
+        _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns(activeSession);
+
+        var result = await CreateHandler().HandleAsync(ValidCommand(blockId, presetId)); // edited block: Start–End
+
+        result.Success.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task HandleAsync_BackgroundBlock_SkipsOverlapAndSessionChecks()
     {
         var blockId = Guid.NewGuid();

@@ -117,7 +117,7 @@ public class ComputeRedemptionAttributionQueryHandlerTests
         var contract = SameDayContract(contractId);
         var deficit = Deficit(presetId, Now, remaining: 40);
         _contracts.GetAllInEffectAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<NenContract>)[contract]);
-        _deficits.HandleAsync(new GetNenContractDeficitsQuery(contractId), Arg.Any<CancellationToken>())
+        _deficits.HandleAsync(new GetNenContractDeficitsQuery(contractId, ExcludeCoverageFromBlockId: deficit.FocusBlockId), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<FocusBlockDeficitDto>)[deficit]);
 
         var result = await CreateHandler().HandleAsync(
@@ -125,6 +125,29 @@ public class ComputeRedemptionAttributionQueryHandlerTests
 
         result.ContractId.Should().BeNull();
         result.Entries.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task HandleAsync_EditingAnAlreadyCoveringBlock_ExcludesItsOwnStaleEntryFromCoverageSum()
+    {
+        // Reproduces the live bug: editing an already-covering redemption block used to see
+        // its own stale, pre-edit RedemptionEntries (still in the DB until the edit itself
+        // is saved) as "already covered by someone else" — GetNenContractDeficitsQuery must
+        // be asked to exclude the block being edited from that sum, or the recompute
+        // collapses toward zero on every edit.
+        var contractId = Guid.NewGuid();
+        var presetId = Guid.NewGuid();
+        var editingBlockId = Guid.NewGuid();
+        var contract = SameDayContract(contractId);
+        var deficit = Deficit(presetId, Now, remaining: 40);
+        _contracts.GetAllInEffectAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<NenContract>)[contract]);
+        _deficits.HandleAsync(new GetNenContractDeficitsQuery(contractId, ExcludeCoverageFromBlockId: editingBlockId), Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyList<FocusBlockDeficitDto>)[deficit]);
+
+        var result = await CreateHandler().HandleAsync(
+            new ComputeRedemptionAttributionQuery(null, presetId, Now, Now.AddMinutes(8), editingBlockId), CancellationToken.None);
+
+        result.Entries.Should().ContainSingle(e => e.MissedBlockId == deficit.FocusBlockId && e.MinutesCovered == 8);
     }
 
     [Fact]

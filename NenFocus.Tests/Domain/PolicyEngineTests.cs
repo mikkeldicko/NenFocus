@@ -261,6 +261,26 @@ public class PolicyEngineTests
     }
 
     [Fact]
+    public void ComputeSlice_NewFocusBlockScheduledIntoEarlyEndedBlocksFreedTail_PicksTheNewBlock()
+    {
+        // Reproduces a live bug: a block that ended its session early (freeing the rest of
+        // its raw window for new scheduling, per EffectiveEnd) still counted as "active" per
+        // raw End — so a second Focus block legitimately scheduled into that freed tail
+        // (e.g. a redemption block) never got picked as ActiveFocusBlockId, and its Ritual
+        // never triggered, until the stale block's raw window finally closed.
+        var preset = CreatePreset(WebsiteFilterType.Blocklist);
+        var staleBlock = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.AddHours(-1), At.AddHours(1));
+        staleBlock.MarkRitualCompleted(At.AddHours(-1));
+        staleBlock.MarkSessionEnded(At.AddMinutes(-2)); // ended early, well before its raw End
+        var newBlock = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.AddMinutes(-1), At.AddMinutes(30));
+
+        var slice = _engine.ComputeSlice(At, [preset], [], [staleBlock, newBlock]);
+
+        slice.ActiveFocusBlockId.Should().Be(newBlock.Id);
+        slice.FocusSessionCompleted.Should().BeFalse();
+    }
+
+    [Fact]
     public void ComputeSlice_CancelledFocusBlock_ExcludedFromActiveBlockPresetType()
     {
         var preset = CreatePreset(WebsiteFilterType.Blocklist);

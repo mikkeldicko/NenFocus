@@ -45,7 +45,15 @@ public sealed class CreatePlannedBlockCommandHandler : ICommandHandler<CreatePla
             if (activeSession?.StartedAt is not null)
             {
                 var sessionStart = activeSession.StartedAt.Value;
-                var sessionEnd = sessionStart + activeSession.Duration.Value;
+                // EndAt, not StartedAt + Duration — for a Planned session, EndAt is pinned
+                // to the originating block's own scheduled end (Session.Start), while
+                // Duration is the block's full nominal length regardless of exactly when
+                // the Ritual completed. A session started even slightly late (still within
+                // the grace period) makes StartedAt + Duration overshoot the session's real
+                // end by the lateness amount, wrongly rejecting a block that legitimately
+                // fits right after it actually ends. Set together with StartedAt inside
+                // Session.Start(), so it's never null here.
+                var sessionEnd = activeSession.EndAt!.Value;
                 if (sessionStart < endTime && sessionEnd > startTime)
                 {
                     var localStart = sessionStart.ToLocalTime();
