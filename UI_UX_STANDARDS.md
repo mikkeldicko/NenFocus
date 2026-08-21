@@ -30,9 +30,9 @@ For the *rules* on what ViewModels are forbidden from doing, see `MODULE_STANDAR
 | Secondary text | `#888899` | Session goal, preset name |
 | Muted text | `#AAAABC` | Section labels, date, muted info |
 | Disabled / strikethrough | `#BBBBCC` | Completed checklist items |
-| Session active green | `#3A9E6A` | "SESSION ACTIVE" status chip; Planner tile — Focus block completed on time (no badge text) |
-| Missed tile red | `#C0392B` | Planner tile — Focus block missed (ritual never completed, window closed) |
-| Late-or-early tile amber | `#D97706` | Planner tile — Focus block ritual completed after the grace period ("STARTED LATE") or session ended before the block's scheduled end ("ENDED EARLY") |
+| Session active green | `#3A9E6A` | "SESSION ACTIVE" status chip; Planner tile — Focus block completed on time (no badge text); Block Snapshot outcome badge ("COMPLETED ON TIME") |
+| Missed tile red | `#C0392B` | Planner tile — Focus block missed (ritual never completed, window closed); Block Snapshot outcome badge ("MISSED") |
+| Late-or-early tile amber | `#D97706` | Planner tile — Focus block ritual completed after the grace period ("STARTED LATE") or session ended before the block's scheduled end ("ENDED EARLY"); Block Snapshot outcome badge (same two labels) |
 
 ---
 

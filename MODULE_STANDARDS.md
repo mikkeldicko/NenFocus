@@ -47,6 +47,24 @@ Before merging any new class or service, ask: *Can a developer understand how to
 - UI framework types (`DispatcherTimer`, Avalonia types)
 - `Math.Clamp`, `TimeSpan.ToString(format)`, progress-percentage arithmetic — these belong here only if they are domain rules; if they are purely for display, they belong in a converter
 
+**Forbidden (added 2026-08-21 — The Application Handler Forbidden Zone):**
+
+#### No Re-Deriving a Business Rule From Raw Entity Fields
+
+A handler must not read an entity's raw fields (`Start`, `End`, `RitualCompletedAt`, `RedemptionEntries`, `BlockedApps`, etc.) and combine them inline to answer a business-meaningful question. If the question is "is this true about the entity," the entity (or a Domain Service, when the answer needs more than one aggregate) answers it through a named method. The handler asks; it does not compute.
+
+> **Rule:** The moment a second call site needs the same fact about an entity, that fact must already be a named method on the entity — never re-derived a second time from primitives, even if the second derivation "looks the same."
+>
+> **Why this is a hard rule, not a style preference:** in one session (2026-08-21), this exact anti-pattern produced four separate live bugs, each shipped, tested, and working *until a second caller needed the same fact and quietly computed it differently*:
+> - `PlannedBlock.IsActive` compared against raw `End`; `EffectiveEnd` (a few lines away, on the same entity) already had the right answer for "is this window still actually reserved." `PolicyEngine` used the wrong one, and a block that ended its session early kept blocking a genuinely new block from ever triggering its Ritual. Fixed by routing `IsActive` through `EffectiveEnd` — one definition, not two.
+> - `GetNenContractDeficitsQueryHandler` decided "is this block a deficit source" via two separate inline `continue` guards instead of one question — see `DESIGN_GAP_HISTORY.md` Gap 29, fixed by `FocusBlock.CanContributeOwnDeficit(outcome)`.
+> - `UpdateBlockPresetValidator` computed "is this edit at least as strict" via a blanket superset check on raw `Websites`/`BlockedApps` collections, inverted for one preset type nobody had a test for — see Gap 30, fixed by `BlockPreset.IsAtLeastAsStrict(...)`.
+> - `GetNenContractDeficitsQueryHandler`'s "how much is already covered" sum, called from three different places (display, create-attribution, edit-attribution) with three subtly different needs, let a block being edited count its own stale, pre-edit contribution as coverage from someone else — collapsing its own new entry toward zero on every edit.
+>
+> **Smell to watch for while reviewing any new Application handler:** a `.Where(...)`, `if`, or arithmetic expression built from more than one raw entity field, especially one that resembles logic that already exists — even loosely — somewhere else in the codebase. Grep for the fields involved before writing the expression.
+>
+> **Canonical example of doing it right:** `FocusBlock.CanContributeOwnDeficit(FocusBlockOutcome? outcome)` — takes the already-classified outcome as a parameter (the caller owns *when* to classify, since that needs `now`/session data), but the entity owns the *rule* of what counts as its own deficit.
+
 ---
 
 ### Infrastructure (`NenFocus.Infrastructure`)
