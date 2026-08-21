@@ -1,4 +1,5 @@
 using NenFocus.Application.Interfaces;
+using NenFocus.Application.Queries.ComputeRedemptionAttribution;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.ValueObjects;
 
@@ -10,17 +11,20 @@ public sealed class UpdatePlannedBlockCommandHandler : ICommandHandler<UpdatePla
     private readonly IBlockPresetRepository _presets;
     private readonly ISessionRepository _sessions;
     private readonly ISystemClock _clock;
+    private readonly IQueryHandler<ComputeRedemptionAttributionQuery, RedemptionAttributionResult> _computeRedemptionAttribution;
 
     public UpdatePlannedBlockCommandHandler(
         IPlannedBlockRepository blocks,
         IBlockPresetRepository presets,
         ISessionRepository sessions,
-        ISystemClock clock)
+        ISystemClock clock,
+        IQueryHandler<ComputeRedemptionAttributionQuery, RedemptionAttributionResult> computeRedemptionAttribution)
     {
         _blocks = blocks;
         _presets = presets;
         _sessions = sessions;
         _clock = clock;
+        _computeRedemptionAttribution = computeRedemptionAttribution;
     }
 
     public async Task<UpdatePlannedBlockResult> HandleAsync(UpdatePlannedBlockCommand command, CancellationToken cancellationToken = default)
@@ -69,9 +73,20 @@ public sealed class UpdatePlannedBlockCommandHandler : ICommandHandler<UpdatePla
 
         if (existing is FocusBlock existingFocusBlock)
         {
-            var entries = command.RedemptionEntries
-                .Select(e => new RedemptionEntry(e.MissedBlockId, e.MinutesCovered))
-                .ToList();
+            // Recomputed fresh on every edit, scoped only to the block's own already-known
+            // contract — never re-parented to a different one via an ordinary edit (see
+            // UpdatePlannedBlockCommand). A standalone block (ContractId null) stays
+            // standalone; editing it never auto-discovers a contract for the first time.
+            IReadOnlyList<RedemptionEntry> entries = [];
+            if (existingFocusBlock.ContractId is { } contractId)
+            {
+                var attribution = await _computeRedemptionAttribution.HandleAsync(
+                    new ComputeRedemptionAttributionQuery(contractId, command.PresetId, startTime, endTime, existing.Id),
+                    cancellationToken);
+                entries = attribution.Entries
+                    .Select(e => new RedemptionEntry(e.MissedBlockId, e.MinutesCovered))
+                    .ToList();
+            }
             existingFocusBlock.AssignRedemptionEntries(entries);
         }
 

@@ -1,5 +1,6 @@
 using FluentAssertions;
 using NenFocus.Application.Interfaces;
+using NenFocus.Application.Queries.ComputeRedemptionAttribution;
 using NenFocus.Application.UseCases.Planner.CreatePlannedBlock;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
@@ -18,6 +19,8 @@ public class CreatePlannedBlockCommandHandlerTests
     private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
     private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
     private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
+    private readonly IQueryHandler<ComputeRedemptionAttributionQuery, RedemptionAttributionResult> _computeRedemptionAttribution =
+        Substitute.For<IQueryHandler<ComputeRedemptionAttributionQuery, RedemptionAttributionResult>>();
 
     public CreatePlannedBlockCommandHandlerTests()
     {
@@ -25,9 +28,14 @@ public class CreatePlannedBlockCommandHandlerTests
         _blocks.GetOverlappingAsync(Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<bool>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[]);
         _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns((Session?)null);
+        // Default: echoes back whatever ContractId was passed in, no redemption entries —
+        // matches the real handler's behavior when nothing is eligible to cover.
+        _computeRedemptionAttribution
+            .HandleAsync(Arg.Any<ComputeRedemptionAttributionQuery>(), Arg.Any<CancellationToken>())
+            .Returns(ci => new RedemptionAttributionResult(((ComputeRedemptionAttributionQuery)ci[0]).ContractId, []));
     }
 
-    private CreatePlannedBlockCommandHandler CreateHandler() => new(_blocks, _presets, _sessions, _clock);
+    private CreatePlannedBlockCommandHandler CreateHandler() => new(_blocks, _presets, _sessions, _clock, _computeRedemptionAttribution);
 
     private static CreatePlannedBlockCommand FocusCommand(Guid presetId) => new()
     {
@@ -141,22 +149,38 @@ public class CreatePlannedBlockCommandHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_WithRedemptionEntries_SetsThemOnTheFocusBlock()
+    public async Task HandleAsync_Focus_AttributionFindsADeficit_SetsRedemptionEntriesAndContractId()
     {
         var presetId = Guid.NewGuid();
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
             .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, DateTime.UtcNow));
         var missedBlockId = Guid.NewGuid();
+        var discoveredContractId = Guid.NewGuid();
+        _computeRedemptionAttribution
+            .HandleAsync(Arg.Any<ComputeRedemptionAttributionQuery>(), Arg.Any<CancellationToken>())
+            .Returns(new RedemptionAttributionResult(discoveredContractId, [new(missedBlockId, 45)]));
 
         PlannedBlock? saved = null;
         await _blocks.AddAsync(Arg.Do<PlannedBlock>(b => saved = b), Arg.Any<CancellationToken>());
 
-        await CreateHandler().HandleAsync(FocusCommand(presetId) with
-        {
-            RedemptionEntries = [new(missedBlockId, 45)]
-        });
+        await CreateHandler().HandleAsync(FocusCommand(presetId));
 
         var focusBlock = saved.Should().BeOfType<FocusBlock>().Subject;
+        focusBlock.ContractId.Should().Be(discoveredContractId);
         focusBlock.RedemptionEntries.Should().ContainSingle(e => e.MissedBlockId == missedBlockId && e.MinutesCovered == 45);
+    }
+
+    [Fact]
+    public async Task HandleAsync_Background_NeverConsultsRedemptionAttribution()
+    {
+        var presetId = Guid.NewGuid();
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
+            .Returns(BlockPreset.Create(presetId, "Background", WebsiteFilterType.Blocklist, BlockPresetType.Background, DateTime.UtcNow));
+        var command = FocusCommand(presetId) with { BlockPresetType = BlockPresetType.Background };
+
+        await CreateHandler().HandleAsync(command);
+
+        await _computeRedemptionAttribution.DidNotReceive().HandleAsync(
+            Arg.Any<ComputeRedemptionAttributionQuery>(), Arg.Any<CancellationToken>());
     }
 }

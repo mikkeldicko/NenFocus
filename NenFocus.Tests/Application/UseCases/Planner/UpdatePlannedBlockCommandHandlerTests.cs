@@ -1,5 +1,6 @@
 using FluentAssertions;
 using NenFocus.Application.Interfaces;
+using NenFocus.Application.Queries.ComputeRedemptionAttribution;
 using NenFocus.Application.UseCases.Planner.UpdatePlannedBlock;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
@@ -18,6 +19,8 @@ public class UpdatePlannedBlockCommandHandlerTests
     private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
     private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
     private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
+    private readonly IQueryHandler<ComputeRedemptionAttributionQuery, RedemptionAttributionResult> _computeRedemptionAttribution =
+        Substitute.For<IQueryHandler<ComputeRedemptionAttributionQuery, RedemptionAttributionResult>>();
 
     public UpdatePlannedBlockCommandHandlerTests()
     {
@@ -25,9 +28,12 @@ public class UpdatePlannedBlockCommandHandlerTests
         _blocks.GetOverlappingAsync(Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<bool>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[]);
         _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns((Session?)null);
+        _computeRedemptionAttribution
+            .HandleAsync(Arg.Any<ComputeRedemptionAttributionQuery>(), Arg.Any<CancellationToken>())
+            .Returns(ci => new RedemptionAttributionResult(((ComputeRedemptionAttributionQuery)ci[0]).ContractId, []));
     }
 
-    private UpdatePlannedBlockCommandHandler CreateHandler() => new(_blocks, _presets, _sessions, _clock);
+    private UpdatePlannedBlockCommandHandler CreateHandler() => new(_blocks, _presets, _sessions, _clock, _computeRedemptionAttribution);
 
     private static UpdatePlannedBlockCommand ValidCommand(Guid blockId, Guid presetId) => new()
     {
@@ -137,29 +143,34 @@ public class UpdatePlannedBlockCommandHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_FocusBlock_ReplacesRedemptionEntries()
+    public async Task HandleAsync_FocusBlock_WithContractId_RecomputesRedemptionEntriesFromAttribution()
     {
         var blockId = Guid.NewGuid();
         var presetId = Guid.NewGuid();
-        var block = FocusBlock.Create(blockId, presetId, Start, End,
+        var contractId = Guid.NewGuid();
+        var block = FocusBlock.Create(blockId, presetId, Start, End, contractId: contractId,
             redemptionEntries: [new RedemptionEntry(Guid.NewGuid(), 20)]);
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns(block);
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>()).Returns(FocusPreset(presetId));
         var newMissedBlockId = Guid.NewGuid();
+        _computeRedemptionAttribution
+            .HandleAsync(Arg.Is<ComputeRedemptionAttributionQuery>(q => q.ContractId == contractId && q.ExcludeBlockId == blockId),
+                Arg.Any<CancellationToken>())
+            .Returns(new RedemptionAttributionResult(contractId, [new(newMissedBlockId, 40)]));
 
-        var result = await CreateHandler().HandleAsync(
-            ValidCommand(blockId, presetId) with { RedemptionEntries = [new(newMissedBlockId, 40)] });
+        var result = await CreateHandler().HandleAsync(ValidCommand(blockId, presetId));
 
         result.Success.Should().BeTrue();
         block.RedemptionEntries.Should().ContainSingle(e => e.MissedBlockId == newMissedBlockId && e.MinutesCovered == 40);
     }
 
     [Fact]
-    public async Task HandleAsync_FocusBlock_EmptyRedemptionEntries_ClearsExisting()
+    public async Task HandleAsync_FocusBlock_WithContractId_NoLongerEligible_ClearsExistingEntries()
     {
         var blockId = Guid.NewGuid();
         var presetId = Guid.NewGuid();
-        var block = FocusBlock.Create(blockId, presetId, Start, End,
+        var contractId = Guid.NewGuid();
+        var block = FocusBlock.Create(blockId, presetId, Start, End, contractId: contractId,
             redemptionEntries: [new RedemptionEntry(Guid.NewGuid(), 20)]);
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns(block);
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>()).Returns(FocusPreset(presetId));
@@ -167,5 +178,23 @@ public class UpdatePlannedBlockCommandHandlerTests
         await CreateHandler().HandleAsync(ValidCommand(blockId, presetId));
 
         block.RedemptionEntries.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task HandleAsync_FocusBlock_NoContractId_NeverConsultsRedemptionAttribution()
+    {
+        // A standalone block (no contract) never auto-discovers one via editing — only a
+        // block already tied to a contract gets its coverage recomputed.
+        var blockId = Guid.NewGuid();
+        var presetId = Guid.NewGuid();
+        var block = FocusBlock.Create(blockId, presetId, Start, End);
+        _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns(block);
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>()).Returns(FocusPreset(presetId));
+
+        await CreateHandler().HandleAsync(ValidCommand(blockId, presetId));
+
+        block.RedemptionEntries.Should().BeEmpty();
+        await _computeRedemptionAttribution.DidNotReceive().HandleAsync(
+            Arg.Any<ComputeRedemptionAttributionQuery>(), Arg.Any<CancellationToken>());
     }
 }

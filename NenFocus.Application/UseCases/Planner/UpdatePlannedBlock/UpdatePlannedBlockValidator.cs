@@ -1,6 +1,5 @@
 using FluentValidation;
 using NenFocus.Application.Interfaces;
-using NenFocus.Application.Queries.CheckRedemptionEntry;
 using NenFocus.Application.Queries.ComputePlannedFocusHours;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
@@ -17,7 +16,6 @@ public sealed class UpdatePlannedBlockValidator : AbstractValidator<UpdatePlanne
         IBlockPresetRepository presets,
         INenContractRepository contracts,
         ISystemClock clock,
-        IQueryHandler<CheckRedemptionEntryQuery, RedemptionEntryCheckResult> checkRedemptionEntry,
         IQueryHandler<ComputePlannedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> computePlannedFocusHours)
     {
         _blocks = blocks;
@@ -69,15 +67,6 @@ public sealed class UpdatePlannedBlockValidator : AbstractValidator<UpdatePlanne
         RuleFor(x => x.End)
             .GreaterThan(x => x.Start)
             .WithMessage("End time must be after start time.");
-
-        RuleFor(x => x)
-            .MustAsync(async (command, ct) =>
-            {
-                if (command.RedemptionEntries.Count == 0) return true;
-                var block = await _blocks.GetByIdAsync(command.BlockId, ct);
-                return block is FocusBlock;
-            })
-            .WithMessage("Only a Focus block can cover deficit for missed blocks — Background blocks have no sessions.");
 
         RuleFor(x => x)
             .MustAsync(async (command, ct) =>
@@ -201,22 +190,6 @@ public sealed class UpdatePlannedBlockValidator : AbstractValidator<UpdatePlanne
                     _ => "Cannot move block outside the contract period." // PeriodTimeBudget
                 };
                 context.AddFailure(nameof(UpdatePlannedBlockCommand.Start), message);
-            });
-
-        RuleForEach(x => x.RedemptionEntries)
-            .CustomAsync(async (entry, context, ct) =>
-            {
-                var command = context.InstanceToValidate;
-                var block = await _blocks.GetByIdAsync(command.BlockId, ct);
-                if (block is not FocusBlock) return; // already reported above
-
-                var result = await checkRedemptionEntry.HandleAsync(
-                    new CheckRedemptionEntryQuery(command.PresetId, command.Start, entry.MissedBlockId, entry.MinutesCovered, command.BlockId),
-                    ct);
-
-                var message = RedemptionEntryMessages.For(result);
-                if (message is not null)
-                    context.AddFailure(nameof(UpdatePlannedBlockCommand.RedemptionEntries), message);
             });
     }
 }

@@ -10,13 +10,14 @@ using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.CheckNenContractDateRangeOverlap;
 using NenFocus.Application.Queries.ComputePlannedFocusHours;
-using NenFocus.Application.Queries.FindRedemptionEligibleBlock;
+using NenFocus.Application.Queries.ComputeRedemptionAttribution;
 using NenFocus.Application.Queries.GetActiveNenContract;
 using NenFocus.Application.Queries.GetAllBlockPresets;
 using NenFocus.Application.Queries.GetAllContractPresets;
 using NenFocus.Application.Queries.GetNenContractForEdit;
 using NenFocus.Application.Queries.GetPlannedBlocksForDay;
 using NenFocus.Application.Queries.GetScheduledNenContracts;
+using NenFocus.Application.Queries.GetSuggestedRedemptionPlacements;
 using NenFocus.Application.UseCases.ContractPresets.CreateContractPreset;
 using NenFocus.Application.UseCases.NenContracts.Break;
 using NenFocus.Application.UseCases.NenContracts.Delete;
@@ -51,9 +52,9 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     private readonly ICommandHandler<BreakNenContractCommand, BreakNenContractResult> _breakContract;
     private readonly IQueryHandler<ComputePlannedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> _computePlannedFocusHours;
     private readonly IQueryHandler<GetAllContractPresetsQuery, IReadOnlyList<ContractPresetDto>> _getContractPresets;
-    private readonly ICommandHandler<CreateContractPresetCommand, CreateContractPresetResult> _createContractPreset;
     private readonly IQueryHandler<GetActiveNenContractQuery, ActiveNenContractDto?> _getActiveContract;
-    private readonly IQueryHandler<FindRedemptionEligibleBlockQuery, FocusBlockDeficitDto?> _findRedemptionEligibleBlock;
+    private readonly IQueryHandler<ComputeRedemptionAttributionQuery, RedemptionAttributionResult> _computeRedemptionAttribution;
+    private readonly IQueryHandler<GetSuggestedRedemptionPlacementsQuery, IReadOnlyList<SuggestedRedemptionPlacementDto>> _getSuggestedRedemptionPlacements;
     private readonly IQueryHandler<CheckNenContractDateRangeOverlapQuery, string?> _checkOverlap;
     private readonly IQueryHandler<GetScheduledNenContractsQuery, IReadOnlyList<ScheduledNenContractDto>> _getScheduledContracts;
     private readonly IQueryHandler<GetNenContractForEditQuery, NenContractEditDto?> _getContractForEdit;
@@ -146,11 +147,10 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     [ObservableProperty] private bool _isEditingBlockDailyFlexibility;
     [ObservableProperty] private string? _dragError;
 
-    // The incomplete block (if any) the currently selected preset + date is eligible to
-    // cover — refreshed whenever either changes. Null means no "mark as redemption" affordance
-    // applies to what's currently in the form.
-    [ObservableProperty] private FocusBlockDeficitDto? _eligibleRedemptionTarget;
-    [ObservableProperty] private bool _isMarkedAsRedemption;
+    // Passive preview only, refreshed whenever preset/date/time change — no user action
+    // needed and nothing sent on Save. CreatePlannedBlockCommandHandler runs the exact same
+    // ComputeRedemptionAttributionQuery itself when the block is actually created, so this
+    // can never drift from what Save will really do.
     [ObservableProperty] private string? _redemptionSuggestionNotice;
 
     // ── Split Block ────────────────────────────────────────────────────────────
@@ -188,6 +188,16 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     [ObservableProperty] private string? _deleteContractErrorMessage;
 
     private Guid? _contractIdPendingDelete;
+
+    // ── Cover Deficit popover (mirrors the Nen Contract popover's button+Popup shape) ──
+    [ObservableProperty] private bool _isCoverDeficitPopoverVisible;
+    [ObservableProperty] private string? _coverDeficitErrorMessage;
+    public ObservableCollection<SuggestedRedemptionPlacementDto> CoverDeficitOptions { get; } = new();
+    public bool HasCoverableDeficit => CoverDeficitOptions.Count > 0;
+
+    [ObservableProperty] private bool _isConfirmPartialRedemptionVisible;
+    [ObservableProperty] private string _confirmPartialRedemptionMessage = string.Empty;
+    private SuggestedRedemptionPlacementDto? _pendingPartialRedemption;
 
     public bool HasActiveContract => ActiveContract is not null;
 
@@ -246,6 +256,88 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
                 d.Date, d.CurrentHours, d.IsRestDay ? null : d.FloorHours, d.IsRestDay, d.Timing,
                 ActiveContract.StrictnessRule, ActiveContract.ContractFloorHours.HasValue))
             ?? new Dictionary<DateOnly, DayFloorPreviewViewModel>();
+
+        await RefreshCoverDeficitOptionsAsync();
+    }
+
+    private async Task RefreshCoverDeficitOptionsAsync()
+    {
+        CoverDeficitOptions.Clear();
+        if (ActiveContract is { } contract)
+        {
+            var suggestions = await _getSuggestedRedemptionPlacements.HandleAsync(
+                new GetSuggestedRedemptionPlacementsQuery(contract.Id, _clockService.LocalNow.ToUniversalTime()));
+            foreach (var suggestion in suggestions)
+                CoverDeficitOptions.Add(suggestion);
+        }
+        OnPropertyChanged(nameof(HasCoverableDeficit));
+    }
+
+    [RelayCommand]
+    private void ToggleCoverDeficitPopover()
+    {
+        if (CoverDeficitOptions.Count == 0) return;
+        if (CoverDeficitOptions.Count == 1)
+        {
+            _ = CoverDeficitAsync(CoverDeficitOptions[0]);
+            return;
+        }
+        IsCoverDeficitPopoverVisible = !IsCoverDeficitPopoverVisible;
+    }
+
+    [RelayCommand]
+    private async Task CoverDeficitAsync(SuggestedRedemptionPlacementDto option)
+    {
+        IsCoverDeficitPopoverVisible = false;
+        CoverDeficitErrorMessage = null;
+
+        if (!option.CanFullyCover)
+        {
+            _pendingPartialRedemption = option;
+            ConfirmPartialRedemptionMessage =
+                $"This starts now and won't fully cover the {option.TotalRemainingDeficitMinutes:0.#} min owed for " +
+                $"{option.PresetName} — the rest will still show as an outstanding deficit. Create it anyway?";
+            IsConfirmPartialRedemptionVisible = true;
+            return;
+        }
+
+        await CreateRedemptionTileAsync(option);
+    }
+
+    [RelayCommand]
+    private async Task ConfirmPartialRedemptionAsync()
+    {
+        IsConfirmPartialRedemptionVisible = false;
+        if (_pendingPartialRedemption is { } option)
+            await CreateRedemptionTileAsync(option);
+        _pendingPartialRedemption = null;
+    }
+
+    [RelayCommand]
+    private void CancelPartialRedemption()
+    {
+        IsConfirmPartialRedemptionVisible = false;
+        _pendingPartialRedemption = null;
+    }
+
+    private async Task CreateRedemptionTileAsync(SuggestedRedemptionPlacementDto option)
+    {
+        var result = await _createBlock.HandleAsync(new CreatePlannedBlockCommand
+        {
+            PresetId = option.PresetId,
+            BlockPresetType = BlockPresetType.Focus,
+            Start = option.SuggestedStart,
+            End = option.SuggestedEnd
+        });
+
+        if (!result.Success)
+        {
+            CoverDeficitErrorMessage = result.ErrorMessage;
+            return;
+        }
+
+        await LoadWeekAsync();
+        await RefreshActiveContractAsync();
     }
 
     [RelayCommand]
@@ -373,9 +465,9 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         ICommandHandler<BreakNenContractCommand, BreakNenContractResult> breakContract,
         IQueryHandler<ComputePlannedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> computePlannedFocusHours,
         IQueryHandler<GetAllContractPresetsQuery, IReadOnlyList<ContractPresetDto>> getContractPresets,
-        ICommandHandler<CreateContractPresetCommand, CreateContractPresetResult> createContractPreset,
         IQueryHandler<GetActiveNenContractQuery, ActiveNenContractDto?> getActiveContract,
-        IQueryHandler<FindRedemptionEligibleBlockQuery, FocusBlockDeficitDto?> findRedemptionEligibleBlock,
+        IQueryHandler<ComputeRedemptionAttributionQuery, RedemptionAttributionResult> computeRedemptionAttribution,
+        IQueryHandler<GetSuggestedRedemptionPlacementsQuery, IReadOnlyList<SuggestedRedemptionPlacementDto>> getSuggestedRedemptionPlacements,
         IQueryHandler<CheckNenContractDateRangeOverlapQuery, string?> checkOverlap,
         IQueryHandler<GetScheduledNenContractsQuery, IReadOnlyList<ScheduledNenContractDto>> getScheduledContracts,
         IQueryHandler<GetNenContractForEditQuery, NenContractEditDto?> getContractForEdit,
@@ -398,9 +490,9 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         _breakContract = breakContract;
         _computePlannedFocusHours = computePlannedFocusHours;
         _getContractPresets = getContractPresets;
-        _createContractPreset = createContractPreset;
         _getActiveContract = getActiveContract;
-        _findRedemptionEligibleBlock = findRedemptionEligibleBlock;
+        _computeRedemptionAttribution = computeRedemptionAttribution;
+        _getSuggestedRedemptionPlacements = getSuggestedRedemptionPlacements;
         _checkOverlap = checkOverlap;
         _clockService = clockService;
         _sessionState = sessionState;
@@ -564,63 +656,40 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         SelectedPreset = AvailablePresets.FirstOrDefault();
     }
 
-    partial void OnSelectedPresetChanged(BlockPresetDto? value) => _ = RefreshEligibleRedemptionTargetAsync();
-    partial void OnFormDateChanged(DateTimeOffset value) => _ = RefreshEligibleRedemptionTargetAsync();
+    partial void OnSelectedPresetChanged(BlockPresetDto? value) => _ = RefreshRedemptionPreviewAsync();
+    partial void OnFormDateChanged(DateTimeOffset value) => _ = RefreshRedemptionPreviewAsync();
+    partial void OnFormStartTimeChanged(string value) => _ = RefreshRedemptionPreviewAsync();
+    partial void OnFormEndTimeChanged(string value) => _ = RefreshRedemptionPreviewAsync();
 
     // Only offered when creating a brand-new block (not editing one, not drafting a
-    // contract) under the currently active contract — composes the existing deficit
-    // ledger via the domain's own CheckRedemptionEligibility rule (FindRedemptionEligibleBlock),
-    // never re-deriving the day/period eligibility rule here.
-    private async Task RefreshEligibleRedemptionTargetAsync()
+    // contract) — composes the same ComputeRedemptionAttributionQuery
+    // CreatePlannedBlockCommandHandler itself calls, so this preview can never drift from
+    // what Save will actually do. No toggle, no user decision: the block either qualifies
+    // or it doesn't, and this is purely informational.
+    private async Task RefreshRedemptionPreviewAsync()
     {
-        IsMarkedAsRedemption = false; // preset/date changed — any previous mark no longer applies
-        EligibleRedemptionTarget = null;
         RedemptionSuggestionNotice = null;
 
-        if (!IsFocusBlock || SelectedPreset is null || ActiveContract is null || IsEditing || IsDraftingContract)
+        if (!IsFocusBlock || SelectedPreset is null || IsEditing || IsDraftingContract)
+            return;
+        if (!TryParseFormTime(FormStartTime, out var startTime) || !TryParseFormTime(FormEndTime, out var endTime))
+            return;
+        if (endTime <= startTime)
             return;
 
-        EligibleRedemptionTarget = await _findRedemptionEligibleBlock.HandleAsync(
-            new FindRedemptionEligibleBlockQuery(ActiveContract.Id, SelectedPreset.Id, FormDate.Date));
-    }
+        var dayDate = FormDate.Date;
+        var startUtc = DateTime.SpecifyKind(dayDate.Add(startTime), DateTimeKind.Local).ToUniversalTime();
+        var endUtc = DateTime.SpecifyKind(dayDate.Add(endTime), DateTimeKind.Local).ToUniversalTime();
 
-    [RelayCommand]
-    private void ToggleMarkAsRedemption()
-    {
-        if (EligibleRedemptionTarget is not { } target) return;
-        IsMarkedAsRedemption = !IsMarkedAsRedemption;
-        RedemptionSuggestionNotice = null;
-        if (!IsMarkedAsRedemption) return;
+        var attribution = await _computeRedemptionAttribution.HandleAsync(
+            new ComputeRedemptionAttributionQuery(null, SelectedPreset.Id, startUtc, endUtc, ExcludeBlockId: null));
 
-        // Suggest an End time sized to the remaining deficit from whatever Start is
-        // already set — a starting point, not a lock; still editable afterward. Rounds
-        // UP to the next whole minute (never down): the deficit is rarely a whole number
-        // of minutes (e.g. 53.18), and TimeSpan.Minutes truncates the fractional part —
-        // suggesting a floor-rounded duration would leave the day a few seconds short of
-        // actually closing the deficit even when completed exactly as suggested.
-        if (TryParseFormTime(FormStartTime, out var startTime))
-        {
-            var suggestedMinutes = Math.Ceiling(target.RemainingDeficitMinutes);
-            var suggestedEnd = startTime + TimeSpan.FromMinutes(suggestedMinutes);
+        if (attribution.Entries.Count == 0) return;
 
-            // Clamped at calendar midnight, not a real time otherwise — "24:28" isn't just
-            // an ugly display, TimeSpan.TryParse silently accepts it as 1 day + 28 minutes,
-            // which would schedule the block a full day later than intended if saved as-is.
-            // Work Hours (if the contract has any) is deliberately NOT accounted for here —
-            // that stays the server-side CreatePlannedBlockValidator's job, same as every
-            // other block creation in this app; teaching the client that rule too would mean
-            // re-deriving it in a second place for a display suggestion, not an actual need.
-            var endOfDay = TimeSpan.FromHours(24);
-            if (suggestedEnd > endOfDay)
-            {
-                var coveredMinutes = (endOfDay - startTime).TotalMinutes;
-                RedemptionSuggestionNotice =
-                    $"Only {coveredMinutes:0.#} min left today — this covers {coveredMinutes:0.#} of the {target.RemainingDeficitMinutes:0.#} min needed; the rest will still show as an incomplete deficit.";
-                suggestedEnd = endOfDay;
-            }
-
-            FormEndTime = suggestedEnd == endOfDay ? "24:00" : $"{(int)suggestedEnd.TotalHours:D2}:{suggestedEnd.Minutes:D2}";
-        }
+        var totalCovered = attribution.Entries.Sum(e => e.MinutesCovered);
+        RedemptionSuggestionNotice = attribution.Entries.Count == 1
+            ? $"This will cover {totalCovered:0.#} min of your missed {SelectedPreset.Name} block."
+            : $"This will cover {totalCovered:0.#} min across {attribution.Entries.Count} missed {SelectedPreset.Name} blocks.";
     }
 
     private async Task LoadWeekAsync()
@@ -827,32 +896,16 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         }
         else
         {
-            var markedAsRedemption = IsMarkedAsRedemption && EligibleRedemptionTarget is not null;
-
-            // MinutesCovered is a ledger claim against the missed block's deficit, not a
-            // restatement of this block's own duration — the two are allowed to differ.
-            // The suggested End time is deliberately rounded UP to the next whole minute
-            // (ToggleMarkAsRedemption) so the day's total credited time comfortably reaches the
-            // floor, but the real deficit is almost never a whole number of minutes (it comes
-            // from precise timestamp subtraction). Claiming the block's own rounded-up
-            // duration would then exceed the real deficit and get rejected by
-            // CheckRedemptionEntryQuery's "MinutesCovered > remainingDeficit" guard — capping
-            // the claim at the real remaining deficit keeps the claim valid while letting the
-            // block itself stay long enough to actually close the gap.
-            IReadOnlyList<RedemptionEntryDto> redemptionEntries = markedAsRedemption
-                ? [new RedemptionEntryDto(
-                    EligibleRedemptionTarget!.FocusBlockId,
-                    Math.Min((endUtc - startUtc).TotalMinutes, EligibleRedemptionTarget.RemainingDeficitMinutes))]
-                : [];
-
+            // No ContractId, no RedemptionEntries — CreatePlannedBlockCommandHandler
+            // auto-discovers whether this block should attach to a contract and cover a
+            // deficit, via the exact same query RefreshRedemptionPreviewAsync already
+            // showed a preview from.
             var result = await _createBlock.HandleAsync(new CreatePlannedBlockCommand
             {
                 PresetId = SelectedPreset.Id,
                 BlockPresetType = blockPresetType,
                 Start = startUtc,
-                End = endUtc,
-                ContractId = markedAsRedemption ? ActiveContract?.Id : null,
-                RedemptionEntries = redemptionEntries
+                End = endUtc
             });
             if (!result.Success) { FormError = result.ErrorMessage; return; }
         }
@@ -1015,8 +1068,6 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         IsEditingBlockDailyFlexibility = false;
         IsSplitDialogVisible = false;
         SplitError = null;
-        EligibleRedemptionTarget = null;
-        IsMarkedAsRedemption = false;
         RedemptionSuggestionNotice = null;
         _editingBlockId = null;
         _editingIsDraft = false;
@@ -1149,7 +1200,6 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         IsNenContractPopoverVisible = false;
         WizardViewModel = new ContractWizardViewModel(
             getPresets: _getContractPresets,
-            createPreset: _createContractPreset,
             checkOverlap: _checkOverlap,
             initialStartDate: DateOnly.FromDateTime(_clockService.LocalNow.Date),
             onReadyToSchedule: BeginDrafting,
@@ -1172,7 +1222,6 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         IsNenContractPopoverVisible = false;
         WizardViewModel = new ContractWizardViewModel(
             getPresets: _getContractPresets,
-            createPreset: _createContractPreset,
             checkOverlap: _checkOverlap,
             initialStartDate: payload.StartDate,
             onReadyToSchedule: BeginDrafting,

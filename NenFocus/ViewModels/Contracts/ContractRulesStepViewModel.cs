@@ -41,11 +41,29 @@ public partial class RestDayChipViewModel : ViewModelBase
     public RestDayChipViewModel(DateOnly date) => Date = date;
 }
 
+/// <summary>
+/// "Advanced" mode no longer means freeform rule entry — rules are authored and edited
+/// entirely on the Presets page (see ContractPresetPageViewModel). This step's non-Simple
+/// path is a preset picker: whatever the selected ContractPresetDto carries is what the
+/// contract gets, applied as-is, with no further tweaking here. Rest days stay here
+/// regardless — they're date-bound to this specific contract's range, never a preset concern.
+/// </summary>
 public partial class ContractRulesStepViewModel : ViewModelBase
 {
     private readonly IQueryHandler<GetAllContractPresetsQuery, IReadOnlyList<ContractPresetDto>>? _getPresets;
     private readonly Action _onContinue;
     private readonly Action _onBack;
+
+    // Fallback rules for an existing contract being edited whose values don't (or no longer)
+    // match any saved preset — e.g. sealed before Contract Presets existed, or its preset was
+    // since deleted. Only ever populated when editing; a brand-new contract has none, so
+    // Continue() requires an explicit preset pick in that case.
+    private readonly StrictnessRule? _initialStrictnessRule;
+    private readonly double? _initialFixedDailyFloorHours;
+    private readonly bool _initialAllowCancellation;
+    private readonly TimeOnly? _initialWorkHoursStart;
+    private readonly TimeOnly? _initialWorkHoursEnd;
+    private readonly Guid? _initialContractPresetId;
 
     public bool IsAdvanced { get; }
     public DateOnly StartDate { get; }
@@ -57,24 +75,31 @@ public partial class ContractRulesStepViewModel : ViewModelBase
     [ObservableProperty]
     private SimpleContractOptionViewModel? _selectedSimpleOption;
 
-    // ── Advanced ─────────────────────────────────────────────────────────────
-    public IReadOnlyList<StrictnessRule> StrictnessOptions { get; } = Enum.GetValues<StrictnessRule>();
-
-    [ObservableProperty] private StrictnessRule _strictnessRule = StrictnessRule.DailyFlexibility;
-    [ObservableProperty] private bool _isDailyFloorEnabled;
-    [ObservableProperty] private string _dailyFloorHoursText = "3";
-    [ObservableProperty] private bool _allowCancellation = true;
-    [ObservableProperty] private bool _isWorkHoursEnabled;
-    [ObservableProperty] private string _workHoursStartText = "09:00";
-    [ObservableProperty] private string _workHoursEndText = "17:00";
-    [ObservableProperty] private bool _saveAsPreset;
-    [ObservableProperty] private string _presetNameToSave = string.Empty;
-    [ObservableProperty] private ContractPresetDto? _selectedStartFromPreset;
+    // ── Preset pick (formerly "Advanced") ───────────────────────────────────
+    [ObservableProperty] private ContractPresetDto? _selectedPreset;
     [ObservableProperty] private bool _isLoadingPresets;
 
-    public ObservableCollection<string> TimeOptions { get; } = new();
+    partial void OnSelectedPresetChanged(ContractPresetDto? value)
+    {
+        OnPropertyChanged(nameof(SelectedPresetFloorLabel));
+        OnPropertyChanged(nameof(SelectedPresetWorkHoursLabel));
+        OnPropertyChanged(nameof(SelectedPresetCancellationLabel));
+    }
+
+    // Read-only confirmation text for the picked preset — mirrors the exact formatting
+    // ContractWizardViewModel's own Review-step summary strings already use.
+    public string SelectedPresetFloorLabel => SelectedPreset?.DailyFloorHours is { } floor
+        ? $"{floor:0.##}h / day" : "Derived from scheduled blocks";
+
+    public string SelectedPresetWorkHoursLabel => SelectedPreset?.WorkHoursStart is { } start && SelectedPreset?.WorkHoursEnd is { } end
+        ? $"{start:HH:mm} – {end:HH:mm}" : "No constraint";
+
+    public string SelectedPresetCancellationLabel =>
+        (SelectedPreset?.AllowCancellation ?? false) ? "Cancellation allowed" : "No cancellation";
+
     public ObservableCollection<RestDayChipViewModel> RestDayChips { get; } = new();
     public ObservableCollection<ContractPresetDto> SavedPresets { get; } = new();
+    public bool HasNoSavedPresets => IsAdvanced && !IsLoadingPresets && SavedPresets.Count == 0;
 
     [ObservableProperty] private string? _error;
 
@@ -88,10 +113,10 @@ public partial class ContractRulesStepViewModel : ViewModelBase
         StrictnessRule? initialStrictnessRule = null,
         double? initialFixedDailyFloorHours = null,
         bool initialAllowCancellation = true,
-        bool initialIsWorkHoursEnabled = false,
         TimeOnly? initialWorkHoursStart = null,
         TimeOnly? initialWorkHoursEnd = null,
-        IReadOnlyCollection<DateOnly>? initialRestDays = null)
+        IReadOnlyCollection<DateOnly>? initialRestDays = null,
+        Guid? initialContractPresetId = null)
     {
         IsAdvanced = isAdvanced;
         StartDate = startDate;
@@ -99,11 +124,12 @@ public partial class ContractRulesStepViewModel : ViewModelBase
         _getPresets = getPresets;
         _onContinue = onContinue;
         _onBack = onBack;
-
-        for (int h = 0; h < 24; h++)
-            for (int m = 0; m < 60; m += 15)
-                TimeOptions.Add($"{h:D2}:{m:D2}");
-        TimeOptions.Add("24:00");
+        _initialStrictnessRule = initialStrictnessRule;
+        _initialFixedDailyFloorHours = initialFixedDailyFloorHours;
+        _initialAllowCancellation = initialAllowCancellation;
+        _initialWorkHoursStart = initialWorkHoursStart;
+        _initialWorkHoursEnd = initialWorkHoursEnd;
+        _initialContractPresetId = initialContractPresetId;
 
         SimpleOptions.Add(new SimpleContractOptionViewModel("Lockdown", "This schedule is law. I will not touch it.", StrictnessRule.Locked, true));
         SimpleOptions.Add(new SimpleContractOptionViewModel("Daily Flex", "I can shuffle blocks around within each day.", StrictnessRule.DailyFlexibility, true));
@@ -117,17 +143,7 @@ public partial class ContractRulesStepViewModel : ViewModelBase
             RestDayChips.Add(new RestDayChipViewModel(d) { IsRestDay = initialRestDays?.Contains(d) ?? false });
 
         if (isAdvanced)
-        {
-            if (initialStrictnessRule.HasValue) StrictnessRule = initialStrictnessRule.Value;
-            IsDailyFloorEnabled = initialFixedDailyFloorHours.HasValue;
-            if (initialFixedDailyFloorHours.HasValue) DailyFloorHoursText = initialFixedDailyFloorHours.Value.ToString("0.##");
-            AllowCancellation = initialAllowCancellation;
-            IsWorkHoursEnabled = initialIsWorkHoursEnabled;
-            if (initialWorkHoursStart.HasValue) WorkHoursStartText = FormatTime(initialWorkHoursStart.Value);
-            if (initialWorkHoursEnd.HasValue) WorkHoursEndText = FormatTime(initialWorkHoursEnd.Value);
-
             _ = LoadPresetsAsync();
-        }
     }
 
     private async Task LoadPresetsAsync()
@@ -139,23 +155,15 @@ public partial class ContractRulesStepViewModel : ViewModelBase
             var presets = await _getPresets.HandleAsync(new GetAllContractPresetsQuery());
             SavedPresets.Clear();
             foreach (var p in presets) SavedPresets.Add(p);
+
+            if (_initialContractPresetId is { } presetId)
+                SelectedPreset = SavedPresets.FirstOrDefault(p => p.Id == presetId);
         }
         finally
         {
             IsLoadingPresets = false;
+            OnPropertyChanged(nameof(HasNoSavedPresets));
         }
-    }
-
-    partial void OnSelectedStartFromPresetChanged(ContractPresetDto? value)
-    {
-        if (value is null) return;
-        StrictnessRule = value.StrictnessRule;
-        IsDailyFloorEnabled = value.DailyFloorHours.HasValue;
-        if (value.DailyFloorHours.HasValue) DailyFloorHoursText = value.DailyFloorHours.Value.ToString("0.##");
-        AllowCancellation = value.AllowCancellation;
-        IsWorkHoursEnabled = value.WorkHoursStart.HasValue && value.WorkHoursEnd.HasValue;
-        if (value.WorkHoursStart.HasValue) WorkHoursStartText = FormatTime(value.WorkHoursStart.Value);
-        if (value.WorkHoursEnd.HasValue) WorkHoursEndText = FormatTime(value.WorkHoursEnd.Value);
     }
 
     [RelayCommand]
@@ -178,47 +186,11 @@ public partial class ContractRulesStepViewModel : ViewModelBase
             return;
         }
 
-        // The checkbox is the deliberate on/off switch for "no fixed floor" — mirrors
-        // "Enforce work hours" exactly, rather than relying on a blank text field (which
-        // looked too similar to typing 0, a mistake that produces a very different,
-        // nonsensical result: a floor that's already satisfied by doing nothing).
-        // What "no fixed floor" resolves to depends on strictness (Application-side):
-        // Daily Flexibility/Locked fall back to a per-day floor derived from whatever's
-        // scheduled each day (same as Simple mode); Period Time Budget gets a single
-        // whole-period ContractFloor instead.
-        double? floor = null;
-        if (IsDailyFloorEnabled)
+        // No preset picked and nothing to fall back on (a brand-new contract, not an edit of
+        // one that already had rules) — there's nothing to seal a contract with.
+        if (SelectedPreset is null && _initialStrictnessRule is null)
         {
-            if (!double.TryParse(DailyFloorHoursText, out var parsedFloor) || parsedFloor % 1 != 0 || parsedFloor < 1 || parsedFloor > 24)
-            {
-                Error = "Daily floor must be a whole number between 1 and 24 hours.";
-                return;
-            }
-            floor = parsedFloor;
-        }
-
-        TimeOnly? workHoursStart = null, workHoursEnd = null;
-        if (IsWorkHoursEnabled)
-        {
-            if (!TryParseTime(WorkHoursStartText, out var start) || !TryParseTime(WorkHoursEndText, out var end) || end <= start)
-            {
-                Error = "Work hours must have a valid start and end, with end after start.";
-                return;
-            }
-            workHoursStart = start;
-            workHoursEnd = end;
-        }
-
-        if (floor.HasValue && workHoursStart.HasValue && workHoursEnd.HasValue
-            && floor.Value > (workHoursEnd.Value - workHoursStart.Value).TotalHours)
-        {
-            Error = "Daily floor cannot exceed the total work hours window.";
-            return;
-        }
-
-        if (SaveAsPreset && string.IsNullOrWhiteSpace(PresetNameToSave))
-        {
-            Error = "Please name the preset you want to save.";
+            Error = "Please choose a contract preset.";
             return;
         }
 
@@ -228,37 +200,38 @@ public partial class ContractRulesStepViewModel : ViewModelBase
     [RelayCommand] private void Back() => _onBack();
 
     // ── Resolved values, pulled by the shell after Continue succeeds ─────────
+    // For Advanced, always prefer the picked preset's current values; fall back to whatever
+    // this contract already had (editing an existing one) only when nothing is picked.
 
-    public string ResolvedSummaryLabel => IsAdvanced ? "Custom" : $"Simple — {SelectedSimpleOption?.Name}";
+    public string ResolvedSummaryLabel => IsAdvanced
+        ? $"Preset — {SelectedPreset?.Name ?? "Custom"}"
+        : $"Simple — {SelectedSimpleOption?.Name}";
 
     public StrictnessRule ResolvedStrictnessRule => IsAdvanced
-        ? StrictnessRule
+        ? SelectedPreset?.StrictnessRule ?? _initialStrictnessRule ?? StrictnessRule.DailyFlexibility
         : SelectedSimpleOption?.StrictnessRule ?? StrictnessRule.DailyFlexibility;
 
     public bool ResolvedAllowCancellation => IsAdvanced
-        ? AllowCancellation
+        ? SelectedPreset?.AllowCancellation ?? _initialAllowCancellation
         : SelectedSimpleOption?.AllowCancellation ?? true;
 
-    public double? ResolvedFixedDailyFloorHours =>
-        IsAdvanced && IsDailyFloorEnabled && double.TryParse(DailyFloorHoursText, out var floor) ? floor : null;
+    public double? ResolvedFixedDailyFloorHours => IsAdvanced
+        ? SelectedPreset?.DailyFloorHours ?? _initialFixedDailyFloorHours
+        : null;
 
     public IReadOnlyList<DateOnly> ResolvedRestDays => IsAdvanced
         ? RestDayChips.Where(c => c.IsRestDay).Select(c => c.Date).ToList()
         : [];
 
-    public TimeOnly? ResolvedWorkHoursStart =>
-        IsAdvanced && IsWorkHoursEnabled && TryParseTime(WorkHoursStartText, out var s) ? s : null;
+    public TimeOnly? ResolvedWorkHoursStart => IsAdvanced
+        ? SelectedPreset?.WorkHoursStart ?? _initialWorkHoursStart
+        : null;
 
-    public TimeOnly? ResolvedWorkHoursEnd =>
-        IsAdvanced && IsWorkHoursEnabled && TryParseTime(WorkHoursEndText, out var e) ? e : null;
+    public TimeOnly? ResolvedWorkHoursEnd => IsAdvanced
+        ? SelectedPreset?.WorkHoursEnd ?? _initialWorkHoursEnd
+        : null;
 
-    public Guid? ResolvedContractPresetId => IsAdvanced ? SelectedStartFromPreset?.Id : null;
-
-    private static bool TryParseTime(string s, out TimeOnly time)
-    {
-        if (s == "24:00") { time = TimeOnly.MaxValue; return true; }
-        return TimeOnly.TryParse(s, out time);
-    }
-
-    private static string FormatTime(TimeOnly t) => t.ToString("HH:mm");
+    public Guid? ResolvedContractPresetId => IsAdvanced
+        ? SelectedPreset?.Id ?? _initialContractPresetId
+        : null;
 }

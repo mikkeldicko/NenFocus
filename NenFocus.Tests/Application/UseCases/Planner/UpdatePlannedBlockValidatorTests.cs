@@ -1,6 +1,5 @@
 using FluentAssertions;
 using NenFocus.Application.Interfaces;
-using NenFocus.Application.Queries.CheckRedemptionEntry;
 using NenFocus.Application.Queries.ComputePlannedFocusHours;
 using NenFocus.Application.UseCases.Planner.UpdatePlannedBlock;
 using NenFocus.Domain.Entities;
@@ -18,22 +17,18 @@ public class UpdatePlannedBlockValidatorTests
     private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
     private readonly INenContractRepository _contracts = Substitute.For<INenContractRepository>();
     private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
-    private readonly IQueryHandler<CheckRedemptionEntryQuery, RedemptionEntryCheckResult> _checkRedemptionEntry =
-        Substitute.For<IQueryHandler<CheckRedemptionEntryQuery, RedemptionEntryCheckResult>>();
     private readonly IQueryHandler<ComputePlannedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> _computePlannedFocusHours =
         Substitute.For<IQueryHandler<ComputePlannedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>>>();
 
     public UpdatePlannedBlockValidatorTests()
     {
         _clock.UtcNow.Returns(Now);
-        _checkRedemptionEntry.HandleAsync(Arg.Any<CheckRedemptionEntryQuery>(), Arg.Any<CancellationToken>())
-            .Returns(RedemptionEntryCheckResult.Valid);
         _computePlannedFocusHours.HandleAsync(Arg.Any<ComputePlannedFocusHoursQuery>(), Arg.Any<CancellationToken>())
             .Returns(new Dictionary<DateOnly, double>());
     }
 
     private UpdatePlannedBlockValidator CreateValidator() =>
-        new(_blocks, _presets, _contracts, _clock, _checkRedemptionEntry, _computePlannedFocusHours);
+        new(_blocks, _presets, _contracts, _clock, _computePlannedFocusHours);
 
     private static UpdatePlannedBlockCommand ValidCommand(Guid blockId, Guid presetId) => new()
     {
@@ -159,56 +154,6 @@ public class UpdatePlannedBlockValidatorTests
     }
 
     [Fact]
-    public async Task Validate_BackgroundBlockWithRedemptionEntries_IsInvalid()
-    {
-        var blockId = Guid.NewGuid();
-        var presetId = Guid.NewGuid();
-        _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(BackgroundBlock.Create(blockId, presetId, Now.AddHours(1), Now.AddHours(2)));
-        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Background", WebsiteFilterType.Blocklist, BlockPresetType.Background, Now));
-        var command = ValidCommand(blockId, presetId) with { RedemptionEntries = [new(Guid.NewGuid(), 30)] };
-
-        var result = await CreateValidator().ValidateAsync(command);
-
-        result.IsValid.Should().BeFalse();
-    }
-
-    [Fact]
-    public async Task Validate_FocusBlockWithRedemptionEntries_IsValid()
-    {
-        var blockId = Guid.NewGuid();
-        var presetId = Guid.NewGuid();
-        _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId, Now.AddHours(1), Now.AddHours(2)));
-        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Now));
-        var command = ValidCommand(blockId, presetId) with { RedemptionEntries = [new(Guid.NewGuid(), 30)] };
-
-        var result = await CreateValidator().ValidateAsync(command);
-
-        result.IsValid.Should().BeTrue();
-    }
-
-    [Fact]
-    public async Task Validate_RedemptionEntryFailsCheck_IsInvalid()
-    {
-        var blockId = Guid.NewGuid();
-        var presetId = Guid.NewGuid();
-        _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId, Now.AddHours(1), Now.AddHours(2)));
-        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Now));
-        _checkRedemptionEntry.HandleAsync(Arg.Any<CheckRedemptionEntryQuery>(), Arg.Any<CancellationToken>())
-            .Returns(RedemptionEntryCheckResult.WrongDay);
-        var command = ValidCommand(blockId, presetId) with { RedemptionEntries = [new(Guid.NewGuid(), 30)] };
-
-        var result = await CreateValidator().ValidateAsync(command);
-
-        result.IsValid.Should().BeFalse();
-    }
-
-    [Fact]
     public async Task Validate_BlockHasNoContractId_SkipsWorkHoursCheck()
     {
         var blockId = Guid.NewGuid();
@@ -287,25 +232,6 @@ public class UpdatePlannedBlockValidatorTests
         var result = await CreateValidator().ValidateAsync(ValidCommand(blockId, presetId)); // Now+1h..Now+2h = 13:00-14:00
 
         result.IsValid.Should().BeTrue();
-    }
-
-    [Fact]
-    public async Task Validate_RedemptionEntry_DispatchesCheckWithThisBlockAsExcludeBlockId()
-    {
-        var blockId = Guid.NewGuid();
-        var presetId = Guid.NewGuid();
-        _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId, Now.AddHours(1), Now.AddHours(2)));
-        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Now));
-        var missedBlockId = Guid.NewGuid();
-        var command = ValidCommand(blockId, presetId) with { RedemptionEntries = [new(missedBlockId, 30)] };
-
-        await CreateValidator().ValidateAsync(command);
-
-        await _checkRedemptionEntry.Received(1).HandleAsync(
-            Arg.Is<CheckRedemptionEntryQuery>(q => q.MissedBlockId == missedBlockId && q.ExcludeBlockId == blockId),
-            Arg.Any<CancellationToken>());
     }
 
     // ── Sealed-contract strictness guards ──────────────────────────────────────

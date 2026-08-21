@@ -217,20 +217,21 @@ public class NenContract : AggregateRoot
     /// <summary>
     /// Whether a missed Focus block due on <paramref name="missedBlockDate"/> can be
     /// covered by a redemption block on <paramref name="proposedDate"/>, per this contract's
-    /// StrictnessRule. Locked never allows it. DailyFlexibility requires same-day
-    /// coverage — its whole model is same-day rearrangement. PeriodTimeBudget has no
-    /// day constraint; only the remaining-deficit amount matters, which callers check
-    /// separately.
+    /// StrictnessRule. Locked and DailyFlexibility both require same-day coverage — for
+    /// DailyFlexibility that's its whole model of same-day rearrangement; for Locked,
+    /// new blocks can always be inserted (only editing/moving an existing sealed block
+    /// is forbidden), so redemption is allowed but confined to the day it's owed, same
+    /// as Daily Flex. PeriodTimeBudget follows the same day constraint only when it
+    /// carries a real per-day floor (the Gap 18 hybrid) — with a pure whole-period
+    /// ContractFloor instead, there is no per-day obligation to be same-day about, so
+    /// any day within the contract period is allowed.
     /// </summary>
     public RedemptionEligibility CheckRedemptionEligibility(DateOnly missedBlockDate, DateOnly proposedDate)
     {
-        if (StrictnessRule == StrictnessRule.Locked)
-            return RedemptionEligibility.NotAllowed;
+        if (StrictnessRule == StrictnessRule.PeriodTimeBudget && ContractFloor is not null)
+            return RedemptionEligibility.Allowed;
 
-        if (StrictnessRule == StrictnessRule.DailyFlexibility)
-            return proposedDate == missedBlockDate ? RedemptionEligibility.Allowed : RedemptionEligibility.WrongDay;
-
-        return RedemptionEligibility.Allowed; // PeriodTimeBudget
+        return proposedDate == missedBlockDate ? RedemptionEligibility.Allowed : RedemptionEligibility.WrongDay;
     }
 
     /// <summary>

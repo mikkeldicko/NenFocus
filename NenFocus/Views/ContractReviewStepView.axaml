@@ -38,12 +38,8 @@
         <TextBlock Text="You'll drag blocks onto the Planner calendar next. Nothing is saved until you seal the contract."
                    FontSize="12" Foreground="#7A7A8C" TextWrapping="Wrap"/>
 
-        <TextBlock Text="{Binding Error}"
-                   IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                   FontSize="12" Foreground="#C03A2B" TextWrapping="Wrap"/>
-
         <Grid ColumnDefinitions="Auto,*,Auto">
-            <Button Grid.Column="2" Classes="primary" Content="Begin Scheduling" Command="{Binding BeginSchedulingCommand}" IsEnabled="{Binding !IsSaving}"/>
+            <Button Grid.Column="2" Classes="primary" Content="Begin Scheduling" Command="{Binding BeginSchedulingCommand}"/>
         </Grid>
     </StackPanel>
 </UserControl>

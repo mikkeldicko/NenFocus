@@ -597,12 +597,19 @@ public class NenContractTests
     }
 
     [Fact]
-    public void CheckRedemptionEligibility_Locked_AlwaysNotAllowed()
+    public void CheckRedemptionEligibility_Locked_SameDayAllowed()
     {
         var contract = Seal(strictnessRule: StrictnessRule.Locked);
 
-        contract.CheckRedemptionEligibility(StartDate, StartDate).Should().Be(RedemptionEligibility.NotAllowed);
-        contract.CheckRedemptionEligibility(StartDate, StartDate.AddDays(1)).Should().Be(RedemptionEligibility.NotAllowed);
+        contract.CheckRedemptionEligibility(StartDate, StartDate).Should().Be(RedemptionEligibility.Allowed);
+    }
+
+    [Fact]
+    public void CheckRedemptionEligibility_Locked_DifferentDayIsWrongDay()
+    {
+        var contract = Seal(strictnessRule: StrictnessRule.Locked);
+
+        contract.CheckRedemptionEligibility(StartDate, StartDate.AddDays(1)).Should().Be(RedemptionEligibility.WrongDay);
     }
 
     [Fact]
@@ -622,11 +629,23 @@ public class NenContractTests
     }
 
     [Fact]
-    public void CheckRedemptionEligibility_PeriodTimeBudget_AnyDayAllowed()
+    public void CheckRedemptionEligibility_PeriodTimeBudget_WithContractFloor_AnyDayAllowed()
     {
-        var contract = Seal(strictnessRule: StrictnessRule.PeriodTimeBudget);
+        var contract = Seal(strictnessRule: StrictnessRule.PeriodTimeBudget, contractFloor: new ContractFloor(20));
 
         contract.CheckRedemptionEligibility(StartDate, StartDate.AddDays(3)).Should().Be(RedemptionEligibility.Allowed);
+    }
+
+    [Fact]
+    public void CheckRedemptionEligibility_PeriodTimeBudget_WithRealDailyFloor_DifferentDayIsWrongDay()
+    {
+        // The Gap 18 hybrid: a Period contract using a real per-day floor instead of a
+        // whole-period ContractFloor behaves like Daily Flex for redemption purposes —
+        // each day has its own obligation, so coverage must land on the same day.
+        var contract = Seal(strictnessRule: StrictnessRule.PeriodTimeBudget);
+
+        contract.CheckRedemptionEligibility(StartDate, StartDate.AddDays(3)).Should().Be(RedemptionEligibility.WrongDay);
+        contract.CheckRedemptionEligibility(StartDate, StartDate).Should().Be(RedemptionEligibility.Allowed);
     }
 
     [Fact]

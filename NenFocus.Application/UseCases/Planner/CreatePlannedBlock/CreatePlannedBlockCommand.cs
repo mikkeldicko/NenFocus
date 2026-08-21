@@ -1,4 +1,3 @@
-using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Domain.Enums;
 
@@ -11,11 +10,12 @@ public sealed record CreatePlannedBlockCommand : ICommand<CreatePlannedBlockResu
     public DateTime Start { get; init; }
     public DateTime End { get; init; }
 
-    /// <summary>Set when this block is created directly under an already-active contract
-    /// (e.g. a redemption block via the "Redemption" form section), outside Seal/Extend's
-    /// own atomic batch.</summary>
+    /// <summary>
+    /// Set when this block is created directly under an already-known contract (e.g. the
+    /// type-changed delete-then-recreate path preserving the original block's contract),
+    /// outside Seal/Extend's own atomic batch. Null for an ordinary new Focus block — the
+    /// handler auto-discovers whether it should attach to a contract and cover a deficit
+    /// via ComputeRedemptionAttributionQuery; there is no client-driven selection.
+    /// </summary>
     public Guid? ContractId { get; init; }
-
-    /// <summary>Focus blocks only — see BlockPresetType. Empty means an ordinary block.</summary>
-    public IReadOnlyList<RedemptionEntryDto> RedemptionEntries { get; init; } = [];
 }

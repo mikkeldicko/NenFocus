@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:NenFocus.ViewModels.Contracts"
              xmlns:dto="using:NenFocus.Application.DTOs"
+             xmlns:conv="using:NenFocus.Converters"
              x:DataType="vm:ContractRulesStepViewModel"
              x:Class="NenFocus.Views.ContractRulesStepView"
              Background="Transparent">
@@ -66,15 +67,15 @@
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
 
-            <!-- ── Advanced ───────────────────────────────────────────────── -->
+            <!-- ── Preset pick (formerly Advanced) ───────────────────────────── -->
             <StackPanel Spacing="14" IsVisible="{Binding IsAdvanced}">
 
-                <StackPanel Spacing="4">
-                    <TextBlock Text="Start from a saved preset (optional)" FontSize="12" Foreground="#7A7A8C"/>
+                <StackPanel Spacing="4" IsVisible="{Binding !HasNoSavedPresets}">
+                    <TextBlock Text="Contract Preset" FontSize="12" Foreground="#7A7A8C"/>
                     <ComboBox ItemsSource="{Binding SavedPresets}"
-                              SelectedItem="{Binding SelectedStartFromPreset}"
+                              SelectedItem="{Binding SelectedPreset}"
                               HorizontalAlignment="Stretch"
-                              PlaceholderText="None">
+                              PlaceholderText="Choose a preset">
                         <ComboBox.ItemTemplate>
                             <DataTemplate DataType="dto:ContractPresetDto">
                                 <TextBlock Text="{Binding Name}"/>
@@ -83,34 +84,31 @@
                     </ComboBox>
                 </StackPanel>
 
-                <StackPanel Spacing="4">
-                    <TextBlock Text="Strictness" FontSize="12" Foreground="#7A7A8C"/>
-                    <ComboBox ItemsSource="{Binding StrictnessOptions}"
-                              SelectedItem="{Binding StrictnessRule}"
-                              HorizontalAlignment="Stretch"/>
-                </StackPanel>
+                <TextBlock Text="You don't have any Contract Presets yet. Create one on the Presets page, then come back here to pick it."
+                           IsVisible="{Binding HasNoSavedPresets}"
+                           FontSize="12" Foreground="#7A7A8C" TextWrapping="Wrap"/>
 
-                <StackPanel Spacing="6">
-                    <CheckBox Content="Enforce a fixed daily floor" IsChecked="{Binding IsDailyFloorEnabled}"/>
-                    <StackPanel Spacing="4" IsVisible="{Binding IsDailyFloorEnabled}">
-                        <TextBlock Text="Daily floor (whole hours)" FontSize="12" Foreground="#7A7A8C"/>
-                        <TextBox Text="{Binding DailyFloorHoursText}" Classes="formInput" Watermark="e.g. 3"/>
+                <!-- Read-only confirmation — a picked preset's rules apply exactly as saved. -->
+                <Border Background="#F8F8FB" CornerRadius="8" Padding="12,10"
+                        IsVisible="{Binding SelectedPreset, Converter={x:Static ObjectConverters.IsNotNull}}">
+                    <StackPanel Spacing="6">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock Text="Strictness:" FontSize="12" Foreground="#7A7A8C"/>
+                            <TextBlock Text="{Binding SelectedPreset.StrictnessRule, Converter={x:Static conv:StrictnessRuleToLabelConverter.Instance}}" FontSize="12" FontWeight="Medium" Foreground="#1A1A2E"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock Text="Daily floor:" FontSize="12" Foreground="#7A7A8C"/>
+                            <TextBlock Text="{Binding SelectedPresetFloorLabel}" FontSize="12" FontWeight="Medium" Foreground="#1A1A2E"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock Text="Work hours:" FontSize="12" Foreground="#7A7A8C"/>
+                            <TextBlock Text="{Binding SelectedPresetWorkHoursLabel}" FontSize="12" FontWeight="Medium" Foreground="#1A1A2E"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock Text="{Binding SelectedPresetCancellationLabel}" FontSize="12" FontWeight="Medium" Foreground="#1A1A2E"/>
+                        </StackPanel>
                     </StackPanel>
-                </StackPanel>
-
-                <StackPanel Spacing="6">
-                    <CheckBox Content="Enforce work hours" IsChecked="{Binding IsWorkHoursEnabled}"/>
-                    <Grid ColumnDefinitions="*,12,*" IsVisible="{Binding IsWorkHoursEnabled}">
-                        <StackPanel Grid.Column="0" Spacing="4">
-                            <TextBlock Text="Start" FontSize="12" Foreground="#7A7A8C"/>
-                            <AutoCompleteBox ItemsSource="{Binding TimeOptions}" Text="{Binding WorkHoursStartText, Mode=TwoWay}" FilterMode="Contains" Watermark="HH:mm"/>
-                        </StackPanel>
-                        <StackPanel Grid.Column="2" Spacing="4">
-                            <TextBlock Text="End" FontSize="12" Foreground="#7A7A8C"/>
-                            <AutoCompleteBox ItemsSource="{Binding TimeOptions}" Text="{Binding WorkHoursEndText, Mode=TwoWay}" FilterMode="Contains" Watermark="HH:mm"/>
-                        </StackPanel>
-                    </Grid>
-                </StackPanel>
+                </Border>
 
                 <StackPanel Spacing="6">
                     <TextBlock Text="Rest days" FontSize="12" Foreground="#7A7A8C"/>

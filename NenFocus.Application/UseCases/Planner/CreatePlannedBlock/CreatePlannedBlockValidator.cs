@@ -1,6 +1,6 @@
 using FluentValidation;
 using NenFocus.Application.Interfaces;
-using NenFocus.Application.Queries.CheckRedemptionEntry;
+using NenFocus.Application.Queries.ComputeRedemptionAttribution;
 using NenFocus.Domain.Enums;
 
 namespace NenFocus.Application.UseCases.Planner.CreatePlannedBlock;
@@ -10,9 +10,8 @@ public sealed class CreatePlannedBlockValidator : AbstractValidator<CreatePlanne
     public CreatePlannedBlockValidator(
         IBlockPresetRepository presets,
         INenContractRepository contracts,
-        IPlannedBlockRepository blocks,
         ISystemClock clock,
-        IQueryHandler<CheckRedemptionEntryQuery, RedemptionEntryCheckResult> checkRedemptionEntry)
+        IQueryHandler<ComputeRedemptionAttributionQuery, RedemptionAttributionResult> computeRedemptionAttribution)
     {
         RuleFor(x => x.PresetId)
             .NotEmpty().WithMessage("Preset ID is required.");
@@ -37,46 +36,26 @@ public sealed class CreatePlannedBlockValidator : AbstractValidator<CreatePlanne
             .Must((command, end) => (end - command.Start).TotalMinutes >= 1)
             .WithMessage("Block must be at least 1 minute long.");
 
+        // Focus blocks: the contract that actually applies may not be command.ContractId
+        // itself — a null ContractId still auto-discovers a contract via
+        // ComputeRedemptionAttributionQuery when the block turns out to cover a deficit.
+        // Resolving through the same query the handler uses (rather than checking
+        // command.ContractId directly) keeps Work Hours validation in sync with whichever
+        // contract the block actually ends up attached to.
         RuleFor(x => x)
             .MustAsync(async (command, ct) =>
             {
-                if (command.ContractId is not { } contractId) return true;
-                var contract = await contracts.GetByIdAsync(contractId, ct);
+                var contractId = command.BlockPresetType == BlockPresetType.Focus
+                    ? (await computeRedemptionAttribution.HandleAsync(
+                        new ComputeRedemptionAttributionQuery(command.ContractId, command.PresetId, command.Start, command.End, ExcludeBlockId: null),
+                        ct)).ContractId
+                    : command.ContractId;
+
+                if (contractId is not { } resolvedContractId) return true;
+                var contract = await contracts.GetByIdAsync(resolvedContractId, ct);
                 return contract is null
                     || contract.AllowsBlockPlacement(DateOnly.FromDateTime(command.Start), command.Start, command.End);
             })
             .WithMessage("This block falls outside the contract's configured Work Hours for that day.");
-
-        RuleFor(x => x.RedemptionEntries)
-            .Empty()
-            .When(x => x.BlockPresetType != BlockPresetType.Focus)
-            .WithMessage("Only a Focus block can cover deficit for missed blocks — Background blocks have no sessions.");
-
-        RuleForEach(x => x.RedemptionEntries)
-            .CustomAsync(async (entry, context, ct) =>
-            {
-                var command = context.InstanceToValidate;
-                if (command.BlockPresetType != BlockPresetType.Focus) return; // already reported above
-
-                var result = await checkRedemptionEntry.HandleAsync(
-                    new CheckRedemptionEntryQuery(command.PresetId, command.Start, entry.MissedBlockId, entry.MinutesCovered, ExcludeBlockId: null),
-                    ct);
-
-                var message = RedemptionEntryMessages.For(result);
-                if (message is not null)
-                    context.AddFailure(nameof(CreatePlannedBlockCommand.RedemptionEntries), message);
-            });
-
-        RuleForEach(x => x.RedemptionEntries)
-            .CustomAsync(async (entry, context, ct) =>
-            {
-                var command = context.InstanceToValidate;
-                if (command.BlockPresetType != BlockPresetType.Focus) return; // already reported above
-
-                var missedBlock = await blocks.GetByIdAsync(entry.MissedBlockId, ct);
-                if (missedBlock is not null && missedBlock.ContractId != command.ContractId)
-                    context.AddFailure(nameof(CreatePlannedBlockCommand.RedemptionEntries),
-                        "A redemption block must belong to the same contract as the block it covers.");
-            });
     }
 }

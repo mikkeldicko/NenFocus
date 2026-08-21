@@ -6,7 +6,6 @@ using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.CheckNenContractDateRangeOverlap;
 using NenFocus.Application.Queries.GetAllContractPresets;
-using NenFocus.Application.UseCases.ContractPresets.CreateContractPreset;
 using NenFocus.Domain.Enums;
 using NenFocus.ViewModels.Components;
 
@@ -22,7 +21,6 @@ namespace NenFocus.ViewModels.Contracts;
 public partial class ContractWizardViewModel : ViewModelBase
 {
     private readonly IQueryHandler<GetAllContractPresetsQuery, IReadOnlyList<ContractPresetDto>> _getPresets;
-    private readonly ICommandHandler<CreateContractPresetCommand, CreateContractPresetResult> _createPreset;
     private readonly IQueryHandler<CheckNenContractDateRangeOverlapQuery, string?> _checkOverlap;
     private readonly Action<NenContractDraftRules> _onReadyToSchedule;
     private readonly Action _onCancel;
@@ -65,7 +63,6 @@ public partial class ContractWizardViewModel : ViewModelBase
 
     public ContractWizardViewModel(
         IQueryHandler<GetAllContractPresetsQuery, IReadOnlyList<ContractPresetDto>> getPresets,
-        ICommandHandler<CreateContractPresetCommand, CreateContractPresetResult> createPreset,
         IQueryHandler<CheckNenContractDateRangeOverlapQuery, string?> checkOverlap,
         DateOnly initialStartDate,
         Action<NenContractDraftRules> onReadyToSchedule,
@@ -73,7 +70,6 @@ public partial class ContractWizardViewModel : ViewModelBase
         NenContractEditDto? editingContract = null)
     {
         _getPresets = getPresets;
-        _createPreset = createPreset;
         _checkOverlap = checkOverlap;
         _onReadyToSchedule = onReadyToSchedule;
         _onCancel = onCancel;
@@ -151,10 +147,10 @@ public partial class ContractWizardViewModel : ViewModelBase
             initialStrictnessRule: _editingContract?.StrictnessRule,
             initialFixedDailyFloorHours: _editingContract?.FixedDailyFloorHours,
             initialAllowCancellation: _editingContract?.AllowCancellation ?? true,
-            initialIsWorkHoursEnabled: _editingContract?.WorkHoursStart is not null,
             initialWorkHoursStart: _editingContract?.WorkHoursStart,
             initialWorkHoursEnd: _editingContract?.WorkHoursEnd,
-            initialRestDays: _editingContract?.RestDays);
+            initialRestDays: _editingContract?.RestDays,
+            initialContractPresetId: _editingContract?.ContractPresetId);
         _currentBackAction = NavigateToMode;
         CurrentStep = _rulesVm;
     }
@@ -172,22 +168,9 @@ public partial class ContractWizardViewModel : ViewModelBase
         var contractPresetId = rules?.ResolvedContractPresetId;
         var modeLabel = rules?.ResolvedSummaryLabel ?? "Simple";
 
-        CreateContractPresetCommand? presetToSave = rules is { IsAdvanced: true, SaveAsPreset: true }
-            ? new CreateContractPresetCommand
-            {
-                Name = rules.PresetNameToSave,
-                StrictnessRule = strictness,
-                DailyFloorHours = fixedFloor,
-                WorkHoursStart = workHoursStart,
-                WorkHoursEnd = workHoursEnd,
-                AllowCancellation = allowCancellation
-            }
-            : null;
-
         StepIndex = 3;
         _currentBackAction = NavigateToRules;
         CurrentStep = new ContractReviewStepViewModel(
-            createPreset: _createPreset,
             getData: () => new NenContractDraftRules
             {
                 Name = _name,
@@ -203,7 +186,6 @@ public partial class ContractWizardViewModel : ViewModelBase
                 ContractPresetId = contractPresetId,
                 EditingContractId = _editingContract?.Id
             },
-            presetToSave: presetToSave,
             summaryName: _name,
             summaryDateRange: $"{_startDate:MMM d, yyyy} – {_endDate:MMM d, yyyy}",
             summaryMode: modeLabel,

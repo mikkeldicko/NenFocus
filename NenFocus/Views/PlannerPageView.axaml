@@ -162,18 +162,14 @@
 			<Setter Property="Foreground" Value="White"/>
 		</Style>
 
-		<Style Selector="Button.redemptionToggle">
+		<Style Selector="Button.coverDeficitBtn">
 			<Setter Property="Background" Value="#FDECEA"/>
 			<Setter Property="Foreground" Value="#C0392B"/>
 			<Setter Property="BorderThickness" Value="0"/>
 			<Setter Property="CornerRadius" Value="6"/>
-			<Setter Property="Padding" Value="10,8"/>
+			<Setter Property="Padding" Value="10,6"/>
 			<Setter Property="FontSize" Value="12"/>
 			<Setter Property="Cursor" Value="Hand"/>
-		</Style>
-		<Style Selector="Button.redemptionToggle.active">
-			<Setter Property="Background" Value="#C0392B"/>
-			<Setter Property="Foreground" Value="White"/>
 		</Style>
 	</UserControl.Styles>
 
@@ -205,14 +201,25 @@
                     CornerRadius="8"
                     Padding="14,10"
                     Margin="0,0,0,16">
-				<Grid ColumnDefinitions="*,Auto">
+				<Grid ColumnDefinitions="*,Auto,Auto">
 					<StackPanel Grid.Column="0" Spacing="4">
 						<TextBlock Text="{Binding ActiveContractBannerText}" FontSize="13" FontWeight="SemiBold" Foreground="#1A1A2E"/>
 						<TextBlock Text="{Binding CancelContractErrorMessage}"
                                    IsVisible="{Binding CancelContractErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                                    FontSize="12" Foreground="#C03A2B" TextWrapping="Wrap"/>
+						<TextBlock Text="{Binding CoverDeficitErrorMessage}"
+                                   IsVisible="{Binding CoverDeficitErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                   FontSize="12" Foreground="#C03A2B" TextWrapping="Wrap"/>
 					</StackPanel>
-					<Button Grid.Column="1"
+					<Button Name="CoverDeficitButton" Grid.Column="1"
+                            Classes="coverDeficitBtn"
+                            Content="Cover Deficit"
+                            ToolTip.Tip="Create a tile to cover an outstanding deficit"
+                            Command="{Binding ToggleCoverDeficitPopoverCommand}"
+                            IsVisible="{Binding HasCoverableDeficit}"
+                            VerticalAlignment="Center"
+                            Margin="8,0,0,0"/>
+					<Button Grid.Column="2"
                             Classes="bannerCancelBtn"
                             Content="✕"
                             ToolTip.Tip="Cancel contract"
@@ -221,6 +228,38 @@
                             VerticalAlignment="Center"/>
 				</Grid>
 			</Border>
+
+			<Popup IsOpen="{Binding IsCoverDeficitPopoverVisible, Mode=TwoWay}"
+                   PlacementTarget="{Binding #CoverDeficitButton}"
+                   Placement="BottomEdgeAlignedRight"
+                   IsLightDismissEnabled="True"
+                   VerticalOffset="6">
+				<Border Background="#FFFFFF" BorderBrush="#DDDDE8" BorderThickness="1" CornerRadius="12"
+                        Width="320" Padding="14" BoxShadow="0 12 40 0 #33000000">
+					<StackPanel Spacing="8">
+						<TextBlock Text="Cover which deficit?" FontSize="12" FontWeight="Medium" Foreground="#888899"/>
+						<ItemsControl ItemsSource="{Binding CoverDeficitOptions}">
+							<ItemsControl.ItemsPanel>
+								<ItemsPanelTemplate>
+									<StackPanel Spacing="6"/>
+								</ItemsPanelTemplate>
+							</ItemsControl.ItemsPanel>
+							<ItemsControl.ItemTemplate>
+								<DataTemplate DataType="dto:SuggestedRedemptionPlacementDto">
+									<Button Classes="secondary" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                                            Command="{Binding $parent[UserControl].((vm:PlannerPageViewModel)DataContext).CoverDeficitCommand}"
+                                            CommandParameter="{Binding}">
+										<StackPanel Spacing="2">
+											<TextBlock Text="{Binding PresetName}" FontSize="13" FontWeight="SemiBold" Foreground="#1A1A2E"/>
+											<TextBlock Text="{Binding TotalRemainingDeficitMinutes, StringFormat='{}{0:0.#} min owed'}" FontSize="11" Foreground="#888899"/>
+										</StackPanel>
+									</Button>
+								</DataTemplate>
+							</ItemsControl.ItemTemplate>
+						</ItemsControl>
+					</StackPanel>
+				</Border>
+			</Popup>
 
 			<Border Grid.Row="2"
                     IsVisible="{Binding IsDraftingContract}"
@@ -384,27 +423,16 @@
 
 							<StackPanel Spacing="4">
 								<TextBlock Text="Block Preset" FontSize="12" Foreground="#7A7A8C"/>
-								<Grid ColumnDefinitions="*,Auto">
-									<ComboBox Grid.Column="0" ItemsSource="{Binding AvailablePresets}"
-                                              SelectedItem="{Binding SelectedPreset}"
-                                              HorizontalAlignment="Stretch"
-                                              IsEnabled="{Binding !IsBlockLocked}">
-										<ComboBox.ItemTemplate>
-											<DataTemplate DataType="dto:BlockPresetDto">
-												<TextBlock Text="{Binding Name}"/>
-											</DataTemplate>
-										</ComboBox.ItemTemplate>
-									</ComboBox>
-									<Button Grid.Column="1" Classes="redemptionToggle" Classes.active="{Binding IsMarkedAsRedemption}"
-                                            Content="Redemption"
-                                            ToolTip.Tip="Mark this block as covering the incomplete block's deficit"
-                                            IsVisible="{Binding EligibleRedemptionTarget, Converter={x:Static ObjectConverters.IsNotNull}}"
-                                            Command="{Binding ToggleMarkAsRedemptionCommand}"
-                                            Margin="8,0,0,0"/>
-								</Grid>
-								<TextBlock Text="{Binding SelectedPreset.Name, StringFormat='Marked as a redemption for the incomplete {0} block.'}"
-                                           IsVisible="{Binding IsMarkedAsRedemption}"
-                                           FontSize="11" Foreground="#7A5C00" TextWrapping="Wrap"/>
+								<ComboBox ItemsSource="{Binding AvailablePresets}"
+                                          SelectedItem="{Binding SelectedPreset}"
+                                          HorizontalAlignment="Stretch"
+                                          IsEnabled="{Binding !IsBlockLocked}">
+									<ComboBox.ItemTemplate>
+										<DataTemplate DataType="dto:BlockPresetDto">
+											<TextBlock Text="{Binding Name}"/>
+										</DataTemplate>
+									</ComboBox.ItemTemplate>
+								</ComboBox>
 								<TextBlock Text="{Binding RedemptionSuggestionNotice}"
                                            IsVisible="{Binding RedemptionSuggestionNotice, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                                            FontSize="11" Foreground="#B8860B" TextWrapping="Wrap"/>
@@ -482,6 +510,21 @@
 					<StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="12">
 						<Button Classes="secondary" Content="Keep Drafting" Command="{Binding CancelCancelDraftCommand}"/>
 						<Button Classes="danger" Content="Discard" Command="{Binding ConfirmCancelDraftCommand}"/>
+					</StackPanel>
+				</StackPanel>
+			</Border>
+		</Border>
+
+		<Border IsVisible="{Binding IsConfirmPartialRedemptionVisible}" Background="#88000000">
+			<Border Background="#FFFFFF" CornerRadius="14" Width="400" Padding="32,28"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                    BoxShadow="0 12 48 0 #44000000">
+				<StackPanel Spacing="20">
+					<TextBlock Text="Won't Fully Cover" FontSize="18" FontWeight="SemiBold" Foreground="#1A1A2E"/>
+					<TextBlock Text="{Binding ConfirmPartialRedemptionMessage}" FontSize="14" Foreground="#888899" TextWrapping="Wrap"/>
+					<StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="12">
+						<Button Classes="secondary" Content="Cancel" Command="{Binding CancelPartialRedemptionCommand}"/>
+						<Button Classes="primary" Content="Create Anyway" Command="{Binding ConfirmPartialRedemptionCommand}"/>
 					</StackPanel>
 				</StackPanel>
 			</Border>
