@@ -345,6 +345,98 @@ Gaps that have been identified but not yet closed. Each is here because deferrin
 
 \---
 
+### Open Gap K — Planner Time Range Editor, built on Cross-Midnight Block Support (interrogated 2026-08-21; not yet built)
+
+**Two features in a mandatory build order — do not start Part 2 before Part 1 is closed.**
+
+1. **Cross-Midnight Block Support** (preliminary read only — needs its own full Design Gap interrogation before implementation).
+2. **Planner Time Range Editor** — Google Calendar-style start/end editing on the Planner block form. Fully interrogated, settled, ready to build once Part 1 lands.
+
+Part 2 depends on Part 1 because the duration-preserving shift math and the End-time dropdown both need to reason about a block whose End can land on a different calendar day than its Start — impossible to represent in the form today.
+
+---
+
+#### Part 1 — Cross-Midnight Block Support (preliminary read; not fully interrogated)
+
+**The rule:** a block spanning midnight credits hours to each day it actually occupies. A 22:00–01:00 block (3h) credits 2h to the day it starts and 1h to the day it ends — never all 3h to one day.
+
+**Already correct, verified against the live code — nothing to build here:**
+- `PlannedFocusHoursCalculator.Calculate` (`NenFocus.Domain/Services/PlannedFocusHoursCalculator.cs:9-25`) already walks a block's range day-by-day and splits its hours exactly per this rule. Feeds the planned-hours/Day-Met-preview machinery (`ComputePlannedFocusHoursQuery`, `RefreshDayFloorPreviewsAsync`, `UpdatePlannedBlockValidator`'s floor checks). Untested for this case only because no UI path can create a cross-midnight block yet.
+- `PlannedBlock.Reschedule`/`FocusBlock.Create` (`NenFocus.Domain/Entities/PlannedBlock.cs:67-73`, `FocusBlock.cs:16-38`) have no same-day constraint at all — only `end > start`.
+- `PlannedBlockRepository.GetForDayAsync` (`NenFocus.Infrastructure/Persistence/Repositories/PlannedBlockRepository.cs:14-25`) already queries by overlap (`b.Start < dayEnd && b.End > dayStart`), not "starts on this day" — a cross-midnight block would already surface correctly on both days' Planner queries, and existing per-day tile clipping (`PlannerLayout.GetTilePosition`) would likely already render it as two separate tiles without changes.
+
+**Real gaps, confirmed by reading the code — these need work:**
+- `GetNenContractCompletedFocusHoursQueryHandler.cs:62` credits a session's entire completed minutes to a single day (`block.Start`'s date) — no split. This is the *actual*-hours side (vs. the planned-hours side above, which already works), and it's the harder fix: it needs to derive a per-day split from a real session's actual start/end timestamps, not just a scalar credited-minutes value.
+- `WorkHours.ContainsRange` (`NenFocus.Domain/ValueObjects/WorkHours.cs:26-31`) anchors its window to `start.Date` — a cross-midnight Focus block under an active Work-Hours-enforcing contract would be rejected outright. Needs a decision on what "Work Hours" even means for a block spanning two days.
+- `SplitPlannedBlockValidator` explicitly requires both halves of a split stay on the original block's day — needs an explicit decision on whether Split allows crossing at all.
+- `PlannerDragMath.ClampRange` clamps at 24:00 — dragging a tile past midnight is currently impossible.
+- The Planner form has one shared `DatePicker` for both Start and End (`PlannerPageView.axaml:414`) — no "which calendar day does End belong to" concept exists yet.
+
+**UI behavior settled during this session (informal — revisit and confirm at the full interrogation):**
+- Typed or picked end-before-start auto-rolls to the next day (Google-style); no explicit "+1 day" toggle.
+- When it rolls, a second date box appears next to End showing the resolved date (e.g. `3:30pm to 11:30am · Aug 22, 2026`); hidden otherwise.
+- **Focus blocks are capped at 12 hours.** Background blocks are not — no existing max-duration rule exists for either type today; this cap is entirely new, and Focus-only by design, mirroring the already-established Focus-only Work Hours exception (`ValidateDraftPlacement`'s own comment: *"Background blocks are never Work-Hours constrained"*, `PlannerPageViewModel.cs:1409`). Exceeding it is rejected at Save, never silently clamped — matches this codebase's existing reject-after-the-fact philosophy for every other Planner placement rule.
+- **Cap enforcement lives in Domain, not Application** — the more-correct DDD placement, confirmed by precedent already in the entity: `FocusBlock.Create` already enforces `end <= start` inline, and `AssignRedemptionEntries`'s own doc comment draws the exact line ("same-preset, uncovered-deficit, and same-day constraints are Application-layer concerns, not enforced here" — i.e., anything needing a repository lookup stays in Application; pure Start/End facts belong in the entity). The 12h cap needs nothing but the two `DateTime`s already in hand, so it belongs beside the existing `end <= start` guard. `FocusBlock` will also need its own override of `Reschedule` (currently only defined on the base `PlannedBlock`), since `UpdatePlannedBlockCommandHandler` mutates existing blocks through `Reschedule`, not `Create`. Mirrored by a thin duplicate check in `CreatePlannedBlockValidator`/`UpdatePlannedBlockValidator` purely to produce a friendly `FormError` instead of an unhandled exception — the exact same two-layer pattern already used for `end <= start` today (Domain is the real, unbypassable invariant; the validator exists only for messaging, and protects nothing the entity doesn't already guarantee).
+
+**Not yet interrogated:** day/week boundary semantics for the completed-hours split, exact query signature changes to `GetNenContractCompletedFocusHoursQueryHandler`, whether Split allows crossing, and full Work-Hours semantics for a crossing block. This needs its own dedicated interrogation before implementation — what's written here is a preliminary read done while scoping Part 2, not a settled design.
+
+---
+
+#### Part 2 — Planner Time Range Editor (fully interrogated, settled)
+
+**The feature:** the Planner block-creation form's `FormStartTime`/`FormEndTime` fields (`AutoCompleteBox`, `PlannerPageView.axaml:420-432`) gain Google Calendar-style behavior: moving Start preserves duration by shifting End; moving End re-derives duration without moving Start; both get dropdowns of preset times with the End dropdown labeled by resulting duration.
+
+**Scope:**
+- **Block create/edit form** — gets the full treatment below.
+- **Split dialog** (`SplitFirstStartTime`/`SplitFirstEndTime`/`SplitSecondStartTime`/`SplitSecondEndTime`) — explicitly **no** linkage between any of the four fields, confirmed. They stay on the plain flat 15-minute grid, unchanged from today — no anchored/duration-labeled dropdown either, since there's no live relationship to anchor one to.
+- **Work Hours fields** (Presets page, `ContractPresetPageView.axaml:245-257`, `WorkHoursStartText`/`WorkHoursEndText`) — plain widget only. Confirmed: moving Start does **not** move End here — it's a boundary-window rule ("work may happen between these two clock times"), not a scheduled appointment with a duration worth preserving.
+- The Contract Wizard has no time input of its own — non-issue.
+
+**Linkage rule (form only — does not touch drag/resize):**
+- Editing **Start** as typed/picked text → **End** shifts to preserve the current duration. Permanent, re-derived every time, never reverts to an original value.
+- Editing **End** as typed/picked text → Start stays put; the new duration becomes what's preserved on the next Start edit.
+- **Dragging/resizing a tile on the calendar grid is completely unaffected** — `PlannerDragMath`/`MoveOrResizeBlockAsync` keep today's plain resize semantics (opposite edge stays fixed). The linkage is a form-text-field-only behavior; drag math is a separate code path and is out of scope for this feature.
+- Needs a "populating" guard (bool flag) around `EditBlockAsync`/`NewBlockAtAsync`/`OpenNewBlockFormWithRangeAsync`'s `FormStartTime =`/`FormEndTime =` assignments, so opening the form for an existing block doesn't fire the shift handler against stale leftover values from a previous form session.
+- `IsStartLocked` (block's start already passed) freezes Start; End stays editable in that state — already true today (`PlannerPageView.axaml:424,432`), no change needed, just confirmed as compatible.
+
+**Dropdowns:**
+- **Start:** unchanged — the existing flat `:00/:15/:30/:45`, 24-hour, context-free grid (`GenerateTimeOptions`, `PlannerPageViewModel.cs:589-600`). Always shows the same absolute grid regardless of what's currently typed, and is never filtered by Work Hours or contract windows — matches this codebase's existing reject-after-the-fact philosophy (nothing else pre-filters a dropdown to avoid an eventually-invalid choice; every placement rule is enforced once, at Save).
+- **End:** new, generated live from the current Start value — Start+15, +30, +45, +60 (first hour, 15-minute steps), then +90, +120, +150… (30-minute steps from there on), wrapping past midnight back to just before Start, truncated at the earlier of that wraparound or the 12-hour Focus cap (Focus blocks only — Background blocks get no cap truncation, per Part 1). Regenerated on every Start change. Confirmed against two independent worked examples (10:15 start, 10:35 start) — both fit this exact step pattern and no other.
+- Each End entry labeled with its resulting duration: `(30 mins)`, `(1 hr)`, `(1.5 hrs)`, `(3 hrs)` — decimal-hours-past-the-hour-mark family, Google's own wording style. **New** converter/formatter — not a change to `DurationToStringConverter` (`NenFocus/Converters/DurationToStringConverter.cs`), which stays exactly as-is; it's shared with the post-session completion screen and the block snapshot modal, and changing its output would silently change both.
+- No persistent duration readout under the fields — dropdown-suffix only.
+
+**Parsing:** one-line patch to the existing `TryParseFormTime` (`PlannerPageViewModel.cs:1170-1174`, already shared by the form and Split dialog):
+```
+if (!TimeSpan.TryParse(s, out result)) return false;
+if (result.Days != 0) { result = default; return false; }
+```
+Closes a real latent bug found while investigating this: today, typing `93` parses "successfully" as a 93-day `TimeSpan` (`TimeSpan.Parse` rolls anything over 23 hours into extra days rather than rejecting it) and would silently place a block 93 days out with nothing to catch it. Confirmed via direct testing, not assumed. `9:3` deliberately keeps its current behavior (`09:03`, not `09:30`) — a full custom positional parser was considered and explicitly rejected as overkill for a rare edge case. The Preset page's separate `TimeOnly`-based parser (`ContractPresetPageViewModel.cs:262-265`) doesn't have this bug and isn't touched by this patch; its own pre-existing `"24:00"`-rejection gap is unrelated and out of scope here.
+
+**Validation timing:**
+- **Live** (every keystroke): syntax only — can this text parse as a valid time-of-day at all. Field turns red; on blur (`LostFocus`), snaps back to the last successfully-parsed value. Needs new plumbing: a `_lastValidFormStartTime`/`_lastValidFormEndTime` backing field pair, and a `LostFocus` hook wired from the View's code-behind (`PlannerPageView.axaml.cs`) into the ViewModel — nothing in this form has focus-driven behavior today.
+- **Save-time** (unchanged): 12h cap, End>Start, Work Hours, floor, overlap — exactly as today, surfaced via `FormError`. Explicitly confirmed: no live business-rule validation (floor/overlap/contract) is being added by this feature — only the syntax-level red/snapback above is new.
+- 24-hour clock throughout (`HH:mm`) — matches every other time field in the app; the Google Calendar screenshots used as reference are 12-hour only because that's Google's locale, not a spec requirement.
+
+**Where new code lives:**
+- Duration-preserving shift math → a new static helper in `ViewModels/Components/`, sibling to `PlannerLayout`/`PlannerDragMath` — pure presentation math with zero business-rule content, same category as those two, not a Domain value object (an earlier draft of this gap considered a Domain value object, reasoning from `WorkHours`/`SessionDuration` as precedent, but those carry real enforced business rules this math doesn't; `PlannerDragMath` turned out to be the closer, better-fitting precedent once compared directly).
+- End-list generation → new static helper, same neighborhood.
+- Duration-label formatting → new converter, sibling to `DurationToStringConverter`, not a modification of it.
+- No `DOMAIN_DICTIONARY.md` entry for the shift-math concept — confirmed it's plumbing, not ubiquitous language; it enforces nothing anything else in the app reasons about.
+
+**Proposed build order once Part 1 lands (thinnest-slice-first):**
+1. Domain: 12h cap in `FocusBlock.Create` + new `Reschedule` override, with tests.
+2. Application: mirroring validator messages in `CreatePlannedBlockValidator`/`UpdatePlannedBlockValidator`, with tests.
+3. UI-layer shift-math helper, unit-tested in isolation, not yet wired to the form.
+4. Wire shift math into `OnFormStartTimeChanged`/`OnFormEndTimeChanged` + the populating-guard.
+5. Parser patch (the `Days != 0` guard above).
+6. Snapback: last-valid-value tracking + `LostFocus` wiring + red-field styling.
+7. End-dropdown generation + duration-label converter, regenerated on Start change.
+8. Manual verification in the running app.
+
+**Must be closed before:** Nothing urgent — deferred until picked up. Part 1 must be interrogated and closed before Part 2's implementation begins; Part 2's own design is settled enough to start Slice 1 (Domain 12h cap) the moment Part 1 lands.
+
+\---
+
 ## Minor Cleanups
 
 Trivial style or consistency fixes that don't rise to the level of a Design Gap. Deferred until the relevant file is next edited for other reasons. Items here should be deletable in a single line change.
