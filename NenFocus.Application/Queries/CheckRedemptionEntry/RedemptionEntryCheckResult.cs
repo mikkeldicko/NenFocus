@@ -1,17 +1,17 @@
-namespace NenFocus.Application.Queries.CheckMakeUpForEntry;
+namespace NenFocus.Application.Queries.CheckRedemptionEntry;
 
-public enum MakeUpForEntryCheckResult
+public enum RedemptionEntryCheckResult
 {
     Valid,
 
     /// <summary>The referenced block doesn't exist, isn't a FocusBlock, or isn't linked to a contract.</summary>
     MissedBlockNotFound,
 
-    /// <summary>Rule 4 — the make-up block must share the missed block's preset.</summary>
+    /// <summary>Rule 4 — the redemption block must share the missed block's preset.</summary>
     PresetMismatch,
 
-    /// <summary>Rule 10 — a Locked contract has no make-up recovery mechanism at all.</summary>
-    StrictnessDoesNotAllowMakeUp,
+    /// <summary>Rule 10 — a Locked contract has no redemption recovery mechanism at all.</summary>
+    StrictnessDoesNotAllowRedemption,
 
     /// <summary>Rule 8 — DailyFlexibility requires same-day coverage.</summary>
     WrongDay,

@@ -220,11 +220,11 @@ namespace NenFocus.Infrastructure.Migrations
                     b.Property<DateTime>("End")
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("MakeUpForEntries")
+                    b.Property<string>("RedemptionEntries")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT")
-                        .HasColumnName("MakeUpForEntries")
+                        .HasColumnName("RedemptionEntries")
                         .HasDefaultValueSql("'[]'");
 
                     b.Property<DateTime>("Start")

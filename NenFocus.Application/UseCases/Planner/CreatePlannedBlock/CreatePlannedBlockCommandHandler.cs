@@ -55,8 +55,8 @@ public sealed class CreatePlannedBlockCommandHandler : ICommandHandler<CreatePla
         PlannedBlock block = command.BlockPresetType == BlockPresetType.Focus
             ? FocusBlock.Create(Guid.NewGuid(), command.PresetId, startTime, endTime,
                 contractId: command.ContractId,
-                makeUpForEntries: command.MakeUpForEntries
-                    .Select(e => new MakeUpForEntry(e.MissedBlockId, e.MinutesCovered))
+                redemptionEntries: command.RedemptionEntries
+                    .Select(e => new RedemptionEntry(e.MissedBlockId, e.MinutesCovered))
                     .ToList())
             : BackgroundBlock.Create(Guid.NewGuid(), command.PresetId, startTime, endTime,
                 contractId: command.ContractId);

@@ -60,7 +60,7 @@ public sealed class GetNenContractDeficitsQueryHandler
             var rawDeficit = Math.Max(0, scheduledMinutes - creditedMinutes);
 
             var coveredMinutes = focusBlocks
-                .SelectMany(b => b.MakeUpForEntries)
+                .SelectMany(b => b.RedemptionEntries)
                 .Where(e => e.MissedBlockId == block.Id)
                 .Sum(e => e.MinutesCovered);
 

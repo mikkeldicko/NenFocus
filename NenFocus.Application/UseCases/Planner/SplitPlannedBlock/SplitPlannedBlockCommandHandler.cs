@@ -26,10 +26,10 @@ public sealed class SplitPlannedBlockCommandHandler : ICommandHandler<SplitPlann
         {
             first = FocusBlock.Create(
                 firstId, focusOriginal.BlockPresetId, command.FirstBlockStart, command.FirstBlockEnd,
-                focusOriginal.Title, focusOriginal.ContractId, focusOriginal.MakeUpForEntries);
+                focusOriginal.Title, focusOriginal.ContractId, focusOriginal.RedemptionEntries);
             second = FocusBlock.Create(
                 secondId, focusOriginal.BlockPresetId, command.SecondBlockStart, command.SecondBlockEnd,
-                focusOriginal.Title, focusOriginal.ContractId, focusOriginal.MakeUpForEntries);
+                focusOriginal.Title, focusOriginal.ContractId, focusOriginal.RedemptionEntries);
         }
         else
         {

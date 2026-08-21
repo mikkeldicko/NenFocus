@@ -10,7 +10,7 @@ using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.CheckNenContractDateRangeOverlap;
 using NenFocus.Application.Queries.ComputePlannedFocusHours;
-using NenFocus.Application.Queries.FindMakeUpEligibleBlock;
+using NenFocus.Application.Queries.FindRedemptionEligibleBlock;
 using NenFocus.Application.Queries.GetActiveNenContract;
 using NenFocus.Application.Queries.GetAllBlockPresets;
 using NenFocus.Application.Queries.GetAllContractPresets;
@@ -53,7 +53,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     private readonly IQueryHandler<GetAllContractPresetsQuery, IReadOnlyList<ContractPresetDto>> _getContractPresets;
     private readonly ICommandHandler<CreateContractPresetCommand, CreateContractPresetResult> _createContractPreset;
     private readonly IQueryHandler<GetActiveNenContractQuery, ActiveNenContractDto?> _getActiveContract;
-    private readonly IQueryHandler<FindMakeUpEligibleBlockQuery, FocusBlockDeficitDto?> _findMakeUpEligibleBlock;
+    private readonly IQueryHandler<FindRedemptionEligibleBlockQuery, FocusBlockDeficitDto?> _findRedemptionEligibleBlock;
     private readonly IQueryHandler<CheckNenContractDateRangeOverlapQuery, string?> _checkOverlap;
     private readonly IQueryHandler<GetScheduledNenContractsQuery, IReadOnlyList<ScheduledNenContractDto>> _getScheduledContracts;
     private readonly IQueryHandler<GetNenContractForEditQuery, NenContractEditDto?> _getContractForEdit;
@@ -147,11 +147,11 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     [ObservableProperty] private string? _dragError;
 
     // The incomplete block (if any) the currently selected preset + date is eligible to
-    // cover — refreshed whenever either changes. Null means no "mark as makeup" affordance
+    // cover — refreshed whenever either changes. Null means no "mark as redemption" affordance
     // applies to what's currently in the form.
-    [ObservableProperty] private FocusBlockDeficitDto? _eligibleMakeUpTarget;
-    [ObservableProperty] private bool _isMarkedAsMakeUp;
-    [ObservableProperty] private string? _makeUpSuggestionNotice;
+    [ObservableProperty] private FocusBlockDeficitDto? _eligibleRedemptionTarget;
+    [ObservableProperty] private bool _isMarkedAsRedemption;
+    [ObservableProperty] private string? _redemptionSuggestionNotice;
 
     // ── Split Block ────────────────────────────────────────────────────────────
     [ObservableProperty] private bool _isSplitDialogVisible;
@@ -375,7 +375,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         IQueryHandler<GetAllContractPresetsQuery, IReadOnlyList<ContractPresetDto>> getContractPresets,
         ICommandHandler<CreateContractPresetCommand, CreateContractPresetResult> createContractPreset,
         IQueryHandler<GetActiveNenContractQuery, ActiveNenContractDto?> getActiveContract,
-        IQueryHandler<FindMakeUpEligibleBlockQuery, FocusBlockDeficitDto?> findMakeUpEligibleBlock,
+        IQueryHandler<FindRedemptionEligibleBlockQuery, FocusBlockDeficitDto?> findRedemptionEligibleBlock,
         IQueryHandler<CheckNenContractDateRangeOverlapQuery, string?> checkOverlap,
         IQueryHandler<GetScheduledNenContractsQuery, IReadOnlyList<ScheduledNenContractDto>> getScheduledContracts,
         IQueryHandler<GetNenContractForEditQuery, NenContractEditDto?> getContractForEdit,
@@ -400,7 +400,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         _getContractPresets = getContractPresets;
         _createContractPreset = createContractPreset;
         _getActiveContract = getActiveContract;
-        _findMakeUpEligibleBlock = findMakeUpEligibleBlock;
+        _findRedemptionEligibleBlock = findRedemptionEligibleBlock;
         _checkOverlap = checkOverlap;
         _clockService = clockService;
         _sessionState = sessionState;
@@ -564,33 +564,33 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         SelectedPreset = AvailablePresets.FirstOrDefault();
     }
 
-    partial void OnSelectedPresetChanged(BlockPresetDto? value) => _ = RefreshEligibleMakeUpTargetAsync();
-    partial void OnFormDateChanged(DateTimeOffset value) => _ = RefreshEligibleMakeUpTargetAsync();
+    partial void OnSelectedPresetChanged(BlockPresetDto? value) => _ = RefreshEligibleRedemptionTargetAsync();
+    partial void OnFormDateChanged(DateTimeOffset value) => _ = RefreshEligibleRedemptionTargetAsync();
 
     // Only offered when creating a brand-new block (not editing one, not drafting a
     // contract) under the currently active contract — composes the existing deficit
-    // ledger via the domain's own CheckMakeUpEligibility rule (FindMakeUpEligibleBlock),
+    // ledger via the domain's own CheckRedemptionEligibility rule (FindRedemptionEligibleBlock),
     // never re-deriving the day/period eligibility rule here.
-    private async Task RefreshEligibleMakeUpTargetAsync()
+    private async Task RefreshEligibleRedemptionTargetAsync()
     {
-        IsMarkedAsMakeUp = false; // preset/date changed — any previous mark no longer applies
-        EligibleMakeUpTarget = null;
-        MakeUpSuggestionNotice = null;
+        IsMarkedAsRedemption = false; // preset/date changed — any previous mark no longer applies
+        EligibleRedemptionTarget = null;
+        RedemptionSuggestionNotice = null;
 
         if (!IsFocusBlock || SelectedPreset is null || ActiveContract is null || IsEditing || IsDraftingContract)
             return;
 
-        EligibleMakeUpTarget = await _findMakeUpEligibleBlock.HandleAsync(
-            new FindMakeUpEligibleBlockQuery(ActiveContract.Id, SelectedPreset.Id, FormDate.Date));
+        EligibleRedemptionTarget = await _findRedemptionEligibleBlock.HandleAsync(
+            new FindRedemptionEligibleBlockQuery(ActiveContract.Id, SelectedPreset.Id, FormDate.Date));
     }
 
     [RelayCommand]
-    private void ToggleMarkAsMakeUp()
+    private void ToggleMarkAsRedemption()
     {
-        if (EligibleMakeUpTarget is not { } target) return;
-        IsMarkedAsMakeUp = !IsMarkedAsMakeUp;
-        MakeUpSuggestionNotice = null;
-        if (!IsMarkedAsMakeUp) return;
+        if (EligibleRedemptionTarget is not { } target) return;
+        IsMarkedAsRedemption = !IsMarkedAsRedemption;
+        RedemptionSuggestionNotice = null;
+        if (!IsMarkedAsRedemption) return;
 
         // Suggest an End time sized to the remaining deficit from whatever Start is
         // already set — a starting point, not a lock; still editable afterward. Rounds
@@ -614,7 +614,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
             if (suggestedEnd > endOfDay)
             {
                 var coveredMinutes = (endOfDay - startTime).TotalMinutes;
-                MakeUpSuggestionNotice =
+                RedemptionSuggestionNotice =
                     $"Only {coveredMinutes:0.#} min left today — this covers {coveredMinutes:0.#} of the {target.RemainingDeficitMinutes:0.#} min needed; the rest will still show as an incomplete deficit.";
                 suggestedEnd = endOfDay;
             }
@@ -827,22 +827,22 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         }
         else
         {
-            var markedAsMakeUp = IsMarkedAsMakeUp && EligibleMakeUpTarget is not null;
+            var markedAsRedemption = IsMarkedAsRedemption && EligibleRedemptionTarget is not null;
 
             // MinutesCovered is a ledger claim against the missed block's deficit, not a
             // restatement of this block's own duration — the two are allowed to differ.
             // The suggested End time is deliberately rounded UP to the next whole minute
-            // (ToggleMarkAsMakeUp) so the day's total credited time comfortably reaches the
+            // (ToggleMarkAsRedemption) so the day's total credited time comfortably reaches the
             // floor, but the real deficit is almost never a whole number of minutes (it comes
             // from precise timestamp subtraction). Claiming the block's own rounded-up
             // duration would then exceed the real deficit and get rejected by
-            // CheckMakeUpForEntryQuery's "MinutesCovered > remainingDeficit" guard — capping
+            // CheckRedemptionEntryQuery's "MinutesCovered > remainingDeficit" guard — capping
             // the claim at the real remaining deficit keeps the claim valid while letting the
             // block itself stay long enough to actually close the gap.
-            IReadOnlyList<MakeUpForEntryDto> makeUpForEntries = markedAsMakeUp
-                ? [new MakeUpForEntryDto(
-                    EligibleMakeUpTarget!.FocusBlockId,
-                    Math.Min((endUtc - startUtc).TotalMinutes, EligibleMakeUpTarget.RemainingDeficitMinutes))]
+            IReadOnlyList<RedemptionEntryDto> redemptionEntries = markedAsRedemption
+                ? [new RedemptionEntryDto(
+                    EligibleRedemptionTarget!.FocusBlockId,
+                    Math.Min((endUtc - startUtc).TotalMinutes, EligibleRedemptionTarget.RemainingDeficitMinutes))]
                 : [];
 
             var result = await _createBlock.HandleAsync(new CreatePlannedBlockCommand
@@ -851,8 +851,8 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
                 BlockPresetType = blockPresetType,
                 Start = startUtc,
                 End = endUtc,
-                ContractId = markedAsMakeUp ? ActiveContract?.Id : null,
-                MakeUpForEntries = makeUpForEntries
+                ContractId = markedAsRedemption ? ActiveContract?.Id : null,
+                RedemptionEntries = redemptionEntries
             });
             if (!result.Success) { FormError = result.ErrorMessage; return; }
         }
@@ -1015,9 +1015,9 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         IsEditingBlockDailyFlexibility = false;
         IsSplitDialogVisible = false;
         SplitError = null;
-        EligibleMakeUpTarget = null;
-        IsMarkedAsMakeUp = false;
-        MakeUpSuggestionNotice = null;
+        EligibleRedemptionTarget = null;
+        IsMarkedAsRedemption = false;
+        RedemptionSuggestionNotice = null;
         _editingBlockId = null;
         _editingIsDraft = false;
     }

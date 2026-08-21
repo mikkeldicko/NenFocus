@@ -326,13 +326,13 @@ public partial class PlannerPageView : UserControl
             return btn;
         }
 
-        // A make-up block stays in its normal outcome/preset color family — a small
-        // "MAKEUP" tag is the only distinguishing mark, no border treatment.
-        if (tile.IsMakeUp)
+        // A redemption block stays in its normal outcome/preset color family — a small
+        // "REDEMPTION" tag is the only distinguishing mark, no border treatment.
+        if (tile.IsRedemption)
         {
             stack.Children.Add(new TextBlock
             {
-                Text       = "MAKEUP",
+                Text       = "REDEMPTION",
                 FontSize   = 9,
                 FontWeight = FontWeight.Bold,
                 Opacity    = 0.9

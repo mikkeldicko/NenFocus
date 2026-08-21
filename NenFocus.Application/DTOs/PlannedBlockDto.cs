@@ -63,10 +63,10 @@ public sealed record PlannedBlockDto
     public bool WasStartedLate { get; init; }
 
     /// <summary>
-    /// True for a Focus block created to cover another block's deficit (MakeUpForEntries
+    /// True for a Focus block created to cover another block's deficit (RedemptionEntries
     /// non-empty). Drives the Planner tile's distinct dashed-border treatment.
     /// </summary>
-    public bool IsMakeUp { get; init; }
+    public bool IsRedemption { get; init; }
 
     public int DurationMinutes => (int)(End - Start).TotalMinutes;
 }

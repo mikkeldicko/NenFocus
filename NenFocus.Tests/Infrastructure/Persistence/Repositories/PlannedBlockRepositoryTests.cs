@@ -388,7 +388,7 @@ public class PlannedBlockRepositoryTests : SqliteRepositoryTestBase
     }
 
     [Fact]
-    public async Task AddAsync_NoMakeUpForEntries_ReloadsAsEmpty()
+    public async Task AddAsync_NoRedemptionEntries_ReloadsAsEmpty()
     {
         var repo = CreateRepository();
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End);
@@ -397,22 +397,22 @@ public class PlannedBlockRepositoryTests : SqliteRepositoryTestBase
         await Context.SaveChangesAsync();
 
         var reloaded = (FocusBlock)(await CreateRepository().GetByIdAsync(block.Id))!;
-        reloaded.MakeUpForEntries.Should().BeEmpty();
+        reloaded.RedemptionEntries.Should().BeEmpty();
     }
 
     [Fact]
-    public async Task AddAsync_WithMakeUpForEntries_RoundTripsThroughJsonColumn()
+    public async Task AddAsync_WithRedemptionEntries_RoundTripsThroughJsonColumn()
     {
         var repo = CreateRepository();
         var missedBlockId = Guid.NewGuid();
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End,
-            makeUpForEntries: [new MakeUpForEntry(missedBlockId, 30)]);
+            redemptionEntries: [new RedemptionEntry(missedBlockId, 30)]);
 
         await repo.AddAsync(block);
         await Context.SaveChangesAsync();
 
         var reloaded = (FocusBlock)(await CreateRepository().GetByIdAsync(block.Id))!;
-        reloaded.MakeUpForEntries.Should().ContainSingle(e =>
+        reloaded.RedemptionEntries.Should().ContainSingle(e =>
             e.MissedBlockId == missedBlockId && e.MinutesCovered == 30);
     }
 

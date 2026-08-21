@@ -3,9 +3,9 @@ using NenFocus.Domain.Enums;
 namespace NenFocus.Application.DTOs;
 
 /// <summary>
-/// A missed or late Focus Block still carrying uncovered deficit — the "Make Up For"
+/// A missed or late Focus Block still carrying uncovered deficit — the "Redemption"
 /// checklist's row shape. Blocks whose deficit has been fully covered by linked
-/// make-up blocks are not included.
+/// redemption blocks are not included.
 /// </summary>
 public sealed record FocusBlockDeficitDto
 {

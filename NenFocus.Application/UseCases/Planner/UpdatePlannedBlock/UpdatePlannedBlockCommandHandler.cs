@@ -69,10 +69,10 @@ public sealed class UpdatePlannedBlockCommandHandler : ICommandHandler<UpdatePla
 
         if (existing is FocusBlock existingFocusBlock)
         {
-            var entries = command.MakeUpForEntries
-                .Select(e => new MakeUpForEntry(e.MissedBlockId, e.MinutesCovered))
+            var entries = command.RedemptionEntries
+                .Select(e => new RedemptionEntry(e.MissedBlockId, e.MinutesCovered))
                 .ToList();
-            existingFocusBlock.AssignMakeUpForEntries(entries);
+            existingFocusBlock.AssignRedemptionEntries(entries);
         }
 
         await _blocks.UpdateAsync(existing, cancellationToken);

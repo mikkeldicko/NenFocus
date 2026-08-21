@@ -216,21 +216,21 @@ public class NenContract : AggregateRoot
 
     /// <summary>
     /// Whether a missed Focus block due on <paramref name="missedBlockDate"/> can be
-    /// covered by a make-up block on <paramref name="proposedDate"/>, per this contract's
+    /// covered by a redemption block on <paramref name="proposedDate"/>, per this contract's
     /// StrictnessRule. Locked never allows it. DailyFlexibility requires same-day
     /// coverage — its whole model is same-day rearrangement. PeriodTimeBudget has no
     /// day constraint; only the remaining-deficit amount matters, which callers check
     /// separately.
     /// </summary>
-    public MakeUpEligibility CheckMakeUpEligibility(DateOnly missedBlockDate, DateOnly proposedDate)
+    public RedemptionEligibility CheckRedemptionEligibility(DateOnly missedBlockDate, DateOnly proposedDate)
     {
         if (StrictnessRule == StrictnessRule.Locked)
-            return MakeUpEligibility.NotAllowed;
+            return RedemptionEligibility.NotAllowed;
 
         if (StrictnessRule == StrictnessRule.DailyFlexibility)
-            return proposedDate == missedBlockDate ? MakeUpEligibility.Allowed : MakeUpEligibility.WrongDay;
+            return proposedDate == missedBlockDate ? RedemptionEligibility.Allowed : RedemptionEligibility.WrongDay;
 
-        return MakeUpEligibility.Allowed; // PeriodTimeBudget
+        return RedemptionEligibility.Allowed; // PeriodTimeBudget
     }
 
     /// <summary>

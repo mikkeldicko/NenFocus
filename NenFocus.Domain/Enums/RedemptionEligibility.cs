@@ -1,6 +1,6 @@
 namespace NenFocus.Domain.Enums;
 
-public enum MakeUpEligibility
+public enum RedemptionEligibility
 {
     Allowed,
     NotAllowed,

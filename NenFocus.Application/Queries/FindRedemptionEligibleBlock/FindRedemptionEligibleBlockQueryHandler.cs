@@ -3,15 +3,15 @@ using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.GetNenContractDeficits;
 using NenFocus.Domain.Enums;
 
-namespace NenFocus.Application.Queries.FindMakeUpEligibleBlock;
+namespace NenFocus.Application.Queries.FindRedemptionEligibleBlock;
 
-public sealed class FindMakeUpEligibleBlockQueryHandler
-    : IQueryHandler<FindMakeUpEligibleBlockQuery, FocusBlockDeficitDto?>
+public sealed class FindRedemptionEligibleBlockQueryHandler
+    : IQueryHandler<FindRedemptionEligibleBlockQuery, FocusBlockDeficitDto?>
 {
     private readonly IQueryHandler<GetNenContractDeficitsQuery, IReadOnlyList<FocusBlockDeficitDto>> _deficits;
     private readonly INenContractRepository _contracts;
 
-    public FindMakeUpEligibleBlockQueryHandler(
+    public FindRedemptionEligibleBlockQueryHandler(
         IQueryHandler<GetNenContractDeficitsQuery, IReadOnlyList<FocusBlockDeficitDto>> deficits,
         INenContractRepository contracts)
     {
@@ -20,7 +20,7 @@ public sealed class FindMakeUpEligibleBlockQueryHandler
     }
 
     public async Task<FocusBlockDeficitDto?> HandleAsync(
-        FindMakeUpEligibleBlockQuery query,
+        FindRedemptionEligibleBlockQuery query,
         CancellationToken cancellationToken = default)
     {
         var contract = await _contracts.GetByIdAsync(query.ContractId, cancellationToken);
@@ -31,7 +31,7 @@ public sealed class FindMakeUpEligibleBlockQueryHandler
 
         return deficits
             .Where(d => d.BlockPresetId == query.PresetId)
-            .Where(d => contract.CheckMakeUpEligibility(DateOnly.FromDateTime(d.ScheduledStart), proposedDate) == MakeUpEligibility.Allowed)
+            .Where(d => contract.CheckRedemptionEligibility(DateOnly.FromDateTime(d.ScheduledStart), proposedDate) == RedemptionEligibility.Allowed)
             .OrderBy(d => d.ScheduledStart)
             .FirstOrDefault();
     }

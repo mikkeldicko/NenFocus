@@ -3,12 +3,12 @@ using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Tests.Domain.ValueObjects;
 
-public class MakeUpForEntryTests
+public class RedemptionEntryTests
 {
     [Fact]
     public void Constructor_ZeroMinutesCovered_Throws()
     {
-        var act = () => new MakeUpForEntry(Guid.NewGuid(), 0);
+        var act = () => new RedemptionEntry(Guid.NewGuid(), 0);
 
         act.Should().Throw<ArgumentException>();
     }
@@ -16,7 +16,7 @@ public class MakeUpForEntryTests
     [Fact]
     public void Constructor_NegativeMinutesCovered_Throws()
     {
-        var act = () => new MakeUpForEntry(Guid.NewGuid(), -5);
+        var act = () => new RedemptionEntry(Guid.NewGuid(), -5);
 
         act.Should().Throw<ArgumentException>();
     }
@@ -26,7 +26,7 @@ public class MakeUpForEntryTests
     {
         var missedBlockId = Guid.NewGuid();
 
-        var entry = new MakeUpForEntry(missedBlockId, 30);
+        var entry = new RedemptionEntry(missedBlockId, 30);
 
         entry.MissedBlockId.Should().Be(missedBlockId);
         entry.MinutesCovered.Should().Be(30);

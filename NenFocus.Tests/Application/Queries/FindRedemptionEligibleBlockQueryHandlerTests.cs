@@ -1,7 +1,7 @@
 using FluentAssertions;
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
-using NenFocus.Application.Queries.FindMakeUpEligibleBlock;
+using NenFocus.Application.Queries.FindRedemptionEligibleBlock;
 using NenFocus.Application.Queries.GetNenContractDeficits;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
@@ -10,7 +10,7 @@ using NSubstitute;
 
 namespace NenFocus.Tests.Application.Queries;
 
-public class FindMakeUpEligibleBlockQueryHandlerTests
+public class FindRedemptionEligibleBlockQueryHandlerTests
 {
     private static readonly Guid ContractId = Guid.NewGuid();
     private static readonly Guid PresetId = Guid.NewGuid();
@@ -21,7 +21,7 @@ public class FindMakeUpEligibleBlockQueryHandlerTests
         Substitute.For<IQueryHandler<GetNenContractDeficitsQuery, IReadOnlyList<FocusBlockDeficitDto>>>();
     private readonly INenContractRepository _contracts = Substitute.For<INenContractRepository>();
 
-    private FindMakeUpEligibleBlockQueryHandler CreateHandler() => new(_deficits, _contracts);
+    private FindRedemptionEligibleBlockQueryHandler CreateHandler() => new(_deficits, _contracts);
 
     private static NenContract Contract(StrictnessRule rule) => NenContract.Seal(
         ContractId, "Contract", new NenContractGoal("Goal"), MissedDate, MissedDate.AddDays(14),
@@ -48,7 +48,7 @@ public class FindMakeUpEligibleBlockQueryHandlerTests
         _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns((NenContract?)null);
 
         var result = await CreateHandler().HandleAsync(
-            new FindMakeUpEligibleBlockQuery(ContractId, PresetId, MissedDate.ToDateTime(TimeOnly.MinValue)), CancellationToken.None);
+            new FindRedemptionEligibleBlockQuery(ContractId, PresetId, MissedDate.ToDateTime(TimeOnly.MinValue)), CancellationToken.None);
 
         result.Should().BeNull();
     }
@@ -60,7 +60,7 @@ public class FindMakeUpEligibleBlockQueryHandlerTests
         SetDeficits(Deficit(MissedDate, presetId: Guid.NewGuid())); // different preset
 
         var result = await CreateHandler().HandleAsync(
-            new FindMakeUpEligibleBlockQuery(ContractId, PresetId, MissedDate.ToDateTime(TimeOnly.MinValue)), CancellationToken.None);
+            new FindRedemptionEligibleBlockQuery(ContractId, PresetId, MissedDate.ToDateTime(TimeOnly.MinValue)), CancellationToken.None);
 
         result.Should().BeNull();
     }
@@ -73,7 +73,7 @@ public class FindMakeUpEligibleBlockQueryHandlerTests
         SetDeficits(deficit);
 
         var result = await CreateHandler().HandleAsync(
-            new FindMakeUpEligibleBlockQuery(ContractId, PresetId, MissedDate.ToDateTime(TimeOnly.MinValue)), CancellationToken.None);
+            new FindRedemptionEligibleBlockQuery(ContractId, PresetId, MissedDate.ToDateTime(TimeOnly.MinValue)), CancellationToken.None);
 
         result.Should().NotBeNull();
         result!.FocusBlockId.Should().Be(deficit.FocusBlockId);
@@ -86,7 +86,7 @@ public class FindMakeUpEligibleBlockQueryHandlerTests
         SetDeficits(Deficit(MissedDate));
 
         var result = await CreateHandler().HandleAsync(
-            new FindMakeUpEligibleBlockQuery(ContractId, PresetId, MissedDate.AddDays(1).ToDateTime(TimeOnly.MinValue)), CancellationToken.None);
+            new FindRedemptionEligibleBlockQuery(ContractId, PresetId, MissedDate.AddDays(1).ToDateTime(TimeOnly.MinValue)), CancellationToken.None);
 
         result.Should().BeNull();
     }
@@ -99,7 +99,7 @@ public class FindMakeUpEligibleBlockQueryHandlerTests
         SetDeficits(deficit);
 
         var result = await CreateHandler().HandleAsync(
-            new FindMakeUpEligibleBlockQuery(ContractId, PresetId, MissedDate.AddDays(5).ToDateTime(TimeOnly.MinValue)), CancellationToken.None);
+            new FindRedemptionEligibleBlockQuery(ContractId, PresetId, MissedDate.AddDays(5).ToDateTime(TimeOnly.MinValue)), CancellationToken.None);
 
         result.Should().NotBeNull();
         result!.FocusBlockId.Should().Be(deficit.FocusBlockId);
@@ -112,7 +112,7 @@ public class FindMakeUpEligibleBlockQueryHandlerTests
         SetDeficits(Deficit(MissedDate));
 
         var result = await CreateHandler().HandleAsync(
-            new FindMakeUpEligibleBlockQuery(ContractId, PresetId, MissedDate.ToDateTime(TimeOnly.MinValue)), CancellationToken.None);
+            new FindRedemptionEligibleBlockQuery(ContractId, PresetId, MissedDate.ToDateTime(TimeOnly.MinValue)), CancellationToken.None);
 
         result.Should().BeNull();
     }
@@ -126,7 +126,7 @@ public class FindMakeUpEligibleBlockQueryHandlerTests
         SetDeficits(later, earlier);
 
         var result = await CreateHandler().HandleAsync(
-            new FindMakeUpEligibleBlockQuery(ContractId, PresetId, MissedDate.AddDays(10).ToDateTime(TimeOnly.MinValue)), CancellationToken.None);
+            new FindRedemptionEligibleBlockQuery(ContractId, PresetId, MissedDate.AddDays(10).ToDateTime(TimeOnly.MinValue)), CancellationToken.None);
 
         result.Should().NotBeNull();
         result!.FocusBlockId.Should().Be(earlier.FocusBlockId);

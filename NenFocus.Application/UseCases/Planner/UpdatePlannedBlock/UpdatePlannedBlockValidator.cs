@@ -1,6 +1,6 @@
 using FluentValidation;
 using NenFocus.Application.Interfaces;
-using NenFocus.Application.Queries.CheckMakeUpForEntry;
+using NenFocus.Application.Queries.CheckRedemptionEntry;
 using NenFocus.Application.Queries.ComputePlannedFocusHours;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
@@ -17,7 +17,7 @@ public sealed class UpdatePlannedBlockValidator : AbstractValidator<UpdatePlanne
         IBlockPresetRepository presets,
         INenContractRepository contracts,
         ISystemClock clock,
-        IQueryHandler<CheckMakeUpForEntryQuery, MakeUpForEntryCheckResult> checkMakeUpForEntry,
+        IQueryHandler<CheckRedemptionEntryQuery, RedemptionEntryCheckResult> checkRedemptionEntry,
         IQueryHandler<ComputePlannedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> computePlannedFocusHours)
     {
         _blocks = blocks;
@@ -73,7 +73,7 @@ public sealed class UpdatePlannedBlockValidator : AbstractValidator<UpdatePlanne
         RuleFor(x => x)
             .MustAsync(async (command, ct) =>
             {
-                if (command.MakeUpForEntries.Count == 0) return true;
+                if (command.RedemptionEntries.Count == 0) return true;
                 var block = await _blocks.GetByIdAsync(command.BlockId, ct);
                 return block is FocusBlock;
             })
@@ -203,20 +203,20 @@ public sealed class UpdatePlannedBlockValidator : AbstractValidator<UpdatePlanne
                 context.AddFailure(nameof(UpdatePlannedBlockCommand.Start), message);
             });
 
-        RuleForEach(x => x.MakeUpForEntries)
+        RuleForEach(x => x.RedemptionEntries)
             .CustomAsync(async (entry, context, ct) =>
             {
                 var command = context.InstanceToValidate;
                 var block = await _blocks.GetByIdAsync(command.BlockId, ct);
                 if (block is not FocusBlock) return; // already reported above
 
-                var result = await checkMakeUpForEntry.HandleAsync(
-                    new CheckMakeUpForEntryQuery(command.PresetId, command.Start, entry.MissedBlockId, entry.MinutesCovered, command.BlockId),
+                var result = await checkRedemptionEntry.HandleAsync(
+                    new CheckRedemptionEntryQuery(command.PresetId, command.Start, entry.MissedBlockId, entry.MinutesCovered, command.BlockId),
                     ct);
 
-                var message = MakeUpForEntryMessages.For(result);
+                var message = RedemptionEntryMessages.For(result);
                 if (message is not null)
-                    context.AddFailure(nameof(UpdatePlannedBlockCommand.MakeUpForEntries), message);
+                    context.AddFailure(nameof(UpdatePlannedBlockCommand.RedemptionEntries), message);
             });
     }
 }

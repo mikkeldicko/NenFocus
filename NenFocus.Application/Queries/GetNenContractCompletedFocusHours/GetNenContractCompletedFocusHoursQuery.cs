@@ -4,7 +4,7 @@ namespace NenFocus.Application.Queries.GetNenContractCompletedFocusHours;
 
 /// <summary>
 /// Completed Focus hours per calendar day for the contract's full date range — feeds
-/// NenContract.IsDayMet(date, hours). Sums planned-block sessions (including make-up
+/// NenContract.IsDayMet(date, hours). Sums planned-block sessions (including redemption
 /// blocks, which are ordinary FocusBlocks under the contract), applying the grace-period
 /// credit via IFocusBlockOutcomeClassifier, plus Spontaneous sessions whose preset
 /// matches any preset used by this contract. A block's credited minutes are attributed

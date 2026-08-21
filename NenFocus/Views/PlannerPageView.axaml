@@ -162,7 +162,7 @@
 			<Setter Property="Foreground" Value="White"/>
 		</Style>
 
-		<Style Selector="Button.makeUpToggle">
+		<Style Selector="Button.redemptionToggle">
 			<Setter Property="Background" Value="#FDECEA"/>
 			<Setter Property="Foreground" Value="#C0392B"/>
 			<Setter Property="BorderThickness" Value="0"/>
@@ -171,7 +171,7 @@
 			<Setter Property="FontSize" Value="12"/>
 			<Setter Property="Cursor" Value="Hand"/>
 		</Style>
-		<Style Selector="Button.makeUpToggle.active">
+		<Style Selector="Button.redemptionToggle.active">
 			<Setter Property="Background" Value="#C0392B"/>
 			<Setter Property="Foreground" Value="White"/>
 		</Style>
@@ -395,18 +395,18 @@
 											</DataTemplate>
 										</ComboBox.ItemTemplate>
 									</ComboBox>
-									<Button Grid.Column="1" Classes="makeUpToggle" Classes.active="{Binding IsMarkedAsMakeUp}"
-                                            Content="Makeup"
+									<Button Grid.Column="1" Classes="redemptionToggle" Classes.active="{Binding IsMarkedAsRedemption}"
+                                            Content="Redemption"
                                             ToolTip.Tip="Mark this block as covering the incomplete block's deficit"
-                                            IsVisible="{Binding EligibleMakeUpTarget, Converter={x:Static ObjectConverters.IsNotNull}}"
-                                            Command="{Binding ToggleMarkAsMakeUpCommand}"
+                                            IsVisible="{Binding EligibleRedemptionTarget, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                            Command="{Binding ToggleMarkAsRedemptionCommand}"
                                             Margin="8,0,0,0"/>
 								</Grid>
-								<TextBlock Text="{Binding SelectedPreset.Name, StringFormat='Marked as a makeup for the incomplete {0} block.'}"
-                                           IsVisible="{Binding IsMarkedAsMakeUp}"
+								<TextBlock Text="{Binding SelectedPreset.Name, StringFormat='Marked as a redemption for the incomplete {0} block.'}"
+                                           IsVisible="{Binding IsMarkedAsRedemption}"
                                            FontSize="11" Foreground="#7A5C00" TextWrapping="Wrap"/>
-								<TextBlock Text="{Binding MakeUpSuggestionNotice}"
-                                           IsVisible="{Binding MakeUpSuggestionNotice, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+								<TextBlock Text="{Binding RedemptionSuggestionNotice}"
+                                           IsVisible="{Binding RedemptionSuggestionNotice, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                                            FontSize="11" Foreground="#B8860B" TextWrapping="Wrap"/>
 							</StackPanel>
 

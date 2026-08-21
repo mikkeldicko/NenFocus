@@ -597,36 +597,36 @@ public class NenContractTests
     }
 
     [Fact]
-    public void CheckMakeUpEligibility_Locked_AlwaysNotAllowed()
+    public void CheckRedemptionEligibility_Locked_AlwaysNotAllowed()
     {
         var contract = Seal(strictnessRule: StrictnessRule.Locked);
 
-        contract.CheckMakeUpEligibility(StartDate, StartDate).Should().Be(MakeUpEligibility.NotAllowed);
-        contract.CheckMakeUpEligibility(StartDate, StartDate.AddDays(1)).Should().Be(MakeUpEligibility.NotAllowed);
+        contract.CheckRedemptionEligibility(StartDate, StartDate).Should().Be(RedemptionEligibility.NotAllowed);
+        contract.CheckRedemptionEligibility(StartDate, StartDate.AddDays(1)).Should().Be(RedemptionEligibility.NotAllowed);
     }
 
     [Fact]
-    public void CheckMakeUpEligibility_DailyFlexibility_SameDayAllowed()
+    public void CheckRedemptionEligibility_DailyFlexibility_SameDayAllowed()
     {
         var contract = Seal(strictnessRule: StrictnessRule.DailyFlexibility);
 
-        contract.CheckMakeUpEligibility(StartDate, StartDate).Should().Be(MakeUpEligibility.Allowed);
+        contract.CheckRedemptionEligibility(StartDate, StartDate).Should().Be(RedemptionEligibility.Allowed);
     }
 
     [Fact]
-    public void CheckMakeUpEligibility_DailyFlexibility_DifferentDayIsWrongDay()
+    public void CheckRedemptionEligibility_DailyFlexibility_DifferentDayIsWrongDay()
     {
         var contract = Seal(strictnessRule: StrictnessRule.DailyFlexibility);
 
-        contract.CheckMakeUpEligibility(StartDate, StartDate.AddDays(1)).Should().Be(MakeUpEligibility.WrongDay);
+        contract.CheckRedemptionEligibility(StartDate, StartDate.AddDays(1)).Should().Be(RedemptionEligibility.WrongDay);
     }
 
     [Fact]
-    public void CheckMakeUpEligibility_PeriodTimeBudget_AnyDayAllowed()
+    public void CheckRedemptionEligibility_PeriodTimeBudget_AnyDayAllowed()
     {
         var contract = Seal(strictnessRule: StrictnessRule.PeriodTimeBudget);
 
-        contract.CheckMakeUpEligibility(StartDate, StartDate.AddDays(3)).Should().Be(MakeUpEligibility.Allowed);
+        contract.CheckRedemptionEligibility(StartDate, StartDate.AddDays(3)).Should().Be(RedemptionEligibility.Allowed);
     }
 
     [Fact]

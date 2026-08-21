@@ -351,48 +351,48 @@ public class PlannedBlockTests
     }
 
     [Fact]
-    public void FocusBlock_Create_WithoutMakeUpForEntries_IsEmpty()
+    public void FocusBlock_Create_WithoutRedemptionEntries_IsEmpty()
     {
-        CreateFocusBlock().MakeUpForEntries.Should().BeEmpty();
+        CreateFocusBlock().RedemptionEntries.Should().BeEmpty();
     }
 
     [Fact]
-    public void FocusBlock_Create_WithMakeUpForEntries_SetsThem()
+    public void FocusBlock_Create_WithRedemptionEntries_SetsThem()
     {
-        var entries = new[] { new MakeUpForEntry(Guid.NewGuid(), 30) };
+        var entries = new[] { new RedemptionEntry(Guid.NewGuid(), 30) };
 
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End, makeUpForEntries: entries);
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End, redemptionEntries: entries);
 
-        block.MakeUpForEntries.Should().BeEquivalentTo(entries);
+        block.RedemptionEntries.Should().BeEquivalentTo(entries);
     }
 
     [Fact]
-    public void BackgroundBlock_Create_MakeUpForEntries_AlwaysEmpty()
+    public void BackgroundBlock_Create_RedemptionEntries_AlwaysEmpty()
     {
-        CreateBackgroundBlock().MakeUpForEntries.Should().BeEmpty();
+        CreateBackgroundBlock().RedemptionEntries.Should().BeEmpty();
     }
 
     [Fact]
-    public void FocusBlock_AssignMakeUpForEntries_ReplacesExisting()
+    public void FocusBlock_AssignRedemptionEntries_ReplacesExisting()
     {
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End,
-            makeUpForEntries: [new MakeUpForEntry(Guid.NewGuid(), 30)]);
-        var newEntries = new[] { new MakeUpForEntry(Guid.NewGuid(), 45), new MakeUpForEntry(Guid.NewGuid(), 15) };
+            redemptionEntries: [new RedemptionEntry(Guid.NewGuid(), 30)]);
+        var newEntries = new[] { new RedemptionEntry(Guid.NewGuid(), 45), new RedemptionEntry(Guid.NewGuid(), 15) };
 
-        block.AssignMakeUpForEntries(newEntries);
+        block.AssignRedemptionEntries(newEntries);
 
-        block.MakeUpForEntries.Should().BeEquivalentTo(newEntries);
+        block.RedemptionEntries.Should().BeEquivalentTo(newEntries);
     }
 
     [Fact]
-    public void FocusBlock_AssignMakeUpForEntries_Empty_ClearsExisting()
+    public void FocusBlock_AssignRedemptionEntries_Empty_ClearsExisting()
     {
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End,
-            makeUpForEntries: [new MakeUpForEntry(Guid.NewGuid(), 30)]);
+            redemptionEntries: [new RedemptionEntry(Guid.NewGuid(), 30)]);
 
-        block.AssignMakeUpForEntries([]);
+        block.AssignRedemptionEntries([]);
 
-        block.MakeUpForEntries.Should().BeEmpty();
+        block.RedemptionEntries.Should().BeEmpty();
     }
 
     [Fact]

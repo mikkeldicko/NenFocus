@@ -1,6 +1,6 @@
 using FluentValidation;
 using NenFocus.Application.Interfaces;
-using NenFocus.Application.Queries.CheckMakeUpForEntry;
+using NenFocus.Application.Queries.CheckRedemptionEntry;
 using NenFocus.Domain.Enums;
 
 namespace NenFocus.Application.UseCases.Planner.CreatePlannedBlock;
@@ -12,7 +12,7 @@ public sealed class CreatePlannedBlockValidator : AbstractValidator<CreatePlanne
         INenContractRepository contracts,
         IPlannedBlockRepository blocks,
         ISystemClock clock,
-        IQueryHandler<CheckMakeUpForEntryQuery, MakeUpForEntryCheckResult> checkMakeUpForEntry)
+        IQueryHandler<CheckRedemptionEntryQuery, RedemptionEntryCheckResult> checkRedemptionEntry)
     {
         RuleFor(x => x.PresetId)
             .NotEmpty().WithMessage("Preset ID is required.");
@@ -47,27 +47,27 @@ public sealed class CreatePlannedBlockValidator : AbstractValidator<CreatePlanne
             })
             .WithMessage("This block falls outside the contract's configured Work Hours for that day.");
 
-        RuleFor(x => x.MakeUpForEntries)
+        RuleFor(x => x.RedemptionEntries)
             .Empty()
             .When(x => x.BlockPresetType != BlockPresetType.Focus)
             .WithMessage("Only a Focus block can cover deficit for missed blocks — Background blocks have no sessions.");
 
-        RuleForEach(x => x.MakeUpForEntries)
+        RuleForEach(x => x.RedemptionEntries)
             .CustomAsync(async (entry, context, ct) =>
             {
                 var command = context.InstanceToValidate;
                 if (command.BlockPresetType != BlockPresetType.Focus) return; // already reported above
 
-                var result = await checkMakeUpForEntry.HandleAsync(
-                    new CheckMakeUpForEntryQuery(command.PresetId, command.Start, entry.MissedBlockId, entry.MinutesCovered, ExcludeBlockId: null),
+                var result = await checkRedemptionEntry.HandleAsync(
+                    new CheckRedemptionEntryQuery(command.PresetId, command.Start, entry.MissedBlockId, entry.MinutesCovered, ExcludeBlockId: null),
                     ct);
 
-                var message = MakeUpForEntryMessages.For(result);
+                var message = RedemptionEntryMessages.For(result);
                 if (message is not null)
-                    context.AddFailure(nameof(CreatePlannedBlockCommand.MakeUpForEntries), message);
+                    context.AddFailure(nameof(CreatePlannedBlockCommand.RedemptionEntries), message);
             });
 
-        RuleForEach(x => x.MakeUpForEntries)
+        RuleForEach(x => x.RedemptionEntries)
             .CustomAsync(async (entry, context, ct) =>
             {
                 var command = context.InstanceToValidate;
@@ -75,8 +75,8 @@ public sealed class CreatePlannedBlockValidator : AbstractValidator<CreatePlanne
 
                 var missedBlock = await blocks.GetByIdAsync(entry.MissedBlockId, ct);
                 if (missedBlock is not null && missedBlock.ContractId != command.ContractId)
-                    context.AddFailure(nameof(CreatePlannedBlockCommand.MakeUpForEntries),
-                        "A make-up block must belong to the same contract as the block it covers.");
+                    context.AddFailure(nameof(CreatePlannedBlockCommand.RedemptionEntries),
+                        "A redemption block must belong to the same contract as the block it covers.");
             });
     }
 }

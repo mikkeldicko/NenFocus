@@ -1,7 +1,7 @@
 using FluentAssertions;
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
-using NenFocus.Application.Queries.CheckMakeUpForEntry;
+using NenFocus.Application.Queries.CheckRedemptionEntry;
 using NenFocus.Application.Queries.GetNenContractDeficits;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
@@ -10,7 +10,7 @@ using NSubstitute;
 
 namespace NenFocus.Tests.Application.Queries;
 
-public class CheckMakeUpForEntryQueryHandlerTests
+public class CheckRedemptionEntryQueryHandlerTests
 {
     private static readonly Guid ContractId = Guid.NewGuid();
     private static readonly Guid PresetId = Guid.NewGuid();
@@ -21,7 +21,7 @@ public class CheckMakeUpForEntryQueryHandlerTests
     private readonly IQueryHandler<GetNenContractDeficitsQuery, IReadOnlyList<FocusBlockDeficitDto>> _deficits =
         Substitute.For<IQueryHandler<GetNenContractDeficitsQuery, IReadOnlyList<FocusBlockDeficitDto>>>();
 
-    private CheckMakeUpForEntryQueryHandler CreateHandler() => new(_blocks, _contracts, _deficits);
+    private CheckRedemptionEntryQueryHandler CreateHandler() => new(_blocks, _contracts, _deficits);
 
     private static FocusBlock MissedBlock() =>
         FocusBlock.Create(Guid.NewGuid(), PresetId, MissedBlockDate, MissedBlockDate.AddHours(2), contractId: ContractId);
@@ -39,7 +39,7 @@ public class CheckMakeUpForEntryQueryHandlerTests
         plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
         sealedAt: MissedBlockDate.AddDays(-1));
 
-    private CheckMakeUpForEntryQuery Query(Guid missedBlockId, DateTime blockDate, double minutesCovered = 30, Guid? excludeBlockId = null) =>
+    private CheckRedemptionEntryQuery Query(Guid missedBlockId, DateTime blockDate, double minutesCovered = 30, Guid? excludeBlockId = null) =>
         new(PresetId, blockDate, missedBlockId, minutesCovered, excludeBlockId);
 
     [Fact]
@@ -49,7 +49,7 @@ public class CheckMakeUpForEntryQueryHandlerTests
 
         var result = await CreateHandler().HandleAsync(Query(Guid.NewGuid(), MissedBlockDate), CancellationToken.None);
 
-        result.Should().Be(MakeUpForEntryCheckResult.MissedBlockNotFound);
+        result.Should().Be(RedemptionEntryCheckResult.MissedBlockNotFound);
     }
 
     [Fact]
@@ -60,7 +60,7 @@ public class CheckMakeUpForEntryQueryHandlerTests
 
         var result = await CreateHandler().HandleAsync(Query(background.Id, MissedBlockDate), CancellationToken.None);
 
-        result.Should().Be(MakeUpForEntryCheckResult.MissedBlockNotFound);
+        result.Should().Be(RedemptionEntryCheckResult.MissedBlockNotFound);
     }
 
     [Fact]
@@ -71,7 +71,7 @@ public class CheckMakeUpForEntryQueryHandlerTests
 
         var result = await CreateHandler().HandleAsync(Query(uncontracted.Id, MissedBlockDate), CancellationToken.None);
 
-        result.Should().Be(MakeUpForEntryCheckResult.MissedBlockNotFound);
+        result.Should().Be(RedemptionEntryCheckResult.MissedBlockNotFound);
     }
 
     [Fact]
@@ -83,11 +83,11 @@ public class CheckMakeUpForEntryQueryHandlerTests
         var query = Query(missed.Id, MissedBlockDate) with { PresetId = Guid.NewGuid() };
         var result = await CreateHandler().HandleAsync(query, CancellationToken.None);
 
-        result.Should().Be(MakeUpForEntryCheckResult.PresetMismatch);
+        result.Should().Be(RedemptionEntryCheckResult.PresetMismatch);
     }
 
     [Fact]
-    public async Task HandleAsync_LockedContract_ReturnsStrictnessDoesNotAllowMakeUp()
+    public async Task HandleAsync_LockedContract_ReturnsStrictnessDoesNotAllowRedemption()
     {
         var missed = MissedBlock();
         _blocks.GetByIdAsync(missed.Id, Arg.Any<CancellationToken>()).Returns(missed);
@@ -95,7 +95,7 @@ public class CheckMakeUpForEntryQueryHandlerTests
 
         var result = await CreateHandler().HandleAsync(Query(missed.Id, MissedBlockDate), CancellationToken.None);
 
-        result.Should().Be(MakeUpForEntryCheckResult.StrictnessDoesNotAllowMakeUp);
+        result.Should().Be(RedemptionEntryCheckResult.StrictnessDoesNotAllowRedemption);
     }
 
     [Fact]
@@ -107,7 +107,7 @@ public class CheckMakeUpForEntryQueryHandlerTests
 
         var result = await CreateHandler().HandleAsync(Query(missed.Id, MissedBlockDate.AddDays(1)), CancellationToken.None);
 
-        result.Should().Be(MakeUpForEntryCheckResult.WrongDay);
+        result.Should().Be(RedemptionEntryCheckResult.WrongDay);
     }
 
     [Fact]
@@ -124,7 +124,7 @@ public class CheckMakeUpForEntryQueryHandlerTests
         var sameDayLaterHour = MissedBlockDate.AddHours(5);
         var result = await CreateHandler().HandleAsync(Query(missed.Id, sameDayLaterHour, 30), CancellationToken.None);
 
-        result.Should().Be(MakeUpForEntryCheckResult.Valid);
+        result.Should().Be(RedemptionEntryCheckResult.Valid);
     }
 
     [Fact]
@@ -140,7 +140,7 @@ public class CheckMakeUpForEntryQueryHandlerTests
 
         var result = await CreateHandler().HandleAsync(Query(missed.Id, MissedBlockDate.AddDays(5), 30), CancellationToken.None);
 
-        result.Should().Be(MakeUpForEntryCheckResult.Valid);
+        result.Should().Be(RedemptionEntryCheckResult.Valid);
     }
 
     [Fact]
@@ -156,7 +156,7 @@ public class CheckMakeUpForEntryQueryHandlerTests
 
         var result = await CreateHandler().HandleAsync(Query(missed.Id, MissedBlockDate, 30), CancellationToken.None);
 
-        result.Should().Be(MakeUpForEntryCheckResult.ExceedsRemainingDeficit);
+        result.Should().Be(RedemptionEntryCheckResult.ExceedsRemainingDeficit);
     }
 
     [Fact]
@@ -170,7 +170,7 @@ public class CheckMakeUpForEntryQueryHandlerTests
 
         var result = await CreateHandler().HandleAsync(Query(missed.Id, MissedBlockDate, 1), CancellationToken.None);
 
-        result.Should().Be(MakeUpForEntryCheckResult.ExceedsRemainingDeficit);
+        result.Should().Be(RedemptionEntryCheckResult.ExceedsRemainingDeficit);
     }
 
     [Fact]
@@ -179,14 +179,14 @@ public class CheckMakeUpForEntryQueryHandlerTests
         var missed = MissedBlock();
         _blocks.GetByIdAsync(missed.Id, Arg.Any<CancellationToken>()).Returns(missed);
         _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(ContractWith(StrictnessRule.PeriodTimeBudget));
-        // Query already reflects this make-up block's OLD 30-minute contribution as "covered".
+        // Query already reflects this redemption block's OLD 30-minute contribution as "covered".
         _deficits.HandleAsync(Arg.Any<GetNenContractDeficitsQuery>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<FocusBlockDeficitDto>)[
                 new FocusBlockDeficitDto { FocusBlockId = missed.Id, RemainingDeficitMinutes = 10 }
             ]);
 
         var editingBlock = FocusBlock.Create(Guid.NewGuid(), PresetId, MissedBlockDate.AddDays(1), MissedBlockDate.AddDays(1).AddHours(1),
-            contractId: ContractId, makeUpForEntries: [new MakeUpForEntry(missed.Id, 30)]);
+            contractId: ContractId, redemptionEntries: [new RedemptionEntry(missed.Id, 30)]);
         _blocks.GetByIdAsync(editingBlock.Id, Arg.Any<CancellationToken>()).Returns(editingBlock);
 
         // Proposing to raise it from 30 to 40 — without adding back the old 30, remaining
@@ -194,6 +194,6 @@ public class CheckMakeUpForEntryQueryHandlerTests
         var result = await CreateHandler().HandleAsync(
             Query(missed.Id, MissedBlockDate, 40, excludeBlockId: editingBlock.Id), CancellationToken.None);
 
-        result.Should().Be(MakeUpForEntryCheckResult.Valid);
+        result.Should().Be(RedemptionEntryCheckResult.Valid);
     }
 }

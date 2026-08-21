@@ -58,7 +58,7 @@ public class NenFocusDbContext : DbContext
     private sealed record WorkHoursJson(TimeOnly Start, TimeOnly End);
     private sealed record WorkHoursPolicyJson(WorkHoursJson? Default, Dictionary<string, WorkHoursJson?> PerDayExceptions);
     private sealed record DailyFloorPolicyJson(double? Default, Dictionary<string, double?> PerDayExceptions);
-    private sealed record MakeUpForEntryJson(Guid MissedBlockId, double MinutesCovered);
+    private sealed record RedemptionEntryJson(Guid MissedBlockId, double MinutesCovered);
 
     private static string SerializeDailyFloorPolicy(DailyFloorPolicy policy) => JsonSerializer.Serialize(
         new DailyFloorPolicyJson(
@@ -88,13 +88,13 @@ public class NenFocusDbContext : DbContext
             dto.PerDayExceptions.ToDictionary(kv => DateOnly.Parse(kv.Key), kv => kv.Value is { } w ? (WorkHours?)new WorkHours(w.Start, w.End) : null));
     }
 
-    private static string SerializeMakeUpForEntries(IReadOnlyList<MakeUpForEntry> entries) => JsonSerializer.Serialize(
-        entries.Select(e => new MakeUpForEntryJson(e.MissedBlockId, e.MinutesCovered)).ToList(),
+    private static string SerializeRedemptionEntries(IReadOnlyList<RedemptionEntry> entries) => JsonSerializer.Serialize(
+        entries.Select(e => new RedemptionEntryJson(e.MissedBlockId, e.MinutesCovered)).ToList(),
         (JsonSerializerOptions?)null);
 
-    private static List<MakeUpForEntry> DeserializeMakeUpForEntries(string json) =>
-        JsonSerializer.Deserialize<List<MakeUpForEntryJson>>(json, (JsonSerializerOptions?)null)!
-            .Select(e => new MakeUpForEntry(e.MissedBlockId, e.MinutesCovered))
+    private static List<RedemptionEntry> DeserializeRedemptionEntries(string json) =>
+        JsonSerializer.Deserialize<List<RedemptionEntryJson>>(json, (JsonSerializerOptions?)null)!
+            .Select(e => new RedemptionEntry(e.MissedBlockId, e.MinutesCovered))
             .ToList();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -285,11 +285,11 @@ public class NenFocusDbContext : DbContext
 
             entity.Property(b => b.CancelledAt);
 
-            entity.Property(b => b.MakeUpForEntries)
+            entity.Property(b => b.RedemptionEntries)
                 .HasConversion(
-                    entries => SerializeMakeUpForEntries(entries),
-                    json => (IReadOnlyList<MakeUpForEntry>)DeserializeMakeUpForEntries(json))
-                .HasColumnName("MakeUpForEntries")
+                    entries => SerializeRedemptionEntries(entries),
+                    json => (IReadOnlyList<RedemptionEntry>)DeserializeRedemptionEntries(json))
+                .HasColumnName("RedemptionEntries")
                 .HasDefaultValueSql("'[]'");
 
             entity.HasDiscriminator<string>("BlockKind")

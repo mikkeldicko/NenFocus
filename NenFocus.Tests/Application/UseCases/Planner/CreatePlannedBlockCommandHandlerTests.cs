@@ -141,7 +141,7 @@ public class CreatePlannedBlockCommandHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_WithMakeUpForEntries_SetsThemOnTheFocusBlock()
+    public async Task HandleAsync_WithRedemptionEntries_SetsThemOnTheFocusBlock()
     {
         var presetId = Guid.NewGuid();
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
@@ -153,10 +153,10 @@ public class CreatePlannedBlockCommandHandlerTests
 
         await CreateHandler().HandleAsync(FocusCommand(presetId) with
         {
-            MakeUpForEntries = [new(missedBlockId, 45)]
+            RedemptionEntries = [new(missedBlockId, 45)]
         });
 
         var focusBlock = saved.Should().BeOfType<FocusBlock>().Subject;
-        focusBlock.MakeUpForEntries.Should().ContainSingle(e => e.MissedBlockId == missedBlockId && e.MinutesCovered == 45);
+        focusBlock.RedemptionEntries.Should().ContainSingle(e => e.MissedBlockId == missedBlockId && e.MinutesCovered == 45);
     }
 }

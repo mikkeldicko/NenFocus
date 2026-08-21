@@ -1,4 +1,4 @@
-﻿using System;
+﻿﻿using System;
 using CommunityToolkit.Mvvm.ComponentModel;
 using NenFocus.Application.DTOs;
 using NenFocus.Domain.Enums;
@@ -43,7 +43,7 @@ public partial class PlannedBlockTileViewModel : ViewModelBase
     public bool WasStartedLate { get; }
 
     /// <summary>True for a Focus block created to cover another block's deficit — renders with a dashed border.</summary>
-    public bool IsMakeUp { get; }
+    public bool IsRedemption { get; }
 
     public PlannedBlockTileViewModel(
         PlannedBlockDto dto,
@@ -65,6 +65,6 @@ public partial class PlannedBlockTileViewModel : ViewModelBase
         IsDraft = isDraft;
         Outcome = dto.Outcome;
         WasStartedLate = dto.WasStartedLate;
-        IsMakeUp = dto.IsMakeUp;
+        IsRedemption = dto.IsRedemption;
     }
 }

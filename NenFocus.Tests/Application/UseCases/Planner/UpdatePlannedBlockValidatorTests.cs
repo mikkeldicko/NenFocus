@@ -1,6 +1,6 @@
 using FluentAssertions;
 using NenFocus.Application.Interfaces;
-using NenFocus.Application.Queries.CheckMakeUpForEntry;
+using NenFocus.Application.Queries.CheckRedemptionEntry;
 using NenFocus.Application.Queries.ComputePlannedFocusHours;
 using NenFocus.Application.UseCases.Planner.UpdatePlannedBlock;
 using NenFocus.Domain.Entities;
@@ -18,22 +18,22 @@ public class UpdatePlannedBlockValidatorTests
     private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
     private readonly INenContractRepository _contracts = Substitute.For<INenContractRepository>();
     private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
-    private readonly IQueryHandler<CheckMakeUpForEntryQuery, MakeUpForEntryCheckResult> _checkMakeUpForEntry =
-        Substitute.For<IQueryHandler<CheckMakeUpForEntryQuery, MakeUpForEntryCheckResult>>();
+    private readonly IQueryHandler<CheckRedemptionEntryQuery, RedemptionEntryCheckResult> _checkRedemptionEntry =
+        Substitute.For<IQueryHandler<CheckRedemptionEntryQuery, RedemptionEntryCheckResult>>();
     private readonly IQueryHandler<ComputePlannedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> _computePlannedFocusHours =
         Substitute.For<IQueryHandler<ComputePlannedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>>>();
 
     public UpdatePlannedBlockValidatorTests()
     {
         _clock.UtcNow.Returns(Now);
-        _checkMakeUpForEntry.HandleAsync(Arg.Any<CheckMakeUpForEntryQuery>(), Arg.Any<CancellationToken>())
-            .Returns(MakeUpForEntryCheckResult.Valid);
+        _checkRedemptionEntry.HandleAsync(Arg.Any<CheckRedemptionEntryQuery>(), Arg.Any<CancellationToken>())
+            .Returns(RedemptionEntryCheckResult.Valid);
         _computePlannedFocusHours.HandleAsync(Arg.Any<ComputePlannedFocusHoursQuery>(), Arg.Any<CancellationToken>())
             .Returns(new Dictionary<DateOnly, double>());
     }
 
     private UpdatePlannedBlockValidator CreateValidator() =>
-        new(_blocks, _presets, _contracts, _clock, _checkMakeUpForEntry, _computePlannedFocusHours);
+        new(_blocks, _presets, _contracts, _clock, _checkRedemptionEntry, _computePlannedFocusHours);
 
     private static UpdatePlannedBlockCommand ValidCommand(Guid blockId, Guid presetId) => new()
     {
@@ -159,7 +159,7 @@ public class UpdatePlannedBlockValidatorTests
     }
 
     [Fact]
-    public async Task Validate_BackgroundBlockWithMakeUpForEntries_IsInvalid()
+    public async Task Validate_BackgroundBlockWithRedemptionEntries_IsInvalid()
     {
         var blockId = Guid.NewGuid();
         var presetId = Guid.NewGuid();
@@ -167,7 +167,7 @@ public class UpdatePlannedBlockValidatorTests
             .Returns(BackgroundBlock.Create(blockId, presetId, Now.AddHours(1), Now.AddHours(2)));
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
             .Returns(BlockPreset.Create(presetId, "Background", WebsiteFilterType.Blocklist, BlockPresetType.Background, Now));
-        var command = ValidCommand(blockId, presetId) with { MakeUpForEntries = [new(Guid.NewGuid(), 30)] };
+        var command = ValidCommand(blockId, presetId) with { RedemptionEntries = [new(Guid.NewGuid(), 30)] };
 
         var result = await CreateValidator().ValidateAsync(command);
 
@@ -175,7 +175,7 @@ public class UpdatePlannedBlockValidatorTests
     }
 
     [Fact]
-    public async Task Validate_FocusBlockWithMakeUpForEntries_IsValid()
+    public async Task Validate_FocusBlockWithRedemptionEntries_IsValid()
     {
         var blockId = Guid.NewGuid();
         var presetId = Guid.NewGuid();
@@ -183,7 +183,7 @@ public class UpdatePlannedBlockValidatorTests
             .Returns(FocusBlock.Create(blockId, presetId, Now.AddHours(1), Now.AddHours(2)));
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
             .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Now));
-        var command = ValidCommand(blockId, presetId) with { MakeUpForEntries = [new(Guid.NewGuid(), 30)] };
+        var command = ValidCommand(blockId, presetId) with { RedemptionEntries = [new(Guid.NewGuid(), 30)] };
 
         var result = await CreateValidator().ValidateAsync(command);
 
@@ -191,7 +191,7 @@ public class UpdatePlannedBlockValidatorTests
     }
 
     [Fact]
-    public async Task Validate_MakeUpForEntryFailsCheck_IsInvalid()
+    public async Task Validate_RedemptionEntryFailsCheck_IsInvalid()
     {
         var blockId = Guid.NewGuid();
         var presetId = Guid.NewGuid();
@@ -199,9 +199,9 @@ public class UpdatePlannedBlockValidatorTests
             .Returns(FocusBlock.Create(blockId, presetId, Now.AddHours(1), Now.AddHours(2)));
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
             .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Now));
-        _checkMakeUpForEntry.HandleAsync(Arg.Any<CheckMakeUpForEntryQuery>(), Arg.Any<CancellationToken>())
-            .Returns(MakeUpForEntryCheckResult.WrongDay);
-        var command = ValidCommand(blockId, presetId) with { MakeUpForEntries = [new(Guid.NewGuid(), 30)] };
+        _checkRedemptionEntry.HandleAsync(Arg.Any<CheckRedemptionEntryQuery>(), Arg.Any<CancellationToken>())
+            .Returns(RedemptionEntryCheckResult.WrongDay);
+        var command = ValidCommand(blockId, presetId) with { RedemptionEntries = [new(Guid.NewGuid(), 30)] };
 
         var result = await CreateValidator().ValidateAsync(command);
 
@@ -290,7 +290,7 @@ public class UpdatePlannedBlockValidatorTests
     }
 
     [Fact]
-    public async Task Validate_MakeUpForEntry_DispatchesCheckWithThisBlockAsExcludeBlockId()
+    public async Task Validate_RedemptionEntry_DispatchesCheckWithThisBlockAsExcludeBlockId()
     {
         var blockId = Guid.NewGuid();
         var presetId = Guid.NewGuid();
@@ -299,12 +299,12 @@ public class UpdatePlannedBlockValidatorTests
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
             .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Now));
         var missedBlockId = Guid.NewGuid();
-        var command = ValidCommand(blockId, presetId) with { MakeUpForEntries = [new(missedBlockId, 30)] };
+        var command = ValidCommand(blockId, presetId) with { RedemptionEntries = [new(missedBlockId, 30)] };
 
         await CreateValidator().ValidateAsync(command);
 
-        await _checkMakeUpForEntry.Received(1).HandleAsync(
-            Arg.Is<CheckMakeUpForEntryQuery>(q => q.MissedBlockId == missedBlockId && q.ExcludeBlockId == blockId),
+        await _checkRedemptionEntry.Received(1).HandleAsync(
+            Arg.Is<CheckRedemptionEntryQuery>(q => q.MissedBlockId == missedBlockId && q.ExcludeBlockId == blockId),
             Arg.Any<CancellationToken>());
     }
 

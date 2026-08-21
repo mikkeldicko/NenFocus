@@ -158,17 +158,17 @@ public class GetNenContractDeficitsQueryHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_MissedBlockFullyCoveredByMakeUp_Excluded()
+    public async Task HandleAsync_MissedBlockFullyCoveredByRedemption_Excluded()
     {
         var missed = MissedBlock(Now.AddHours(-3), Now.AddHours(-1)); // 120 min deficit
         var presetId = missed.BlockPresetId;
-        var makeUp = FocusBlock.Create(Guid.NewGuid(), presetId, Now.AddHours(1), Now.AddHours(3),
-            contractId: ContractId, makeUpForEntries: [new MakeUpForEntry(missed.Id, 120)]);
+        var redemption = FocusBlock.Create(Guid.NewGuid(), presetId, Now.AddHours(1), Now.AddHours(3),
+            contractId: ContractId, redemptionEntries: [new RedemptionEntry(missed.Id, 120)]);
 
         _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>())
-            .Returns((IReadOnlyList<PlannedBlock>)[missed, makeUp]);
+            .Returns((IReadOnlyList<PlannedBlock>)[missed, redemption]);
         _classifier.Classify(missed.Start, missed.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Now).Returns(FocusBlockOutcome.Missed);
-        _classifier.Classify(makeUp.Start, makeUp.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Now).Returns((FocusBlockOutcome?)null);
+        _classifier.Classify(redemption.Start, redemption.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Now).Returns((FocusBlockOutcome?)null);
 
         var result = await CreateHandler().HandleAsync(new GetNenContractDeficitsQuery(ContractId), CancellationToken.None);
 
@@ -176,17 +176,17 @@ public class GetNenContractDeficitsQueryHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_MissedBlockPartiallyCoveredByMakeUp_RemainingDeficitReduced()
+    public async Task HandleAsync_MissedBlockPartiallyCoveredByRedemption_RemainingDeficitReduced()
     {
         var missed = MissedBlock(Now.AddHours(-3), Now.AddHours(-1)); // 120 min deficit
         var presetId = missed.BlockPresetId;
-        var makeUp = FocusBlock.Create(Guid.NewGuid(), presetId, Now.AddHours(1), Now.AddHours(2),
-            contractId: ContractId, makeUpForEntries: [new MakeUpForEntry(missed.Id, 50)]);
+        var redemption = FocusBlock.Create(Guid.NewGuid(), presetId, Now.AddHours(1), Now.AddHours(2),
+            contractId: ContractId, redemptionEntries: [new RedemptionEntry(missed.Id, 50)]);
 
         _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>())
-            .Returns((IReadOnlyList<PlannedBlock>)[missed, makeUp]);
+            .Returns((IReadOnlyList<PlannedBlock>)[missed, redemption]);
         _classifier.Classify(missed.Start, missed.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Now).Returns(FocusBlockOutcome.Missed);
-        _classifier.Classify(makeUp.Start, makeUp.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Now).Returns((FocusBlockOutcome?)null);
+        _classifier.Classify(redemption.Start, redemption.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Now).Returns((FocusBlockOutcome?)null);
 
         var result = await CreateHandler().HandleAsync(new GetNenContractDeficitsQuery(ContractId), CancellationToken.None);
 

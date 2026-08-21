@@ -19,7 +19,7 @@ public sealed class FocusBlock : PlannedBlock
         DateTime end,
         string? title = null,
         Guid? contractId = null,
-        IReadOnlyList<MakeUpForEntry>? makeUpForEntries = null)
+        IReadOnlyList<RedemptionEntry>? redemptionEntries = null)
     {
         if (end <= start)
             throw new ArgumentException("End time must be after start time.");
@@ -32,7 +32,7 @@ public sealed class FocusBlock : PlannedBlock
             End = end,
             Title = title,
             ContractId = contractId,
-            MakeUpForEntries = makeUpForEntries ?? Array.Empty<MakeUpForEntry>()
+            RedemptionEntries = redemptionEntries ?? Array.Empty<RedemptionEntry>()
         };
     }
 
@@ -69,12 +69,12 @@ public sealed class FocusBlock : PlannedBlock
     }
 
     /// <summary>
-    /// Replaces which missed/late blocks this make-up block covers. A plain setter, same
+    /// Replaces which missed/late blocks this redemption block covers. A plain setter, same
     /// as AssignPreset/AssignContract — same-preset, uncovered-deficit, and same-day
     /// constraints are Application-layer concerns, not enforced here.
     /// </summary>
-    public void AssignMakeUpForEntries(IReadOnlyList<MakeUpForEntry> entries)
+    public void AssignRedemptionEntries(IReadOnlyList<RedemptionEntry> entries)
     {
-        MakeUpForEntries = entries;
+        RedemptionEntries = entries;
     }
 }

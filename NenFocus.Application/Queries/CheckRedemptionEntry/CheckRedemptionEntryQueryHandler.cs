@@ -4,15 +4,15 @@ using NenFocus.Application.Queries.GetNenContractDeficits;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
 
-namespace NenFocus.Application.Queries.CheckMakeUpForEntry;
+namespace NenFocus.Application.Queries.CheckRedemptionEntry;
 
-public sealed class CheckMakeUpForEntryQueryHandler : IQueryHandler<CheckMakeUpForEntryQuery, MakeUpForEntryCheckResult>
+public sealed class CheckRedemptionEntryQueryHandler : IQueryHandler<CheckRedemptionEntryQuery, RedemptionEntryCheckResult>
 {
     private readonly IPlannedBlockRepository _blocks;
     private readonly INenContractRepository _contracts;
     private readonly IQueryHandler<GetNenContractDeficitsQuery, IReadOnlyList<FocusBlockDeficitDto>> _deficits;
 
-    public CheckMakeUpForEntryQueryHandler(
+    public CheckRedemptionEntryQueryHandler(
         IPlannedBlockRepository blocks,
         INenContractRepository contracts,
         IQueryHandler<GetNenContractDeficitsQuery, IReadOnlyList<FocusBlockDeficitDto>> deficits)
@@ -22,29 +22,29 @@ public sealed class CheckMakeUpForEntryQueryHandler : IQueryHandler<CheckMakeUpF
         _deficits = deficits;
     }
 
-    public async Task<MakeUpForEntryCheckResult> HandleAsync(CheckMakeUpForEntryQuery query, CancellationToken ct = default)
+    public async Task<RedemptionEntryCheckResult> HandleAsync(CheckRedemptionEntryQuery query, CancellationToken ct = default)
     {
         var missedBlock = await _blocks.GetByIdAsync(query.MissedBlockId, ct) as FocusBlock;
         if (missedBlock is null || missedBlock.ContractId is not { } contractId)
-            return MakeUpForEntryCheckResult.MissedBlockNotFound;
+            return RedemptionEntryCheckResult.MissedBlockNotFound;
 
         if (missedBlock.BlockPresetId != query.PresetId)
-            return MakeUpForEntryCheckResult.PresetMismatch;
+            return RedemptionEntryCheckResult.PresetMismatch;
 
         var contract = await _contracts.GetByIdAsync(contractId, ct);
         if (contract is null)
-            return MakeUpForEntryCheckResult.MissedBlockNotFound;
+            return RedemptionEntryCheckResult.MissedBlockNotFound;
 
-        var eligibility = contract.CheckMakeUpEligibility(
+        var eligibility = contract.CheckRedemptionEligibility(
             DateOnly.FromDateTime(missedBlock.Start),
             DateOnly.FromDateTime(query.BlockDate));
 
         switch (eligibility)
         {
-            case MakeUpEligibility.NotAllowed:
-                return MakeUpForEntryCheckResult.StrictnessDoesNotAllowMakeUp;
-            case MakeUpEligibility.WrongDay:
-                return MakeUpForEntryCheckResult.WrongDay;
+            case RedemptionEligibility.NotAllowed:
+                return RedemptionEntryCheckResult.StrictnessDoesNotAllowRedemption;
+            case RedemptionEligibility.WrongDay:
+                return RedemptionEntryCheckResult.WrongDay;
         }
 
         var deficits = await _deficits.HandleAsync(new GetNenContractDeficitsQuery(contractId), ct);
@@ -53,14 +53,14 @@ public sealed class CheckMakeUpForEntryQueryHandler : IQueryHandler<CheckMakeUpF
         if (query.ExcludeBlockId is { } excludeId)
         {
             var editingBlock = await _blocks.GetByIdAsync(excludeId, ct) as FocusBlock;
-            var priorContribution = editingBlock?.MakeUpForEntries
+            var priorContribution = editingBlock?.RedemptionEntries
                 .Where(e => e.MissedBlockId == query.MissedBlockId)
                 .Sum(e => e.MinutesCovered) ?? 0;
             remainingDeficit += priorContribution;
         }
 
         return query.MinutesCovered > remainingDeficit
-            ? MakeUpForEntryCheckResult.ExceedsRemainingDeficit
-            : MakeUpForEntryCheckResult.Valid;
+            ? RedemptionEntryCheckResult.ExceedsRemainingDeficit
+            : RedemptionEntryCheckResult.Valid;
     }
 }

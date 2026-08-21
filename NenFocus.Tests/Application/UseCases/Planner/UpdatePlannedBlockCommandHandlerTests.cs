@@ -137,35 +137,35 @@ public class UpdatePlannedBlockCommandHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_FocusBlock_ReplacesMakeUpForEntries()
+    public async Task HandleAsync_FocusBlock_ReplacesRedemptionEntries()
     {
         var blockId = Guid.NewGuid();
         var presetId = Guid.NewGuid();
         var block = FocusBlock.Create(blockId, presetId, Start, End,
-            makeUpForEntries: [new MakeUpForEntry(Guid.NewGuid(), 20)]);
+            redemptionEntries: [new RedemptionEntry(Guid.NewGuid(), 20)]);
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns(block);
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>()).Returns(FocusPreset(presetId));
         var newMissedBlockId = Guid.NewGuid();
 
         var result = await CreateHandler().HandleAsync(
-            ValidCommand(blockId, presetId) with { MakeUpForEntries = [new(newMissedBlockId, 40)] });
+            ValidCommand(blockId, presetId) with { RedemptionEntries = [new(newMissedBlockId, 40)] });
 
         result.Success.Should().BeTrue();
-        block.MakeUpForEntries.Should().ContainSingle(e => e.MissedBlockId == newMissedBlockId && e.MinutesCovered == 40);
+        block.RedemptionEntries.Should().ContainSingle(e => e.MissedBlockId == newMissedBlockId && e.MinutesCovered == 40);
     }
 
     [Fact]
-    public async Task HandleAsync_FocusBlock_EmptyMakeUpForEntries_ClearsExisting()
+    public async Task HandleAsync_FocusBlock_EmptyRedemptionEntries_ClearsExisting()
     {
         var blockId = Guid.NewGuid();
         var presetId = Guid.NewGuid();
         var block = FocusBlock.Create(blockId, presetId, Start, End,
-            makeUpForEntries: [new MakeUpForEntry(Guid.NewGuid(), 20)]);
+            redemptionEntries: [new RedemptionEntry(Guid.NewGuid(), 20)]);
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns(block);
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>()).Returns(FocusPreset(presetId));
 
         await CreateHandler().HandleAsync(ValidCommand(blockId, presetId));
 
-        block.MakeUpForEntries.Should().BeEmpty();
+        block.RedemptionEntries.Should().BeEmpty();
     }
 }

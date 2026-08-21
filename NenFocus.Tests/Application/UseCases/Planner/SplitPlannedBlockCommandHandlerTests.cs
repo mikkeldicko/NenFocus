@@ -41,9 +41,9 @@ public class SplitPlannedBlockCommandHandlerTests
         var blockId = Guid.NewGuid();
         var presetId = Guid.NewGuid();
         var contractId = Guid.NewGuid();
-        var makeUpEntries = new List<MakeUpForEntry> { new(Guid.NewGuid(), 15) };
+        var redemptionEntries = new List<RedemptionEntry> { new(Guid.NewGuid(), 15) };
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId, OriginalStart, OriginalEnd, "My Block", contractId, makeUpEntries));
+            .Returns(FocusBlock.Create(blockId, presetId, OriginalStart, OriginalEnd, "My Block", contractId, redemptionEntries));
 
         var result = await CreateHandler().HandleAsync(ValidCommand(blockId));
 
@@ -66,7 +66,7 @@ public class SplitPlannedBlockCommandHandlerTests
                 && b.Start == OriginalStart
                 && b.End == OriginalStart.AddHours(2)
                 && b.Title == "My Block"
-                && ((FocusBlock)b).MakeUpForEntries.Count == 1),
+                && ((FocusBlock)b).RedemptionEntries.Count == 1),
             Arg.Any<CancellationToken>());
 
         await _blocks.Received(1).AddAsync(

@@ -19,11 +19,11 @@ public abstract class PlannedBlock : AggregateRoot
     public DateTime? CancelledAt { get; protected set; }
 
     /// <summary>
-    /// Empty means an ordinary block. Populated means this is a make-up block covering
+    /// Empty means an ordinary block. Populated means this is a redemption block covering
     /// those specific missed/late blocks' deficits. Only ever populated on a FocusBlock —
     /// Background Blocks have no sessions and cannot contribute toward a Focus-hours deficit.
     /// </summary>
-    public IReadOnlyList<MakeUpForEntry> MakeUpForEntries { get; protected set; } = Array.Empty<MakeUpForEntry>();
+    public IReadOnlyList<RedemptionEntry> RedemptionEntries { get; protected set; } = Array.Empty<RedemptionEntry>();
 
     protected PlannedBlock() { }
 

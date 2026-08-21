@@ -87,7 +87,7 @@ public sealed class GetPlannedBlocksForDayQueryHandler
                     ? _classifier.Classify(b.Start, b.End, focusBlock.RitualCompletedAt, focusBlock.SessionEndedAt, now)
                     : null,
                 WasStartedLate = wasStartedLate,
-                IsMakeUp = focusBlock?.MakeUpForEntries.Count > 0
+                IsRedemption = focusBlock?.RedemptionEntries.Count > 0
             };
         }).ToList();
     }
