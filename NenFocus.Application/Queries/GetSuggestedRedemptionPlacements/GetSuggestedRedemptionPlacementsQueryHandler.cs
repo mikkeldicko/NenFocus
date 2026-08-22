@@ -51,10 +51,23 @@ public sealed class GetSuggestedRedemptionPlacementsQueryHandler
         var results = new List<SuggestedRedemptionPlacementDto>();
         foreach (var group in coverableToday)
         {
-            var neededMinutes = group.Sum(d => d.RemainingDeficitMinutes);
+            // Rounded up to the next whole minute — restores the guarantee Gap 25 first
+            // established (accepting the suggestion as-is can only meet-or-exceed the real
+            // deficit, never fall short) and closes the tick-quantization gap a raw
+            // fractional duration reopened: a whole number of minutes converts to DateTime
+            // ticks with zero rounding loss, so the tile this creates always fully closes
+            // the deficit it was sized for, with nothing left for a tolerance to paper over.
+            var neededMinutes = Math.Ceiling(group.Sum(d => d.RemainingDeficitMinutes));
             var preset = await _presets.GetByIdAsync(group.Key, ct);
 
             var (start, end, canFullyCover) = FindPlacement(query.AsOf, neededMinutes, boundary, todaysFocusBlocks);
+
+            // No room left today to place anything (e.g. "now" has already reached the
+            // boundary) — offering this would create a block whose End isn't after its
+            // Start, so drop the suggestion for this preset entirely rather than hand back
+            // a range FocusBlock.Create can only reject.
+            if (end <= start)
+                continue;
 
             results.Add(new SuggestedRedemptionPlacementDto
             {

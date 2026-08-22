@@ -9,6 +9,15 @@ namespace NenFocus.Application.Queries.GetNenContractDeficits;
 public sealed class GetNenContractDeficitsQueryHandler
     : IQueryHandler<GetNenContractDeficitsQuery, IReadOnlyList<FocusBlockDeficitDto>>
 {
+    // A redemption block's duration is sized to a deficit expressed as a double, then
+    // round-tripped through a DateTime End (quantized to 100ns ticks) and read back out as
+    // TotalMinutes when its MinutesCovered is computed — that round-trip always loses a
+    // sliver of precision (observed: ~1.7e-9 minutes, about one tick), leaving a deficit
+    // that's fully covered in every way a person can perceive still reading as
+    // microscopically > 0 forever. This tolerance is many orders of magnitude above that
+    // noise floor and many orders below the smallest deficit a user could ever care about.
+    private const double DeficitToleranceMinutes = 0.01;
+
     private readonly IPlannedBlockRepository _blocks;
     private readonly ISessionRepository _sessions;
     private readonly IFocusBlockOutcomeClassifier _classifier;
@@ -35,15 +44,16 @@ public sealed class GetNenContractDeficitsQueryHandler
             .OfType<FocusBlock>()
             .ToList();
 
-        var deficits = new List<FocusBlockDeficitDto>();
-
+        // Every block's own outcome + credited minutes, resolved once up front — not just
+        // for blocks with a deficit of their own, but for every block, since a covering
+        // block's own real outcome is what Rule 13's second half needs to judge whether its
+        // RedemptionEntries actually mean anything (see the coveredMinutes loop below).
+        var resolved = new Dictionary<Guid, (FocusBlockOutcome? Outcome, double CreditedMinutes)>();
         foreach (var block in focusBlocks)
         {
             var session = await _sessions.GetByOriginatingBlockIdAsync(block.Id, ct);
             var outcome = _classifier.Classify(block.Start, block.End, block.RitualCompletedAt, session?.EndedAt, now);
-            if (!block.CanContributeOwnDeficit(outcome))
-                continue;
-
+            var actualElapsedMinutes = session?.GetElapsedTime(now)?.TotalMinutes ?? 0;
             // Credited, not raw elapsed: a StartedLate session that keeps running past the
             // block's own scheduled end (e.g. a fixed-duration session started late) can
             // rack up more raw elapsed minutes than the block was ever scheduled for. Raw
@@ -53,20 +63,60 @@ public sealed class GetNenContractDeficitsQueryHandler
             // uses via GetNenContractCompletedFocusHoursQueryHandler), reused here rather
             // than re-derived, so the two can never disagree about "how much of this block
             // was actually honored."
-            var actualElapsedMinutes = session?.GetElapsedTime(now)?.TotalMinutes ?? 0;
             var creditedMinutes = _classifier.CreditedFocusMinutes(
                 block.Start, block.End, block.RitualCompletedAt, session?.EndedAt, actualElapsedMinutes);
+
+            // Classify answers "what does this look like right now" — a deliberately live
+            // read other consumers (Day Met's progress number, Insights, Planner badges) rely
+            // on updating in real time. The deficit ledger asks a narrower, second question:
+            // has this outcome actually settled yet. Until the session has genuinely ended
+            // (naturally or early), treat the outcome as still-open (null) *for this handler
+            // only* — every consumer below already has correct handling for null (excluded as
+            // a deficit source; trusted optimistically as a covering block, since it hasn't
+            // failed yet). A StartedLate block whose session is still running is the case this
+            // exists for: its final credited minutes aren't knowable yet (it could still end
+            // early), so nothing downstream should be allowed to treat today's live number as
+            // final.
+            var hasEnded = session?.HasEnded ?? false;
+            var effectiveOutcome = hasEnded ? outcome : null;
+            resolved[block.Id] = (effectiveOutcome, creditedMinutes);
+        }
+
+        var deficits = new List<FocusBlockDeficitDto>();
+
+        foreach (var block in focusBlocks)
+        {
+            var (outcome, creditedMinutes) = resolved[block.Id];
+            if (!block.CanContributeOwnDeficit(outcome))
+                continue;
+
             var scheduledMinutes = block.GetDuration().TotalMinutes;
             var rawDeficit = Math.Max(0, scheduledMinutes - creditedMinutes);
 
+            // Rule 13's second half: a covering block's RedemptionEntry only counts for as
+            // much as that block actually delivered. Still-open (null outcome, scheduled
+            // ahead but not yet judged) trusts the planned claim — a redemption isn't
+            // penalized just for not having happened yet. Missed contributes nothing — it
+            // never delivered anything, so the original deficit it claimed to cover reopens.
+            // Anything else (CompletedOnTime/StartedLate/EndedEarly) is capped at that
+            // block's own real credited minutes, never the frozen creation-time estimate.
             var coveredMinutes = focusBlocks
                 .Where(b => b.Id != query.ExcludeCoverageFromBlockId)
-                .SelectMany(b => b.RedemptionEntries)
-                .Where(e => e.MissedBlockId == block.Id)
-                .Sum(e => e.MinutesCovered);
+                .SelectMany(b => b.RedemptionEntries.Select(entry => (Covering: b, Entry: entry)))
+                .Where(x => x.Entry.MissedBlockId == block.Id)
+                .Sum(x =>
+                {
+                    var (coveringOutcome, coveringCreditedMinutes) = resolved[x.Covering.Id];
+                    return coveringOutcome switch
+                    {
+                        null => x.Entry.MinutesCovered,
+                        FocusBlockOutcome.Missed => 0,
+                        _ => Math.Min(x.Entry.MinutesCovered, coveringCreditedMinutes)
+                    };
+                });
 
             var remainingDeficit = Math.Max(0, rawDeficit - coveredMinutes);
-            if (remainingDeficit <= 0)
+            if (remainingDeficit <= DeficitToleranceMinutes)
                 continue;
 
             deficits.Add(new FocusBlockDeficitDto

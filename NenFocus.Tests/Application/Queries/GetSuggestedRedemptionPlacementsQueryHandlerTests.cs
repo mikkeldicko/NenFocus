@@ -215,6 +215,59 @@ public class GetSuggestedRedemptionPlacementsQueryHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_FractionalDeficit_SuggestionRoundsUpToWholeMinute()
+    {
+        // A fractional deficit (e.g. from an EndedEarly session, timestamped to the
+        // millisecond) must round UP to a whole minute, not size the tile to the raw
+        // fractional value — a whole-minute duration converts to DateTime ticks with zero
+        // rounding loss, so the created tile always meets or exceeds the real deficit
+        // instead of landing a tick short of it.
+        var contractId = Guid.NewGuid();
+        var presetId = Guid.NewGuid();
+        var now = Today.ToDateTime(new TimeOnly(10, 0));
+        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>()).Returns(SameDayContract(contractId));
+        var deficit = Deficit(presetId, now, remaining: 31.896581196666666);
+        _deficits.HandleAsync(new GetNenContractDeficitsQuery(contractId), Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyList<FocusBlockDeficitDto>)[deficit]);
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, now));
+        NoConflicts();
+
+        var result = await CreateHandler().HandleAsync(
+            new GetSuggestedRedemptionPlacementsQuery(contractId, now), CancellationToken.None);
+
+        var placement = result.Should().ContainSingle().Subject;
+        placement.TotalRemainingDeficitMinutes.Should().Be(32);
+        (placement.SuggestedEnd - placement.SuggestedStart).Should().Be(TimeSpan.FromMinutes(32));
+        placement.CanFullyCover.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task HandleAsync_NoRoomLeftBeforeBoundary_SuggestionDropped()
+    {
+        // "Now" is already past the day's boundary (Work Hours closed at 17:00, it's 18:00).
+        // FindPlacement's fallback branch would otherwise hand back Start=18:00/End=17:00 —
+        // an End before its own Start, which FocusBlock.Create can only reject. The handler
+        // must drop the suggestion instead of returning a broken range.
+        var contractId = Guid.NewGuid();
+        var presetId = Guid.NewGuid();
+        var now = Today.ToDateTime(new TimeOnly(18, 0));
+        var workHours = new WorkHoursPolicy(new WorkHours(new TimeOnly(9, 0), new TimeOnly(17, 0)));
+        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>()).Returns(SameDayContract(contractId, workHours));
+        var deficit = Deficit(presetId, now, remaining: 30);
+        _deficits.HandleAsync(new GetNenContractDeficitsQuery(contractId), Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyList<FocusBlockDeficitDto>)[deficit]);
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, now));
+        NoConflicts();
+
+        var result = await CreateHandler().HandleAsync(
+            new GetSuggestedRedemptionPlacementsQuery(contractId, now), CancellationToken.None);
+
+        result.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task HandleAsync_TwoDifferentPresets_ReturnsOneEntryPerPreset()
     {
         var contractId = Guid.NewGuid();
