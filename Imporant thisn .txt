@@ -14,3 +14,4 @@ Get-ChildItem -Recurse -Include bin,obj | Remove-Item -Recurse -Force
 dotnet restore --force
 
 Delete Databse	
+Remove-Item "$env:APPDATA\NenFocus\NenFocus.db*" -Force

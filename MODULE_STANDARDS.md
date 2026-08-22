@@ -65,6 +65,18 @@ A handler must not read an entity's raw fields (`Start`, `End`, `RitualCompleted
 >
 > **Canonical example of doing it right:** `FocusBlock.CanContributeOwnDeficit(FocusBlockOutcome? outcome)` — takes the already-classified outcome as a parameter (the caller owns *when* to classify, since that needs `now`/session data), but the entity owns the *rule* of what counts as its own deficit.
 
+#### No Baking a Computed Fraction Into a Persisted Timestamp Without Rounding to Its Invariant's Grain
+
+A handler must not convert a fractional `double` (minutes, hours, or any unit derived from subtraction, division, or `Sum(...)` over other doubles) directly into a real, persisted timestamp via `AddMinutes`/`AddSeconds`/`AddTicks` when that timestamp is later read back out and compared against the original value to decide whether some "covers at least X" invariant holds. `DateTime.AddMinutes(double)` rounds to the nearest 100ns tick — the value read back out is not guaranteed to be bit-identical to the value that produced it, and can land fractionally under it.
+
+> **Rule:** Before converting a fractional quantity into a timestamp a later "did this fully satisfy X" check depends on, round it up to whatever grain that timestamp is meaningful at (a whole minute, for anything a person perceives at minute granularity). Never persist the raw fraction and lean on a downstream tolerance to absorb the loss — a tolerance can't tell "tick-rounding noise" apart from "genuinely short by a hair."
+>
+> **Why this is a hard rule, not a style preference:** (2026-08-22, `DESIGN_GAP_HISTORY.md` Gap 33) `GetSuggestedRedemptionPlacementsQueryHandler` sized a Cover-Deficit redemption tile to a fractional deficit (`31.896581196666666` minutes, from an `EndedEarly` session timestamped to the millisecond) and passed it straight to `AddMinutes`. The round-trip lost ~1.7e-9 minutes, so `GetNenContractDeficitsQueryHandler`'s "is this fully covered" check could never resolve to exactly zero — the Cover Deficit button stayed lit forever even though the tile visibly, functionally closed the gap. This is a **regression** of a guarantee `DESIGN_GAP_HISTORY.md` Gap 25 Addendum 1 already established ("round up so accepting the suggestion can only meet-or-exceed the deficit, never fall short") — it was silently dropped when Gap 26 rewrote the same mechanism the next day, and nobody noticed until live testing surfaced it. A documented rule is not a permanent guarantee against a later rewrite; only a regression test is.
+>
+> **Smell to watch for:** any `.AddMinutes(x)`/`.AddSeconds(x)`/`.AddTicks(x)` where `x` is a `double` computed from subtraction, division, or `Sum(...)` — not a whole-number literal or an `int`-backed field — especially when the resulting timestamp gets persisted and something else later re-derives a number from it to compare against an "at least this much" threshold.
+>
+> **Canonical example of doing it right:** `GetSuggestedRedemptionPlacementsQueryHandler.HandleAsync` — `Math.Ceiling(group.Sum(d => d.RemainingDeficitMinutes))` before the value ever reaches `AddMinutes`. A whole number of minutes converts to ticks with zero rounding loss.
+
 ---
 
 ### Infrastructure (`NenFocus.Infrastructure`)
