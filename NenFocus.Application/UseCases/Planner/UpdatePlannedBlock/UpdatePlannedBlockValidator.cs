@@ -68,6 +68,20 @@ public sealed class UpdatePlannedBlockValidator : AbstractValidator<UpdatePlanne
             .GreaterThan(x => x.Start)
             .WithMessage("End time must be after start time.");
 
+        // Mirrors FocusBlock.Reschedule's own cap — the entity is the real,
+        // unbypassable invariant; this exists only to produce a friendly FormError
+        // instead of an unhandled exception, same two-layer pattern already used for
+        // end <= start. An Update can never change a block between Focus and
+        // Background (enforced by the preset-type-match rule above), so checking the
+        // existing block's type is reliable here.
+        RuleFor(x => x)
+            .MustAsync(async (command, ct) =>
+            {
+                var block = await _blocks.GetByIdAsync(command.BlockId, ct);
+                return block is not FocusBlock || (command.End - command.Start) <= TimeSpan.FromHours(FocusBlock.MaxDurationHours);
+            })
+            .WithMessage($"A Focus block cannot exceed {FocusBlock.MaxDurationHours} hours.");
+
         RuleFor(x => x)
             .MustAsync(async (command, ct) =>
             {

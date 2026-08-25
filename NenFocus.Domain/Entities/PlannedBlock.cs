@@ -64,7 +64,7 @@ public abstract class PlannedBlock : AggregateRoot
 
     public int MinutesUntilStart(DateTime asOf) => (int)(Start - asOf).TotalMinutes;
 
-    public void Reschedule(DateTime start, DateTime end)
+    public virtual void Reschedule(DateTime start, DateTime end)
     {
         if (end <= start)
             throw new ArgumentException("End time must be after start time.");

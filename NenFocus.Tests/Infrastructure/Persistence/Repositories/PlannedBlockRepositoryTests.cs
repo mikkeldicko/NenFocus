@@ -52,6 +52,31 @@ public class PlannedBlockRepositoryTests : SqliteRepositoryTestBase
     }
 
     [Fact]
+    public async Task GetForDayAsync_CrossMidnightBlock_FoundOnBothLocalDaysItOccupies()
+    {
+        // Built from LOCAL wall-clock time near midnight, not a fixed UTC instant, so this
+        // actually exercises the local-day-boundary conversion GetForDayAsync must do
+        // (date is a local calendar day, b.Start/End are UTC) rather than a case a naive
+        // UTC-anchored boundary would happen to get right anyway. Whether this reproduces
+        // the original bug on any given test machine depends on its local UTC offset (the
+        // repository has no injectable clock to control it directly), but it always
+        // verifies the fix's actual correctness regardless of host timezone.
+        var localDay = DateTime.Today;
+        var localStart = DateTime.SpecifyKind(localDay.AddHours(23), DateTimeKind.Local).ToUniversalTime();
+        var localEnd = DateTime.SpecifyKind(localDay.AddHours(24.5), DateTimeKind.Local).ToUniversalTime();
+
+        var repo = CreateRepository();
+        await repo.AddAsync(FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), localStart, localEnd));
+        await Context.SaveChangesAsync();
+
+        var dayOneResult = await CreateRepository().GetForDayAsync(DateOnly.FromDateTime(localDay));
+        var dayTwoResult = await CreateRepository().GetForDayAsync(DateOnly.FromDateTime(localDay.AddDays(1)));
+
+        dayOneResult.Should().ContainSingle();
+        dayTwoResult.Should().ContainSingle();
+    }
+
+    [Fact]
     public async Task GetForRangeAsync_ReturnsOverlappingBlocksOrderedByStart()
     {
         var repo = CreateRepository();

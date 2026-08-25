@@ -5,6 +5,15 @@ namespace NenFocus.Domain.Entities;
 
 public sealed class FocusBlock : PlannedBlock
 {
+    /// <summary>
+    /// A Focus block cannot exceed this many hours — Background blocks have no such
+    /// limit. Focus-only by design, mirroring the already-established Focus-only Work
+    /// Hours exception. Lives here (not a validator) because it's a pure fact about
+    /// Start/End, the same justification already used for the entity's own end &gt; start
+    /// guard — no repository lookup needed, so nothing pushes it out of Domain.
+    /// </summary>
+    public const int MaxDurationHours = 12;
+
     /// <summary>Null means the Ritual was never completed for this block.</summary>
     public DateTime? RitualCompletedAt { get; private set; }
 
@@ -24,6 +33,7 @@ public sealed class FocusBlock : PlannedBlock
     {
         if (end <= start)
             throw new ArgumentException("End time must be after start time.");
+        ValidateDuration(start, end);
 
         return new FocusBlock
         {
@@ -35,6 +45,18 @@ public sealed class FocusBlock : PlannedBlock
             ContractId = contractId,
             RedemptionEntries = redemptionEntries ?? Array.Empty<RedemptionEntry>()
         };
+    }
+
+    public override void Reschedule(DateTime start, DateTime end)
+    {
+        ValidateDuration(start, end);
+        base.Reschedule(start, end);
+    }
+
+    private static void ValidateDuration(DateTime start, DateTime end)
+    {
+        if (end - start > TimeSpan.FromHours(MaxDurationHours))
+            throw new ArgumentException($"A Focus block cannot exceed {MaxDurationHours} hours.");
     }
 
     public void MarkRitualCompleted(DateTime completedAt)

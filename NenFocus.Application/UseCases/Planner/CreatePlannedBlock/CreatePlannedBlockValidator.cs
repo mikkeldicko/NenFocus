@@ -1,6 +1,7 @@
 using FluentValidation;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.ComputeRedemptionAttribution;
+using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
 
 namespace NenFocus.Application.UseCases.Planner.CreatePlannedBlock;
@@ -34,7 +35,13 @@ public sealed class CreatePlannedBlockValidator : AbstractValidator<CreatePlanne
             .GreaterThan(x => x.Start)
             .WithMessage("End time must be after start time.")
             .Must((command, end) => (end - command.Start).TotalMinutes >= 1)
-            .WithMessage("Block must be at least 1 minute long.");
+            .WithMessage("Block must be at least 1 minute long.")
+            // Mirrors FocusBlock.Create's own cap — the entity is the real, unbypassable
+            // invariant; this exists only to produce a friendly FormError instead of an
+            // unhandled exception, same two-layer pattern already used for end <= start.
+            .Must((command, end) => command.BlockPresetType != BlockPresetType.Focus
+                || (end - command.Start) <= TimeSpan.FromHours(FocusBlock.MaxDurationHours))
+            .WithMessage($"A Focus block cannot exceed {FocusBlock.MaxDurationHours} hours.");
 
         // Focus blocks: the contract that actually applies may not be command.ContractId
         // itself — a null ContractId still auto-discovers a contract via

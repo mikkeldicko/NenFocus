@@ -64,4 +64,8 @@
 		<ProjectReference Include="..\NenFocus.Infrastructure\NenFocus.Infrastructure.csproj" />
 	</ItemGroup>
 
+	<ItemGroup>
+		<InternalsVisibleTo Include="NenFocus.Tests" />
+	</ItemGroup>
+
 </Project>

@@ -1,5 +1,6 @@
 using FluentValidation;
 using NenFocus.Application.Interfaces;
+using NenFocus.Application.Queries.ComputePlannedFocusHours;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
 using NenFocus.Domain.Services;
@@ -12,7 +13,8 @@ public sealed class SplitPlannedBlockValidator : AbstractValidator<SplitPlannedB
         IPlannedBlockRepository blocks,
         ISessionRepository sessions,
         INenContractRepository contracts,
-        ISystemClock clock)
+        ISystemClock clock,
+        IQueryHandler<ComputePlannedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> computePlannedFocusHours)
     {
         // The local calendar day(s) the original block spans — null when the block can't
         // be resolved (reported by the "block to split could not be found" rule instead).
@@ -61,8 +63,11 @@ public sealed class SplitPlannedBlockValidator : AbstractValidator<SplitPlannedB
 
         // Split is Focus-only — a Background block has no session and no Daily Floor
         // relevance, so there's no real use case for reallocating its hours, and it has no
-        // duration cap (unlike Focus, capped at 12h — see Part 2 of Gap K), so allowing it
-        // here would reopen the N-day case the next rule deliberately guards against.
+        // duration cap (unlike Focus, capped at FocusBlock.MaxDurationHours), so allowing
+        // it here would reopen the N-day case OriginalBlockDaysAsync's 2-day assumption
+        // relies on. No separate N-day guard is needed: FocusBlock.Create/Reschedule
+        // themselves make a 3+ day Focus block unconstructible, so this rule alone is
+        // sufficient to keep the day-membership logic below within its 2-day assumption.
         RuleFor(x => x)
             .MustAsync(async (command, ct) =>
             {
@@ -70,19 +75,6 @@ public sealed class SplitPlannedBlockValidator : AbstractValidator<SplitPlannedB
                 return block is null || block is FocusBlock;
             })
             .WithMessage("Only a Focus block can be split.");
-
-        // Defensive guard: Focus blocks aren't capped at 12h yet (that's Part 2 of Gap K,
-        // not yet built), so an original spanning more than two days is still technically
-        // constructible today. The day-membership logic below only reasons about "the
-        // original's day-set" in the abstract and would silently misbehave on a 3+ day
-        // span rather than failing loud — reject it outright instead.
-        RuleFor(x => x)
-            .MustAsync(async (command, ct) =>
-            {
-                var days = await OriginalBlockDaysAsync(command.OriginalBlockId, ct);
-                return days is null || days.Count <= 2;
-            })
-            .WithMessage("A block spanning more than two calendar days cannot be split.");
 
         // Split is exclusively a sealed-contract feature — an ordinary block has no
         // strictness rule to check and isn't in scope for this operation.
@@ -100,9 +92,9 @@ public sealed class SplitPlannedBlockValidator : AbstractValidator<SplitPlannedB
                 var block = await blocks.GetByIdAsync(command.OriginalBlockId, ct);
                 if (block?.ContractId is not { } contractId) return true; // reported above
                 var contract = await contracts.GetByIdAsync(contractId, ct);
-                return contract is not null && contract.StrictnessRule == StrictnessRule.DailyFlexibility;
+                return contract is not null && contract.StrictnessRule != StrictnessRule.Locked;
             })
-            .WithMessage("Only a Daily Flexibility contract allows splitting a block — Lockdown blocks are immutable.");
+            .WithMessage("Lockdown contracts are immutable — only Daily Flexibility and Period Time Budget contracts allow splitting a block.");
 
         RuleFor(x => x)
             .MustAsync(async (command, ct) =>
@@ -185,5 +177,70 @@ public sealed class SplitPlannedBlockValidator : AbstractValidator<SplitPlannedB
                 return splitDuration == originalDuration;
             })
             .WithMessage("The two resulting blocks must add up to the original block's total duration.");
+
+        // Floor-protection: unlike an ordinary same-preset shrink (which conserves the
+        // day's total by construction), Split can freely reallocate hours across whichever
+        // day(s) the original spans — including concentrating everything on one day and
+        // leaving the other short. Reuses IsDayMet/FloorHoursFor/IsPeriodMet (the same
+        // domain rules UpdatePlannedBlockValidator's own floor checks already use) rather
+        // than re-deriving the comparison here. Branches on StrictnessRule exactly like
+        // Update's own edit guard: Daily Flexibility and a Period Time Budget contract with
+        // no whole-period ContractFloor both fall back to the same per-day check (the days
+        // the original vacates, unioned with the days the two new pieces land on); a Period
+        // Time Budget contract that does carry a ContractFloor checks the whole period's
+        // planned total instead, since there's no per-day obligation to protect.
+        RuleFor(x => x)
+            .CustomAsync(async (command, context, ct) =>
+            {
+                var block = await blocks.GetByIdAsync(command.OriginalBlockId, ct);
+                if (block?.ContractId is not { } contractId) return; // reported above
+
+                var contract = await contracts.GetByIdAsync(contractId, ct);
+                if (contract is null || contract.StrictnessRule == StrictnessRule.Locked) return; // reported above
+
+                var plannedByDay = await computePlannedFocusHours.HandleAsync(
+                    new ComputePlannedFocusHoursQuery(
+                        contractId,
+                        DraftFocusBlockRanges:
+                        [
+                            (command.FirstBlockStart, command.FirstBlockEnd),
+                            (command.SecondBlockStart, command.SecondBlockEnd)
+                        ],
+                        ExcludeBlockId: command.OriginalBlockId),
+                    ct);
+
+                if (contract.StrictnessRule == StrictnessRule.PeriodTimeBudget && contract.ContractFloor is not null)
+                {
+                    var newPeriodTotal = plannedByDay.Values.Sum();
+                    if (!contract.IsPeriodMet(newPeriodTotal))
+                    {
+                        context.AddFailure(nameof(SplitPlannedBlockCommand.FirstBlockEnd),
+                            $"This would drop the contract's total planned hours below its {contract.ContractFloorHours:0.#}h target.");
+                    }
+                    return;
+                }
+
+                // The days the original is being vacated from union the days the two new
+                // pieces land on — a day the original touched but neither piece lands on
+                // anymore is exactly the case this check exists for (abandoned entirely,
+                // its total can drop without either piece being there to trigger a check).
+                var originalDays = await OriginalBlockDaysAsync(command.OriginalBlockId, ct) ?? [];
+                var touchedDays = originalDays
+                    .Append(clock.ToLocalDate(command.FirstBlockStart))
+                    .Append(clock.ToLocalDate(command.SecondBlockStart))
+                    .Distinct();
+
+                foreach (var date in touchedDays)
+                {
+                    var total = plannedByDay.GetValueOrDefault(date);
+                    if (!contract.IsDayMet(date, total))
+                    {
+                        var floorHours = contract.FloorHoursFor(date);
+                        context.AddFailure(nameof(SplitPlannedBlockCommand.FirstBlockEnd),
+                            $"This would drop {date:MMM d}'s total below its {floorHours:0.#}h daily floor.");
+                        break;
+                    }
+                }
+            });
     }
 }

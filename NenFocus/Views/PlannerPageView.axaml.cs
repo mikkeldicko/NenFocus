@@ -1,12 +1,14 @@
 using Avalonia;
 using Avalonia.Collections;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Shapes;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
+using Avalonia.VisualTree;
 using NenFocus.Domain.Enums;
 using NenFocus.ViewModels.Pages;
 using NenFocus.ViewModels.Components;
@@ -51,11 +53,150 @@ public partial class PlannerPageView : UserControl
     private Canvas? _tileGhostCanvas;
     private TextBlock? _tileGhostTimeLabel;
 
+    // Wired once in the constructor (not AttachedToVisualTree, which can fire more than
+    // once for the same control instance) since all six AutoCompleteBoxes below are part
+    // of the static form/dialog UI, never rebuilt like the day columns are. Kept as fields
+    // so OnViewModelPropertyChanged (a live user edit re-scrolling the open dropdown) can
+    // reach them too, not just the constructor's own GotFocus wiring.
+    private AutoCompleteBox? _formStartTimeBox;
+    private AutoCompleteBox? _formEndTimeBox;
+    private AutoCompleteBox? _splitFirstStartTimeBox;
+    private AutoCompleteBox? _splitFirstEndTimeBox;
+    private AutoCompleteBox? _splitSecondStartTimeBox;
+    private AutoCompleteBox? _splitSecondEndTimeBox;
+
     public PlannerPageView()
     {
         InitializeComponent();
         DataContextChanged += OnDataContextChanged;
         AttachedToVisualTree += OnAttachedToVisualTree;
+
+        _formStartTimeBox = this.FindControl<AutoCompleteBox>("FormStartTimeBox")!;
+        _formEndTimeBox = this.FindControl<AutoCompleteBox>("FormEndTimeBox")!;
+        _splitFirstStartTimeBox = this.FindControl<AutoCompleteBox>("SplitFirstStartTimeBox")!;
+        _splitFirstEndTimeBox = this.FindControl<AutoCompleteBox>("SplitFirstEndTimeBox")!;
+        _splitSecondStartTimeBox = this.FindControl<AutoCompleteBox>("SplitSecondStartTimeBox")!;
+        _splitSecondEndTimeBox = this.FindControl<AutoCompleteBox>("SplitSecondEndTimeBox")!;
+
+        // Nothing in the main form's two boxes has focus-driven behavior otherwise —
+        // LostFocus isn't a Command binding target, so the code-behind wires it directly
+        // into the ViewModel. The Split dialog's four boxes have no such snapback behavior.
+        _formStartTimeBox.LostFocus += (_, _) => _vm?.OnFormStartTimeLostFocus();
+        _formEndTimeBox.LostFocus += (_, _) => _vm?.OnFormEndTimeLostFocus();
+
+        WireTimeDropdown(_formStartTimeBox, () => _vm?.StartTimeScrollIndex);
+        WireTimeDropdown(_formEndTimeBox, () => _vm?.EndTimeScrollIndex);
+        WireTimeDropdown(_splitFirstStartTimeBox, () => _vm?.SplitFirstStartTimeScrollIndex);
+        WireTimeDropdown(_splitFirstEndTimeBox, () => _vm?.SplitFirstEndTimeScrollIndex);
+        WireTimeDropdown(_splitSecondStartTimeBox, () => _vm?.SplitSecondStartTimeScrollIndex);
+        WireTimeDropdown(_splitSecondEndTimeBox, () => _vm?.SplitSecondEndTimeScrollIndex);
+    }
+
+    /// <summary>
+    /// Google-Calendar-style: the dropdown opens on click/focus showing every option
+    /// (MinimumPrefixLength="0" in XAML) rather than requiring a typed character first,
+    /// scrolled to a ~5-item window around the current value. AutoCompleteBox's own
+    /// built-in filtering is disabled (FilterMode="Custom" in XAML plus an always-true
+    /// predicate here) specifically so it can't re-narrow ItemsSource down to only the item
+    /// matching the typed text verbatim — the ViewModel already decides the full-list-vs-
+    /// filtered-subset split (see UpdateVisibleTimeOptions); this box must never re-narrow
+    /// it further, or the "scroll to see everything else" promise breaks.
+    ///
+    /// Both GotFocus AND PointerPressed open it — GotFocus alone isn't enough. Light-dismiss
+    /// (clicking blank space elsewhere on the form) closes the popup without necessarily
+    /// moving keyboard focus off the box (clicking non-focusable whitespace doesn't steal
+    /// focus in Avalonia), so a second click back into the same, already-focused box would
+    /// never re-fire GotFocus and the dropdown would stay stuck closed. PointerPressed is
+    /// subscribed with handledEventsToo:true because AutoCompleteBox's internal TextBox
+    /// marks its own PointerPressed handled (for caret placement), which would otherwise
+    /// stop it from ever reaching this outer handler.
+    /// </summary>
+    private void WireTimeDropdown(AutoCompleteBox box, Func<int?> getScrollIndex)
+    {
+        box.TextFilter = (_, _) => true;
+
+        void Open()
+        {
+            box.IsDropDownOpen = true;
+            ScrollDropdownToWindow(box, getScrollIndex());
+        }
+
+        box.GotFocus += (_, _) => Open();
+        box.AddHandler(InputElement.PointerPressedEvent, (_, _) => Open(), RoutingStrategies.Bubble, handledEventsToo: true);
+    }
+
+    /// <summary>
+    /// The rendered height of one dropdown row under the live Fluent theme — measured via a
+    /// real headless Avalonia layout pass (not guessed), confirmed identical for a plain
+    /// string item and for End's TimeText+Duration ItemTemplate. Also the basis for
+    /// PlannerPageView.axaml's MaxDropDownHeight="171" (5 * 33 + 6px popup chrome) — the two
+    /// must stay in step; if that XAML value ever changes, this constant needs the same
+    /// re-derivation.
+    /// </summary>
+    private const double DropdownItemHeightPx = 33;
+
+    /// <summary>
+    /// Positions the popup's ScrollViewer directly at the top of a 5-item window around
+    /// <paramref name="centerIndex"/> (PlannerDropdownWindow.Bounds), by setting Offset —
+    /// deliberately NOT ScrollIntoView, which only scrolls the minimum distance needed to
+    /// bring a target into view and is therefore a no-op whenever that target is already
+    /// anywhere in the viewport. That "already visible" heuristic was the real bug behind a
+    /// confirmed repro: manually scrolling the popup to 16:00, closing it, then reopening it
+    /// on a field whose value was untouched at 20:30 — ScrollIntoView left the popup exactly
+    /// where the user had last scrolled it instead of recentering, because Avalonia keeps
+    /// the same ScrollViewer instance (and its Offset) alive across a close/reopen cycle
+    /// rather than resetting it. Setting Offset directly is unconditional, so every open
+    /// lands on the box's actual current value regardless of wherever it was left last time.
+    ///
+    /// Retries a few times at Loaded priority rather than a single fire-and-forget post:
+    /// right after ItemsSource is swapped in (BuildVisibleTimeOptions reassigning the
+    /// collection — see PlannerPageViewModel), the popup's internal item containers can
+    /// still be mid-rebuild the first time this runs, reporting ItemCount == 0. A single
+    /// attempt would silently no-op there.
+    /// </summary>
+    private static void ScrollDropdownToWindow(AutoCompleteBox box, int? centerIndex, int attemptsLeft = 5)
+    {
+        if (centerIndex is null) return;
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (!box.IsDropDownOpen) return; // closed again before this ran — nothing to do
+
+            // The open popup's content is NOT part of box's own visual tree — Popup hosts
+            // its Child in a separate root (Popup.Host: an OverlayPopupHost or a native
+            // PopupRoot depending on platform), so box.GetVisualDescendants() alone can
+            // never reach it. This was the actual root cause behind every prior "scroll
+            // doesn't work" report: the SelectingItemsControl lookup was silently finding
+            // nothing every time, making the whole scroll step a no-op — everything
+            // observed (defaulting to 00:00, "remembering" a stale position, drifting on
+            // reopen) was AutoCompleteBox's own native behavior, never touched by this
+            // code at all. Confirmed via a headless Avalonia repro before landing this fix.
+            var popup = box.GetVisualDescendants().OfType<Popup>().FirstOrDefault();
+            var popupContent = popup?.Host is Visual hostVisual
+                ? hostVisual.GetSelfAndVisualDescendants()
+                : Enumerable.Empty<Visual>();
+
+            var list = popupContent.OfType<SelectingItemsControl>().FirstOrDefault();
+            var scrollViewer = list?.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault();
+            if (list is null || scrollViewer is null || list.ItemCount == 0)
+            {
+                if (attemptsLeft > 0) ScrollDropdownToWindow(box, centerIndex, attemptsLeft - 1);
+                return;
+            }
+
+            var (start, _) = PlannerDropdownWindow.Bounds(centerIndex.Value, list.ItemCount, 5);
+            scrollViewer.Offset = new Vector(scrollViewer.Offset.X, start * DropdownItemHeightPx);
+        }, DispatcherPriority.Loaded);
+    }
+
+    /// <summary>
+    /// A live user edit (typing/picking a new value) while the dropdown is already open
+    /// should re-center it — otherwise the window only ever reflects wherever the field
+    /// happened to be when it first gained focus.
+    /// </summary>
+    private void RescrollIfOpen(AutoCompleteBox? box, int? scrollIndex)
+    {
+        if (box is { IsDropDownOpen: true }) ScrollDropdownToWindow(box, scrollIndex);
     }
 
     private void OnAttachedToVisualTree(object? sender, Avalonia.VisualTreeAttachmentEventArgs e)
@@ -97,6 +238,28 @@ public partial class PlannerPageView : UserControl
     {
         if (e.PropertyName == nameof(PlannerPageViewModel.IsFormVisible) && _vm?.IsFormVisible == false)
             RemoveCreateGhost();
+
+        switch (e.PropertyName)
+        {
+            case nameof(PlannerPageViewModel.FormStartTime):
+                RescrollIfOpen(_formStartTimeBox, _vm?.StartTimeScrollIndex);
+                break;
+            case nameof(PlannerPageViewModel.FormEndTime):
+                RescrollIfOpen(_formEndTimeBox, _vm?.EndTimeScrollIndex);
+                break;
+            case nameof(PlannerPageViewModel.SplitFirstStartTime):
+                RescrollIfOpen(_splitFirstStartTimeBox, _vm?.SplitFirstStartTimeScrollIndex);
+                break;
+            case nameof(PlannerPageViewModel.SplitFirstEndTime):
+                RescrollIfOpen(_splitFirstEndTimeBox, _vm?.SplitFirstEndTimeScrollIndex);
+                break;
+            case nameof(PlannerPageViewModel.SplitSecondStartTime):
+                RescrollIfOpen(_splitSecondStartTimeBox, _vm?.SplitSecondStartTimeScrollIndex);
+                break;
+            case nameof(PlannerPageViewModel.SplitSecondEndTime):
+                RescrollIfOpen(_splitSecondEndTimeBox, _vm?.SplitSecondEndTimeScrollIndex);
+                break;
+        }
     }
 
     private void OnTilesChanged(object? sender, NotifyCollectionChangedEventArgs e) => RebuildTiles();

@@ -98,6 +98,46 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     public ObservableCollection<PlannedBlockTileViewModel> Tiles { get; } = new();
     public ObservableCollection<BlockPresetDto> AvailablePresets { get; } = new();
     public ObservableCollection<string> TimeOptions { get; } = new();
+    // Regenerated from the current Start value (and Focus/Background type, for the 12h
+    // cap) whenever either changes — see RegenerateEndTimeOptions.
+    public ObservableCollection<PlannerEndTimeOptionDto> EndTimeOptions { get; } = new();
+
+    // What the Start/End AutoCompleteBox dropdowns actually display — recomputed on every
+    // keystroke. A complete, valid time-of-day shows the FULL underlying list (the View's
+    // code-behind scrolls it to a ~5-item window around the current value; see
+    // ScrollDropdownToWindow in PlannerPageView.axaml.cs); a partial/invalid typed value
+    // instead shows every entry starting with it, unbounded. See
+    // UpdateVisibleStartTimeOptions/UpdateVisibleEndTimeOptions.
+    //
+    // [ObservableProperty] (whole-collection reassignment) rather than a fixed instance
+    // mutated via Clear()+Add() — AutoCompleteBox keeps its own internal selection state
+    // synced to its ItemsSource, and clearing a live-bound collection out from under an
+    // active selection crashes deep in Avalonia's SelectingItemsControl (confirmed via a
+    // real repro: placing an End time that rolls past midnight, where the newly-generated
+    // list is drastically shorter than the previous one, threw
+    // ArgumentOutOfRangeException inside AutoCompleteBox.ClearView()). Reassigning the
+    // property lets Avalonia's ordinary ItemsSource-changed path tear down and rebuild
+    // cleanly instead of mutating a collection an active selection still points into.
+    [ObservableProperty] private ObservableCollection<string> _visibleStartTimeOptions = new();
+    [ObservableProperty] private ObservableCollection<PlannerEndTimeOptionDto> _visibleEndTimeOptions = new();
+
+    // The index within VisibleStartTimeOptions/VisibleEndTimeOptions the dropdown should be
+    // scrolled to on open — the parsed current value's position when the full list is
+    // showing, null when a partial/invalid filter is showing instead (nothing to center on).
+    // Read by the View's code-behind; not itself bound to anything in XAML.
+    public int? StartTimeScrollIndex { get; private set; }
+    public int? EndTimeScrollIndex { get; private set; }
+
+    // Split dialog's four time fields get the identical treatment, mirroring Start's own
+    // plain flat-list pattern (no duration labels — these are ordinary times, not offsets).
+    [ObservableProperty] private ObservableCollection<string> _visibleSplitFirstStartTimeOptions = new();
+    [ObservableProperty] private ObservableCollection<string> _visibleSplitFirstEndTimeOptions = new();
+    [ObservableProperty] private ObservableCollection<string> _visibleSplitSecondStartTimeOptions = new();
+    [ObservableProperty] private ObservableCollection<string> _visibleSplitSecondEndTimeOptions = new();
+    public int? SplitFirstStartTimeScrollIndex { get; private set; }
+    public int? SplitFirstEndTimeScrollIndex { get; private set; }
+    public int? SplitSecondStartTimeScrollIndex { get; private set; }
+    public int? SplitSecondEndTimeScrollIndex { get; private set; }
     // Per-day floor badge lookup, keyed by date — feeds the day-header badges. Populated
     // either by RefreshDayFloorPreviewsAsync (drafting) or RefreshActiveContractAsync
     // (sealed/active contract); the two are mutually exclusive for any viewed week, since
@@ -140,6 +180,33 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     [ObservableProperty] private string _formStartTime = "09:00";
     [ObservableProperty] private string _formEndTime = "10:00";
 
+    // Google-Calendar-style: a typed/picked End at or before Start resolves to the next
+    // day rather than being rejected outright. Non-draft form only — drafting a contract
+    // keeps today's same-day-only behavior unchanged (see ValidateDraftPlacement's own
+    // non-day-segmented Work Hours check, deliberately not extended to cross-midnight
+    // either, per Gap K Part 1's own scope note).
+    [ObservableProperty] private bool _formEndRollsToNextDay;
+    [ObservableProperty] private string _formEndDateText = string.Empty;
+
+    // Duration preserved across a Start edit (End shifts to keep it); re-derived whenever
+    // End itself is edited. Set alongside FormStartTime/FormEndTime by SetFormTimes.
+    private TimeSpan _preservedFormDuration;
+
+    // Suppresses the shift-math reaction in OnFormStartTimeChanged/OnFormEndTimeChanged
+    // for a programmatic assignment — either populating the form for an existing
+    // block/draft, or the shift handler itself updating the other field — neither
+    // represents a live user edit.
+    private bool _isPopulatingFormTimes;
+
+    // Live syntax-only validation (can this text parse as a time-of-day at all) — turns
+    // the field red; on LostFocus (wired from the View's code-behind) an invalid field
+    // snaps back to the last value that successfully parsed. Independent of Save-time
+    // business-rule validation (12h cap, Work Hours, floor, overlap), which is unchanged.
+    [ObservableProperty] private bool _isFormStartTimeInvalid;
+    [ObservableProperty] private bool _isFormEndTimeInvalid;
+    private string _lastValidFormStartTime = "09:00";
+    private string _lastValidFormEndTime = "10:00";
+
     [ObservableProperty] private bool _isFocusBlock = true;
     [ObservableProperty] private BlockPresetDto? _selectedPreset;
     [ObservableProperty] private bool _isStartLocked;
@@ -168,6 +235,14 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     [ObservableProperty] private string _splitSecondStartTime = "10:00";
     [ObservableProperty] private string _splitSecondEndTime = "11:00";
     [ObservableProperty] private string? _splitError;
+
+    // Duration-preserving shift, mirroring the main form's own PlannerTimeShiftMath
+    // wiring — independently per piece, since First and Second never affect each other.
+    private TimeSpan _preservedSplitFirstDuration;
+    private TimeSpan _preservedSplitSecondDuration;
+    // Covers both OpenSplitDialog's initial population and each shift handler's own
+    // programmatic update of the other field in its pair — neither is a live user edit.
+    private bool _isPopulatingSplitTimes;
 
     // ── Nen Contract wizard + drafting mode ───────────────────────────────────
     [ObservableProperty] private bool _isWizardVisible;
@@ -679,12 +754,165 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         RefreshAvailablePresets();
         SelectedPreset = AvailablePresets.FirstOrDefault();
         OnPropertyChanged(nameof(CanSplitBlock));
+        RegenerateEndTimeOptions();
+        UpdateVisibleEndTimeOptions(FormEndTime);
     }
 
     partial void OnSelectedPresetChanged(BlockPresetDto? value) => _ = RefreshRedemptionPreviewAsync();
     partial void OnFormDateChanged(DateTimeOffset value) => _ = RefreshRedemptionPreviewAsync();
-    partial void OnFormStartTimeChanged(string value) => _ = RefreshRedemptionPreviewAsync();
-    partial void OnFormEndTimeChanged(string value) => _ = RefreshRedemptionPreviewAsync();
+    partial void OnFormStartTimeChanged(string value)
+    {
+        _ = RefreshRedemptionPreviewAsync();
+
+        IsFormStartTimeInvalid = !TryParseFormTime(value, out var newStart);
+        if (!IsFormStartTimeInvalid) _lastValidFormStartTime = value;
+        if (!IsFormStartTimeInvalid) RegenerateEndTimeOptions();
+        UpdateVisibleStartTimeOptions(value);
+        UpdateVisibleEndTimeOptions(FormEndTime); // End's own pool just regenerated (or didn't) — either way, re-window it
+
+        if (_isPopulatingFormTimes || IsDraftingContract || IsFormStartTimeInvalid) return;
+
+        var newEnd = PlannerTimeShiftMath.ShiftEnd(newStart, _preservedFormDuration);
+        _isPopulatingFormTimes = true;
+        FormEndTime = $"{(int)newEnd.TotalHours:D2}:{newEnd.Minutes:D2}";
+        _isPopulatingFormTimes = false;
+
+        UpdateEndRolloverDisplay(newStart, newEnd);
+    }
+
+    partial void OnFormEndTimeChanged(string value)
+    {
+        _ = RefreshRedemptionPreviewAsync();
+
+        IsFormEndTimeInvalid = !TryParseFormTime(value, out var newEnd);
+        if (!IsFormEndTimeInvalid) _lastValidFormEndTime = value;
+        UpdateVisibleEndTimeOptions(value);
+
+        if (_isPopulatingFormTimes || IsDraftingContract || IsFormEndTimeInvalid) return;
+        if (!TryParseFormTime(FormStartTime, out var start)) return;
+
+        _preservedFormDuration = PlannerTimeShiftMath.ResolvedDuration(start, newEnd);
+        UpdateEndRolloverDisplay(start, newEnd);
+    }
+
+    /// <summary>
+    /// Google-Calendar-style dropdown content: a complete, valid time-of-day shows the full
+    /// underlying list — the View's code-behind scrolls the popup to a ~5-item window
+    /// around it, rather than the ItemsSource itself being sliced down, so the user can
+    /// still scroll to any other entry. A partial/invalid typed value instead shows every
+    /// entry starting with it, unbounded. AutoCompleteBox's own built-in filtering is
+    /// disabled (its TextFilter is wired to always match in the View's code-behind)
+    /// specifically so it can't re-narrow this list back down to just the exact text typed —
+    /// the same re-narrowing that made the dropdown show only the current value before this
+    /// existed. Returns the index to scroll to (null when the partial/invalid branch is
+    /// showing instead — nothing to center on).
+    /// </summary>
+    /// <summary>
+    /// Reuses <paramref name="current"/> verbatim (same reference) when its content
+    /// already matches what would be rebuilt — critical, not just an optimization: picking
+    /// an item from an already-fully-shown dropdown (e.g. clicking a post-midnight End
+    /// option) changes Text to another value that ALSO resolves to "show the full list,"
+    /// so before/after content is identical. Swapping in a brand-new collection instance
+    /// there would still replace ItemsSource synchronously while AutoCompleteBox is mid-way
+    /// through handling that very click's own selection-changed logic — confirmed via a
+    /// real repro (ArgumentOutOfRangeException deep inside AutoCompleteBox.ClearView(),
+    /// re-entered from its own SelectionModel callback). Reusing the same instance means
+    /// the generated property setter's equality check (same reference) skips raising
+    /// PropertyChanged entirely, so ItemsSource is never touched during that click at all.
+    /// </summary>
+    private static (ObservableCollection<T> Items, int? ScrollIndex) BuildVisibleTimeOptions<T>(
+        ObservableCollection<T> current, List<T> full, string text, Func<T, string> textOf)
+    {
+        if (TryParseFormTime(text, out var parsed))
+        {
+            var formatted = $"{(int)parsed.TotalHours:D2}:{parsed.Minutes:D2}";
+            var index = full.FindIndex(item => textOf(item) == formatted);
+            var items = current.SequenceEqual(full) ? current : new ObservableCollection<T>(full);
+            return (items, index >= 0 ? index : null);
+        }
+
+        var filtered = full.Where(item => textOf(item).StartsWith(text, StringComparison.OrdinalIgnoreCase)).ToList();
+        var filteredItems = current.SequenceEqual(filtered) ? current : new ObservableCollection<T>(filtered);
+        return (filteredItems, null);
+    }
+
+    private void UpdateVisibleStartTimeOptions(string text) =>
+        (VisibleStartTimeOptions, StartTimeScrollIndex) = BuildVisibleTimeOptions(VisibleStartTimeOptions, TimeOptions.ToList(), text, t => t);
+
+    private void UpdateVisibleEndTimeOptions(string text) =>
+        (VisibleEndTimeOptions, EndTimeScrollIndex) = BuildVisibleTimeOptions(VisibleEndTimeOptions, EndTimeOptions.ToList(), text, o => o.TimeText);
+
+    private void UpdateVisibleSplitFirstStartTimeOptions(string text) =>
+        (VisibleSplitFirstStartTimeOptions, SplitFirstStartTimeScrollIndex) = BuildVisibleTimeOptions(VisibleSplitFirstStartTimeOptions, TimeOptions.ToList(), text, t => t);
+
+    private void UpdateVisibleSplitFirstEndTimeOptions(string text) =>
+        (VisibleSplitFirstEndTimeOptions, SplitFirstEndTimeScrollIndex) = BuildVisibleTimeOptions(VisibleSplitFirstEndTimeOptions, TimeOptions.ToList(), text, t => t);
+
+    private void UpdateVisibleSplitSecondStartTimeOptions(string text) =>
+        (VisibleSplitSecondStartTimeOptions, SplitSecondStartTimeScrollIndex) = BuildVisibleTimeOptions(VisibleSplitSecondStartTimeOptions, TimeOptions.ToList(), text, t => t);
+
+    private void UpdateVisibleSplitSecondEndTimeOptions(string text) =>
+        (VisibleSplitSecondEndTimeOptions, SplitSecondEndTimeScrollIndex) = BuildVisibleTimeOptions(VisibleSplitSecondEndTimeOptions, TimeOptions.ToList(), text, t => t);
+
+    /// <summary>Wired from the View's code-behind on the Start field's LostFocus — an
+    /// invalid value snaps back to the last one that successfully parsed.</summary>
+    public void OnFormStartTimeLostFocus()
+    {
+        if (IsFormStartTimeInvalid) FormStartTime = _lastValidFormStartTime;
+    }
+
+    /// <summary>Wired from the View's code-behind on the End field's LostFocus — an
+    /// invalid value snaps back to the last one that successfully parsed.</summary>
+    public void OnFormEndTimeLostFocus()
+    {
+        if (IsFormEndTimeInvalid) FormEndTime = _lastValidFormEndTime;
+    }
+
+    private void UpdateEndRolloverDisplay(TimeSpan start, TimeSpan end)
+    {
+        FormEndRollsToNextDay = PlannerTimeShiftMath.EndRollsToNextDay(start, end);
+        FormEndDateText = FormEndRollsToNextDay
+            ? FormDate.DateTime.AddDays(1).ToString("MMM d, yyyy")
+            : string.Empty;
+    }
+
+    /// <summary>
+    /// Rebuilds the End dropdown from the current Start value and block type. While
+    /// drafting a contract, entries that would roll to the next day are excluded — draft
+    /// blocks keep today's same-day-only behavior (see the shift-math linkage's identical
+    /// exclusion above).
+    /// </summary>
+    private void RegenerateEndTimeOptions()
+    {
+        EndTimeOptions.Clear();
+        if (!TryParseFormTime(FormStartTime, out var start)) return;
+
+        foreach (var offset in PlannerEndTimeOptions.GenerateOffsets(IsFocusBlock))
+        {
+            var end = PlannerTimeShiftMath.ShiftEnd(start, offset);
+            if (IsDraftingContract && PlannerTimeShiftMath.EndRollsToNextDay(start, end))
+                break;
+
+            EndTimeOptions.Add(new PlannerEndTimeOptionDto($"{(int)end.TotalHours:D2}:{end.Minutes:D2}", offset));
+        }
+    }
+
+    /// <summary>
+    /// Sets FormStartTime/FormEndTime together and (re)initializes the duration-preserving
+    /// shift state from them — the single entry point every form-population site should
+    /// use instead of assigning the two properties directly, so opening the form never
+    /// fires the shift handlers against stale leftover values from a previous session.
+    /// </summary>
+    private void SetFormTimes(TimeSpan start, TimeSpan end)
+    {
+        _isPopulatingFormTimes = true;
+        FormStartTime = $"{(int)start.TotalHours:D2}:{start.Minutes:D2}";
+        FormEndTime = $"{(int)end.TotalHours:D2}:{end.Minutes:D2}";
+        _isPopulatingFormTimes = false;
+
+        _preservedFormDuration = PlannerTimeShiftMath.ResolvedDuration(start, end);
+        UpdateEndRolloverDisplay(start, end);
+    }
 
     // Only offered when creating a brand-new block (not editing one, not drafting a
     // contract) — composes the same ComputeRedemptionAttributionQuery
@@ -699,12 +927,8 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
             return;
         if (!TryParseFormTime(FormStartTime, out var startTime) || !TryParseFormTime(FormEndTime, out var endTime))
             return;
-        if (endTime <= startTime)
-            return;
 
-        var dayDate = FormDate.Date;
-        var startUtc = DateTime.SpecifyKind(dayDate.Add(startTime), DateTimeKind.Local).ToUniversalTime();
-        var endUtc = DateTime.SpecifyKind(dayDate.Add(endTime), DateTimeKind.Local).ToUniversalTime();
+        var (startUtc, endUtc) = ResolveFormRangeUtc(startTime, endTime);
 
         var attribution = await _computeRedemptionAttribution.HandleAsync(
             new ComputeRedemptionAttributionQuery(null, SelectedPreset.Id, startUtc, endUtc, ExcludeBlockId: null));
@@ -715,6 +939,21 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         RedemptionSuggestionNotice = attribution.Entries.Count == 1
             ? $"This will cover {totalCovered:0.#} min of your missed {SelectedPreset.Name} block."
             : $"This will cover {totalCovered:0.#} min across {attribution.Entries.Count} missed {SelectedPreset.Name} blocks.";
+    }
+
+    /// <summary>
+    /// Resolves FormDate + a Start/End time-of-day pair into actual UTC instants, rolling
+    /// End onto the day after FormDate when it's at or before Start — the non-draft form's
+    /// single source of truth for "what does this range actually mean," shared by the
+    /// redemption preview and Save so they can never resolve it differently.
+    /// </summary>
+    private (DateTime StartUtc, DateTime EndUtc) ResolveFormRangeUtc(TimeSpan startTime, TimeSpan endTime)
+    {
+        var dayDate = FormDate.Date;
+        var endDate = PlannerTimeShiftMath.EndRollsToNextDay(startTime, endTime) ? dayDate.AddDays(1) : dayDate;
+        var startUtc = DateTime.SpecifyKind(dayDate.Add(startTime), DateTimeKind.Local).ToUniversalTime();
+        var endUtc = DateTime.SpecifyKind(endDate.Add(endTime), DateTimeKind.Local).ToUniversalTime();
+        return (startUtc, endUtc);
     }
 
     private async Task LoadWeekAsync()
@@ -776,8 +1015,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         var blockDate = DateTime.SpecifyKind(WeekStart.AddDays(slot.ColumnIndex).Date, DateTimeKind.Utc);
         FormDate = new DateTimeOffset(blockDate, TimeSpan.Zero);
 
-        FormStartTime = $"{slot.Hour:D2}:00";
-        FormEndTime = $"{(slot.Hour + 1):D2}:00";
+        SetFormTimes(TimeSpan.FromHours(slot.Hour), TimeSpan.FromHours(slot.Hour + 1));
         SelectedPreset = AvailablePresets.FirstOrDefault();
         IsFormVisible = true;
     }
@@ -806,8 +1044,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
             var draftBlockDate = DateTime.SpecifyKind(draftLocalStart.Date, DateTimeKind.Utc);
             FormDate = new DateTimeOffset(draftBlockDate, TimeSpan.Zero);
 
-            FormStartTime = $"{draftLocalStart.Hour:D2}:{draftLocalStart.Minute:D2}";
-            FormEndTime = $"{draftLocalEnd.Hour:D2}:{draftLocalEnd.Minute:D2}";
+            SetFormTimes(draftLocalStart.TimeOfDay, draftLocalEnd.TimeOfDay);
             IsFocusBlock = draft.IsFocus;
             SelectedPreset = AvailablePresets.FirstOrDefault(p => p.Id == draft.PresetId)
                               ?? AvailablePresets.FirstOrDefault();
@@ -845,8 +1082,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         var blockDate = DateTime.SpecifyKind(localStart.Date, DateTimeKind.Utc);
         FormDate = new DateTimeOffset(blockDate, TimeSpan.Zero);
 
-        FormStartTime = $"{localStart.Hour:D2}:{localStart.Minute:D2}";
-        FormEndTime = $"{localEnd.Hour:D2}:{localEnd.Minute:D2}";
+        SetFormTimes(localStart.TimeOfDay, localEnd.TimeOfDay);
         IsFocusBlock = dto.BlockPresetType == BlockPresetType.Focus;
         SelectedPreset = AvailablePresets.FirstOrDefault(p => p.Id == dto.PresetId)
                           ?? AvailablePresets.FirstOrDefault();
@@ -945,13 +1181,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
             FormError = "Invalid time format. Use HH:mm.";
             return;
         }
-        if (endTime <= startTime) { FormError = "End time must be after start time."; return; }
-
-        var dayDate = FormDate.Date;
-        var localStart = DateTime.SpecifyKind(dayDate.Add(startTime), DateTimeKind.Local);
-        var localEnd = DateTime.SpecifyKind(dayDate.Add(endTime), DateTimeKind.Local);
-        var startUtc = localStart.ToUniversalTime();
-        var endUtc = localEnd.ToUniversalTime();
+        var (startUtc, endUtc) = ResolveFormRangeUtc(startTime, endTime);
 
         var blockPresetType = IsFocusBlock ? BlockPresetType.Focus : BlockPresetType.Background;
 
@@ -1097,11 +1327,57 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         var localEnd = dto.End.ToLocalTime();
         var midpoint = localStart + TimeSpan.FromTicks((localEnd - localStart).Ticks / 2);
 
+        _isPopulatingSplitTimes = true;
         SplitFirstStartTime = $"{localStart.Hour:D2}:{localStart.Minute:D2}";
         SplitFirstEndTime = $"{midpoint.Hour:D2}:{midpoint.Minute:D2}";
         SplitSecondStartTime = $"{midpoint.Hour:D2}:{midpoint.Minute:D2}";
         SplitSecondEndTime = $"{localEnd.Hour:D2}:{localEnd.Minute:D2}";
+        _isPopulatingSplitTimes = false;
+
+        _preservedSplitFirstDuration = midpoint - localStart;
+        _preservedSplitSecondDuration = localEnd - midpoint;
+
         IsSplitDialogVisible = true;
+    }
+
+    partial void OnSplitFirstStartTimeChanged(string value)
+    {
+        UpdateVisibleSplitFirstStartTimeOptions(value);
+        if (_isPopulatingSplitTimes || !TryParseFormTime(value, out var newStart)) return;
+
+        var newEnd = PlannerTimeShiftMath.ShiftEnd(newStart, _preservedSplitFirstDuration);
+        _isPopulatingSplitTimes = true;
+        SplitFirstEndTime = $"{(int)newEnd.TotalHours:D2}:{newEnd.Minutes:D2}";
+        _isPopulatingSplitTimes = false;
+    }
+
+    partial void OnSplitFirstEndTimeChanged(string value)
+    {
+        UpdateVisibleSplitFirstEndTimeOptions(value);
+        if (_isPopulatingSplitTimes) return;
+        if (!TryParseFormTime(SplitFirstStartTime, out var start) || !TryParseFormTime(value, out var newEnd)) return;
+
+        _preservedSplitFirstDuration = PlannerTimeShiftMath.ResolvedDuration(start, newEnd);
+    }
+
+    partial void OnSplitSecondStartTimeChanged(string value)
+    {
+        UpdateVisibleSplitSecondStartTimeOptions(value);
+        if (_isPopulatingSplitTimes || !TryParseFormTime(value, out var newStart)) return;
+
+        var newEnd = PlannerTimeShiftMath.ShiftEnd(newStart, _preservedSplitSecondDuration);
+        _isPopulatingSplitTimes = true;
+        SplitSecondEndTime = $"{(int)newEnd.TotalHours:D2}:{newEnd.Minutes:D2}";
+        _isPopulatingSplitTimes = false;
+    }
+
+    partial void OnSplitSecondEndTimeChanged(string value)
+    {
+        UpdateVisibleSplitSecondEndTimeOptions(value);
+        if (_isPopulatingSplitTimes) return;
+        if (!TryParseFormTime(SplitSecondStartTime, out var start) || !TryParseFormTime(value, out var newEnd)) return;
+
+        _preservedSplitSecondDuration = PlannerTimeShiftMath.ResolvedDuration(start, newEnd);
     }
 
     [RelayCommand]
@@ -1170,10 +1446,16 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
     // ── Time parsing ─────────────────────────────────────────────────────────────
     // TimeSpan.TryParse rejects hours > 23, but "24:00" is a valid end-of-day value.
-    private static bool TryParseFormTime(string s, out TimeSpan result)
+    // Internal (not private) so it's directly unit-testable — this exact patch closes a
+    // real latent bug: without the Days check, typing e.g. "93" parses "successfully" as a
+    // 93-day TimeSpan (TimeSpan.Parse rolls anything over 23 hours into extra days rather
+    // than rejecting it), silently placing a block 93 days out with nothing to catch it.
+    internal static bool TryParseFormTime(string s, out TimeSpan result)
     {
         if (s == "24:00") { result = TimeSpan.FromHours(24); return true; }
-        return TimeSpan.TryParse(s, out result);
+        if (!TimeSpan.TryParse(s, out result)) return false;
+        if (result.Days != 0) { result = default; return false; }
+        return true;
     }
 
     // ── Drag lock checks (called from code-behind before starting a drag) ──────
@@ -1218,8 +1500,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         var blockDate = DateTime.SpecifyKind(WeekStart.AddDays(range.ColumnIndex).Date, DateTimeKind.Utc);
         FormDate = new DateTimeOffset(blockDate, TimeSpan.Zero);
 
-        FormStartTime = $"{(int)range.LocalStart.TotalHours:D2}:{range.LocalStart.Minutes:D2}";
-        FormEndTime   = $"{(int)range.LocalEnd.TotalHours:D2}:{range.LocalEnd.Minutes:D2}";
+        SetFormTimes(range.LocalStart, range.LocalEnd);
         SelectedPreset = AvailablePresets.FirstOrDefault();
         IsFormVisible = true;
     }

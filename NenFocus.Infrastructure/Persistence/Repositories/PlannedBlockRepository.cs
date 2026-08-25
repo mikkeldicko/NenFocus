@@ -15,8 +15,17 @@ public sealed class PlannedBlockRepository : IPlannedBlockRepository
         DateOnly date,
         CancellationToken cancellationToken = default)
     {
-        var dayStart = date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
-        var dayEnd = date.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc);
+        // date is the user's LOCAL calendar day (every caller derives it from a local
+        // DateTime — e.g. PlannerPageViewModel.LoadWeekAsync's WeekStart.AddDays(i)) — but
+        // b.Start/b.End are stored UTC. Anchoring the boundary with DateTimeKind.Utc
+        // directly on that local date (the previous bug here) silently mis-windowed every
+        // query for any non-UTC user: a cross-midnight block's tail could fall on the
+        // wrong side of the query's UTC-anchored boundary and never surface on the day it
+        // actually occupies. Exclusive upper bound (next local midnight) rather than
+        // TimeOnly.MaxValue, matching the [start, end) semantics used everywhere else in
+        // this domain — also sidesteps TimeOnly's own inability to represent "24:00".
+        var dayStart = date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Local).ToUniversalTime();
+        var dayEnd = date.AddDays(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Local).ToUniversalTime();
 
         return await _context.PlannedBlocks
             .Where(b => b.Start < dayEnd && b.End > dayStart)

@@ -289,6 +289,65 @@ public class PlannedBlockTests
     }
 
     [Fact]
+    public void FocusBlock_Create_ExceedsMaxDuration_Throws()
+    {
+        var act = () => FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, Start.AddHours(FocusBlock.MaxDurationHours).AddMinutes(1));
+
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
+    public void FocusBlock_Create_AtExactlyMaxDuration_Succeeds()
+    {
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, Start.AddHours(FocusBlock.MaxDurationHours));
+
+        block.GetDuration().Should().Be(TimeSpan.FromHours(FocusBlock.MaxDurationHours));
+    }
+
+    [Fact]
+    public void BackgroundBlock_Create_ExceedsFocusMaxDuration_Succeeds()
+    {
+        // Background blocks have no duration cap at all — Focus-only by design.
+        var block = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, Start.AddHours(FocusBlock.MaxDurationHours).AddDays(3));
+
+        block.GetDuration().Should().Be(TimeSpan.FromHours(FocusBlock.MaxDurationHours).Add(TimeSpan.FromDays(3)));
+    }
+
+    [Fact]
+    public void FocusBlock_Reschedule_ExceedsMaxDuration_ThrowsAndLeavesWindowUnchanged()
+    {
+        var block = CreateFocusBlock();
+
+        var act = () => block.Reschedule(Start, Start.AddHours(FocusBlock.MaxDurationHours).AddMinutes(1));
+
+        act.Should().Throw<ArgumentException>();
+        block.Start.Should().Be(Start);
+        block.End.Should().Be(End);
+    }
+
+    [Fact]
+    public void FocusBlock_Reschedule_AtExactlyMaxDuration_Succeeds()
+    {
+        var block = CreateFocusBlock();
+        var newEnd = Start.AddHours(FocusBlock.MaxDurationHours);
+
+        block.Reschedule(Start, newEnd);
+
+        block.End.Should().Be(newEnd);
+    }
+
+    [Fact]
+    public void BackgroundBlock_Reschedule_ExceedsFocusMaxDuration_Succeeds()
+    {
+        var block = CreateBackgroundBlock();
+        var newEnd = Start.AddHours(FocusBlock.MaxDurationHours).AddDays(3);
+
+        block.Reschedule(Start, newEnd);
+
+        block.End.Should().Be(newEnd);
+    }
+
+    [Fact]
     public void TrimEnd_Valid_UpdatesEnd()
     {
         var block = CreateFocusBlock();

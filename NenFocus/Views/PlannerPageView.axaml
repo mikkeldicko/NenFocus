@@ -12,6 +12,7 @@
 		<conv:WeekRangeToStringConverter x:Key="WeekRangeConverter"/>
 		<conv:DateTimeToUpperStringConverter x:Key="DateTimeUpperConverter"/>
 		<conv:DurationToStringConverter x:Key="DurationConverter"/>
+		<conv:DurationLabelConverter x:Key="DurationLabelConverter"/>
 	</UserControl.Resources>
 
 	<UserControl.Styles>
@@ -182,6 +183,37 @@
 		<Style Selector="Border.snapshotBadge">
 			<Setter Property="CornerRadius" Value="4"/>
 			<Setter Property="Padding" Value="8,3"/>
+		</Style>
+		<!-- Wraps the Start/End AutoCompleteBox rather than reaching into its own control
+		     template — a template-part selector on AutoCompleteBox's internal TextBox
+		     turned out not to render reliably (Fluent theme's own template structure isn't
+		     something to guess at without visually confirming it). A plain Border around
+		     the control is unaffected by any of that. -->
+		<Style Selector="Border.invalid">
+			<Setter Property="BorderBrush" Value="#C03A2B"/>
+			<Setter Property="BorderThickness" Value="2"/>
+		</Style>
+
+		<!-- Google-Calendar-style capped dropdown height, applied to all six time
+		     AutoCompleteBoxes on this page (Form Start/End + Split's four fields) — the
+		     only AutoCompleteBox instances in this view, so one page-wide selector covers
+		     them without touching each instance. AutoCompleteBox's own default
+		     MaxDropDownHeight is Infinity (confirmed via reflection on the registered
+		     StyledProperty), which is why the popup was growing to fit every item.
+		     171 is not a guessed magic number — measured via a headless Avalonia layout
+		     pass against the live Fluent theme: each ListBoxItem row renders at exactly
+		     33px (theme's default Padding of 12,9,12,12 around one line of text; confirmed
+		     identical for both a plain string item — Start/Split — and End's own
+		     TimeText+Duration ItemTemplate, so it's deterministic across every field here,
+		     not dependent on which template is used), and the popup's outer chrome (a
+		     Border with BorderThickness 1 and Padding 0,2,0,2 around the ListBox) adds a
+		     fixed 6px. 5 * 33 + 6 = 171, verified against the same layout pass to land the
+		     ScrollViewer's viewport at exactly 165px (5 whole rows, no partial 6th row).
+		     The inner ScrollViewer's VerticalScrollBarVisibility already defaults to Auto
+		     in AutoCompleteBox's stock template, so capping the height alone is enough to
+		     make the scrollbar appear for the remaining items — no retemplating needed. -->
+		<Style Selector="AutoCompleteBox">
+			<Setter Property="MaxDropDownHeight" Value="171"/>
 		</Style>
 	</UserControl.Styles>
 
@@ -417,19 +449,41 @@
 							<Grid ColumnDefinitions="*,12,*">
 								<StackPanel Grid.Column="0" Spacing="4">
 									<TextBlock Text="Start" FontSize="12" Foreground="#7A7A8C"/>
-									<AutoCompleteBox ItemsSource="{Binding TimeOptions}"
-                                                     Text="{Binding FormStartTime, Mode=TwoWay}"
-                                                     FilterMode="Contains"
-                                                     Watermark="HH:mm"
-                                                     IsEnabled="{Binding !IsStartLocked}"/>
+									<Border Classes.invalid="{Binding IsFormStartTimeInvalid}" CornerRadius="6">
+										<AutoCompleteBox Name="FormStartTimeBox"
+                                                         ItemsSource="{Binding VisibleStartTimeOptions}"
+                                                         Text="{Binding FormStartTime, Mode=TwoWay}"
+                                                         FilterMode="Custom"
+                                                         MinimumPrefixLength="0"
+                                                         Watermark="HH:mm"
+                                                         IsEnabled="{Binding !IsStartLocked}"/>
+									</Border>
 								</StackPanel>
 								<StackPanel Grid.Column="2" Spacing="4">
 									<TextBlock Text="End" FontSize="12" Foreground="#7A7A8C"/>
-									<AutoCompleteBox ItemsSource="{Binding TimeOptions}"
-                                                     Text="{Binding FormEndTime, Mode=TwoWay}"
-                                                     FilterMode="Contains"
-                                                     Watermark="HH:mm"
-                                                     IsEnabled="{Binding !IsBlockLocked}"/>
+									<Border Classes.invalid="{Binding IsFormEndTimeInvalid}" CornerRadius="6">
+										<AutoCompleteBox Name="FormEndTimeBox"
+                                                         ItemsSource="{Binding VisibleEndTimeOptions}"
+                                                         ValueMemberBinding="{Binding TimeText}"
+                                                         Text="{Binding FormEndTime, Mode=TwoWay}"
+                                                         FilterMode="Custom"
+                                                         MinimumPrefixLength="0"
+                                                         Watermark="HH:mm"
+                                                         IsEnabled="{Binding !IsBlockLocked}">
+											<AutoCompleteBox.ItemTemplate>
+												<DataTemplate DataType="comp:PlannerEndTimeOptionDto">
+													<StackPanel Orientation="Horizontal" Spacing="6">
+														<TextBlock Text="{Binding TimeText}"/>
+														<TextBlock Text="{Binding Duration, Converter={StaticResource DurationLabelConverter}}"
+                                                                   Opacity="0.6" FontSize="11"/>
+													</StackPanel>
+												</DataTemplate>
+											</AutoCompleteBox.ItemTemplate>
+										</AutoCompleteBox>
+									</Border>
+									<TextBlock Text="{Binding FormEndDateText}"
+                                               IsVisible="{Binding FormEndRollsToNextDay}"
+                                               FontSize="11" Foreground="#7A7A8C" FontStyle="Italic"/>
 								</StackPanel>
 							</Grid>
 
@@ -615,24 +669,24 @@
 					<StackPanel Spacing="4">
 						<TextBlock Text="First Block" FontSize="12" Foreground="#7A7A8C"/>
 						<Grid ColumnDefinitions="*,12,*">
-							<AutoCompleteBox Grid.Column="0" ItemsSource="{Binding TimeOptions}"
+							<AutoCompleteBox Name="SplitFirstStartTimeBox" Grid.Column="0" ItemsSource="{Binding VisibleSplitFirstStartTimeOptions}"
                                               Text="{Binding SplitFirstStartTime, Mode=TwoWay}"
-                                              FilterMode="Contains" Watermark="HH:mm"/>
-							<AutoCompleteBox Grid.Column="2" ItemsSource="{Binding TimeOptions}"
+                                              FilterMode="Custom" MinimumPrefixLength="0" Watermark="HH:mm"/>
+							<AutoCompleteBox Name="SplitFirstEndTimeBox" Grid.Column="2" ItemsSource="{Binding VisibleSplitFirstEndTimeOptions}"
                                               Text="{Binding SplitFirstEndTime, Mode=TwoWay}"
-                                              FilterMode="Contains" Watermark="HH:mm"/>
+                                              FilterMode="Custom" MinimumPrefixLength="0" Watermark="HH:mm"/>
 						</Grid>
 					</StackPanel>
 
 					<StackPanel Spacing="4">
 						<TextBlock Text="Second Block" FontSize="12" Foreground="#7A7A8C"/>
 						<Grid ColumnDefinitions="*,12,*">
-							<AutoCompleteBox Grid.Column="0" ItemsSource="{Binding TimeOptions}"
+							<AutoCompleteBox Name="SplitSecondStartTimeBox" Grid.Column="0" ItemsSource="{Binding VisibleSplitSecondStartTimeOptions}"
                                               Text="{Binding SplitSecondStartTime, Mode=TwoWay}"
-                                              FilterMode="Contains" Watermark="HH:mm"/>
-							<AutoCompleteBox Grid.Column="2" ItemsSource="{Binding TimeOptions}"
+                                              FilterMode="Custom" MinimumPrefixLength="0" Watermark="HH:mm"/>
+							<AutoCompleteBox Name="SplitSecondEndTimeBox" Grid.Column="2" ItemsSource="{Binding VisibleSplitSecondEndTimeOptions}"
                                               Text="{Binding SplitSecondEndTime, Mode=TwoWay}"
-                                              FilterMode="Contains" Watermark="HH:mm"/>
+                                              FilterMode="Custom" MinimumPrefixLength="0" Watermark="HH:mm"/>
 						</Grid>
 					</StackPanel>
 

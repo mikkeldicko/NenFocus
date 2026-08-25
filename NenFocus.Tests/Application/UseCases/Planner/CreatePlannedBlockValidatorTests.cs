@@ -125,6 +125,55 @@ public class CreatePlannedBlockValidatorTests
     }
 
     [Fact]
+    public async Task Validate_FocusBlock_ExceedsMaxDuration_IsInvalid()
+    {
+        var presetId = Guid.NewGuid();
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Now));
+        var command = ValidCommand(presetId) with
+        {
+            End = ValidCommand(presetId).Start.AddHours(FocusBlock.MaxDurationHours).AddMinutes(1)
+        };
+
+        var result = await CreateValidator().ValidateAsync(command);
+
+        result.IsValid.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Validate_FocusBlock_AtExactlyMaxDuration_IsValid()
+    {
+        var presetId = Guid.NewGuid();
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Now));
+        var command = ValidCommand(presetId) with
+        {
+            End = ValidCommand(presetId).Start.AddHours(FocusBlock.MaxDurationHours)
+        };
+
+        var result = await CreateValidator().ValidateAsync(command);
+
+        result.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Validate_BackgroundBlock_ExceedsFocusMaxDuration_IsValid()
+    {
+        var presetId = Guid.NewGuid();
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
+            .Returns(BlockPreset.Create(presetId, "Background", WebsiteFilterType.Blocklist, BlockPresetType.Background, Now));
+        var command = ValidCommand(presetId) with
+        {
+            BlockPresetType = BlockPresetType.Background,
+            End = ValidCommand(presetId).Start.AddHours(FocusBlock.MaxDurationHours).AddDays(1)
+        };
+
+        var result = await CreateValidator().ValidateAsync(command);
+
+        result.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task Validate_NoContractId_SkipsWorkHoursCheck()
     {
         var presetId = Guid.NewGuid();

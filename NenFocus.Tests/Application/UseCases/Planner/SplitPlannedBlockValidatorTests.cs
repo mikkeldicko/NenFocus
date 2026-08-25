@@ -1,5 +1,6 @@
 using FluentAssertions;
 using NenFocus.Application.Interfaces;
+using NenFocus.Application.Queries.ComputePlannedFocusHours;
 using NenFocus.Application.UseCases.Planner.SplitPlannedBlock;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
@@ -19,6 +20,8 @@ public class SplitPlannedBlockValidatorTests
     private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
     private readonly INenContractRepository _contracts = Substitute.For<INenContractRepository>();
     private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
+    private readonly IQueryHandler<ComputePlannedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> _computePlannedFocusHours =
+        Substitute.For<IQueryHandler<ComputePlannedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>>>();
 
     public SplitPlannedBlockValidatorTests()
     {
@@ -28,9 +31,14 @@ public class SplitPlannedBlockValidatorTests
             .Returns((Session?)null);
         _blocks.GetOverlappingAsync(Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<bool>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[]);
+        // Default: no planned hours anywhere — combined with DailyFloor.None (every
+        // existing SealedContract fixture below), the floor check trivially passes
+        // (0 >= 0) unless a test configures a real floor and a real result.
+        _computePlannedFocusHours.HandleAsync(Arg.Any<ComputePlannedFocusHoursQuery>(), Arg.Any<CancellationToken>())
+            .Returns(new Dictionary<DateOnly, double>());
     }
 
-    private SplitPlannedBlockValidator CreateValidator() => new(_blocks, _sessions, _contracts, _clock);
+    private SplitPlannedBlockValidator CreateValidator() => new(_blocks, _sessions, _contracts, _clock, _computePlannedFocusHours);
 
     private static SplitPlannedBlockCommand ValidCommand(Guid blockId) => new()
     {
@@ -114,10 +122,10 @@ public class SplitPlannedBlockValidatorTests
     }
 
     [Fact]
-    public async Task Validate_PeriodTimeBudgetContract_IsInvalid()
+    public async Task Validate_PeriodTimeBudgetContract_IsValid()
     {
-        // Only Daily Flexibility allows splitting — Period Time Budget doesn't get the
-        // same free pass AllowsBlockTimeChange gives it for ordinary moves.
+        // Widened alongside the floor check: Period Time Budget contracts allow
+        // splitting just like Daily Flexibility does — only Lockdown is immutable.
         var blockId = Guid.NewGuid();
         var contractId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
@@ -127,7 +135,7 @@ public class SplitPlannedBlockValidatorTests
 
         var result = await CreateValidator().ValidateAsync(ValidCommand(blockId));
 
-        result.IsValid.Should().BeFalse();
+        result.IsValid.Should().BeTrue();
     }
 
     [Fact]
@@ -339,11 +347,12 @@ public class SplitPlannedBlockValidatorTests
     }
 
     [Fact]
-    public async Task Validate_CrossMidnightOriginal_BothPiecesOnSameDay_IsValid()
+    public async Task Validate_CrossMidnightOriginal_BothPiecesOnSameDay_NoRealFloorConfigured_IsValid()
     {
-        // Both pieces land on Day1, abandoning Day2 entirely — Split deliberately isn't
-        // floor-protected (matches its existing unprotected behavior for ordinary same-day
-        // splits), so the user can knowingly create a deficit this way.
+        // Both pieces land on Day1, abandoning Day2 entirely. Uses the zero-floor
+        // SealedContract fixture deliberately, to isolate day-membership behavior from
+        // floor behavior — see the floor-check tests below for what happens when a real
+        // floor is actually configured and would be violated.
         var blockId = Guid.NewGuid();
         var contractId = Guid.NewGuid();
         var day1 = new DateTime(2026, 1, 3, 0, 0, 0, DateTimeKind.Utc);
@@ -367,6 +376,170 @@ public class SplitPlannedBlockValidatorTests
         result.IsValid.Should().BeTrue();
     }
 
+    // Date range narrowed to just the two days these tests care about (rather than
+    // SealedContract's open-ended 30-day range) — Seal() itself hard-validates every day
+    // in range against the floor, so a wide range would need a satisfying planned-hours
+    // entry for every single day. The seal-time snapshot below only needs to satisfy
+    // Seal's own check; it's independent of whatever the validator's own floor check
+    // (mocked via _computePlannedFocusHours) reports as the live, post-split state.
+    private static NenContract SealedContractWithFloor(Guid id, double floorHours, DateOnly day1, DateOnly day2) =>
+        NenContract.Seal(id, "Contract", new NenContractGoal("Goal"),
+            day1, day2,
+            StrictnessRule.DailyFlexibility, new DailyFloorPolicy(new DailyFloor(floorHours)), null, false,
+            new Dictionary<DateOnly, double> { [day1] = floorHours, [day2] = floorHours }, sealedAt: Now);
+
+    [Fact]
+    public async Task Validate_CrossMidnightOriginal_BothPiecesOnSameDay_LeavesTheOtherDayBelowItsFloor_IsInvalid()
+    {
+        // A real floor this time (2h) — abandoning Day2 entirely now leaves it with 0
+        // planned hours, below the floor. This is exactly the case the floor check exists
+        // for: same-day splits can never violate the floor (the "must sum to the original
+        // duration" rule already conserves a single day's total), but a cross-midnight
+        // original genuinely can be reallocated unevenly across the two days it spans.
+        var blockId = Guid.NewGuid();
+        var contractId = Guid.NewGuid();
+        var day1 = new DateTime(2026, 1, 3, 0, 0, 0, DateTimeKind.Utc);
+        var day2 = day1.AddDays(1);
+
+        _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
+            .Returns(FocusBlock.Create(blockId, Guid.NewGuid(), day1.AddHours(23), day2.AddHours(1), contractId: contractId));
+        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
+            .Returns(SealedContractWithFloor(contractId, floorHours: 2, DateOnly.FromDateTime(day1), DateOnly.FromDateTime(day2)));
+        _computePlannedFocusHours.HandleAsync(Arg.Any<ComputePlannedFocusHoursQuery>(), Arg.Any<CancellationToken>())
+            .Returns(new Dictionary<DateOnly, double> { [DateOnly.FromDateTime(day1)] = 2 }); // Day2 absent = 0 planned
+        var command = new SplitPlannedBlockCommand
+        {
+            OriginalBlockId = blockId,
+            FirstBlockStart = day1.AddHours(10),
+            FirstBlockEnd = day1.AddHours(11),
+            SecondBlockStart = day1.AddHours(11),
+            SecondBlockEnd = day1.AddHours(12)
+        };
+
+        var result = await CreateValidator().ValidateAsync(command);
+
+        result.IsValid.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Validate_CrossMidnightOriginal_PiecesOnEitherDay_BothDaysMeetTheFloor_IsValid()
+    {
+        var blockId = Guid.NewGuid();
+        var contractId = Guid.NewGuid();
+        var day1 = new DateTime(2026, 1, 3, 0, 0, 0, DateTimeKind.Utc);
+        var day2 = day1.AddDays(1);
+
+        _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
+            .Returns(FocusBlock.Create(blockId, Guid.NewGuid(), day1.AddHours(23), day2.AddHours(1), contractId: contractId));
+        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
+            .Returns(SealedContractWithFloor(contractId, floorHours: 0.5, DateOnly.FromDateTime(day1), DateOnly.FromDateTime(day2)));
+        _computePlannedFocusHours.HandleAsync(Arg.Any<ComputePlannedFocusHoursQuery>(), Arg.Any<CancellationToken>())
+            .Returns(new Dictionary<DateOnly, double>
+            {
+                [DateOnly.FromDateTime(day1)] = 0.5,
+                [DateOnly.FromDateTime(day2)] = 1.5
+            });
+        var command = new SplitPlannedBlockCommand
+        {
+            OriginalBlockId = blockId,
+            FirstBlockStart = day1.AddHours(23),
+            FirstBlockEnd = day1.AddHours(23).AddMinutes(30), // 30 min, entirely Day1
+            SecondBlockStart = day2,
+            SecondBlockEnd = day2.AddHours(1).AddMinutes(30) // 90 min, entirely Day2
+        };
+
+        var result = await CreateValidator().ValidateAsync(command);
+
+        result.IsValid.Should().BeTrue();
+    }
+
+    // Same narrowed-range rationale as SealedContractWithFloor above; DailyFloorPolicy
+    // stays DailyFloor.None (Seal forbids a contract carrying both a daily floor and a
+    // whole-contract ContractFloor at once).
+    private static NenContract SealedPeriodBudgetContract(Guid id, double contractFloorHours, DateOnly day1, DateOnly day2) =>
+        NenContract.Seal(id, "Contract", new NenContractGoal("Goal"),
+            day1, day2,
+            StrictnessRule.PeriodTimeBudget, DailyFloorPolicy.None, null, false,
+            new Dictionary<DateOnly, double>(), sealedAt: Now,
+            contractFloor: new ContractFloor(contractFloorHours));
+
+    [Fact]
+    public async Task Validate_PeriodTimeBudgetWithContractFloor_DropsBelowPeriodTotal_IsInvalid()
+    {
+        // A whole-period ContractFloor checks the sum across the period, not any one day —
+        // reallocating hours between the two pieces can still legally drop the period total
+        // if the split itself sheds time (e.g. a gap left unaccounted for isn't possible
+        // here since duration must sum to the original, but ComputePlannedFocusHours also
+        // reflects every OTHER block in the period, which this test starves down directly).
+        var blockId = Guid.NewGuid();
+        var contractId = Guid.NewGuid();
+        var day1 = DateOnly.FromDateTime(OriginalStart);
+        SetUpDailyFlexBlock(blockId, contractId); // reuse for block wiring only
+        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
+            .Returns(SealedPeriodBudgetContract(contractId, contractFloorHours: 10, day1, day1.AddDays(30)));
+        _computePlannedFocusHours.HandleAsync(Arg.Any<ComputePlannedFocusHoursQuery>(), Arg.Any<CancellationToken>())
+            .Returns(new Dictionary<DateOnly, double> { [day1] = 3 }); // well under the 10h period floor
+
+        var result = await CreateValidator().ValidateAsync(ValidCommand(blockId));
+
+        result.IsValid.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Validate_PeriodTimeBudgetWithContractFloor_MeetsPeriodTotal_IsValid()
+    {
+        var blockId = Guid.NewGuid();
+        var contractId = Guid.NewGuid();
+        var day1 = DateOnly.FromDateTime(OriginalStart);
+        SetUpDailyFlexBlock(blockId, contractId);
+        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
+            .Returns(SealedPeriodBudgetContract(contractId, contractFloorHours: 3, day1, day1.AddDays(30)));
+        _computePlannedFocusHours.HandleAsync(Arg.Any<ComputePlannedFocusHoursQuery>(), Arg.Any<CancellationToken>())
+            .Returns(new Dictionary<DateOnly, double> { [day1] = 3 });
+
+        var result = await CreateValidator().ValidateAsync(ValidCommand(blockId));
+
+        result.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Validate_PeriodTimeBudgetWithoutContractFloor_FallsBackToPerDayFloor_IsInvalid()
+    {
+        // No ContractFloor set — falls back to the same per-day IsDayMet check Daily
+        // Flexibility uses, per the user-confirmed rule ("if it's period budget without a
+        // daily floor it should just check against the floor").
+        var blockId = Guid.NewGuid();
+        var contractId = Guid.NewGuid();
+        var day1 = new DateOnly(2026, 1, 3);
+        var day2 = day1.AddDays(1);
+
+        _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
+            .Returns(FocusBlock.Create(blockId, Guid.NewGuid(),
+                day1.ToDateTime(TimeOnly.MinValue).AddHours(23), day2.ToDateTime(TimeOnly.MinValue).AddHours(1), contractId: contractId));
+        // The contract's own DailyFloorPolicy carries a real per-day floor (2h) even though
+        // StrictnessRule is PeriodTimeBudget — this is the "hybrid" shape: no ContractFloor,
+        // so the validator's live check falls back to per-day IsDayMet, same as Daily Flex.
+        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
+            .Returns(NenContract.Seal(contractId, "Contract", new NenContractGoal("Goal"),
+                day1, day2, StrictnessRule.PeriodTimeBudget, new DailyFloorPolicy(new DailyFloor(2)), null, false,
+                new Dictionary<DateOnly, double> { [day1] = 2, [day2] = 2 }, sealedAt: Now));
+        _computePlannedFocusHours.HandleAsync(Arg.Any<ComputePlannedFocusHoursQuery>(), Arg.Any<CancellationToken>())
+            .Returns(new Dictionary<DateOnly, double> { [day1] = 2 }); // Day2 abandoned entirely = 0
+
+        var command = new SplitPlannedBlockCommand
+        {
+            OriginalBlockId = blockId,
+            FirstBlockStart = day1.ToDateTime(TimeOnly.MinValue).AddHours(10),
+            FirstBlockEnd = day1.ToDateTime(TimeOnly.MinValue).AddHours(11),
+            SecondBlockStart = day1.ToDateTime(TimeOnly.MinValue).AddHours(11),
+            SecondBlockEnd = day1.ToDateTime(TimeOnly.MinValue).AddHours(12)
+        };
+
+        var result = await CreateValidator().ValidateAsync(command);
+
+        result.IsValid.Should().BeFalse();
+    }
+
     [Fact]
     public async Task Validate_PieceItselfCrossesMidnight_IsInvalid()
     {
@@ -387,33 +560,6 @@ public class SplitPlannedBlockValidatorTests
             FirstBlockEnd = day2.AddHours(1), // crosses midnight itself
             SecondBlockStart = day2.AddHours(1),
             SecondBlockEnd = day2.AddHours(2)
-        };
-
-        var result = await CreateValidator().ValidateAsync(command);
-
-        result.IsValid.Should().BeFalse();
-    }
-
-    [Fact]
-    public async Task Validate_OriginalSpansMoreThanTwoDays_IsInvalid()
-    {
-        // Focus blocks aren't capped at 12h yet (Part 2 of Gap K) — a 3+ day original is
-        // still technically constructible and must be rejected outright rather than have
-        // the 2-day-only day-membership logic silently misapply to it.
-        var blockId = Guid.NewGuid();
-        var contractId = Guid.NewGuid();
-        var day1 = new DateTime(2026, 1, 3, 0, 0, 0, DateTimeKind.Utc);
-        var original = FocusBlock.Create(blockId, Guid.NewGuid(), day1.AddHours(22), day1.AddDays(2).AddHours(2), contractId: contractId); // spans 3 days
-        _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns(original);
-        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
-            .Returns(SealedContract(StrictnessRule.DailyFlexibility, contractId));
-        var command = new SplitPlannedBlockCommand
-        {
-            OriginalBlockId = blockId,
-            FirstBlockStart = day1.AddHours(22),
-            FirstBlockEnd = day1.AddHours(23),
-            SecondBlockStart = day1.AddHours(23),
-            SecondBlockEnd = day1.AddDays(2).AddHours(2).AddHours(-25) // arbitrary, rejected before duration is even checked
         };
 
         var result = await CreateValidator().ValidateAsync(command);
