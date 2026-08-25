@@ -410,11 +410,13 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     // Mirrors SplitPlannedBlockValidator's gating conditions exactly — sourced from
     // dto.IsUnderInEffectContract + dto.ContractStrictnessRule (Application-computed),
     // IsStartLocked (the future-only guard — a block that hasn't started yet always has
-    // Start > now), IsEditingCompleted (a completed ritual means a session ran), and the
-    // live active-session noticeboard. The validator remains the sole authority; this only
-    // gates button visibility, same relationship CanDeleteFromForm has to its validator.
+    // Start > now), IsEditingCompleted (a completed ritual means a session ran), IsFocusBlock
+    // (Split is Focus-only — a Background block has no session and no Daily Floor
+    // relevance), and the live active-session noticeboard. The validator remains the sole
+    // authority; this only gates button visibility, same relationship CanDeleteFromForm has
+    // to its validator.
     public bool CanSplitBlock =>
-        IsEditing && !_editingIsDraft
+        IsEditing && !_editingIsDraft && IsFocusBlock
         && _isEditingBlockContractLocked && _isEditingBlockDailyFlexibility
         && !IsStartLocked && !_isEditingCompleted
         && _sessionState.ActiveSession?.OriginatingBlockId != _editingBlockId;
@@ -676,6 +678,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     {
         RefreshAvailablePresets();
         SelectedPreset = AvailablePresets.FirstOrDefault();
+        OnPropertyChanged(nameof(CanSplitBlock));
     }
 
     partial void OnSelectedPresetChanged(BlockPresetDto? value) => _ = RefreshRedemptionPreviewAsync();

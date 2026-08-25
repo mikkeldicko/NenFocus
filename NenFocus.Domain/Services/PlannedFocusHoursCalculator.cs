@@ -8,20 +8,10 @@ public sealed class PlannedFocusHoursCalculator : IPlannedFocusHoursCalculator
 
         foreach (var (start, end) in focusBlockRanges)
         {
-            if (end <= start)
-                continue;
-
-            var cursor = start;
-            while (cursor < end)
+            foreach (var (date, segmentStart, segmentEnd) in DayRangeSplitter.Split(start, end))
             {
-                var nextDayStart = cursor.Date.AddDays(1);
-                var segmentEnd = end < nextDayStart ? end : nextDayStart;
-
-                var date = DateOnly.FromDateTime(cursor.Date);
-                var hours = (segmentEnd - cursor).TotalHours;
+                var hours = (segmentEnd - segmentStart).TotalHours;
                 hoursByDay[date] = hoursByDay.GetValueOrDefault(date) + hours;
-
-                cursor = segmentEnd;
             }
         }
 

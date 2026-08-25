@@ -75,7 +75,7 @@ public sealed class UpdatePlannedBlockValidator : AbstractValidator<UpdatePlanne
                 if (block?.ContractId is not { } contractId) return true;
                 var contract = await contracts.GetByIdAsync(contractId, ct);
                 return contract is null
-                    || contract.AllowsBlockPlacement(DateOnly.FromDateTime(command.Start), command.Start, command.End);
+                    || contract.AllowsBlockPlacement(_clock.ToLocal(command.Start), _clock.ToLocal(command.End));
             })
             .WithMessage("This block falls outside the contract's configured Work Hours for that day.");
 
@@ -101,14 +101,14 @@ public sealed class UpdatePlannedBlockValidator : AbstractValidator<UpdatePlanne
                     return;
                 }
 
-                var originalDate = DateOnly.FromDateTime(block.Start.ToLocalTime());
-                var newStartDate = DateOnly.FromDateTime(command.Start.ToLocalTime());
+                var originalDate = _clock.ToLocalDate(block.Start);
+                var newStartDate = _clock.ToLocalDate(command.Start);
                 // A block ending exactly at midnight (e.g. 22:00-24:00) has no actual
                 // presence on the next calendar day — resolve End's boundary to the day it
                 // closes out, mirroring the [start, end) exclusive-end semantics
                 // PlannedBlock.IsActive already uses everywhere else. Subtracting one tick
                 // only changes the resolved date when End lands exactly on a day boundary.
-                var newEndDate = DateOnly.FromDateTime(command.End.ToLocalTime().AddTicks(-1));
+                var newEndDate = DateOnly.FromDateTime(_clock.ToLocal(command.End).AddTicks(-1));
 
                 if (contract.AllowsBlockTimeChange(originalDate, newStartDate, newEndDate))
                 {

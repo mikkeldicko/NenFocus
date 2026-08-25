@@ -9,11 +9,13 @@ public sealed class ComputePlannedFocusHoursQueryHandler
 {
     private readonly IPlannedBlockRepository _blocks;
     private readonly IPlannedFocusHoursCalculator _calculator;
+    private readonly ISystemClock _clock;
 
-    public ComputePlannedFocusHoursQueryHandler(IPlannedBlockRepository blocks, IPlannedFocusHoursCalculator calculator)
+    public ComputePlannedFocusHoursQueryHandler(IPlannedBlockRepository blocks, IPlannedFocusHoursCalculator calculator, ISystemClock clock)
     {
         _blocks = blocks;
         _calculator = calculator;
+        _clock = clock;
     }
 
     public async Task<IReadOnlyDictionary<DateOnly, double>> HandleAsync(
@@ -33,6 +35,11 @@ public sealed class ComputePlannedFocusHoursQueryHandler
 
         ranges.AddRange(query.DraftFocusBlockRanges);
 
-        return _calculator.Calculate(ranges);
+        // Calculator buckets by calendar day off whatever it's given — convert to local
+        // here so "which day" always means the user's local day, not the UTC day these
+        // ranges are stored/passed in as.
+        var localRanges = ranges.Select(r => (_clock.ToLocal(r.Start), _clock.ToLocal(r.End)));
+
+        return _calculator.Calculate(localRanges);
     }
 }

@@ -23,6 +23,7 @@ public class UpdatePlannedBlockValidatorTests
     public UpdatePlannedBlockValidatorTests()
     {
         _clock.UtcNow.Returns(Now);
+        _clock.ToLocal(Arg.Any<DateTime>()).Returns(ci => ci.Arg<DateTime>());
         _computePlannedFocusHours.HandleAsync(Arg.Any<ComputePlannedFocusHoursQuery>(), Arg.Any<CancellationToken>())
             .Returns(new Dictionary<DateOnly, double>());
     }

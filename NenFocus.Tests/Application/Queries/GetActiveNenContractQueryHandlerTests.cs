@@ -34,6 +34,7 @@ public class GetActiveNenContractQueryHandlerTests
     public GetActiveNenContractQueryHandlerTests()
     {
         _clock.UtcNow.Returns(Today);
+        _clock.ToLocal(Arg.Any<DateTime>()).Returns(ci => ci.Arg<DateTime>());
         _deficits.HandleAsync(Arg.Any<GetNenContractDeficitsQuery>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<FocusBlockDeficitDto>)[]);
         _completedHours.HandleAsync(Arg.Any<GetNenContractCompletedFocusHoursQuery>(), Arg.Any<CancellationToken>())
@@ -103,6 +104,22 @@ public class GetActiveNenContractQueryHandlerTests
         result.TotalDays.Should().Be(10);
         result.DayNumber.Should().Be(4); // Today is Jan 4, contract starts Jan 1
         result.StrictnessRule.Should().Be(StrictnessRule.DailyFlexibility);
+    }
+
+    [Fact]
+    public async Task HandleAsync_DayNumber_UsesLocalCalendarDay_NotRawUtcDate()
+    {
+        // 1:00 AM UTC Jan 5 — but 8:00 PM local (UTC-5) on Jan 4. A fix that forgot to
+        // convert would compute "today" as Jan 5 (DayNumber 5) instead of Jan 4 (DayNumber 4).
+        var utcNow = new DateTime(2026, 1, 5, 1, 0, 0, DateTimeKind.Utc);
+        _clock.UtcNow.Returns(utcNow);
+        _clock.ToLocal(Arg.Any<DateTime>()).Returns(ci => ci.Arg<DateTime>().AddHours(-5));
+        var contract = Contract();
+        SetInEffect(contract);
+
+        var result = await CreateHandler().HandleAsync(AnyWeek);
+
+        result!.DayNumber.Should().Be(4);
     }
 
     [Fact]

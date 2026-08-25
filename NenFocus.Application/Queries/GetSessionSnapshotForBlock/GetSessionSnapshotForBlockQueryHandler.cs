@@ -11,17 +11,20 @@ public sealed class GetSessionSnapshotForBlockQueryHandler
     private readonly IBlockedAttemptTracker _attempts;
     private readonly IPlannedBlockRepository _blocks;
     private readonly IBlockPresetRepository _presets;
+    private readonly ISystemClock _clock;
 
     public GetSessionSnapshotForBlockQueryHandler(
         ISessionRepository sessions,
         IBlockedAttemptTracker attempts,
         IPlannedBlockRepository blocks,
-        IBlockPresetRepository presets)
+        IBlockPresetRepository presets,
+        ISystemClock clock)
     {
         _sessions = sessions;
         _attempts = attempts;
         _blocks = blocks;
         _presets = presets;
+        _clock = clock;
     }
 
     public async Task<SessionSnapshotDto?> HandleAsync(
@@ -49,7 +52,7 @@ public sealed class GetSessionSnapshotForBlockQueryHandler
                     MissedBlockId = entry.MissedBlockId,
                     MissedBlockPresetName = missedPreset?.Name ?? "Unknown",
                     MissedBlockDate = missedBlock is not null
-                        ? DateOnly.FromDateTime(missedBlock.Start)
+                        ? _clock.ToLocalDate(missedBlock.Start)
                         : default,
                     MinutesCovered = entry.MinutesCovered
                 });

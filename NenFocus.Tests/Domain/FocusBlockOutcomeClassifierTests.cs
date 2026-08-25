@@ -257,4 +257,84 @@ public class FocusBlockOutcomeClassifierTests
 
         credited.Should().Be(90);
     }
+
+    [Fact]
+    public void CreditedWindow_WithinGracePeriod_IsTheFullScheduledWindow()
+    {
+        var ritualAt = ScheduledStart.AddMinutes(3);
+
+        var window = _classifier.CreditedWindow(
+            ScheduledStart, ScheduledEnd, ritualCompletedAt: ritualAt, sessionEndedAt: null, actualElapsedMinutes: 117);
+
+        window.Should().Be((ScheduledStart, ScheduledEnd));
+    }
+
+    [Fact]
+    public void CreditedWindow_Missed_IsNull()
+    {
+        var window = _classifier.CreditedWindow(
+            ScheduledStart, ScheduledEnd, ritualCompletedAt: null, sessionEndedAt: null, actualElapsedMinutes: 0);
+
+        window.Should().BeNull();
+    }
+
+    [Fact]
+    public void CreditedWindow_EndedEarly_IsTheActualWorkedWindow()
+    {
+        var sessionEndedAt = ScheduledStart.AddMinutes(20);
+
+        var window = _classifier.CreditedWindow(
+            ScheduledStart, ScheduledEnd, ritualCompletedAt: ScheduledStart, sessionEndedAt: sessionEndedAt, actualElapsedMinutes: 20);
+
+        window.Should().Be((ScheduledStart, ScheduledStart.AddMinutes(20)));
+    }
+
+    [Fact]
+    public void CreditedWindow_StartedLateAndRanPastScheduledEnd_ClipsAtScheduledEnd()
+    {
+        var ritualAt = ScheduledStart.AddMinutes(19);
+
+        var window = _classifier.CreditedWindow(
+            ScheduledStart, ScheduledEnd, ritualCompletedAt: ritualAt, sessionEndedAt: null, actualElapsedMinutes: 180);
+
+        window.Should().Be((ritualAt, ScheduledEnd));
+    }
+
+    [Fact]
+    public void CreditedWindow_MatchesCreditedFocusMinutesDuration_AcrossEveryBranch()
+    {
+        // The refactor's core guarantee: CreditedFocusMinutes is derived from this window,
+        // so the two can never disagree — verified directly rather than assumed, across
+        // every branch the classifier has.
+        var scenarios = new (DateTime? ritual, DateTime? ended, double elapsed)[]
+        {
+            (ScheduledStart.AddMinutes(3), null, 117),                                    // within grace
+            (ScheduledStart.AddMinutes(19), null, 180),                                   // late, capped
+            (ScheduledStart.AddMinutes(10), null, 90),                                    // late, uncapped
+            (ScheduledStart, ScheduledStart.AddMinutes(20), 20),                          // ended early
+            (null, null, 0),                                                              // missed
+        };
+
+        foreach (var (ritual, ended, elapsed) in scenarios)
+        {
+            var minutes = _classifier.CreditedFocusMinutes(ScheduledStart, ScheduledEnd, ritual, ended, elapsed);
+            var window = _classifier.CreditedWindow(ScheduledStart, ScheduledEnd, ritual, ended, elapsed);
+
+            var windowMinutes = window is { } w ? (w.End - w.Start).TotalMinutes : 0;
+            windowMinutes.Should().Be(minutes);
+        }
+    }
+
+    [Fact]
+    public void CreditedWindow_CrossMidnightScheduledBlock_WithinGracePeriod_IsTheFullOvernightWindow()
+    {
+        var overnightStart = new DateTime(2026, 1, 1, 22, 0, 0, DateTimeKind.Utc);
+        var overnightEnd = new DateTime(2026, 1, 2, 1, 0, 0, DateTimeKind.Utc); // 22:00-01:00, 3h
+        var ritualAt = overnightStart.AddMinutes(2);
+
+        var window = _classifier.CreditedWindow(
+            overnightStart, overnightEnd, ritualCompletedAt: ritualAt, sessionEndedAt: null, actualElapsedMinutes: 178);
+
+        window.Should().Be((overnightStart, overnightEnd));
+    }
 }

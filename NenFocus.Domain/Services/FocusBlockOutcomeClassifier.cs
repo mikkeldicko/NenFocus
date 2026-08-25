@@ -40,20 +40,32 @@ public sealed class FocusBlockOutcomeClassifier : IFocusBlockOutcomeClassifier
         DateTime? sessionEndedAt,
         double actualElapsedMinutes)
     {
+        var window = CreditedWindow(scheduledStart, scheduledEnd, ritualCompletedAt, sessionEndedAt, actualElapsedMinutes);
+        return window is { } w ? (w.End - w.Start).TotalMinutes : 0;
+    }
+
+    public (DateTime Start, DateTime End)? CreditedWindow(
+        DateTime scheduledStart,
+        DateTime scheduledEnd,
+        DateTime? ritualCompletedAt,
+        DateTime? sessionEndedAt,
+        double actualElapsedMinutes)
+    {
         if (sessionEndedAt is { } endedEarly && endedEarly < scheduledEnd)
-            return actualElapsedMinutes;
+            return ritualCompletedAt is { } startedAt ? (startedAt, startedAt.AddMinutes(actualElapsedMinutes)) : null;
 
         if (ritualCompletedAt is { } completedAt)
         {
             if (!IsLateStart(scheduledStart, completedAt))
-                return (scheduledEnd - scheduledStart).TotalMinutes;
+                return (scheduledStart, scheduledEnd);
 
             // Started late: credit is bounded by the block's own scheduled end — a session
             // that ran (or was force-ended, e.g. via the debug clock) past scheduledEnd earns
             // no more credit than a full-length, on-time completion would have.
-            return Math.Min(actualElapsedMinutes, (scheduledEnd - completedAt).TotalMinutes);
+            var cappedMinutes = Math.Min(actualElapsedMinutes, (scheduledEnd - completedAt).TotalMinutes);
+            return cappedMinutes > 0 ? (completedAt, completedAt.AddMinutes(cappedMinutes)) : null;
         }
 
-        return actualElapsedMinutes;
+        return null;
     }
 }

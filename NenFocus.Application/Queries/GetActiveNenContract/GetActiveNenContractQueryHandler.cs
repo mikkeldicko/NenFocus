@@ -42,7 +42,7 @@ public sealed class GetActiveNenContractQueryHandler : IQueryHandler<GetActiveNe
         if (contract is null)
             return null;
 
-        var today = DateOnly.FromDateTime(_clock.UtcNow);
+        var today = _clock.ToLocalDate(_clock.UtcNow);
         var clampedToday = today < contract.StartDate ? contract.StartDate
             : today > contract.EndDate ? contract.EndDate
             : today;

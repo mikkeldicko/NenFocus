@@ -11,13 +11,16 @@ public sealed class ComputeRedemptionAttributionQueryHandler
 {
     private readonly INenContractRepository _contracts;
     private readonly IQueryHandler<GetNenContractDeficitsQuery, IReadOnlyList<FocusBlockDeficitDto>> _deficits;
+    private readonly ISystemClock _clock;
 
     public ComputeRedemptionAttributionQueryHandler(
         INenContractRepository contracts,
-        IQueryHandler<GetNenContractDeficitsQuery, IReadOnlyList<FocusBlockDeficitDto>> deficits)
+        IQueryHandler<GetNenContractDeficitsQuery, IReadOnlyList<FocusBlockDeficitDto>> deficits,
+        ISystemClock clock)
     {
         _contracts = contracts;
         _deficits = deficits;
+        _clock = clock;
     }
 
     public async Task<RedemptionAttributionResult> HandleAsync(
@@ -28,7 +31,7 @@ public sealed class ComputeRedemptionAttributionQueryHandler
             ? await _contracts.GetByIdAsync(contractId, ct) is { } scoped ? [scoped] : []
             : await _contracts.GetAllInEffectAsync(ct);
 
-        var proposedDate = DateOnly.FromDateTime(query.BlockStart);
+        var proposedDate = _clock.ToLocalDate(query.BlockStart);
         var eligible = new List<(NenContract Contract, FocusBlockDeficitDto Deficit)>();
 
         foreach (var contract in candidates)
@@ -40,7 +43,7 @@ public sealed class ComputeRedemptionAttributionQueryHandler
                 if (deficit.BlockPresetId != query.PresetId) continue;
                 if (deficit.FocusBlockId == query.ExcludeBlockId) continue;
 
-                var missedDate = DateOnly.FromDateTime(deficit.ScheduledStart);
+                var missedDate = _clock.ToLocalDate(deficit.ScheduledStart);
                 if (contract.CheckRedemptionEligibility(missedDate, proposedDate) != RedemptionEligibility.Allowed)
                     continue;
 

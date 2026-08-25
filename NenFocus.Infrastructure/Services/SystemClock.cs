@@ -19,6 +19,8 @@ public sealed class SystemClock : ISystemClock, IDebugClockController, IDisposab
     public DateTime UtcNow => DateTime.UtcNow + _offset;
     public bool IsOverridden => _offset != TimeSpan.Zero;
 
+    public DateTime ToLocal(DateTime utc) => utc.ToLocalTime();
+
     public event EventHandler? Changed;
 
     public SystemClock()

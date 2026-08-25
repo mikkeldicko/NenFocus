@@ -44,4 +44,20 @@ public interface IFocusBlockOutcomeClassifier
         DateTime? ritualCompletedAt,
         DateTime? sessionEndedAt,
         double actualElapsedMinutes);
+
+    /// <summary>
+    /// The real (start, end) window backing whatever <see cref="CreditedFocusMinutes"/>
+    /// would return for the same inputs — null when nothing is credited (e.g. Missed).
+    /// Within the grace period the window is the full scheduled window (credit is granted
+    /// regardless of actual timing); otherwise it's the actual worked window, clipped
+    /// exactly where <see cref="CreditedFocusMinutes"/> clips its own minutes. Lets a
+    /// caller split credited time across the calendar days it actually falls on — the
+    /// scalar alone can't say which days.
+    /// </summary>
+    (DateTime Start, DateTime End)? CreditedWindow(
+        DateTime scheduledStart,
+        DateTime scheduledEnd,
+        DateTime? ritualCompletedAt,
+        DateTime? sessionEndedAt,
+        double actualElapsedMinutes);
 }

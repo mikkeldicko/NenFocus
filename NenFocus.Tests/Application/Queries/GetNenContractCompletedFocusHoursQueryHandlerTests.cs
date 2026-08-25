@@ -20,17 +20,22 @@ public class GetNenContractCompletedFocusHoursQueryHandlerTests
     private readonly IPlannedBlockRepository _blocks = Substitute.For<IPlannedBlockRepository>();
     private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
     private readonly IFocusBlockOutcomeClassifier _classifier = Substitute.For<IFocusBlockOutcomeClassifier>();
+    // Real, pure implementation — already covered by its own tests (incl. cross-midnight
+    // splitting); using it here keeps this handler's tests focused on which windows it
+    // hands over, not re-verifying summing/splitting math a second time.
+    private readonly IPlannedFocusHoursCalculator _calculator = new PlannedFocusHoursCalculator();
     private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
 
     public GetNenContractCompletedFocusHoursQueryHandlerTests()
     {
         _clock.UtcNow.Returns(Now);
+        _clock.ToLocal(Arg.Any<DateTime>()).Returns(ci => ci.Arg<DateTime>());
         _sessions.GetByOriginatingBlockIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((Session?)null);
         _sessions.GetHistoryAsync(Arg.Any<DateOnly>(), Arg.Any<DateOnly>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<Session>)[]);
     }
 
-    private GetNenContractCompletedFocusHoursQueryHandler CreateHandler() => new(_contracts, _blocks, _sessions, _classifier, _clock);
+    private GetNenContractCompletedFocusHoursQueryHandler CreateHandler() => new(_contracts, _blocks, _sessions, _classifier, _calculator, _clock);
 
     private static NenContract ActiveContract() => NenContract.Seal(
         id: ContractId,
@@ -58,10 +63,12 @@ public class GetNenContractCompletedFocusHoursQueryHandlerTests
     [Fact]
     public async Task HandleAsync_OpenBlock_NotCredited()
     {
+        // CreditedWindow deliberately left unstubbed — an open/unresolved block credits
+        // nothing, and NSubstitute's default null for an unconfigured nullable return
+        // already models that correctly.
         _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(ActiveContract());
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Now.AddHours(-1), Now.AddHours(1), contractId: ContractId);
         _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
-        _classifier.Classify(block.Start, block.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Now).Returns((FocusBlockOutcome?)null);
 
         var result = await CreateHandler().HandleAsync(new GetNenContractCompletedFocusHoursQuery(ContractId), CancellationToken.None);
 
@@ -76,8 +83,8 @@ public class GetNenContractCompletedFocusHoursQueryHandlerTests
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), day, day.AddHours(2), contractId: ContractId);
         block.MarkRitualCompleted(day.AddMinutes(3));
         _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
-        _classifier.Classify(block.Start, block.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Now).Returns(FocusBlockOutcome.CompletedOnTime);
-        _classifier.CreditedFocusMinutes(block.Start, block.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), 0).Returns(120); // grace-period credit
+        _classifier.CreditedWindow(block.Start, block.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), 0)
+            .Returns(((DateTime, DateTime)?)(block.Start, block.End)); // grace-period credit: full window
 
         var result = await CreateHandler().HandleAsync(new GetNenContractCompletedFocusHoursQuery(ContractId), CancellationToken.None);
 
@@ -87,12 +94,11 @@ public class GetNenContractCompletedFocusHoursQueryHandlerTests
     [Fact]
     public async Task HandleAsync_MissedBlock_CreditsZero()
     {
+        // CreditedWindow left unstubbed — Missed credits nothing.
         _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(ActiveContract());
         var day = new DateTime(2026, 1, 2, 9, 0, 0, DateTimeKind.Utc);
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), day, day.AddHours(2), contractId: ContractId);
         _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
-        _classifier.Classify(block.Start, block.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Now).Returns(FocusBlockOutcome.Missed);
-        _classifier.CreditedFocusMinutes(block.Start, block.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), 0).Returns(0);
 
         var result = await CreateHandler().HandleAsync(new GetNenContractCompletedFocusHoursQuery(ContractId), CancellationToken.None);
 
@@ -114,12 +120,33 @@ public class GetNenContractCompletedFocusHoursQueryHandlerTests
         session.Complete(day.AddMinutes(20)); // quit after 20 of the 120 scheduled minutes
         _sessions.GetByOriginatingBlockIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns(session);
 
-        _classifier.Classify(block.Start, block.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Now).Returns(FocusBlockOutcome.EndedEarly);
-        _classifier.CreditedFocusMinutes(block.Start, block.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), 20).Returns(20); // no grace-period credit for an early end
+        _classifier.CreditedWindow(block.Start, block.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), 20)
+            .Returns(((DateTime, DateTime)?)(day, day.AddMinutes(20))); // no grace-period credit for an early end
 
         var result = await CreateHandler().HandleAsync(new GetNenContractCompletedFocusHoursQuery(ContractId), CancellationToken.None);
 
         result[DateOnly.FromDateTime(day)].Should().BeApproximately(20.0 / 60.0, 0.001); // ~20 minutes, not the full 2 hours
+    }
+
+    [Fact]
+    public async Task HandleAsync_CrossMidnightBlock_SplitsCreditedHoursAcrossBothDays()
+    {
+        // The credited window itself spans midnight (a 22:00-01:00 overnight block, fully
+        // credited via the grace period) — proves the handler's local-converted window
+        // actually gets split per day, not attributed wholesale to the start day.
+        _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(ActiveContract());
+        var start = new DateTime(2026, 1, 2, 22, 0, 0, DateTimeKind.Utc);
+        var end = new DateTime(2026, 1, 3, 1, 0, 0, DateTimeKind.Utc); // 22:00-01:00, 3h
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), start, end, contractId: ContractId);
+        block.MarkRitualCompleted(start.AddMinutes(2));
+        _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
+        _classifier.CreditedWindow(block.Start, block.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), 0)
+            .Returns(((DateTime, DateTime)?)(start, end));
+
+        var result = await CreateHandler().HandleAsync(new GetNenContractCompletedFocusHoursQuery(ContractId), CancellationToken.None);
+
+        result[new DateOnly(2026, 1, 2)].Should().Be(2); // 22:00-24:00
+        result[new DateOnly(2026, 1, 3)].Should().Be(1); // 00:00-01:00
     }
 
     [Fact]
@@ -157,10 +184,10 @@ public class GetNenContractCompletedFocusHoursQueryHandlerTests
         var block2 = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),
             new DateTime(2026, 1, 2, 14, 0, 0), new DateTime(2026, 1, 2, 15, 30, 0), contractId: ContractId);
         _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block1, block2]);
-        _classifier.Classify(block1.Start, block1.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Now).Returns(FocusBlockOutcome.CompletedOnTime);
-        _classifier.Classify(block2.Start, block2.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Now).Returns(FocusBlockOutcome.CompletedOnTime);
-        _classifier.CreditedFocusMinutes(block1.Start, block1.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), 0).Returns(60);
-        _classifier.CreditedFocusMinutes(block2.Start, block2.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), 0).Returns(90);
+        _classifier.CreditedWindow(block1.Start, block1.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), 0)
+            .Returns(((DateTime, DateTime)?)(block1.Start, block1.End));
+        _classifier.CreditedWindow(block2.Start, block2.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), 0)
+            .Returns(((DateTime, DateTime)?)(block2.Start, block2.End));
 
         var result = await CreateHandler().HandleAsync(new GetNenContractCompletedFocusHoursQuery(ContractId), CancellationToken.None);
 
@@ -175,7 +202,6 @@ public class GetNenContractCompletedFocusHoursQueryHandlerTests
         var presetId = Guid.NewGuid();
         var block = FocusBlock.Create(Guid.NewGuid(), presetId, Now.AddDays(-1), Now.AddDays(-1).AddHours(1), contractId: ContractId);
         _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
-        _classifier.Classify(block.Start, block.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Now).Returns((FocusBlockOutcome?)null);
 
         var spontaneousStart = new DateTime(2026, 1, 3, 10, 0, 0, DateTimeKind.Utc);
         var spontaneous = Session.Create(Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(45)),
@@ -188,6 +214,28 @@ public class GetNenContractCompletedFocusHoursQueryHandlerTests
         var result = await CreateHandler().HandleAsync(new GetNenContractCompletedFocusHoursQuery(ContractId), CancellationToken.None);
 
         result[DateOnly.FromDateTime(spontaneousStart)].Should().Be(0.75); // 45 minutes
+    }
+
+    [Fact]
+    public async Task HandleAsync_CrossMidnightSpontaneousSession_SplitsAcrossBothDays()
+    {
+        _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(ActiveContract());
+        var presetId = Guid.NewGuid();
+        var block = FocusBlock.Create(Guid.NewGuid(), presetId, Now.AddDays(-1), Now.AddDays(-1).AddHours(1), contractId: ContractId);
+        _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
+
+        var spontaneousStart = new DateTime(2026, 1, 3, 23, 0, 0, DateTimeKind.Utc);
+        var spontaneous = Session.Create(Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(120)),
+            presetId, SessionOrigin.Spontaneous);
+        spontaneous.Start(spontaneousStart);
+        spontaneous.Complete(spontaneousStart.AddHours(2)); // 23:00-01:00
+        _sessions.GetHistoryAsync(StartDate, EndDate, null, Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyList<Session>)[spontaneous]);
+
+        var result = await CreateHandler().HandleAsync(new GetNenContractCompletedFocusHoursQuery(ContractId), CancellationToken.None);
+
+        result[new DateOnly(2026, 1, 3)].Should().Be(1);
+        result[new DateOnly(2026, 1, 4)].Should().Be(1);
     }
 
     [Fact]
@@ -232,5 +280,26 @@ public class GetNenContractCompletedFocusHoursQueryHandlerTests
         // if under the contract, is already credited via the block loop) — excluded here
         // since it's not Spontaneous.
         result.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task HandleAsync_ConvertsCreditedWindowsToLocalTime_BeforeSplittingByDay()
+    {
+        // 1:00 AM UTC Jan 3 — but 8:00 PM local (UTC-5) on Jan 2. A fix that forgot to
+        // convert would credit Jan 3 instead of Jan 2.
+        _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(ActiveContract());
+        var start = new DateTime(2026, 1, 3, 0, 0, 0, DateTimeKind.Utc);
+        var end = new DateTime(2026, 1, 3, 1, 0, 0, DateTimeKind.Utc);
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), start, end, contractId: ContractId);
+        block.MarkRitualCompleted(start);
+        _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
+        _classifier.CreditedWindow(block.Start, block.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), 0)
+            .Returns(((DateTime, DateTime)?)(start, end));
+        _clock.ToLocal(Arg.Any<DateTime>()).Returns(ci => ci.Arg<DateTime>().AddHours(-5));
+
+        var result = await CreateHandler().HandleAsync(new GetNenContractCompletedFocusHoursQuery(ContractId), CancellationToken.None);
+
+        result.Should().ContainKey(new DateOnly(2026, 1, 2));
+        result.Should().NotContainKey(new DateOnly(2026, 1, 3));
     }
 }

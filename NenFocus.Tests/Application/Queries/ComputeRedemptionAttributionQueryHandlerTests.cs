@@ -18,8 +18,16 @@ public class ComputeRedemptionAttributionQueryHandlerTests
     private readonly INenContractRepository _contracts = Substitute.For<INenContractRepository>();
     private readonly IQueryHandler<GetNenContractDeficitsQuery, IReadOnlyList<FocusBlockDeficitDto>> _deficits =
         Substitute.For<IQueryHandler<GetNenContractDeficitsQuery, IReadOnlyList<FocusBlockDeficitDto>>>();
+    private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
 
-    private ComputeRedemptionAttributionQueryHandler CreateHandler() => new(_contracts, _deficits);
+    public ComputeRedemptionAttributionQueryHandlerTests()
+    {
+        // Identity conversion by default — every existing scenario below reasons purely in
+        // UTC, so "local" trivially equals the UTC value unless a test overrides it.
+        _clock.ToLocal(Arg.Any<DateTime>()).Returns(ci => ci.Arg<DateTime>());
+    }
+
+    private ComputeRedemptionAttributionQueryHandler CreateHandler() => new(_contracts, _deficits, _clock);
 
     private static NenContract SameDayContract(Guid id) =>
         NenContract.Seal(id, "Contract", new NenContractGoal("Goal"), Today.AddDays(-1), Today.AddDays(7),
@@ -107,6 +115,35 @@ public class ComputeRedemptionAttributionQueryHandlerTests
 
         result.ContractId.Should().BeNull();
         result.Entries.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task HandleAsync_UsesLocalCalendarDay_NotRawUtcDate_ForRedemptionEligibility()
+    {
+        var contractId = Guid.NewGuid();
+        var presetId = Guid.NewGuid();
+        var contract = SameDayContract(contractId);
+
+        // Missed block scheduled 1:00 AM UTC Jan 2 — but 8:00 PM local (UTC-5) on Jan 1.
+        var missedScheduledUtc = new DateTime(2026, 1, 2, 1, 0, 0, DateTimeKind.Utc);
+        var deficit = Deficit(presetId, missedScheduledUtc, remaining: 40);
+
+        // Proposed block at 11:00 PM UTC Jan 1 — 6:00 PM local (UTC-5), the *same* local day
+        // as the miss even though their raw UTC dates differ. A fix that forgot to convert
+        // would compare Jan 2 (UTC) against Jan 1 (UTC) and wrongly report WrongDay.
+        var proposedStartUtc = new DateTime(2026, 1, 1, 23, 0, 0, DateTimeKind.Utc);
+
+        _clock.ToLocal(Arg.Any<DateTime>()).Returns(ci => ci.Arg<DateTime>().AddHours(-5));
+        _contracts.GetAllInEffectAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<NenContract>)[contract]);
+        _deficits.HandleAsync(new GetNenContractDeficitsQuery(contractId), Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyList<FocusBlockDeficitDto>)[deficit]);
+
+        var result = await CreateHandler().HandleAsync(
+            new ComputeRedemptionAttributionQuery(null, presetId, proposedStartUtc, proposedStartUtc.AddHours(1), null),
+            CancellationToken.None);
+
+        result.ContractId.Should().Be(contractId);
+        result.Entries.Should().ContainSingle(e => e.MissedBlockId == deficit.FocusBlockId);
     }
 
     [Fact]

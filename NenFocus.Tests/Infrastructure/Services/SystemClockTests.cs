@@ -67,4 +67,16 @@ public class SystemClockTests
 
         Assert.True(raised);
     }
+
+    [Fact]
+    public void ToLocal_PreservesTheInstantAndReportsLocalKind()
+    {
+        using var clock = new SystemClock();
+        var utc = DateTime.UtcNow;
+
+        var local = clock.ToLocal(utc);
+
+        Assert.Equal(DateTimeKind.Local, local.Kind);
+        Assert.Equal(utc, local.ToUniversalTime());
+    }
 }

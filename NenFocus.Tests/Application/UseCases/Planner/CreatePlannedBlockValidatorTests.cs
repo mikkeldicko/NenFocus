@@ -22,6 +22,7 @@ public class CreatePlannedBlockValidatorTests
     public CreatePlannedBlockValidatorTests()
     {
         _clock.UtcNow.Returns(Now);
+        _clock.ToLocal(Arg.Any<DateTime>()).Returns(ci => ci.Arg<DateTime>());
         // Default: echoes back whatever ContractId was scoped to, no redemption entries —
         // matches the real handler's behavior when nothing is eligible to cover.
         _computeRedemptionAttribution

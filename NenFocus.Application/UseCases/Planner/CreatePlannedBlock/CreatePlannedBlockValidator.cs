@@ -54,7 +54,7 @@ public sealed class CreatePlannedBlockValidator : AbstractValidator<CreatePlanne
                 if (contractId is not { } resolvedContractId) return true;
                 var contract = await contracts.GetByIdAsync(resolvedContractId, ct);
                 return contract is null
-                    || contract.AllowsBlockPlacement(DateOnly.FromDateTime(command.Start), command.Start, command.End);
+                    || contract.AllowsBlockPlacement(clock.ToLocal(command.Start), clock.ToLocal(command.End));
             })
             .WithMessage("This block falls outside the contract's configured Work Hours for that day.");
     }

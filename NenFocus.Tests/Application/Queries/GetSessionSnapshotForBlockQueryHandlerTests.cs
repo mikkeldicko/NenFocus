@@ -17,8 +17,14 @@ public class GetSessionSnapshotForBlockQueryHandlerTests
     private readonly IBlockedAttemptTracker _attempts = Substitute.For<IBlockedAttemptTracker>();
     private readonly IPlannedBlockRepository _blocks = Substitute.For<IPlannedBlockRepository>();
     private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
+    private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
 
-    private GetSessionSnapshotForBlockQueryHandler CreateHandler() => new(_sessions, _attempts, _blocks, _presets);
+    public GetSessionSnapshotForBlockQueryHandlerTests()
+    {
+        _clock.ToLocal(Arg.Any<DateTime>()).Returns(ci => ci.Arg<DateTime>());
+    }
+
+    private GetSessionSnapshotForBlockQueryHandler CreateHandler() => new(_sessions, _attempts, _blocks, _presets, _clock);
 
     private static Session CreateCompletedSession(Guid originatingBlockId, string goal = "Finish report", string? reflection = null)
     {
@@ -95,5 +101,33 @@ public class GetSessionSnapshotForBlockQueryHandlerTests
         coverage.MissedBlockPresetName.Should().Be("Deep Work");
         coverage.MissedBlockDate.Should().Be(DateOnly.FromDateTime(missedStart));
         coverage.MinutesCovered.Should().Be(30);
+    }
+
+    [Fact]
+    public async Task HandleAsync_MissedBlockDate_UsesLocalCalendarDay_NotRawUtcDate()
+    {
+        var missedBlockId = Guid.NewGuid();
+        var missedPresetId = Guid.NewGuid();
+        // 1:00 AM UTC Jan 2 — but 8:00 PM local (UTC-5) on Jan 1.
+        var missedStart = new DateTime(2026, 1, 2, 1, 0, 0, DateTimeKind.Utc);
+        var missedBlock = FocusBlock.Create(missedBlockId, missedPresetId, missedStart, missedStart.AddHours(1));
+
+        var coveringBlockId = Guid.NewGuid();
+        var coveringBlock = FocusBlock.Create(coveringBlockId, Guid.NewGuid(), Start, End,
+            redemptionEntries: [new RedemptionEntry(missedBlockId, 30)]);
+
+        var session = CreateCompletedSession(coveringBlockId);
+        _sessions.GetByOriginatingBlockIdAsync(coveringBlockId, Arg.Any<CancellationToken>()).Returns(session);
+        _attempts.GetAttemptsForSessionAsync(session.Id).Returns([]);
+        _blocks.GetByIdAsync(coveringBlockId, Arg.Any<CancellationToken>()).Returns(coveringBlock);
+        _blocks.GetByIdAsync(missedBlockId, Arg.Any<CancellationToken>()).Returns(missedBlock);
+        _presets.GetByIdAsync(missedPresetId, Arg.Any<CancellationToken>())
+            .Returns(BlockPreset.Create(missedPresetId, "Deep Work", WebsiteFilterType.Allowlist, BlockPresetType.Focus, missedStart));
+        _clock.ToLocal(Arg.Any<DateTime>()).Returns(ci => ci.Arg<DateTime>().AddHours(-5));
+
+        var result = await CreateHandler().HandleAsync(new GetSessionSnapshotForBlockQuery { PlannedBlockId = coveringBlockId });
+
+        var coverage = result!.RedemptionCoverage.Should().ContainSingle().Subject;
+        coverage.MissedBlockDate.Should().Be(new DateOnly(2026, 1, 1));
     }
 }

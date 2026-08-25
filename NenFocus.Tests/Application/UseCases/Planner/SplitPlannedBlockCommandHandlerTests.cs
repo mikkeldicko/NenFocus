@@ -169,23 +169,6 @@ public class SplitPlannedBlockCommandHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_BackgroundBlock_CreatesTwoBackgroundBlocks()
-    {
-        var blockId = Guid.NewGuid();
-        var presetId = Guid.NewGuid();
-        var contractId = Guid.NewGuid();
-        _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(BackgroundBlock.Create(blockId, presetId, OriginalStart, OriginalEnd, contractId: contractId));
-
-        var result = await CreateHandler().HandleAsync(ValidCommand(blockId));
-
-        result.Success.Should().BeTrue();
-        await _blocks.Received(2).AddAsync(Arg.Is<PlannedBlock>(b => b is BackgroundBlock), Arg.Any<CancellationToken>());
-        await _computeRedemptionAttribution.DidNotReceive().HandleAsync(
-            Arg.Any<ComputeRedemptionAttributionQuery>(), Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
     public async Task HandleAsync_NeitherNewBlockInheritsOriginalId()
     {
         var blockId = Guid.NewGuid();

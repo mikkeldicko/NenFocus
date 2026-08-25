@@ -653,7 +653,7 @@ public class NenContractTests
     {
         var contract = Seal(workHoursPolicy: null);
 
-        contract.AllowsBlockPlacement(StartDate, StartDate.ToDateTime(new TimeOnly(3, 0)), StartDate.ToDateTime(new TimeOnly(4, 0)))
+        contract.AllowsBlockPlacement(StartDate.ToDateTime(new TimeOnly(3, 0)), StartDate.ToDateTime(new TimeOnly(4, 0)))
             .Should().BeTrue();
     }
 
@@ -663,7 +663,7 @@ public class NenContractTests
         var policy = new WorkHoursPolicy(new WorkHours(new TimeOnly(9, 0), new TimeOnly(17, 0)));
         var contract = Seal(workHoursPolicy: policy);
 
-        contract.AllowsBlockPlacement(StartDate, StartDate.ToDateTime(new TimeOnly(9, 0)), StartDate.ToDateTime(new TimeOnly(10, 0)))
+        contract.AllowsBlockPlacement(StartDate.ToDateTime(new TimeOnly(9, 0)), StartDate.ToDateTime(new TimeOnly(10, 0)))
             .Should().BeTrue();
     }
 
@@ -673,7 +673,7 @@ public class NenContractTests
         var policy = new WorkHoursPolicy(new WorkHours(new TimeOnly(9, 0), new TimeOnly(17, 0)));
         var contract = Seal(workHoursPolicy: policy);
 
-        contract.AllowsBlockPlacement(StartDate, StartDate.ToDateTime(new TimeOnly(20, 0)), StartDate.ToDateTime(new TimeOnly(21, 0)))
+        contract.AllowsBlockPlacement(StartDate.ToDateTime(new TimeOnly(20, 0)), StartDate.ToDateTime(new TimeOnly(21, 0)))
             .Should().BeFalse();
     }
 
@@ -685,8 +685,45 @@ public class NenContractTests
             new Dictionary<DateOnly, WorkHours?> { [StartDate] = null }); // no constraint that day
         var contract = Seal(workHoursPolicy: policy);
 
-        contract.AllowsBlockPlacement(StartDate, StartDate.ToDateTime(new TimeOnly(20, 0)), StartDate.ToDateTime(new TimeOnly(21, 0)))
+        contract.AllowsBlockPlacement(StartDate.ToDateTime(new TimeOnly(20, 0)), StartDate.ToDateTime(new TimeOnly(21, 0)))
             .Should().BeTrue();
+    }
+
+    [Fact]
+    public void AllowsBlockPlacement_CrossMidnightBlock_BothDaysWithinTheirOwnWindow_Allowed()
+    {
+        // 23:00-01:00 — each day individually configured to allow that late window,
+        // rather than the block being anchored to (and checked only against) its start day.
+        // Day 1's window ends at TimeOnly.MaxValue — as close to midnight as representable,
+        // since TimeOnly can't express "24:00" itself; the day-1 segment produced by the
+        // splitter ends exactly at midnight, resolved via the same one-tick-back idiom
+        // AllowsBlockPlacement applies internally.
+        var lateWindow = new WorkHours(new TimeOnly(22, 0), TimeOnly.MaxValue);
+        var earlyWindow = new WorkHours(new TimeOnly(0, 0), new TimeOnly(2, 0));
+        var policy = new WorkHoursPolicy(
+            new WorkHours(new TimeOnly(9, 0), new TimeOnly(17, 0)),
+            new Dictionary<DateOnly, WorkHours?> { [StartDate] = lateWindow, [StartDate.AddDays(1)] = earlyWindow });
+        var contract = Seal(workHoursPolicy: policy);
+
+        contract.AllowsBlockPlacement(StartDate.ToDateTime(new TimeOnly(23, 0)), StartDate.AddDays(1).ToDateTime(new TimeOnly(1, 0)))
+            .Should().BeTrue();
+    }
+
+    [Fact]
+    public void AllowsBlockPlacement_CrossMidnightBlock_OnlyTheSecondDayViolatesItsWindow_NotAllowed()
+    {
+        // Day 1 (up to midnight) is genuinely satisfied; Day 2's default 9-17 window
+        // doesn't cover 00:00-01:00 — isolates that the rejection comes from Day 2's own
+        // window, not (as the earlier, flawed version of this test accidentally allowed
+        // to pass unnoticed) from Day 1 spuriously failing the midnight boundary too.
+        var lateWindow = new WorkHours(new TimeOnly(22, 0), TimeOnly.MaxValue);
+        var policy = new WorkHoursPolicy(
+            new WorkHours(new TimeOnly(9, 0), new TimeOnly(17, 0)), // default window doesn't cover 00:00-01:00 either
+            new Dictionary<DateOnly, WorkHours?> { [StartDate] = lateWindow });
+        var contract = Seal(workHoursPolicy: policy);
+
+        contract.AllowsBlockPlacement(StartDate.ToDateTime(new TimeOnly(23, 0)), StartDate.AddDays(1).ToDateTime(new TimeOnly(1, 0)))
+            .Should().BeFalse();
     }
 
     [Fact]

@@ -11,9 +11,15 @@ public class ComputePlannedFocusHoursQueryHandlerTests
 {
     private readonly IPlannedBlockRepository _blocks = Substitute.For<IPlannedBlockRepository>();
     private readonly IPlannedFocusHoursCalculator _calculator = Substitute.For<IPlannedFocusHoursCalculator>();
+    private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
     private static readonly Guid ContractId = Guid.NewGuid();
 
-    private ComputePlannedFocusHoursQueryHandler CreateHandler() => new(_blocks, _calculator);
+    public ComputePlannedFocusHoursQueryHandlerTests()
+    {
+        _clock.ToLocal(Arg.Any<DateTime>()).Returns(ci => ci.Arg<DateTime>());
+    }
+
+    private ComputePlannedFocusHoursQueryHandler CreateHandler() => new(_blocks, _calculator, _clock);
 
     [Fact]
     public async Task HandleAsync_NoContractId_DoesNotQueryRepository()
@@ -76,6 +82,20 @@ public class ComputePlannedFocusHoursQueryHandlerTests
 
         _calculator.Received(1).Calculate(Arg.Is<IEnumerable<(DateTime Start, DateTime End)>>(r =>
             r.Count() == 1 && r.First().Start == updatedStart && r.First().End == updatedEnd));
+    }
+
+    [Fact]
+    public async Task HandleAsync_ConvertsRangesToLocalTime_BeforePassingToTheCalculator()
+    {
+        var draftStart = new DateTime(2026, 1, 1, 9, 0, 0, DateTimeKind.Utc);
+        var draftEnd = new DateTime(2026, 1, 1, 11, 0, 0, DateTimeKind.Utc);
+        _clock.ToLocal(Arg.Any<DateTime>()).Returns(ci => ci.Arg<DateTime>().AddHours(-5));
+
+        await CreateHandler().HandleAsync(
+            new ComputePlannedFocusHoursQuery(null, [(draftStart, draftEnd)]), CancellationToken.None);
+
+        _calculator.Received(1).Calculate(Arg.Is<IEnumerable<(DateTime Start, DateTime End)>>(r =>
+            r.Count() == 1 && r.First().Start == draftStart.AddHours(-5) && r.First().End == draftEnd.AddHours(-5)));
     }
 
     [Fact]

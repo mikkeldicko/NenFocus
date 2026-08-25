@@ -12,6 +12,7 @@ public sealed class GetNenContractCompletedFocusHoursQueryHandler
     private readonly IPlannedBlockRepository _blocks;
     private readonly ISessionRepository _sessions;
     private readonly IFocusBlockOutcomeClassifier _classifier;
+    private readonly IPlannedFocusHoursCalculator _calculator;
     private readonly ISystemClock _clock;
 
     public GetNenContractCompletedFocusHoursQueryHandler(
@@ -19,12 +20,14 @@ public sealed class GetNenContractCompletedFocusHoursQueryHandler
         IPlannedBlockRepository blocks,
         ISessionRepository sessions,
         IFocusBlockOutcomeClassifier classifier,
+        IPlannedFocusHoursCalculator calculator,
         ISystemClock clock)
     {
         _contracts = contracts;
         _blocks = blocks;
         _sessions = sessions;
         _classifier = classifier;
+        _calculator = calculator;
         _clock = clock;
     }
 
@@ -32,11 +35,9 @@ public sealed class GetNenContractCompletedFocusHoursQueryHandler
         GetNenContractCompletedFocusHoursQuery query,
         CancellationToken ct = default)
     {
-        var hoursByDay = new Dictionary<DateOnly, double>();
-
         var contract = await _contracts.GetByIdAsync(query.ContractId, ct);
         if (contract is null)
-            return hoursByDay;
+            return new Dictionary<DateOnly, double>();
 
         var now = _clock.UtcNow;
         var contractBlocks = await _blocks.GetForContractAsync(query.ContractId, ct);
@@ -48,18 +49,21 @@ public sealed class GetNenContractCompletedFocusHoursQueryHandler
         // set Focus-only makes that true by construction, not by coincidence.
         var focusPresetIds = focusBlocks.Select(b => b.BlockPresetId).ToHashSet();
 
+        // Every credited window — from resolved blocks and matching spontaneous sessions
+        // alike — local-converted and handed to the calculator once, so a window spanning
+        // midnight (in either source) is split across the days it actually occupies exactly
+        // like the planned-hours side already does.
+        var creditedWindows = new List<(DateTime Start, DateTime End)>();
+
         foreach (var block in focusBlocks)
         {
             var session = await _sessions.GetByOriginatingBlockIdAsync(block.Id, ct);
-            var outcome = _classifier.Classify(block.Start, block.End, block.RitualCompletedAt, session?.EndedAt, now);
-            if (outcome is null)
-                continue; // still open — nothing resolved to credit yet
-
             var actualElapsedMinutes = session?.GetElapsedTime(now)?.TotalMinutes ?? 0;
-            var creditedMinutes = _classifier.CreditedFocusMinutes(
+            var window = _classifier.CreditedWindow(
                 block.Start, block.End, block.RitualCompletedAt, session?.EndedAt, actualElapsedMinutes);
 
-            AddMinutes(hoursByDay, DateOnly.FromDateTime(block.Start), creditedMinutes);
+            if (window is { } w)
+                creditedWindows.Add((_clock.ToLocal(w.Start), _clock.ToLocal(w.End)));
         }
 
         var spontaneousSessions = await _sessions.GetHistoryAsync(contract.StartDate, contract.EndDate, presetId: null, ct);
@@ -70,15 +74,11 @@ public sealed class GetNenContractCompletedFocusHoursQueryHandler
             if (session.StartedAt is not { } startedAt) continue;
 
             var minutes = session.GetElapsedTime(now)?.TotalMinutes ?? 0;
-            AddMinutes(hoursByDay, DateOnly.FromDateTime(startedAt), minutes);
+            if (minutes <= 0) continue;
+
+            creditedWindows.Add((_clock.ToLocal(startedAt), _clock.ToLocal(startedAt.AddMinutes(minutes))));
         }
 
-        return hoursByDay;
-    }
-
-    private static void AddMinutes(Dictionary<DateOnly, double> hoursByDay, DateOnly date, double minutes)
-    {
-        if (minutes <= 0) return;
-        hoursByDay[date] = hoursByDay.GetValueOrDefault(date) + minutes / 60.0;
+        return _calculator.Calculate(creditedWindows);
     }
 }

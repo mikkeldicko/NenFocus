@@ -1,5 +1,6 @@
 using NenFocus.Domain.Enums;
 using NenFocus.Domain.Events;
+using NenFocus.Domain.Services;
 using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Domain.Entities;
@@ -235,14 +236,32 @@ public class NenContract : AggregateRoot
     }
 
     /// <summary>
-    /// Whether a block spanning [start, end) may be placed under this contract, per its
-    /// Work Hours window for that day. A contract with no WorkHoursPolicy configured
-    /// (Simple contracts, or Advanced contracts that opted out) has no constraint.
+    /// Whether a block spanning [localStart, localEnd) may be placed under this contract,
+    /// per each day it touches' own Work Hours window — walked day-by-day so a block
+    /// spanning midnight is checked against both days' windows independently, rather than
+    /// anchored to a single day. A contract with no WorkHoursPolicy configured (Simple
+    /// contracts, or Advanced contracts that opted out) has no constraint. Callers must
+    /// pass already-local-converted times — Work Hours is configured in the user's local
+    /// wall-clock terms, and this method has no way to convert on its own.
     /// </summary>
-    public bool AllowsBlockPlacement(DateOnly date, DateTime start, DateTime end)
+    public bool AllowsBlockPlacement(DateTime localStart, DateTime localEnd)
     {
-        var workHours = WorkHoursPolicy?.For(date);
-        return workHours is null || workHours.ContainsRange(start, end);
+        foreach (var (date, segmentStart, segmentEnd) in DayRangeSplitter.Split(localStart, localEnd))
+        {
+            var workHours = WorkHoursPolicy?.For(date);
+            if (workHours is null) continue;
+
+            // DayRangeSplitter ends every non-final day-segment exactly at midnight — but
+            // TimeOnly (WorkHours.End's type) can never represent "24:00", so a segment
+            // ending exactly at midnight could never satisfy any window otherwise, no
+            // matter how late it's configured. Same "exact midnight has no presence on the
+            // next day" resolution already used for date extraction elsewhere in this
+            // codebase (e.g. SplitPlannedBlockValidator), applied here to the time check.
+            var effectiveEnd = segmentEnd.TimeOfDay == TimeSpan.Zero ? segmentEnd.AddTicks(-1) : segmentEnd;
+            if (!workHours.ContainsRange(segmentStart, effectiveEnd))
+                return false;
+        }
+        return true;
     }
 
     /// <summary>

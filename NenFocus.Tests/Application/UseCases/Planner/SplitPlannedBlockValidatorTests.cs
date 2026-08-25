@@ -23,6 +23,7 @@ public class SplitPlannedBlockValidatorTests
     public SplitPlannedBlockValidatorTests()
     {
         _clock.UtcNow.Returns(Now);
+        _clock.ToLocal(Arg.Any<DateTime>()).Returns(ci => ci.Arg<DateTime>());
         _sessions.GetByOriginatingBlockIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
             .Returns((Session?)null);
         _blocks.GetOverlappingAsync(Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<bool>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>())
@@ -267,25 +268,23 @@ public class SplitPlannedBlockValidatorTests
     {
         // Original block is 22:00-24:00 so the split's total duration (1h + 1h) still
         // matches it exactly; the second half ends exactly at midnight — no actual
-        // presence on the next calendar day. localDay is 2 days out so every wall-clock
-        // hour on it converts to a UTC instant safely after Now regardless of the test
-        // machine's timezone offset.
+        // presence on the next calendar day.
         var blockId = Guid.NewGuid();
         var contractId = Guid.NewGuid();
-        var localDay = Now.ToLocalTime().Date.AddDays(2);
-        DateTime AtLocal(double hours) => DateTime.SpecifyKind(localDay.AddHours(hours), DateTimeKind.Local).ToUniversalTime();
+        var day = new DateTime(2026, 1, 3, 0, 0, 0, DateTimeKind.Utc);
+        DateTime At(double hours) => day.AddHours(hours);
 
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, Guid.NewGuid(), AtLocal(22), AtLocal(24), contractId: contractId));
+            .Returns(FocusBlock.Create(blockId, Guid.NewGuid(), At(22), At(24), contractId: contractId));
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
             .Returns(SealedContract(StrictnessRule.DailyFlexibility, contractId));
         var command = new SplitPlannedBlockCommand
         {
             OriginalBlockId = blockId,
-            FirstBlockStart = AtLocal(22),
-            FirstBlockEnd = AtLocal(23),
-            SecondBlockStart = AtLocal(23),
-            SecondBlockEnd = AtLocal(24)
+            FirstBlockStart = At(22),
+            FirstBlockEnd = At(23),
+            SecondBlockStart = At(23),
+            SecondBlockEnd = At(24)
         };
 
         var result = await CreateValidator().ValidateAsync(command);
@@ -294,8 +293,10 @@ public class SplitPlannedBlockValidatorTests
     }
 
     [Fact]
-    public async Task Validate_BackgroundBlock_UsesNonRitualOverlapCheck()
+    public async Task Validate_BackgroundBlock_IsInvalid()
     {
+        // Split is Focus-only — a Background block can never be split, regardless of how
+        // valid the rest of the command would otherwise be.
         var blockId = Guid.NewGuid();
         var contractId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
@@ -305,8 +306,118 @@ public class SplitPlannedBlockValidatorTests
 
         var result = await CreateValidator().ValidateAsync(ValidCommand(blockId));
 
+        result.IsValid.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Validate_CrossMidnightOriginal_PiecesOnEitherDay_IsValid()
+    {
+        // Original: Day1 23:00 - Day2 01:00 (2h). Reallocated as First on Day1, Second on
+        // Day2 — proves Split now lets pieces land on either day the original spans,
+        // rather than forcing everything onto the start day alone.
+        var blockId = Guid.NewGuid();
+        var contractId = Guid.NewGuid();
+        var day1 = new DateTime(2026, 1, 3, 0, 0, 0, DateTimeKind.Utc);
+        var day2 = day1.AddDays(1);
+
+        _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
+            .Returns(FocusBlock.Create(blockId, Guid.NewGuid(), day1.AddHours(23), day2.AddHours(1), contractId: contractId));
+        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
+            .Returns(SealedContract(StrictnessRule.DailyFlexibility, contractId));
+        var command = new SplitPlannedBlockCommand
+        {
+            OriginalBlockId = blockId,
+            FirstBlockStart = day1.AddHours(23),
+            FirstBlockEnd = day1.AddHours(23).AddMinutes(30), // 30 min, entirely Day1
+            SecondBlockStart = day2,
+            SecondBlockEnd = day2.AddHours(1).AddMinutes(30) // 90 min, entirely Day2
+        };
+
+        var result = await CreateValidator().ValidateAsync(command);
+
         result.IsValid.Should().BeTrue();
-        await _blocks.Received().GetOverlappingAsync(
-            Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<DateTime>(), false, blockId, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Validate_CrossMidnightOriginal_BothPiecesOnSameDay_IsValid()
+    {
+        // Both pieces land on Day1, abandoning Day2 entirely — Split deliberately isn't
+        // floor-protected (matches its existing unprotected behavior for ordinary same-day
+        // splits), so the user can knowingly create a deficit this way.
+        var blockId = Guid.NewGuid();
+        var contractId = Guid.NewGuid();
+        var day1 = new DateTime(2026, 1, 3, 0, 0, 0, DateTimeKind.Utc);
+        var day2 = day1.AddDays(1);
+
+        _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
+            .Returns(FocusBlock.Create(blockId, Guid.NewGuid(), day1.AddHours(23), day2.AddHours(1), contractId: contractId));
+        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
+            .Returns(SealedContract(StrictnessRule.DailyFlexibility, contractId));
+        var command = new SplitPlannedBlockCommand
+        {
+            OriginalBlockId = blockId,
+            FirstBlockStart = day1.AddHours(10),
+            FirstBlockEnd = day1.AddHours(11),
+            SecondBlockStart = day1.AddHours(11),
+            SecondBlockEnd = day1.AddHours(12)
+        };
+
+        var result = await CreateValidator().ValidateAsync(command);
+
+        result.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Validate_PieceItselfCrossesMidnight_IsInvalid()
+    {
+        // Each resulting piece must resolve to a single day — no recursive crossing.
+        var blockId = Guid.NewGuid();
+        var contractId = Guid.NewGuid();
+        var day1 = new DateTime(2026, 1, 3, 0, 0, 0, DateTimeKind.Utc);
+        var day2 = day1.AddDays(1);
+
+        _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
+            .Returns(FocusBlock.Create(blockId, Guid.NewGuid(), day1.AddHours(22), day2.AddHours(2), contractId: contractId)); // 4h
+        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
+            .Returns(SealedContract(StrictnessRule.DailyFlexibility, contractId));
+        var command = new SplitPlannedBlockCommand
+        {
+            OriginalBlockId = blockId,
+            FirstBlockStart = day1.AddHours(22),
+            FirstBlockEnd = day2.AddHours(1), // crosses midnight itself
+            SecondBlockStart = day2.AddHours(1),
+            SecondBlockEnd = day2.AddHours(2)
+        };
+
+        var result = await CreateValidator().ValidateAsync(command);
+
+        result.IsValid.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Validate_OriginalSpansMoreThanTwoDays_IsInvalid()
+    {
+        // Focus blocks aren't capped at 12h yet (Part 2 of Gap K) — a 3+ day original is
+        // still technically constructible and must be rejected outright rather than have
+        // the 2-day-only day-membership logic silently misapply to it.
+        var blockId = Guid.NewGuid();
+        var contractId = Guid.NewGuid();
+        var day1 = new DateTime(2026, 1, 3, 0, 0, 0, DateTimeKind.Utc);
+        var original = FocusBlock.Create(blockId, Guid.NewGuid(), day1.AddHours(22), day1.AddDays(2).AddHours(2), contractId: contractId); // spans 3 days
+        _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns(original);
+        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
+            .Returns(SealedContract(StrictnessRule.DailyFlexibility, contractId));
+        var command = new SplitPlannedBlockCommand
+        {
+            OriginalBlockId = blockId,
+            FirstBlockStart = day1.AddHours(22),
+            FirstBlockEnd = day1.AddHours(23),
+            SecondBlockStart = day1.AddHours(23),
+            SecondBlockEnd = day1.AddDays(2).AddHours(2).AddHours(-25) // arbitrary, rejected before duration is even checked
+        };
+
+        var result = await CreateValidator().ValidateAsync(command);
+
+        result.IsValid.Should().BeFalse();
     }
 }
