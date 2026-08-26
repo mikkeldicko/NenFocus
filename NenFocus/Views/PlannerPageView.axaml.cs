@@ -126,16 +126,6 @@ public partial class PlannerPageView : UserControl
     }
 
     /// <summary>
-    /// The rendered height of one dropdown row under the live Fluent theme — measured via a
-    /// real headless Avalonia layout pass (not guessed), confirmed identical for a plain
-    /// string item and for End's TimeText+Duration ItemTemplate. Also the basis for
-    /// PlannerPageView.axaml's MaxDropDownHeight="171" (5 * 33 + 6px popup chrome) — the two
-    /// must stay in step; if that XAML value ever changes, this constant needs the same
-    /// re-derivation.
-    /// </summary>
-    private const double DropdownItemHeightPx = 33;
-
-    /// <summary>
     /// Positions the popup's ScrollViewer directly at the top of a 5-item window around
     /// <paramref name="centerIndex"/> (PlannerDropdownWindow.Bounds), by setting Offset —
     /// deliberately NOT ScrollIntoView, which only scrolls the minimum distance needed to
@@ -151,8 +141,21 @@ public partial class PlannerPageView : UserControl
     /// Retries a few times at Loaded priority rather than a single fire-and-forget post:
     /// right after ItemsSource is swapped in (BuildVisibleTimeOptions reassigning the
     /// collection — see PlannerPageViewModel), the popup's internal item containers can
-    /// still be mid-rebuild the first time this runs, reporting ItemCount == 0. A single
-    /// attempt would silently no-op there.
+    /// still be mid-rebuild the first time this runs, reporting ItemCount == 0 or an
+    /// unmeasured (zero-height) Extent. A single attempt would silently no-op there.
+    ///
+    /// The index-to-pixels conversion is derived at runtime as Extent.Height / ItemCount
+    /// rather than a hardcoded per-row pixel constant. A prior attempt hardcoded 33px,
+    /// measured via an isolated headless Avalonia layout pass — but diagnostic logging
+    /// against the real running app (2026-08-26, see DESIGN_GAP_HISTORY.md Gap 38) showed
+    /// rows actually render at 38px there (Extent.Height == ItemCount * 38 exactly,
+    /// confirmed for both Start's 97-item list and End's 26-item list), presumably due to
+    /// real Windows theme/DPI/font metrics the headless pass didn't reproduce. That
+    /// mismatch — not a tree-traversal or timing bug — was the actual cause of Open Gap L:
+    /// the offset-setting mechanism itself always worked, it was just computing the wrong
+    /// pixel target, increasingly wrong the further into the list the value was. Deriving
+    /// the row height from the real ScrollViewer at scroll time makes this self-correcting
+    /// regardless of whatever renders it — no constant to keep in sync.
     /// </summary>
     private static void ScrollDropdownToWindow(AutoCompleteBox box, int? centerIndex, int attemptsLeft = 5)
     {
@@ -178,14 +181,16 @@ public partial class PlannerPageView : UserControl
 
             var list = popupContent.OfType<SelectingItemsControl>().FirstOrDefault();
             var scrollViewer = list?.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault();
-            if (list is null || scrollViewer is null || list.ItemCount == 0)
+
+            if (list is null || scrollViewer is null || list.ItemCount == 0 || scrollViewer.Extent.Height <= 0)
             {
                 if (attemptsLeft > 0) ScrollDropdownToWindow(box, centerIndex, attemptsLeft - 1);
                 return;
             }
 
             var (start, _) = PlannerDropdownWindow.Bounds(centerIndex.Value, list.ItemCount, 5);
-            scrollViewer.Offset = new Vector(scrollViewer.Offset.X, start * DropdownItemHeightPx);
+            double itemHeight = scrollViewer.Extent.Height / list.ItemCount;
+            scrollViewer.Offset = new Vector(scrollViewer.Offset.X, start * itemHeight);
         }, DispatcherPriority.Loaded);
     }
 

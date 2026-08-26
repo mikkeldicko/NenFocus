@@ -200,20 +200,21 @@
 		     them without touching each instance. AutoCompleteBox's own default
 		     MaxDropDownHeight is Infinity (confirmed via reflection on the registered
 		     StyledProperty), which is why the popup was growing to fit every item.
-		     171 is not a guessed magic number — measured via a headless Avalonia layout
-		     pass against the live Fluent theme: each ListBoxItem row renders at exactly
-		     33px (theme's default Padding of 12,9,12,12 around one line of text; confirmed
-		     identical for both a plain string item — Start/Split — and End's own
-		     TimeText+Duration ItemTemplate, so it's deterministic across every field here,
-		     not dependent on which template is used), and the popup's outer chrome (a
-		     Border with BorderThickness 1 and Padding 0,2,0,2 around the ListBox) adds a
-		     fixed 6px. 5 * 33 + 6 = 171, verified against the same layout pass to land the
-		     ScrollViewer's viewport at exactly 165px (5 whole rows, no partial 6th row).
+		     196 replaces an earlier 171 that was derived from a headless Avalonia layout
+		     pass claiming 33px rows — that number turned out wrong for the real running
+		     app (see Open Gap L / DESIGN_GAP_HISTORY.md Gap 37/38): live diagnostic logging
+		     (Extent.Height / ItemCount, confirmed identical and exact for both Start's plain
+		     string items and End's TimeText+Duration template) showed rows actually render
+		     at 38px, and the popup's outer chrome (a Border with BorderThickness 1 and
+		     Padding 0,2,0,2 around the ListBox) adds a fixed 6px — confirmed via 8 repeated
+		     LayoutUpdated ticks per open, Viewport rock-steady the whole time, so this isn't
+		     a still-settling number. 5 * 38 + 6 = 196, landing the ScrollViewer's viewport
+		     at exactly 190px (5 whole rows, no partial 6th row).
 		     The inner ScrollViewer's VerticalScrollBarVisibility already defaults to Auto
 		     in AutoCompleteBox's stock template, so capping the height alone is enough to
 		     make the scrollbar appear for the remaining items — no retemplating needed. -->
 		<Style Selector="AutoCompleteBox">
-			<Setter Property="MaxDropDownHeight" Value="171"/>
+			<Setter Property="MaxDropDownHeight" Value="196"/>
 		</Style>
 	</UserControl.Styles>
 

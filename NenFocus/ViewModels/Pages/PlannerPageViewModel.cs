@@ -460,13 +460,13 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     // dto.HasEnded / dto.IsUnderInEffectContract (Application-computed, same predicates the
     // validator calls) and the live active-session noticeboard, not re-derived here.
     public bool CanDeleteFromForm =>
-        IsEditing && !_isEditingBlockEnded && !_isEditingBlockContractLocked
+        IsEditing && !IsEditingBlockEnded && !IsEditingBlockContractLocked
         && _sessionState.ActiveSession?.OriginatingBlockId != _editingBlockId;
 
     // True when the editing block is either currently running (active session) or already completed.
     // Controls visibility of the Save button and disables form inputs.
     public bool IsBlockLocked =>
-        IsEditing && (_isEditingCompleted || _sessionState.ActiveSession?.OriginatingBlockId == _editingBlockId);
+        IsEditing && (IsEditingCompleted || _sessionState.ActiveSession?.OriginatingBlockId == _editingBlockId);
 
     public bool CanSaveBlock => !IsBlockLocked;
 
@@ -492,8 +492,8 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     // to its validator.
     public bool CanSplitBlock =>
         IsEditing && !_editingIsDraft && IsFocusBlock
-        && _isEditingBlockContractLocked && _isEditingBlockDailyFlexibility
-        && !IsStartLocked && !_isEditingCompleted
+        && IsEditingBlockContractLocked && IsEditingBlockDailyFlexibility
+        && !IsStartLocked && !IsEditingCompleted
         && _sessionState.ActiveSession?.OriginatingBlockId != _editingBlockId;
 
     // Deliberately NOT gated on session-active — confirmed with the architect: the only

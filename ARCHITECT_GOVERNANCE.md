@@ -345,19 +345,6 @@ Gaps that have been identified but not yet closed. Each is here because deferrin
 
 \---
 
-### Open Gap L — Planner Time-Field Dropdowns Don't Reliably Scroll to the Current Value (surfaced 2026-08-25; three fix attempts, still broken)
-
-**The gap:** The six Google-Calendar-style time dropdowns added in Gap K Part 2/Gap 37 (`FormStartTime`/`FormEndTime` plus Split's four fields) are supposed to open scrolled to a ~5-item window centered on whatever time is already in the field. In the real running app this still doesn't work reliably — confirmed broken by the architect after three separate fix attempts, each believed correct at the time it landed. See `DESIGN_GAP_HISTORY.md` Gap 37 for the full blow-by-blow; this entry exists so the next session doesn't restart from attempt 1.
-
-**What's been tried and ruled out:**
-1. **`ScrollIntoView` on the popup's `SelectingItemsControl`, found via `box.GetVisualDescendants()`.** Confirmed via a headless Avalonia repro to be a complete no-op — `box.GetVisualDescendants()` never reaches an open `Popup`'s content at all (Avalonia hosts a `Popup`'s `Child` in a separate root via `Popup.Host`, not as part of the owning control's own visual tree). Every symptom reported across this — defaulting to the top of the list, "remembering" a stale manually-scrolled position, drifting on reopen — was AutoCompleteBox's own uncontrolled native behavior; none of it was ever caused by the scroll code actually running incorrectly, because it wasn't running at all.
-2. **Direct `ScrollViewer.Offset` assignment** (to sidestep `ScrollIntoView`'s "already visible → no-op" semantics) — same underlying lookup bug, so it inherited the same complete no-op.
-3. **Traversing via `Popup.Host` instead of `box.GetVisualDescendants()`.** This is the fix that should have worked: verified in an isolated headless Avalonia test (`Popup` → `Popup.Host` as `Visual` → `GetSelfAndVisualDescendants()` → find `SelectingItemsControl`/`ScrollViewer` → set `Offset` directly) across four repeated open/close cycles, landing on the exact same correct offset every time, no drift, text never mutated. **The architect confirmed it is still broken in the real running app.** The discrepancy between the passing isolated repro and the live app's actual behavior is unexplained — something about the real app's popup/timing graph (real Win32 `PopupRoot` vs. headless's `OverlayPopupHost`? a different `IsDropDownOpen` timing sequence in the full app vs. an isolated two-control test? something about `WireTimeDropdown`'s dual `GotFocus`+`PointerPressed` wiring interacting badly in ways a synthetic `Open()` call in the repro didn't exercise?) is the open question.
-
-**Must be closed before:** Nothing urgent — a UX nicety, not a data-integrity or enforcement issue. The dropdowns are still fully usable (typing, clicking any visible item, and `MaxDropDownHeight` capping to ~5 rows all work correctly and are confirmed closed — see Gap 37); only the "open already scrolled to the right spot" convenience is affected, degrading (not blocking) the six time fields' usability.
-
-\---
-
 ## Minor Cleanups
 
 Trivial style or consistency fixes that don't rise to the level of a Design Gap. Deferred until the relevant file is next edited for other reasons. Items here should be deletable in a single line change.
