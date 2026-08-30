@@ -102,6 +102,29 @@ public sealed class FocusBlock : PlannedBlock
     }
 
     /// <summary>
+    /// A redemption block can never claim more scheduled time than it actually redeems —
+    /// covering less than what's owed is fine (the rest stays outstanding for a later
+    /// block), but claiming more would let unaccounted "extra" time hide inside a block
+    /// whose REDEMPTION badge implies its whole span is accounted-for deficit coverage.
+    /// Pure and self-contained (only this block's own Start/End/RedemptionEntries), so it
+    /// lives here rather than in an Application handler — the same justification already
+    /// used for MaxDurationHours/ValidateDuration on this entity. Rounds down, never up:
+    /// the opposite direction from the existing "round up before persisting a fraction into
+    /// a timestamp" rule, because that rule guarantees "covers at least X" survives tick-
+    /// rounding, while this guarantees the opposite — duration must never exceed coverage.
+    /// </summary>
+    public static DateTime CapEndToRedemptionCoverage(DateTime start, DateTime requestedEnd, IReadOnlyList<RedemptionEntry> entries)
+    {
+        if (entries.Count == 0) return requestedEnd;
+
+        var coveredMinutes = entries.Sum(e => e.MinutesCovered);
+        var requestedMinutes = (requestedEnd - start).TotalMinutes;
+        if (coveredMinutes >= requestedMinutes) return requestedEnd;
+
+        return start.AddMinutes(Math.Floor(coveredMinutes));
+    }
+
+    /// <summary>
     /// True when this block's own outcome represents an unredeemed shortfall of its own —
     /// Missed, StartedLate, or EndedEarly — and it isn't itself already serving as a
     /// redemption for another block. A block actively covering someone else's deficit never

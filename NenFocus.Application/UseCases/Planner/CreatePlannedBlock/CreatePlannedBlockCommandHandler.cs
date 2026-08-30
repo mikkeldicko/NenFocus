@@ -36,6 +36,28 @@ public sealed class CreatePlannedBlockCommandHandler : ICommandHandler<CreatePla
         var preset = await _presets.GetByIdAsync(command.PresetId, cancellationToken);
         if (preset is null) return CreatePlannedBlockResult.Fail("Preset not found.");
 
+        // Resolved before the overlap/active-session checks below, not just before
+        // FocusBlock.Create — those checks must validate the window that will actually be
+        // persisted (post-cap), not the longer one the caller originally asked for.
+        Guid? contractId = command.ContractId;
+        IReadOnlyList<RedemptionEntry> redemptionEntries = [];
+        var redemptionCapped = false;
+
+        if (command.BlockPresetType == BlockPresetType.Focus && !command.DeclineRedemption)
+        {
+            var attribution = await _computeRedemptionAttribution.HandleAsync(
+                new ComputeRedemptionAttributionQuery(command.ContractId, command.PresetId, startTime, endTime, ExcludeBlockId: null),
+                cancellationToken);
+            contractId = attribution.ContractId;
+            redemptionEntries = attribution.Entries
+                .Select(e => new RedemptionEntry(e.MissedBlockId, e.MinutesCovered))
+                .ToList();
+
+            var cappedEnd = FocusBlock.CapEndToRedemptionCoverage(startTime, endTime, redemptionEntries);
+            redemptionCapped = cappedEnd != endTime;
+            endTime = cappedEnd;
+        }
+
         if (command.BlockPresetType == BlockPresetType.Focus)
         {
             var overlapping = await _blocks.GetOverlappingAsync(startTime, endTime, _clock.UtcNow, ritualOnly: true, cancellationToken: cancellationToken);
@@ -67,20 +89,6 @@ public sealed class CreatePlannedBlockCommandHandler : ICommandHandler<CreatePla
         PlannedBlock block;
         if (command.BlockPresetType == BlockPresetType.Focus)
         {
-            var contractId = command.ContractId;
-            IReadOnlyList<RedemptionEntry> redemptionEntries = [];
-
-            if (!command.DeclineRedemption)
-            {
-                var attribution = await _computeRedemptionAttribution.HandleAsync(
-                    new ComputeRedemptionAttributionQuery(command.ContractId, command.PresetId, startTime, endTime, ExcludeBlockId: null),
-                    cancellationToken);
-                contractId = attribution.ContractId;
-                redemptionEntries = attribution.Entries
-                    .Select(e => new RedemptionEntry(e.MissedBlockId, e.MinutesCovered))
-                    .ToList();
-            }
-
             block = FocusBlock.Create(Guid.NewGuid(), command.PresetId, startTime, endTime,
                 contractId: contractId,
                 redemptionEntries: redemptionEntries);
@@ -92,6 +100,6 @@ public sealed class CreatePlannedBlockCommandHandler : ICommandHandler<CreatePla
         }
 
         await _blocks.AddAsync(block, cancellationToken);
-        return CreatePlannedBlockResult.Ok(block.Id);
+        return CreatePlannedBlockResult.Ok(block.Id, redemptionCapped);
     }
 }

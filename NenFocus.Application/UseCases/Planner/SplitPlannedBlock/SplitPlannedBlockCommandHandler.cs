@@ -49,11 +49,19 @@ public sealed class SplitPlannedBlockCommandHandler : ICommandHandler<SplitPlann
             var firstDurationMinutes = (command.FirstBlockEnd - command.FirstBlockStart).TotalMinutes;
             var (firstEntries, secondEntries) = SplitEntriesAcrossHalves(attribution.Entries, firstDurationMinutes);
 
+            // A half can still end up needing its own cap even though the combined span's
+            // entries were queried once for the whole original window: if the original
+            // covered less than its own full duration, both resulting halves inherit that
+            // same shortfall proportionally, and each must independently respect "duration
+            // never exceeds what it covers" — the same rule Create/Update enforce.
+            var firstEnd = FocusBlock.CapEndToRedemptionCoverage(command.FirstBlockStart, command.FirstBlockEnd, firstEntries);
+            var secondEnd = FocusBlock.CapEndToRedemptionCoverage(command.SecondBlockStart, command.SecondBlockEnd, secondEntries);
+
             first = FocusBlock.Create(
-                firstId, focusOriginal.BlockPresetId, command.FirstBlockStart, command.FirstBlockEnd,
+                firstId, focusOriginal.BlockPresetId, command.FirstBlockStart, firstEnd,
                 focusOriginal.Title, attribution.ContractId, firstEntries);
             second = FocusBlock.Create(
-                secondId, focusOriginal.BlockPresetId, command.SecondBlockStart, command.SecondBlockEnd,
+                secondId, focusOriginal.BlockPresetId, command.SecondBlockStart, secondEnd,
                 focusOriginal.Title, attribution.ContractId, secondEntries);
         }
         else

@@ -43,6 +43,11 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     public const int TotalHours = LastHour - FirstHour;
     public double GridContentHeight => HourRowHeight * TotalHours;
 
+    // Shared by every path that can trigger FocusBlock.CapEndToRedemptionCoverage — create
+    // (via the confirm gate), edit (form Save), and drag-resize.
+    private const string RedemptionCapMessage =
+        "A redemption block can't be longer than the deficit it covers — shortened to match.";
+
     private readonly IQueryDispatcher _queryDispatcher;
     private readonly ICommandDispatcher _commandDispatcher;
     private readonly IPlannerClockService _clockService;
@@ -1132,6 +1137,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         }
 
         FormError = null;
+        DragError = null;
         if (SelectedPreset is null) { FormError = "Please select a block preset."; return; }
         if (!TryParseFormTime(FormStartTime, out var startTime) || !TryParseFormTime(FormEndTime, out var endTime))
         {
@@ -1163,6 +1169,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
                 };
                 var createResult = await _commandDispatcher.DispatchAsync(createCmd);
                 if (!createResult.Success) { FormError = createResult.ErrorMessage; return; }
+                if (createResult.RedemptionCapped) DragError = RedemptionCapMessage;
             }
             else
             {
@@ -1174,6 +1181,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
                     End = endUtc
                 });
                 if (!result.Success) { FormError = result.ErrorMessage; return; }
+                if (result.RedemptionCapped) DragError = RedemptionCapMessage;
             }
         }
         else
@@ -1242,6 +1250,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
             End = pending.End
         });
         if (!result.Success) { FormError = result.ErrorMessage; return; }
+        if (result.RedemptionCapped) DragError = RedemptionCapMessage;
         await FinishBlockSavedAsync();
     }
 
@@ -1582,6 +1591,8 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
         if (!updateResult.Success)
             DragError = updateResult.ErrorMessage;
+        else if (updateResult.RedemptionCapped)
+            DragError = RedemptionCapMessage;
 
         // Reload either way: on success to reflect the committed change, on failure so the
         // tile snaps back to its actual (unchanged) position — the drag gesture already

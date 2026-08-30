@@ -40,8 +40,32 @@ public sealed class UpdatePlannedBlockCommandHandler : ICommandHandler<UpdatePla
         if (preset is null)
             return UpdatePlannedBlockResult.Fail($"Preset '{command.PresetId}' not found.");
 
-        if (existing is FocusBlock)
+        IReadOnlyList<RedemptionEntry> redemptionEntries = [];
+        var redemptionCapped = false;
+
+        if (existing is FocusBlock existingFocusBlock)
         {
+            // Recomputed fresh on every edit, scoped only to the block's own already-known
+            // contract — never re-parented to a different one via an ordinary edit (see
+            // UpdatePlannedBlockCommand). A standalone block (ContractId null) stays
+            // standalone; editing it never auto-discovers a contract for the first time.
+            // Resolved before the overlap/active-session checks below, not just before
+            // Reschedule — those checks must validate the window that will actually be
+            // persisted (post-cap), not the longer one the caller originally asked for.
+            if (existingFocusBlock.ContractId is { } contractId)
+            {
+                var attribution = await _computeRedemptionAttribution.HandleAsync(
+                    new ComputeRedemptionAttributionQuery(contractId, command.PresetId, startTime, endTime, existing.Id),
+                    cancellationToken);
+                redemptionEntries = attribution.Entries
+                    .Select(e => new RedemptionEntry(e.MissedBlockId, e.MinutesCovered))
+                    .ToList();
+
+                var cappedEnd = FocusBlock.CapEndToRedemptionCoverage(startTime, endTime, redemptionEntries);
+                redemptionCapped = cappedEnd != endTime;
+                endTime = cappedEnd;
+            }
+
             var overlapping = await _blocks.GetOverlappingAsync(
                 startTime,
                 endTime,
@@ -74,26 +98,10 @@ public sealed class UpdatePlannedBlockCommandHandler : ICommandHandler<UpdatePla
         existing.Reschedule(startTime, endTime);
         existing.AssignPreset(command.PresetId);
 
-        if (existing is FocusBlock existingFocusBlock)
-        {
-            // Recomputed fresh on every edit, scoped only to the block's own already-known
-            // contract — never re-parented to a different one via an ordinary edit (see
-            // UpdatePlannedBlockCommand). A standalone block (ContractId null) stays
-            // standalone; editing it never auto-discovers a contract for the first time.
-            IReadOnlyList<RedemptionEntry> entries = [];
-            if (existingFocusBlock.ContractId is { } contractId)
-            {
-                var attribution = await _computeRedemptionAttribution.HandleAsync(
-                    new ComputeRedemptionAttributionQuery(contractId, command.PresetId, startTime, endTime, existing.Id),
-                    cancellationToken);
-                entries = attribution.Entries
-                    .Select(e => new RedemptionEntry(e.MissedBlockId, e.MinutesCovered))
-                    .ToList();
-            }
-            existingFocusBlock.AssignRedemptionEntries(entries);
-        }
+        if (existing is FocusBlock focusBlockToUpdate)
+            focusBlockToUpdate.AssignRedemptionEntries(redemptionEntries);
 
         await _blocks.UpdateAsync(existing, cancellationToken);
-        return UpdatePlannedBlockResult.Ok();
+        return UpdatePlannedBlockResult.Ok(redemptionCapped);
     }
 }

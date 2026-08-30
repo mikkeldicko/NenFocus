@@ -231,4 +231,67 @@ public class CreatePlannedBlockCommandHandlerTests
         focusBlock.ContractId.Should().BeNull();
         focusBlock.RedemptionEntries.Should().BeEmpty();
     }
+
+    [Fact]
+    public async Task HandleAsync_Focus_RequestedDurationExceedsRedemptionCoverage_CapsEndAndReportsCapped()
+    {
+        var presetId = Guid.NewGuid();
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, DateTime.UtcNow));
+        _computeRedemptionAttribution
+            .HandleAsync(Arg.Any<ComputeRedemptionAttributionQuery>(), Arg.Any<CancellationToken>())
+            .Returns(new RedemptionAttributionResult(Guid.NewGuid(), [new(Guid.NewGuid(), 45)]));
+
+        PlannedBlock? saved = null;
+        await _blocks.AddAsync(Arg.Do<PlannedBlock>(b => saved = b), Arg.Any<CancellationToken>());
+
+        // Requested a 2h block (Start..Start+2h) — only 45 min of deficit exists.
+        var command = FocusCommand(presetId) with { End = Start.AddHours(2) };
+        var result = await CreateHandler().HandleAsync(command);
+
+        result.Success.Should().BeTrue();
+        result.RedemptionCapped.Should().BeTrue();
+        var focusBlock = saved.Should().BeOfType<FocusBlock>().Subject;
+        focusBlock.End.Should().Be(Start.AddMinutes(45));
+    }
+
+    [Fact]
+    public async Task HandleAsync_Focus_RedemptionCoverageMeetsRequestedDuration_DoesNotCap()
+    {
+        var presetId = Guid.NewGuid();
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, DateTime.UtcNow));
+        // FocusCommand's default window is exactly 60 minutes (Start..End).
+        _computeRedemptionAttribution
+            .HandleAsync(Arg.Any<ComputeRedemptionAttributionQuery>(), Arg.Any<CancellationToken>())
+            .Returns(new RedemptionAttributionResult(Guid.NewGuid(), [new(Guid.NewGuid(), 60)]));
+
+        PlannedBlock? saved = null;
+        await _blocks.AddAsync(Arg.Do<PlannedBlock>(b => saved = b), Arg.Any<CancellationToken>());
+
+        var result = await CreateHandler().HandleAsync(FocusCommand(presetId));
+
+        result.RedemptionCapped.Should().BeFalse();
+        saved!.End.Should().Be(End);
+    }
+
+    [Fact]
+    public async Task HandleAsync_Focus_RequestedDurationExceedsCoverage_OverlapCheckUsesTheCappedWindowNotTheRequestedOne()
+    {
+        var presetId = Guid.NewGuid();
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, DateTime.UtcNow));
+        _computeRedemptionAttribution
+            .HandleAsync(Arg.Any<ComputeRedemptionAttributionQuery>(), Arg.Any<CancellationToken>())
+            .Returns(new RedemptionAttributionResult(Guid.NewGuid(), [new(Guid.NewGuid(), 45)]));
+
+        var command = FocusCommand(presetId) with { End = Start.AddHours(2) };
+        await CreateHandler().HandleAsync(command);
+
+        // Only 45 min will actually be persisted — the overlap check must reflect that,
+        // not the originally-requested 2h window, or it could reject a placement that
+        // never actually conflicts with anything.
+        await _blocks.Received(1).GetOverlappingAsync(
+            Start, Start.AddMinutes(45), Now, true, null, Arg.Any<CancellationToken>());
+    }
 }

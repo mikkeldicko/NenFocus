@@ -218,4 +218,73 @@ public class UpdatePlannedBlockCommandHandlerTests
         await _computeRedemptionAttribution.DidNotReceive().HandleAsync(
             Arg.Any<ComputeRedemptionAttributionQuery>(), Arg.Any<CancellationToken>());
     }
+
+    [Fact]
+    public async Task HandleAsync_FocusBlock_ExtendedPastAvailableDeficit_CapsEndAndReportsCapped()
+    {
+        var blockId = Guid.NewGuid();
+        var presetId = Guid.NewGuid();
+        var contractId = Guid.NewGuid();
+        var block = FocusBlock.Create(blockId, presetId, Start, End, contractId: contractId,
+            redemptionEntries: [new RedemptionEntry(Guid.NewGuid(), 60)]);
+        _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns(block);
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>()).Returns(FocusPreset(presetId));
+        // Only 45 min of deficit is available now, even though the caller asked to extend
+        // the block to a full 2h (Start..Start+2h).
+        _computeRedemptionAttribution
+            .HandleAsync(Arg.Any<ComputeRedemptionAttributionQuery>(), Arg.Any<CancellationToken>())
+            .Returns(new RedemptionAttributionResult(contractId, [new(Guid.NewGuid(), 45)]));
+
+        var command = ValidCommand(blockId, presetId) with { End = Start.AddHours(2) };
+        var result = await CreateHandler().HandleAsync(command);
+
+        result.Success.Should().BeTrue();
+        result.RedemptionCapped.Should().BeTrue();
+        block.End.Should().Be(Start.AddMinutes(45));
+    }
+
+    [Fact]
+    public async Task HandleAsync_FocusBlock_ShortenedBelowAvailableDeficit_DoesNotCap()
+    {
+        // Covering less than what's owed is fine — the rest just stays outstanding for a
+        // later block. Only "duration exceeds coverage" needs capping, never the reverse.
+        var blockId = Guid.NewGuid();
+        var presetId = Guid.NewGuid();
+        var contractId = Guid.NewGuid();
+        var block = FocusBlock.Create(blockId, presetId, Start, Start.AddHours(2), contractId: contractId,
+            redemptionEntries: [new RedemptionEntry(Guid.NewGuid(), 120)]);
+        _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns(block);
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>()).Returns(FocusPreset(presetId));
+        _computeRedemptionAttribution
+            .HandleAsync(Arg.Any<ComputeRedemptionAttributionQuery>(), Arg.Any<CancellationToken>())
+            .Returns(new RedemptionAttributionResult(contractId, [new(Guid.NewGuid(), 120)]));
+
+        // Shortened to 30 min — well under the 120 min still available to cover.
+        var command = ValidCommand(blockId, presetId) with { End = Start.AddMinutes(30) };
+        var result = await CreateHandler().HandleAsync(command);
+
+        result.RedemptionCapped.Should().BeFalse();
+        block.End.Should().Be(Start.AddMinutes(30));
+    }
+
+    [Fact]
+    public async Task HandleAsync_FocusBlock_ExtendedPastAvailableDeficit_OverlapCheckUsesTheCappedWindow()
+    {
+        var blockId = Guid.NewGuid();
+        var presetId = Guid.NewGuid();
+        var contractId = Guid.NewGuid();
+        var block = FocusBlock.Create(blockId, presetId, Start, End, contractId: contractId,
+            redemptionEntries: [new RedemptionEntry(Guid.NewGuid(), 60)]);
+        _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns(block);
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>()).Returns(FocusPreset(presetId));
+        _computeRedemptionAttribution
+            .HandleAsync(Arg.Any<ComputeRedemptionAttributionQuery>(), Arg.Any<CancellationToken>())
+            .Returns(new RedemptionAttributionResult(contractId, [new(Guid.NewGuid(), 45)]));
+
+        var command = ValidCommand(blockId, presetId) with { End = Start.AddHours(2) };
+        await CreateHandler().HandleAsync(command);
+
+        await _blocks.Received(1).GetOverlappingAsync(
+            Start, Start.AddMinutes(45), Now, true, blockId, Arg.Any<CancellationToken>());
+    }
 }

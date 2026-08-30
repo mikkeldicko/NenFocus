@@ -169,6 +169,37 @@ public class SplitPlannedBlockCommandHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_FocusBlock_FirstHalfEntriesFallShortOfItsOwnDuration_CapsFirstHalfEnd()
+    {
+        // First half is [OriginalStart, OriginalStart+2h) — 120 min. The combined span's
+        // only entry (90 min) lands entirely on the first half (per SplitEntriesAcrossHalves),
+        // 30 min short of the first half's own requested duration — the first half must be
+        // capped to what it actually covers, the same rule Create/Update enforce.
+        var blockId = Guid.NewGuid();
+        var presetId = Guid.NewGuid();
+        var contractId = Guid.NewGuid();
+        var missedBlockId = Guid.NewGuid();
+        _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
+            .Returns(FocusBlock.Create(blockId, presetId, OriginalStart, OriginalEnd, "My Block", contractId));
+        _computeRedemptionAttribution
+            .HandleAsync(Arg.Any<ComputeRedemptionAttributionQuery>(), Arg.Any<CancellationToken>())
+            .Returns(new RedemptionAttributionResult(contractId, [new RedemptionEntryDto(missedBlockId, 90)]));
+
+        var result = await CreateHandler().HandleAsync(ValidCommand(blockId));
+
+        await _blocks.Received(1).AddAsync(
+            Arg.Is<PlannedBlock>(b => b.Id == result.FirstBlockId
+                && b.Start == OriginalStart && b.End == OriginalStart.AddMinutes(90)),
+            Arg.Any<CancellationToken>());
+        // Second half has no entries at all — it's not claiming to be a redemption block,
+        // so it keeps its full requested span untouched.
+        await _blocks.Received(1).AddAsync(
+            Arg.Is<PlannedBlock>(b => b.Id == result.SecondBlockId
+                && b.Start == OriginalStart.AddHours(2) && b.End == OriginalEnd),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task HandleAsync_NeitherNewBlockInheritsOriginalId()
     {
         var blockId = Guid.NewGuid();
