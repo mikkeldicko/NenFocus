@@ -206,4 +206,29 @@ public class CreatePlannedBlockCommandHandlerTests
         await _computeRedemptionAttribution.DidNotReceive().HandleAsync(
             Arg.Any<ComputeRedemptionAttributionQuery>(), Arg.Any<CancellationToken>());
     }
+
+    [Fact]
+    public async Task HandleAsync_Focus_DeclineRedemptionTrue_SkipsAttributionAndCreatesUnlinkedBlock()
+    {
+        var presetId = Guid.NewGuid();
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, DateTime.UtcNow));
+        // A real match exists — proves DeclineRedemption skips it rather than the match
+        // simply not being found.
+        _computeRedemptionAttribution
+            .HandleAsync(Arg.Any<ComputeRedemptionAttributionQuery>(), Arg.Any<CancellationToken>())
+            .Returns(new RedemptionAttributionResult(Guid.NewGuid(), [new(Guid.NewGuid(), 45)]));
+
+        PlannedBlock? saved = null;
+        await _blocks.AddAsync(Arg.Do<PlannedBlock>(b => saved = b), Arg.Any<CancellationToken>());
+
+        var result = await CreateHandler().HandleAsync(FocusCommand(presetId) with { DeclineRedemption = true });
+
+        result.Success.Should().BeTrue();
+        await _computeRedemptionAttribution.DidNotReceive().HandleAsync(
+            Arg.Any<ComputeRedemptionAttributionQuery>(), Arg.Any<CancellationToken>());
+        var focusBlock = saved.Should().BeOfType<FocusBlock>().Subject;
+        focusBlock.ContractId.Should().BeNull();
+        focusBlock.RedemptionEntries.Should().BeEmpty();
+    }
 }

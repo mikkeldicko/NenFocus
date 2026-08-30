@@ -43,25 +43,8 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     public const int TotalHours = LastHour - FirstHour;
     public double GridContentHeight => HourRowHeight * TotalHours;
 
-    private readonly IQueryHandler<GetAllBlockPresetsQuery, IReadOnlyList<BlockPresetDto>> _getPresets;
-    private readonly IQueryHandler<GetPlannedBlocksForDayQuery, IReadOnlyList<PlannedBlockDto>> _getBlocksForDay;
-    private readonly ICommandHandler<CreatePlannedBlockCommand, CreatePlannedBlockResult> _createBlock;
-    private readonly ICommandHandler<UpdatePlannedBlockCommand, UpdatePlannedBlockResult> _updateBlock;
-    private readonly ICommandHandler<DeletePlannedBlockCommand, DeletePlannedBlockResult> _deleteBlock;
-    private readonly ICommandHandler<SplitPlannedBlockCommand, SplitPlannedBlockResult> _splitBlock;
-    private readonly ICommandHandler<SealNenContractCommand, SealNenContractResult> _sealContract;
-    private readonly ICommandHandler<BreakNenContractCommand, BreakNenContractResult> _breakContract;
-    private readonly IQueryHandler<ComputePlannedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> _computePlannedFocusHours;
-    private readonly IQueryHandler<GetAllContractPresetsQuery, IReadOnlyList<ContractPresetDto>> _getContractPresets;
-    private readonly IQueryHandler<GetActiveNenContractQuery, ActiveNenContractDto?> _getActiveContract;
-    private readonly IQueryHandler<ComputeRedemptionAttributionQuery, RedemptionAttributionResult> _computeRedemptionAttribution;
-    private readonly IQueryHandler<GetSuggestedRedemptionPlacementsQuery, IReadOnlyList<SuggestedRedemptionPlacementDto>> _getSuggestedRedemptionPlacements;
-    private readonly IQueryHandler<CheckNenContractDateRangeOverlapQuery, string?> _checkOverlap;
-    private readonly IQueryHandler<GetScheduledNenContractsQuery, IReadOnlyList<ScheduledNenContractDto>> _getScheduledContracts;
-    private readonly IQueryHandler<GetSessionSnapshotForBlockQuery, SessionSnapshotDto?> _getSessionSnapshot;
-    private readonly IQueryHandler<GetNenContractForEditQuery, NenContractEditDto?> _getContractForEdit;
-    private readonly ICommandHandler<EditNenContractCommand, EditNenContractResult> _editContract;
-    private readonly ICommandHandler<DeleteNenContractCommand, DeleteNenContractResult> _deleteContract;
+    private readonly IQueryDispatcher _queryDispatcher;
+    private readonly ICommandDispatcher _commandDispatcher;
     private readonly IPlannerClockService _clockService;
     private readonly ISessionStateService _sessionState;
 
@@ -282,6 +265,14 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     [ObservableProperty] private string _confirmPartialRedemptionMessage = string.Empty;
     private SuggestedRedemptionPlacementDto? _pendingPartialRedemption;
 
+    // ── Create-time redemption confirm gate (DESIGN_GAP_HISTORY.md Gap 39) ─────────
+    // Only reached from the plain "new block" Save path — never from editing, never from
+    // the type-changed delete-then-recreate path (which passes an already-known
+    // ContractId explicitly and never consults ComputeRedemptionAttributionQuery at all).
+    [ObservableProperty] private bool _isConfirmCreateRedemptionVisible;
+    [ObservableProperty] private string _confirmCreateRedemptionMessage = string.Empty;
+    private (Guid PresetId, DateTime Start, DateTime End)? _pendingRedemptionCreate;
+
     public bool HasActiveContract => ActiveContract is not null;
 
     // AllowCancellation is deliberately not enforced here (interim, 2026-08-18) — mirrors
@@ -325,7 +316,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     {
         var weekStartDate = DateOnly.FromDateTime(WeekStart);
         var weekEndDate = weekStartDate.AddDays(6);
-        ActiveContract = await _getActiveContract.HandleAsync(new GetActiveNenContractQuery(weekStartDate, weekEndDate));
+        ActiveContract = await _queryDispatcher.QueryAsync(new GetActiveNenContractQuery(weekStartDate, weekEndDate));
 
         // Drafting owns DayFloorByDate while it's active (RefreshDayFloorPreviewsAsync) —
         // an in-effect contract can never overlap the date range being drafted, so this
@@ -348,7 +339,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         CoverDeficitOptions.Clear();
         if (ActiveContract is { } contract)
         {
-            var suggestions = await _getSuggestedRedemptionPlacements.HandleAsync(
+            var suggestions = await _queryDispatcher.QueryAsync(
                 new GetSuggestedRedemptionPlacementsQuery(contract.Id, _clockService.LocalNow.ToUniversalTime()));
             foreach (var suggestion in suggestions)
                 CoverDeficitOptions.Add(suggestion);
@@ -405,7 +396,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
     private async Task CreateRedemptionTileAsync(SuggestedRedemptionPlacementDto option)
     {
-        var result = await _createBlock.HandleAsync(new CreatePlannedBlockCommand
+        var result = await _commandDispatcher.DispatchAsync(new CreatePlannedBlockCommand
         {
             PresetId = option.PresetId,
             BlockPresetType = BlockPresetType.Focus,
@@ -437,7 +428,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     {
         if (ActiveContract is null) { IsConfirmCancelContractVisible = false; return; }
 
-        var result = await _breakContract.HandleAsync(new BreakNenContractCommand { ContractId = ActiveContract.Id });
+        var result = await _commandDispatcher.DispatchAsync(new BreakNenContractCommand { ContractId = ActiveContract.Id });
         IsConfirmCancelContractVisible = false;
 
         if (!result.Success)
@@ -552,47 +543,13 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     partial void OnIsDraftingContractChanged(bool value) => OnPropertyChanged(nameof(CanOpenContractWizard));
 
     public PlannerPageViewModel(
-        IQueryHandler<GetAllBlockPresetsQuery, IReadOnlyList<BlockPresetDto>> getPresets,
-        IQueryHandler<GetPlannedBlocksForDayQuery, IReadOnlyList<PlannedBlockDto>> getBlocksForDay,
-        ICommandHandler<CreatePlannedBlockCommand, CreatePlannedBlockResult> createBlock,
-        ICommandHandler<UpdatePlannedBlockCommand, UpdatePlannedBlockResult> updateBlock,
-        ICommandHandler<DeletePlannedBlockCommand, DeletePlannedBlockResult> deleteBlock,
-        ICommandHandler<SplitPlannedBlockCommand, SplitPlannedBlockResult> splitBlock,
-        ICommandHandler<SealNenContractCommand, SealNenContractResult> sealContract,
-        ICommandHandler<BreakNenContractCommand, BreakNenContractResult> breakContract,
-        IQueryHandler<ComputePlannedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> computePlannedFocusHours,
-        IQueryHandler<GetAllContractPresetsQuery, IReadOnlyList<ContractPresetDto>> getContractPresets,
-        IQueryHandler<GetActiveNenContractQuery, ActiveNenContractDto?> getActiveContract,
-        IQueryHandler<ComputeRedemptionAttributionQuery, RedemptionAttributionResult> computeRedemptionAttribution,
-        IQueryHandler<GetSuggestedRedemptionPlacementsQuery, IReadOnlyList<SuggestedRedemptionPlacementDto>> getSuggestedRedemptionPlacements,
-        IQueryHandler<CheckNenContractDateRangeOverlapQuery, string?> checkOverlap,
-        IQueryHandler<GetScheduledNenContractsQuery, IReadOnlyList<ScheduledNenContractDto>> getScheduledContracts,
-        IQueryHandler<GetSessionSnapshotForBlockQuery, SessionSnapshotDto?> getSessionSnapshot,
-        IQueryHandler<GetNenContractForEditQuery, NenContractEditDto?> getContractForEdit,
-        ICommandHandler<EditNenContractCommand, EditNenContractResult> editContract,
-        ICommandHandler<DeleteNenContractCommand, DeleteNenContractResult> deleteContract,
+        IQueryDispatcher queryDispatcher,
+        ICommandDispatcher commandDispatcher,
         IPlannerClockService clockService,
         ISessionStateService sessionState)
     {
-        _getPresets = getPresets;
-        _getBlocksForDay = getBlocksForDay;
-        _createBlock = createBlock;
-        _updateBlock = updateBlock;
-        _deleteBlock = deleteBlock;
-        _splitBlock = splitBlock;
-        _sealContract = sealContract;
-        _getScheduledContracts = getScheduledContracts;
-        _getSessionSnapshot = getSessionSnapshot;
-        _getContractForEdit = getContractForEdit;
-        _editContract = editContract;
-        _deleteContract = deleteContract;
-        _breakContract = breakContract;
-        _computePlannedFocusHours = computePlannedFocusHours;
-        _getContractPresets = getContractPresets;
-        _getActiveContract = getActiveContract;
-        _computeRedemptionAttribution = computeRedemptionAttribution;
-        _getSuggestedRedemptionPlacements = getSuggestedRedemptionPlacements;
-        _checkOverlap = checkOverlap;
+        _queryDispatcher = queryDispatcher;
+        _commandDispatcher = commandDispatcher;
         _clockService = clockService;
         _sessionState = sessionState;
         _sessionState.SessionChanged += OnSessionChanged;
@@ -735,7 +692,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
     private async Task LoadPresetsAsync()
     {
-        var presets = await _getPresets.HandleAsync(new GetAllBlockPresetsQuery());
+        var presets = await _queryDispatcher.QueryAsync(new GetAllBlockPresetsQuery());
         _allPresets.Clear();
         _allPresets.AddRange(presets);
         RefreshAvailablePresets();
@@ -930,7 +887,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
         var (startUtc, endUtc) = ResolveFormRangeUtc(startTime, endTime);
 
-        var attribution = await _computeRedemptionAttribution.HandleAsync(
+        var attribution = await _queryDispatcher.QueryAsync(
             new ComputeRedemptionAttributionQuery(null, SelectedPreset.Id, startUtc, endUtc, ExcludeBlockId: null));
 
         if (attribution.Entries.Count == 0) return;
@@ -966,7 +923,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         {
             var day = WeekStart.AddDays(i);
             var query = new GetPlannedBlocksForDayQuery { Date = DateOnly.FromDateTime(day) };
-            var blocks = await _getBlocksForDay.HandleAsync(query);
+            var blocks = await _queryDispatcher.QueryAsync(query);
 
             foreach (var b in blocks)
             {
@@ -1095,7 +1052,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         // Background blocks have no Ritual, so no Session is ever tied to one — skip the
         // query entirely rather than asking it a question that's always null by construction.
         SnapshotSession = dto.BlockPresetType == BlockPresetType.Focus
-            ? await _getSessionSnapshot.HandleAsync(new GetSessionSnapshotForBlockQuery { PlannedBlockId = dto.Id })
+            ? await _queryDispatcher.QueryAsync(new GetSessionSnapshotForBlockQuery { PlannedBlockId = dto.Id })
             : null;
         DeleteSnapshotErrorMessage = null;
         IsSnapshotVisible = true;
@@ -1122,7 +1079,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         IsConfirmDeleteSnapshotVisible = false;
         if (SnapshotBlock is not { } block) return;
 
-        var result = await _deleteBlock.HandleAsync(new DeletePlannedBlockCommand { BlockId = block.Id });
+        var result = await _commandDispatcher.DispatchAsync(new DeletePlannedBlockCommand { BlockId = block.Id });
         if (!result.Success)
         {
             DeleteSnapshotErrorMessage = result.ErrorMessage;
@@ -1192,7 +1149,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
             if (typeChanged)
             {
-                var deleteResult = await _deleteBlock.HandleAsync(
+                var deleteResult = await _commandDispatcher.DispatchAsync(
                     new DeletePlannedBlockCommand { BlockId = _editingBlockId.Value });
                 if (!deleteResult.Success) { FormError = deleteResult.ErrorMessage; return; }
 
@@ -1204,12 +1161,12 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
                     End = endUtc,
                     ContractId = originalDto!.ContractId
                 };
-                var createResult = await _createBlock.HandleAsync(createCmd);
+                var createResult = await _commandDispatcher.DispatchAsync(createCmd);
                 if (!createResult.Success) { FormError = createResult.ErrorMessage; return; }
             }
             else
             {
-                var result = await _updateBlock.HandleAsync(new UpdatePlannedBlockCommand
+                var result = await _commandDispatcher.DispatchAsync(new UpdatePlannedBlockCommand
                 {
                     BlockId = _editingBlockId.Value,
                     PresetId = SelectedPreset.Id,
@@ -1221,11 +1178,34 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         }
         else
         {
+            // A Focus block whose preset+date already matches an open deficit gets a confirm
+            // gate instead of silently auto-attaching — the same ComputeRedemptionAttributionQuery
+            // RefreshRedemptionPreviewAsync already previewed, called fresh here rather than
+            // trusting that possibly-stale preview at the actual moment of Save. Background
+            // blocks never reach this: no session, never redemption-eligible.
+            if (blockPresetType == BlockPresetType.Focus)
+            {
+                var attribution = await _queryDispatcher.QueryAsync(
+                    new ComputeRedemptionAttributionQuery(null, SelectedPreset.Id, startUtc, endUtc, ExcludeBlockId: null));
+
+                if (attribution.Entries.Count > 0)
+                {
+                    var totalCovered = attribution.Entries.Sum(e => e.MinutesCovered);
+                    var body = attribution.Entries.Count == 1
+                        ? $"This will cover {totalCovered:0.#} min of your missed {SelectedPreset.Name} block."
+                        : $"This will cover {totalCovered:0.#} min across {attribution.Entries.Count} missed {SelectedPreset.Name} blocks.";
+                    ConfirmCreateRedemptionMessage = $"{body} Link it as a redemption?";
+                    _pendingRedemptionCreate = (SelectedPreset.Id, startUtc, endUtc);
+                    IsConfirmCreateRedemptionVisible = true;
+                    return;
+                }
+            }
+
             // No ContractId, no RedemptionEntries — CreatePlannedBlockCommandHandler
             // auto-discovers whether this block should attach to a contract and cover a
             // deficit, via the exact same query RefreshRedemptionPreviewAsync already
             // showed a preview from.
-            var result = await _createBlock.HandleAsync(new CreatePlannedBlockCommand
+            var result = await _commandDispatcher.DispatchAsync(new CreatePlannedBlockCommand
             {
                 PresetId = SelectedPreset.Id,
                 BlockPresetType = blockPresetType,
@@ -1234,9 +1214,54 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
             });
             if (!result.Success) { FormError = result.ErrorMessage; return; }
         }
+        await FinishBlockSavedAsync();
+    }
+
+    // Shared by SaveAsync's own non-gated paths and both create-time redemption confirm
+    // outcomes below — the refresh/close sequence is identical regardless of which path
+    // actually created or updated the block.
+    private async Task FinishBlockSavedAsync()
+    {
         await LoadWeekAsync();
         await RefreshActiveContractAsync();
         CloseForm();
+    }
+
+    [RelayCommand]
+    private async Task ConfirmCreateRedemptionAsync()
+    {
+        IsConfirmCreateRedemptionVisible = false;
+        if (_pendingRedemptionCreate is not { } pending) return;
+        _pendingRedemptionCreate = null;
+
+        var result = await _commandDispatcher.DispatchAsync(new CreatePlannedBlockCommand
+        {
+            PresetId = pending.PresetId,
+            BlockPresetType = BlockPresetType.Focus,
+            Start = pending.Start,
+            End = pending.End
+        });
+        if (!result.Success) { FormError = result.ErrorMessage; return; }
+        await FinishBlockSavedAsync();
+    }
+
+    [RelayCommand]
+    private async Task CreateAsBonusBlockAsync()
+    {
+        IsConfirmCreateRedemptionVisible = false;
+        if (_pendingRedemptionCreate is not { } pending) return;
+        _pendingRedemptionCreate = null;
+
+        var result = await _commandDispatcher.DispatchAsync(new CreatePlannedBlockCommand
+        {
+            PresetId = pending.PresetId,
+            BlockPresetType = BlockPresetType.Focus,
+            Start = pending.Start,
+            End = pending.End,
+            DeclineRedemption = true
+        });
+        if (!result.Success) { FormError = result.ErrorMessage; return; }
+        await FinishBlockSavedAsync();
     }
 
     // Validates and commits a draft block into the in-memory _draftBlocks list — no
@@ -1306,7 +1331,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        var result = await _deleteBlock.HandleAsync(new DeletePlannedBlockCommand { BlockId = _editingBlockId.Value });
+        var result = await _commandDispatcher.DispatchAsync(new DeletePlannedBlockCommand { BlockId = _editingBlockId.Value });
         if (result.Success) { await LoadWeekAsync(); CloseForm(); }
         else { FormError = result.ErrorMessage; }
     }
@@ -1406,7 +1431,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         var secondStartUtc = DateTime.SpecifyKind(dayDate.Add(secondStart), DateTimeKind.Local).ToUniversalTime();
         var secondEndUtc = DateTime.SpecifyKind(dayDate.Add(secondEnd), DateTimeKind.Local).ToUniversalTime();
 
-        var result = await _splitBlock.HandleAsync(new SplitPlannedBlockCommand
+        var result = await _commandDispatcher.DispatchAsync(new SplitPlannedBlockCommand
         {
             OriginalBlockId = _editingBlockId.Value,
             FirstBlockStart = firstStartUtc,
@@ -1440,6 +1465,8 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         IsSplitDialogVisible = false;
         SplitError = null;
         RedemptionSuggestionNotice = null;
+        IsConfirmCreateRedemptionVisible = false;
+        _pendingRedemptionCreate = null;
         _editingBlockId = null;
         _editingIsDraft = false;
     }
@@ -1545,7 +1572,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        var updateResult = await _updateBlock.HandleAsync(new UpdatePlannedBlockCommand
+        var updateResult = await _commandDispatcher.DispatchAsync(new UpdatePlannedBlockCommand
         {
             BlockId   = result.BlockId,
             PresetId = dto.PresetId,
@@ -1575,8 +1602,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         _editingContractPayload = null;
         IsNenContractPopoverVisible = false;
         WizardViewModel = new ContractWizardViewModel(
-            getPresets: _getContractPresets,
-            checkOverlap: _checkOverlap,
+            queryDispatcher: _queryDispatcher,
             initialStartDate: DateOnly.FromDateTime(_clockService.LocalNow.Date),
             onReadyToSchedule: BeginDrafting,
             onCancel: CloseWizard);
@@ -1591,14 +1617,13 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     {
         if (!CanOpenContractWizard) return;
 
-        var payload = await _getContractForEdit.HandleAsync(new GetNenContractForEditQuery(contractId));
+        var payload = await _queryDispatcher.QueryAsync(new GetNenContractForEditQuery(contractId));
         if (payload is null) return;
 
         _editingContractPayload = payload;
         IsNenContractPopoverVisible = false;
         WizardViewModel = new ContractWizardViewModel(
-            getPresets: _getContractPresets,
-            checkOverlap: _checkOverlap,
+            queryDispatcher: _queryDispatcher,
             initialStartDate: payload.StartDate,
             onReadyToSchedule: BeginDrafting,
             onCancel: CloseWizard,
@@ -1723,7 +1748,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
             .Select(d => (d.Start, d.End))
             .ToList();
 
-        var hoursByDay = await _computePlannedFocusHours.HandleAsync(
+        var hoursByDay = await _queryDispatcher.QueryAsync(
             new ComputePlannedFocusHoursQuery(ContractId: null, DraftFocusBlockRanges: focusRanges));
 
         var byDate = new Dictionary<DateOnly, DayFloorPreviewViewModel>();
@@ -1763,7 +1788,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
             if (_draftRules.EditingContractId is { } editingContractId)
             {
-                var editResult = await _editContract.HandleAsync(new EditNenContractCommand
+                var editResult = await _commandDispatcher.DispatchAsync(new EditNenContractCommand
                 {
                     ContractId = editingContractId,
                     Name = _draftRules.Name,
@@ -1784,7 +1809,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
             }
             else
             {
-                var sealResult = await _sealContract.HandleAsync(new SealNenContractCommand
+                var sealResult = await _commandDispatcher.DispatchAsync(new SealNenContractCommand
                 {
                     Name = _draftRules.Name,
                     Goal = _draftRules.Goal,
@@ -1875,7 +1900,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
     private async Task RefreshScheduledContractsAsync()
     {
-        var scheduled = await _getScheduledContracts.HandleAsync(new GetScheduledNenContractsQuery());
+        var scheduled = await _queryDispatcher.QueryAsync(new GetScheduledNenContractsQuery());
         ScheduledContracts.Clear();
         foreach (var contract in scheduled)
             ScheduledContracts.Add(contract);
@@ -1896,7 +1921,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     {
         if (_contractIdPendingDelete is not { } contractId) { IsConfirmDeleteContractVisible = false; return; }
 
-        var result = await _deleteContract.HandleAsync(new DeleteNenContractCommand { ContractId = contractId });
+        var result = await _commandDispatcher.DispatchAsync(new DeleteNenContractCommand { ContractId = contractId });
         IsConfirmDeleteContractVisible = false;
         _contractIdPendingDelete = null;
 

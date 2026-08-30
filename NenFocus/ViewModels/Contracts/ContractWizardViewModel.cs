@@ -20,8 +20,7 @@ namespace NenFocus.ViewModels.Contracts;
 /// </summary>
 public partial class ContractWizardViewModel : ViewModelBase
 {
-    private readonly IQueryHandler<GetAllContractPresetsQuery, IReadOnlyList<ContractPresetDto>> _getPresets;
-    private readonly IQueryHandler<CheckNenContractDateRangeOverlapQuery, string?> _checkOverlap;
+    private readonly IQueryDispatcher _queryDispatcher;
     private readonly Action<NenContractDraftRules> _onReadyToSchedule;
     private readonly Action _onCancel;
 
@@ -62,15 +61,13 @@ public partial class ContractWizardViewModel : ViewModelBase
     private ContractRulesStepViewModel? _rulesVm;
 
     public ContractWizardViewModel(
-        IQueryHandler<GetAllContractPresetsQuery, IReadOnlyList<ContractPresetDto>> getPresets,
-        IQueryHandler<CheckNenContractDateRangeOverlapQuery, string?> checkOverlap,
+        IQueryDispatcher queryDispatcher,
         DateOnly initialStartDate,
         Action<NenContractDraftRules> onReadyToSchedule,
         Action onCancel,
         NenContractEditDto? editingContract = null)
     {
-        _getPresets = getPresets;
-        _checkOverlap = checkOverlap;
+        _queryDispatcher = queryDispatcher;
         _onReadyToSchedule = onReadyToSchedule;
         _onCancel = onCancel;
         _editingContract = editingContract;
@@ -100,7 +97,7 @@ public partial class ContractWizardViewModel : ViewModelBase
         IsBackVisible = true;
         _currentBackAction = _onCancel;
         _basicsVm = new ContractBasicsStepViewModel(
-            checkOverlap: _checkOverlap,
+            queryDispatcher: _queryDispatcher,
             initialName: _name,
             initialGoal: _goal,
             initialStartDate: new DateTimeOffset(_startDate.ToDateTime(TimeOnly.MinValue)),
@@ -141,7 +138,7 @@ public partial class ContractWizardViewModel : ViewModelBase
             isAdvanced: _isAdvanced,
             startDate: _startDate,
             endDate: _endDate,
-            getPresets: _isAdvanced ? _getPresets : null,
+            queryDispatcher: _queryDispatcher,
             onContinue: NavigateToReview,
             onBack: NavigateToMode,
             initialStrictnessRule: _editingContract?.StrictnessRule,

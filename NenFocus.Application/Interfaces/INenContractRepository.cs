@@ -49,6 +49,14 @@ public interface INenContractRepository
     /// </summary>
     Task<IReadOnlyList<NenContract>> GetAllInEffectAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Returns every contract regardless of status (Scheduled, Active, Completed, Broken).
+    /// Backs Insights-facing reads — a broken-contract count, and the full contract list
+    /// Bonus Block resolution checks a block's Start date against (DESIGN_GAP_HISTORY.md
+    /// Gap 39). Unlike GetAllInEffectAsync, deliberately unfiltered by lifecycle status.
+    /// </summary>
+    Task<IReadOnlyList<NenContract>> GetAllAsync(CancellationToken cancellationToken = default);
+
     /// <summary>Removes a contract by Id. No-op if it doesn't exist.</summary>
     Task DeleteAsync(Guid id, CancellationToken cancellationToken = default);
 }

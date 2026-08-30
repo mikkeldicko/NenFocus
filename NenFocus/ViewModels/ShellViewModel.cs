@@ -54,16 +54,8 @@ namespace NenFocus.ViewModels;
 
 public partial class ShellViewModel : ViewModelBase
 {
-    private readonly IQueryHandler<GetAllBlockPresetsQuery, IReadOnlyList<BlockPresetDto>> _presetsQuery;
-    private readonly IQueryHandler<GetFocusBlockRitualContextQuery, FocusBlockRitualContext?> _getFocusBlockRitualContext;
-    private readonly ICommandHandler<StartSessionCommand, StartSessionResult> _startSession;
-    private readonly ICommandHandler<EndSessionCommand, EndSessionResult> _endSession;
-    private readonly ICommandHandler<StartBreakCommand, StartBreakResult> _startBreak;
-    private readonly ICommandHandler<ResumeFromBreakCommand, ResumeFromBreakResult> _resumeFromBreak;
-    private readonly ICommandHandler<SaveReflectionCommand, SaveReflectionResult> _saveReflection;
-    private readonly ICommandHandler<AcknowledgePostSessionCommand, AcknowledgePostSessionResult> _acknowledgePostSession;
-    private readonly ICommandHandler<MarkFocusBlockMissedCommand, MarkFocusBlockMissedResult> _markFocusBlockMissed;
-    private readonly IQueryHandler<GetUnacknowledgedPostSessionsQuery, IReadOnlyList<PostSessionDto>> _getUnacknowledgedPostSessions;
+    private readonly IQueryDispatcher _queryDispatcher;
+    private readonly ICommandDispatcher _commandDispatcher;
     private readonly ISessionStateService _sessionState;
     private readonly IActiveSessionMonitor _monitor;
     private readonly IPlannerClockService _plannerClock;
@@ -91,57 +83,16 @@ public partial class ShellViewModel : ViewModelBase
     public ObservableCollection<NavItemViewModel> NavItems { get; } = new();
 
     public ShellViewModel(
-       IQueryHandler<GetAllBlockPresetsQuery, IReadOnlyList<BlockPresetDto>> presetsQuery,
-       IQueryHandler<GetFocusBlockRitualContextQuery, FocusBlockRitualContext?> getFocusBlockRitualContext,
-       ICommandHandler<StartSessionCommand, StartSessionResult> startSession,
-       ICommandHandler<EndSessionCommand, EndSessionResult> endSession,
-       ICommandHandler<StartBreakCommand, StartBreakResult> startBreak,
-       ICommandHandler<ResumeFromBreakCommand, ResumeFromBreakResult> resumeFromBreak,
-       ICommandHandler<SaveReflectionCommand, SaveReflectionResult> saveReflection,
-       ICommandHandler<AcknowledgePostSessionCommand, AcknowledgePostSessionResult> acknowledgePostSession,
-       ICommandHandler<MarkFocusBlockMissedCommand, MarkFocusBlockMissedResult> markFocusBlockMissed,
-       IQueryHandler<GetUnacknowledgedPostSessionsQuery, IReadOnlyList<PostSessionDto>> getUnacknowledgedPostSessions,
+       IQueryDispatcher queryDispatcher,
+       ICommandDispatcher commandDispatcher,
        ISessionStateService sessionState,
        IActiveSessionMonitor monitor,
        IPlannerClockService plannerClock,
        ISystemClock clock,
-       IDebugClockController debugClockController,
-       ICommandHandler<CreateBlockPresetCommand, CreateBlockPresetResult> createPreset,
-       ICommandHandler<UpdateBlockPresetCommand, UpdateBlockPresetResult> updatePreset,
-       ICommandHandler<DeleteBlockPresetCommand, DeleteBlockPresetResult> deletePreset,
-       ICommandHandler<DuplicateBlockPresetCommand, DuplicateBlockPresetResult> duplicatePreset,
-       IQueryHandler<GetPlannedBlocksForDayQuery, IReadOnlyList<PlannedBlockDto>> getBlocksForDay,
-       ICommandHandler<CreatePlannedBlockCommand, CreatePlannedBlockResult> createPlannedBlock,
-       ICommandHandler<UpdatePlannedBlockCommand, UpdatePlannedBlockResult> updatePlannedBlock,
-       ICommandHandler<DeletePlannedBlockCommand, DeletePlannedBlockResult> deletePlannedBlock,
-       ICommandHandler<SplitPlannedBlockCommand, SplitPlannedBlockResult> splitPlannedBlock,
-       ICommandHandler<SealNenContractCommand, SealNenContractResult> sealContract,
-       ICommandHandler<BreakNenContractCommand, BreakNenContractResult> breakContract,
-       IQueryHandler<ComputePlannedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> computePlannedFocusHours,
-       IQueryHandler<GetAllContractPresetsQuery, IReadOnlyList<ContractPresetDto>> getContractPresets,
-       ICommandHandler<CreateContractPresetCommand, CreateContractPresetResult> createContractPreset,
-       ICommandHandler<UpdateContractPresetCommand, UpdateContractPresetResult> updateContractPreset,
-       ICommandHandler<DeleteContractPresetCommand, DeleteContractPresetResult> deleteContractPreset,
-       IQueryHandler<GetActiveNenContractQuery, ActiveNenContractDto?> getActiveContract,
-       IQueryHandler<ComputeRedemptionAttributionQuery, RedemptionAttributionResult> computeRedemptionAttribution,
-       IQueryHandler<GetSuggestedRedemptionPlacementsQuery, IReadOnlyList<SuggestedRedemptionPlacementDto>> getSuggestedRedemptionPlacements,
-       IQueryHandler<CheckNenContractDateRangeOverlapQuery, string?> checkOverlap,
-       IQueryHandler<GetScheduledNenContractsQuery, IReadOnlyList<ScheduledNenContractDto>> getScheduledContracts,
-       IQueryHandler<GetSessionSnapshotForBlockQuery, SessionSnapshotDto?> getSessionSnapshot,
-       IQueryHandler<GetNenContractForEditQuery, NenContractEditDto?> getContractForEdit,
-       ICommandHandler<EditNenContractCommand, EditNenContractResult> editContract,
-       ICommandHandler<DeleteNenContractCommand, DeleteNenContractResult> deleteContract)
+       IDebugClockController debugClockController)
     {
-        _presetsQuery = presetsQuery;
-        _getFocusBlockRitualContext = getFocusBlockRitualContext;
-        _startSession = startSession;
-        _endSession = endSession;
-        _startBreak = startBreak;
-        _resumeFromBreak = resumeFromBreak;
-        _saveReflection = saveReflection;
-        _acknowledgePostSession = acknowledgePostSession;
-        _markFocusBlockMissed = markFocusBlockMissed;
-        _getUnacknowledgedPostSessions = getUnacknowledgedPostSessions;
+        _queryDispatcher = queryDispatcher;
+        _commandDispatcher = commandDispatcher;
         _sessionState = sessionState;
         _monitor = monitor;
         _plannerClock = plannerClock;
@@ -160,12 +111,12 @@ public partial class ShellViewModel : ViewModelBase
             CurrentPage = selected.PageViewModel;
         }
 
-        NavItems.Add(new NavItemViewModel("Main", "⊹", new MainPageViewModel(() => StartRitual(), ShowPostSession, _sessionState, _monitor, _endSession, _startBreak, _resumeFromBreak, _plannerClock), Select));
+        NavItems.Add(new NavItemViewModel("Main", "⊹", new MainPageViewModel(() => StartRitual(), ShowPostSession, _sessionState, _monitor, _commandDispatcher, _plannerClock), Select));
         var presetsPageViewModel = new PresetsPageViewModel(
-            new BlockPresetPageViewModel(presetsQuery, createPreset, updatePreset, deletePreset, duplicatePreset),
-            new ContractPresetPageViewModel(getContractPresets, createContractPreset, updateContractPreset, deleteContractPreset));
+            new BlockPresetPageViewModel(_queryDispatcher, _commandDispatcher),
+            new ContractPresetPageViewModel(_queryDispatcher, _commandDispatcher));
         NavItems.Add(new NavItemViewModel("Presets", "◻", presetsPageViewModel, Select));
-        var plannerViewModel = new PlannerPageViewModel(presetsQuery, getBlocksForDay, createPlannedBlock, updatePlannedBlock, deletePlannedBlock, splitPlannedBlock, sealContract, breakContract, computePlannedFocusHours, getContractPresets, getActiveContract, computeRedemptionAttribution, getSuggestedRedemptionPlacements, checkOverlap, getScheduledContracts, getSessionSnapshot, getContractForEdit, editContract, deleteContract, _plannerClock, _sessionState);
+        var plannerViewModel = new PlannerPageViewModel(_queryDispatcher, _commandDispatcher, _plannerClock, _sessionState);
         plannerViewModel.ContractWizardOpened += OnContractWizardOpened;
         plannerViewModel.ContractWizardClosed += OnContractWizardClosed;
         NavItems.Add(new NavItemViewModel("Planner", "◫", plannerViewModel, Select));
@@ -203,7 +154,7 @@ public partial class ShellViewModel : ViewModelBase
     // this costs nothing to assert here too.
     private async Task InitializePendingOverlaysAsync()
     {
-        var unacknowledged = await _getUnacknowledgedPostSessions.HandleAsync(new GetUnacknowledgedPostSessionsQuery());
+        var unacknowledged = await _queryDispatcher.QueryAsync(new GetUnacknowledgedPostSessionsQuery());
         foreach (var postSession in unacknowledged)
             _pendingOverlays.Enqueue(new PendingPostSession(postSession));
 
@@ -245,7 +196,7 @@ public partial class ShellViewModel : ViewModelBase
 
         if (focusBlockId.HasValue)
         {
-            var context = await _getFocusBlockRitualContext.HandleAsync(
+            var context = await _queryDispatcher.QueryAsync(
                 new GetFocusBlockRitualContextQuery { FocusBlockId = focusBlockId.Value });
 
             if (context is not null && context.AlreadyHasSession)
@@ -268,8 +219,8 @@ public partial class ShellViewModel : ViewModelBase
         bool isPlanned = lockedPreset is not null;
 
         RitualViewModel = new RitualShellViewModel(
-            presetsQuery: _presetsQuery,
-            startSession: _startSession,
+            queryDispatcher: _queryDispatcher,
+            commandDispatcher: _commandDispatcher,
             clock: _clock,
             originatingBlockId: focusBlockId,
             lockedPreset: lockedPreset,
@@ -350,7 +301,7 @@ public partial class ShellViewModel : ViewModelBase
     {
         try
         {
-            var result = await _markFocusBlockMissed.HandleAsync(
+            var result = await _commandDispatcher.DispatchAsync(
                 new MarkFocusBlockMissedCommand { FocusBlockId = focusBlockId });
 
             return result.Success ? result.PostSession : null;
@@ -420,7 +371,7 @@ public partial class ShellViewModel : ViewModelBase
         // Time may have passed while this sat behind another overlay — if the block's
         // window already closed, there's nothing left to ritual into, so resolve it
         // the same way a live release would instead of opening a dead Ritual screen.
-        var context = await _getFocusBlockRitualContext.HandleAsync(
+        var context = await _queryDispatcher.QueryAsync(
             new GetFocusBlockRitualContextQuery { FocusBlockId = focusBlockId });
 
         if (context is not null && context.Schedule.End <= _clock.UtcNow)
@@ -518,7 +469,7 @@ public partial class ShellViewModel : ViewModelBase
 
     private void ShowPostSession(PostSessionDto data)
     {
-        PostSessionViewModel = new PostSessionViewModel(data, _saveReflection, _acknowledgePostSession, ExitPostSession);
+        PostSessionViewModel = new PostSessionViewModel(data, _commandDispatcher, ExitPostSession);
         IsPostSessionActive = true;
     }
 

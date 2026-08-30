@@ -63,10 +63,18 @@ public sealed record PlannedBlockDto
     public bool WasStartedLate { get; init; }
 
     /// <summary>
-    /// True for a Focus block created to cover another block's deficit (RedemptionEntries
-    /// non-empty). Drives the Planner tile's distinct dashed-border treatment.
+    /// Redemption (a Focus block created to cover another block's deficit — RedemptionEntries
+    /// non-empty, always linked) or Bonus (ContractId null but Start's date falls within some
+    /// contract's [StartDate, EndDate], regardless of that contract's status — a purely
+    /// read-time label, never counts toward that contract's floor/Day-Met scoring). The two
+    /// are mutually exclusive by construction, so null covers both an ordinary committed
+    /// block and one with no contract relation at all — both already fully distinguished by
+    /// ContractId's own nullability. Drives the Planner tile's badge.
     /// </summary>
-    public bool IsRedemption { get; init; }
+    public PlannedBlockContractBadge? ContractBadge { get; init; }
+
+    /// <summary>The covering contract's Name when ContractBadge is Bonus, otherwise null.</summary>
+    public string? BonusContractName { get; init; }
 
     public int DurationMinutes => (int)(End - Start).TotalMinutes;
 

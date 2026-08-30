@@ -42,8 +42,11 @@ public partial class PlannedBlockTileViewModel : ViewModelBase
     /// </summary>
     public bool WasStartedLate { get; }
 
-    /// <summary>True for a Focus block created to cover another block's deficit — renders with a dashed border.</summary>
-    public bool IsRedemption { get; }
+    /// <summary>
+    /// Redemption or Bonus — mutually exclusive by construction. Null for an ordinary block
+    /// (committed or unrelated to any contract). Drives the tile's badge.
+    /// </summary>
+    public PlannedBlockContractBadge? ContractBadge { get; }
 
     public PlannedBlockTileViewModel(
         PlannedBlockDto dto,
@@ -65,6 +68,6 @@ public partial class PlannedBlockTileViewModel : ViewModelBase
         IsDraft = isDraft;
         Outcome = dto.Outcome;
         WasStartedLate = dto.WasStartedLate;
-        IsRedemption = dto.IsRedemption;
+        ContractBadge = dto.ContractBadge;
     }
 }

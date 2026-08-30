@@ -51,11 +51,8 @@ public partial class BlockPresetCardViewModel : ViewModelBase
 
 public partial class BlockPresetPageViewModel : ViewModelBase
 {
-    private readonly IQueryHandler<GetAllBlockPresetsQuery, IReadOnlyList<BlockPresetDto>> _getPresets;
-    private readonly ICommandHandler<CreateBlockPresetCommand, CreateBlockPresetResult> _createPreset;
-    private readonly ICommandHandler<UpdateBlockPresetCommand, UpdateBlockPresetResult> _updatePreset;
-    private readonly ICommandHandler<DeleteBlockPresetCommand, DeleteBlockPresetResult> _deletePreset;
-    private readonly ICommandHandler<DuplicateBlockPresetCommand, DuplicateBlockPresetResult> _duplicatePreset;
+    private readonly IQueryDispatcher _queryDispatcher;
+    private readonly ICommandDispatcher _commandDispatcher;
 
     private Guid? _editingPresetId;
     private readonly List<BlockPresetCardViewModel> _allPresetCards = new();
@@ -169,18 +166,10 @@ public partial class BlockPresetPageViewModel : ViewModelBase
     [ObservableProperty] private string? _confirmDeleteError;
     private BlockPresetCardViewModel? _pendingDeleteCard;
 
-    public BlockPresetPageViewModel(
-        IQueryHandler<GetAllBlockPresetsQuery, IReadOnlyList<BlockPresetDto>> getPresets,
-        ICommandHandler<CreateBlockPresetCommand, CreateBlockPresetResult> createPreset,
-        ICommandHandler<UpdateBlockPresetCommand, UpdateBlockPresetResult> updatePreset,
-        ICommandHandler<DeleteBlockPresetCommand, DeleteBlockPresetResult> deletePreset,
-        ICommandHandler<DuplicateBlockPresetCommand, DuplicateBlockPresetResult> duplicatePreset)
+    public BlockPresetPageViewModel(IQueryDispatcher queryDispatcher, ICommandDispatcher commandDispatcher)
     {
-        _getPresets = getPresets;
-        _createPreset = createPreset;
-        _updatePreset = updatePreset;
-        _deletePreset = deletePreset;
-        _duplicatePreset = duplicatePreset;
+        _queryDispatcher = queryDispatcher;
+        _commandDispatcher = commandDispatcher;
 
         Presets.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasNoPresets));
         _ = LoadPresetsAsync();
@@ -189,7 +178,7 @@ public partial class BlockPresetPageViewModel : ViewModelBase
     private async Task LoadPresetsAsync()
     {
         IsLoading = true;
-        var presets = await _getPresets.HandleAsync(new GetAllBlockPresetsQuery());
+        var presets = await _queryDispatcher.QueryAsync(new GetAllBlockPresetsQuery());
         _allPresetCards.Clear();
         foreach (var p in presets)
             _allPresetCards.Add(new BlockPresetCardViewModel(p));
@@ -252,7 +241,7 @@ public partial class BlockPresetPageViewModel : ViewModelBase
     [RelayCommand]
     private async Task DuplicatePresetAsync(BlockPresetCardViewModel card)
     {
-        var result = await _duplicatePreset.HandleAsync(
+        var result = await _commandDispatcher.DispatchAsync(
             new DuplicateBlockPresetCommand { SourcePresetId = card.Id });
         if (result.Success)
             await LoadPresetsAsync();
@@ -272,7 +261,7 @@ public partial class BlockPresetPageViewModel : ViewModelBase
     private async Task ConfirmDeleteAsync()
     {
         if (_pendingDeleteCard is null) return;
-        var result = await _deletePreset.HandleAsync(
+        var result = await _commandDispatcher.DispatchAsync(
             new DeleteBlockPresetCommand { PresetId = _pendingDeleteCard.Id });
         if (!result.Success)
         {
@@ -392,7 +381,7 @@ public partial class BlockPresetPageViewModel : ViewModelBase
 
         if (IsEditing && _editingPresetId.HasValue)
         {
-            var result = await _updatePreset.HandleAsync(new UpdateBlockPresetCommand
+            var result = await _commandDispatcher.DispatchAsync(new UpdateBlockPresetCommand
             {
                 PresetId = _editingPresetId.Value,
                 Name = name,
@@ -406,7 +395,7 @@ public partial class BlockPresetPageViewModel : ViewModelBase
         }
         else
         {
-            var result = await _createPreset.HandleAsync(new CreateBlockPresetCommand
+            var result = await _commandDispatcher.DispatchAsync(new CreateBlockPresetCommand
             {
                 Name = name,
                 Tags = FormTags.ToList(),

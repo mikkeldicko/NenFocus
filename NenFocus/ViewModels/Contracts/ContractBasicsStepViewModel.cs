@@ -9,7 +9,7 @@ namespace NenFocus.ViewModels.Contracts;
 
 public partial class ContractBasicsStepViewModel : ViewModelBase
 {
-    private readonly IQueryHandler<CheckNenContractDateRangeOverlapQuery, string?> _checkOverlap;
+    private readonly IQueryDispatcher _queryDispatcher;
     private readonly Action _onContinue;
     private readonly Action _onBack;
     private readonly Guid? _excludeContractId;
@@ -47,7 +47,7 @@ public partial class ContractBasicsStepViewModel : ViewModelBase
         OverlapErrorMessage is null;
 
     public ContractBasicsStepViewModel(
-        IQueryHandler<CheckNenContractDateRangeOverlapQuery, string?> checkOverlap,
+        IQueryDispatcher queryDispatcher,
         string initialName,
         string initialGoal,
         DateTimeOffset initialStartDate,
@@ -56,7 +56,7 @@ public partial class ContractBasicsStepViewModel : ViewModelBase
         Action onBack,
         Guid? excludeContractId = null)
     {
-        _checkOverlap = checkOverlap;
+        _queryDispatcher = queryDispatcher;
         _name = initialName;
         _goal = initialGoal;
         _startDate = initialStartDate;
@@ -75,7 +75,7 @@ public partial class ContractBasicsStepViewModel : ViewModelBase
     {
         if (EndDate.Date < StartDate.Date) { OverlapErrorMessage = null; return; }
 
-        var overlapping = await _checkOverlap.HandleAsync(new CheckNenContractDateRangeOverlapQuery(
+        var overlapping = await _queryDispatcher.QueryAsync(new CheckNenContractDateRangeOverlapQuery(
             DateOnly.FromDateTime(StartDate.Date), DateOnly.FromDateTime(EndDate.Date), _excludeContractId));
 
         OverlapErrorMessage = overlapping is not null

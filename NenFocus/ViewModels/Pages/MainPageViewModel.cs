@@ -21,9 +21,7 @@ public partial class MainPageViewModel : ViewModelBase
     private readonly Action<PostSessionDto> _onShowPostSession;
     private readonly ISessionStateService _sessionState;
     private readonly IActiveSessionMonitor _monitor;
-    private readonly ICommandHandler<EndSessionCommand, EndSessionResult> _endSession;
-    private readonly ICommandHandler<StartBreakCommand, StartBreakResult> _startBreak;
-    private readonly ICommandHandler<ResumeFromBreakCommand, ResumeFromBreakResult> _resumeFromBreak;
+    private readonly ICommandDispatcher _commandDispatcher;
     private readonly IPlannerClockService _clock;
     private Guid _activeSessionId;
 
@@ -83,18 +81,14 @@ public partial class MainPageViewModel : ViewModelBase
         Action<PostSessionDto> onShowPostSession,
         ISessionStateService sessionState,
         IActiveSessionMonitor monitor,
-        ICommandHandler<EndSessionCommand, EndSessionResult> endSession,
-        ICommandHandler<StartBreakCommand, StartBreakResult> startBreak,
-        ICommandHandler<ResumeFromBreakCommand, ResumeFromBreakResult> resumeFromBreak,
+        ICommandDispatcher commandDispatcher,
         IPlannerClockService clock)
     {
         _onStartRitual = onStartRitual;
         _onShowPostSession = onShowPostSession;
         _sessionState = sessionState;
         _monitor = monitor;
-        _endSession = endSession;
-        _startBreak = startBreak;
-        _resumeFromBreak = resumeFromBreak;
+        _commandDispatcher = commandDispatcher;
         _clock = clock;
 
         _sessionState.RitualRequirementChanged += (_, change) =>
@@ -173,7 +167,7 @@ public partial class MainPageViewModel : ViewModelBase
     [RelayCommand]
     private async Task EndSession()
     {
-        var result = await _endSession.HandleAsync(new EndSessionCommand { SessionId = _activeSessionId });
+        var result = await _commandDispatcher.DispatchAsync(new EndSessionCommand { SessionId = _activeSessionId });
         if (result.Success && result.PostSession is not null)
             _onShowPostSession(result.PostSession);
     }
@@ -190,13 +184,13 @@ public partial class MainPageViewModel : ViewModelBase
     [RelayCommand]
     private async Task TakeBreak()
     {
-        await _startBreak.HandleAsync(new StartBreakCommand { SessionId = _activeSessionId, UserInitiated = true });
+        await _commandDispatcher.DispatchAsync(new StartBreakCommand { SessionId = _activeSessionId, UserInitiated = true });
     }
 
     [RelayCommand]
     private async Task ResumeFromBreak()
     {
-        await _resumeFromBreak.HandleAsync(new ResumeFromBreakCommand { SessionId = _activeSessionId });
+        await _commandDispatcher.DispatchAsync(new ResumeFromBreakCommand { SessionId = _activeSessionId });
     }
 }
 

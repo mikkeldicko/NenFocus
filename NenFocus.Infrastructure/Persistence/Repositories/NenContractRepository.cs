@@ -89,6 +89,11 @@ public sealed class NenContractRepository : INenContractRepository
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<NenContract>> GetAllAsync(CancellationToken cancellationToken = default)
+    {
+        return await _context.NenContracts.ToListAsync(cancellationToken);
+    }
+
     public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var contract = await _context.NenContracts

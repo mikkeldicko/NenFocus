@@ -25,6 +25,7 @@ public class GetPlannedBlocksForDayQueryHandlerTests
     {
         _clock.UtcNow.Returns(new DateTime(2026, 1, 2, 10, 30, 0, DateTimeKind.Utc)); // mid-window by default
         _contracts.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((NenContract?)null);
+        _contracts.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<NenContract>)[]);
     }
 
     private GetPlannedBlocksForDayQueryHandler CreateHandler() => new(_blocks, _presets, _contracts, _clock, _classifier);
@@ -48,11 +49,11 @@ public class GetPlannedBlocksForDayQueryHandlerTests
         dto.End.Should().Be(End);
         dto.IsCompleted.Should().BeFalse();
         dto.HasEnded.Should().BeFalse();
-        dto.IsRedemption.Should().BeFalse();
+        dto.ContractBadge.Should().BeNull();
     }
 
     [Fact]
-    public async Task HandleAsync_FocusBlockWithRedemptionEntries_IsRedemptionTrue()
+    public async Task HandleAsync_FocusBlockWithRedemptionEntries_ContractBadgeIsRedemption()
     {
         var presetId = Guid.NewGuid();
         var block = FocusBlock.Create(Guid.NewGuid(), presetId, Start, End,
@@ -62,7 +63,7 @@ public class GetPlannedBlocksForDayQueryHandlerTests
 
         var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
 
-        result.Should().ContainSingle().Subject.IsRedemption.Should().BeTrue();
+        result.Should().ContainSingle().Subject.ContractBadge.Should().Be(PlannedBlockContractBadge.Redemption);
     }
 
     [Fact]
@@ -374,5 +375,82 @@ public class GetPlannedBlocksForDayQueryHandlerTests
         var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
 
         result.Should().ContainSingle().Subject.ContractStrictnessRule.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task HandleAsync_UnlinkedBlockWithinAnActiveContractRange_ContractBadgeIsBonusWithContractName()
+    {
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End); // ContractId null
+        _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
+        _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
+        var contract = NenContract.Seal(Guid.NewGuid(), "Study Month", new NenContractGoal("Goal"),
+            Day.AddDays(-1), Day.AddDays(5),
+            StrictnessRule.Locked, new DailyFloorPolicy(DailyFloor.None), null, false,
+            new Dictionary<DateOnly, double>(), sealedAt: Start.AddDays(-1));
+        _contracts.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<NenContract>)[contract]);
+
+        var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
+
+        var dto = result.Should().ContainSingle().Subject;
+        dto.ContractBadge.Should().Be(PlannedBlockContractBadge.Bonus);
+        dto.BonusContractName.Should().Be("Study Month");
+    }
+
+    [Fact]
+    public async Task HandleAsync_UnlinkedBlockOutsideAnyContractRange_ContractBadgeIsNull()
+    {
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End); // ContractId null
+        _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
+        _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
+        var contract = NenContract.Seal(Guid.NewGuid(), "Study Month", new NenContractGoal("Goal"),
+            Day.AddDays(10), Day.AddDays(20),
+            StrictnessRule.Locked, new DailyFloorPolicy(DailyFloor.None), null, false,
+            new Dictionary<DateOnly, double>(), sealedAt: Start.AddDays(10));
+        _contracts.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<NenContract>)[contract]);
+
+        var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
+
+        var dto = result.Should().ContainSingle().Subject;
+        dto.ContractBadge.Should().BeNull();
+        dto.BonusContractName.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task HandleAsync_LinkedBlockWithinAContractRange_ContractBadgeIsNull()
+    {
+        var contractId = Guid.NewGuid();
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End, contractId: contractId);
+        _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
+        _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
+        var contract = NenContract.Seal(contractId, "Study Month", new NenContractGoal("Goal"),
+            Day.AddDays(-1), Day.AddDays(5),
+            StrictnessRule.Locked, new DailyFloorPolicy(DailyFloor.None), null, false,
+            new Dictionary<DateOnly, double>(), sealedAt: Start.AddDays(-1));
+        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>()).Returns(contract);
+        _contracts.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<NenContract>)[contract]);
+
+        var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
+
+        // Already committed to its own contract — never also labeled Bonus.
+        result.Should().ContainSingle().Subject.ContractBadge.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task HandleAsync_UnlinkedBlockWithinABrokenContractRange_ContractBadgeIsBonus()
+    {
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End); // ContractId null
+        _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
+        _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
+        var contract = NenContract.Seal(Guid.NewGuid(), "Study Month", new NenContractGoal("Goal"),
+            Day.AddDays(-1), Day.AddDays(5),
+            StrictnessRule.Locked, new DailyFloorPolicy(DailyFloor.None), null, true,
+            new Dictionary<DateOnly, double>(), sealedAt: Start.AddDays(-1));
+        contract.Break(Start);
+        _contracts.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<NenContract>)[contract]);
+
+        var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
+
+        // Bonus status is regardless of the covering contract's current status.
+        result.Should().ContainSingle().Subject.ContractBadge.Should().Be(PlannedBlockContractBadge.Bonus);
     }
 }

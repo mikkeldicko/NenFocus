@@ -18,4 +18,13 @@ public sealed record CreatePlannedBlockCommand : ICommand<CreatePlannedBlockResu
     /// via ComputeRedemptionAttributionQuery; there is no client-driven selection.
     /// </summary>
     public Guid? ContractId { get; init; }
+
+    /// <summary>
+    /// True when the user, shown a match against an open deficit at create time, chose
+    /// "Create as Bonus Block instead" rather than "Link as Redemption." When true, the
+    /// handler skips ComputeRedemptionAttributionQuery entirely — the block is created with
+    /// ContractId null and no RedemptionEntries, regardless of what a match would have found.
+    /// Focus-only in practice; Background blocks never surface the confirm gate that sets this.
+    /// </summary>
+    public bool DeclineRedemption { get; init; }
 }

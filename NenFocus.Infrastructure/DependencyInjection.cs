@@ -18,13 +18,19 @@ public static class DependencyInjection
         services.AddApplication();
         RegisterDecoratedCommandHandlers(services);
 
-        // Both factory and context are needed: factory for singleton services that
-        // create their own isolated contexts; context for scoped repositories.
+        // Both a factory and a directly-injectable Scoped context are needed: factory for
+        // singleton services that create their own isolated contexts; the Scoped
+        // registration for repositories resolved per operation. Registering AddDbContextFactory
+        // and AddDbContext independently (as this used to) silently breaks resolving
+        // NenFocusDbContext from any real DI scope under ValidateScopes: true — EF Core's
+        // factory-options plumbing ends up needing the root provider regardless of which
+        // scope actually asked for it. The documented fix: register the factory once, then
+        // derive the Scoped registration from it instead of registering both independently.
         services.AddDbContextFactory<NenFocusDbContext>(options =>
             options.UseSqlite($"Data Source={dbPath}"));
 
-        services.AddDbContext<NenFocusDbContext>(options =>
-            options.UseSqlite($"Data Source={dbPath}"));
+        services.AddScoped<NenFocusDbContext>(sp =>
+            sp.GetRequiredService<IDbContextFactory<NenFocusDbContext>>().CreateDbContext());
 
         services.AddScoped<ISessionRepository, SessionRepository>();
         services.AddScoped<IBlockPresetRepository, BlockPresetRepository>();
@@ -44,6 +50,12 @@ public static class DependencyInjection
         services.AddSingleton<IActiveSessionMonitor, ActiveSessionMonitor>();
         services.AddSingleton<IPlannerClockService, PlannerClockService>();
         services.AddSingleton<IDomainEventPublisher, InProcessDomainEventPublisher>();
+
+        // Stateless, thread-safe — hold only IServiceScopeFactory, so one Singleton instance
+        // is safe to share for the app's whole lifetime. Every individual dispatch still gets
+        // its own fresh scope (and therefore its own DbContext) internally.
+        services.AddSingleton<IQueryDispatcher, ScopedQueryDispatcher>();
+        services.AddSingleton<ICommandDispatcher, ScopedCommandDispatcher>();
 
         services.AddScoped<IUnitOfWork, EfCoreUnitOfWork>();
 

@@ -541,7 +541,8 @@
 								<TextBlock Text="{Binding SnapshotBlock.Outcome, Converter={x:Static conv:FocusBlockOutcomeToLabelConverter.Instance}}"
                                            FontSize="10" FontWeight="Medium" LetterSpacing="1" Foreground="White"/>
 							</Border>
-							<Border Classes="snapshotBadge" Background="#F5EDD8" IsVisible="{Binding SnapshotBlock.IsRedemption}">
+							<Border Classes="snapshotBadge" Background="#F5EDD8"
+                                    IsVisible="{Binding SnapshotBlock.ContractBadge, Converter={x:Static conv:EnumEqualConverter.Instance}, ConverterParameter=Redemption}">
 								<TextBlock Text="REDEMPTION" FontSize="10" FontWeight="Medium" LetterSpacing="1" Foreground="#8B7320"/>
 							</Border>
 						</StackPanel>
@@ -728,6 +729,21 @@
 					<StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="12">
 						<Button Classes="secondary" Content="Cancel" Command="{Binding CancelPartialRedemptionCommand}"/>
 						<Button Classes="primary" Content="Create Anyway" Command="{Binding ConfirmPartialRedemptionCommand}"/>
+					</StackPanel>
+				</StackPanel>
+			</Border>
+		</Border>
+
+		<Border IsVisible="{Binding IsConfirmCreateRedemptionVisible}" Background="#88000000">
+			<Border Background="#FFFFFF" CornerRadius="14" Width="400" Padding="32,28"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                    BoxShadow="0 12 48 0 #44000000">
+				<StackPanel Spacing="20">
+					<TextBlock Text="Link as Redemption?" FontSize="18" FontWeight="SemiBold" Foreground="#1A1A2E"/>
+					<TextBlock Text="{Binding ConfirmCreateRedemptionMessage}" FontSize="14" Foreground="#888899" TextWrapping="Wrap"/>
+					<StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="12">
+						<Button Classes="secondary" Content="Create as Bonus Block instead" Command="{Binding CreateAsBonusBlockCommand}"/>
+						<Button Classes="primary" Content="Link as Redemption" Command="{Binding ConfirmCreateRedemptionCommand}"/>
 					</StackPanel>
 				</StackPanel>
 			</Border>

@@ -141,6 +141,17 @@ ViewModels must never hold a reference to any `IRepository` interface or call on
 >
 > **Why:** Direct repository access in a ViewModel bypasses validation, event publication, and audit trail. It also makes the ViewModel impossible to unit-test without a real database.
 
+#### No Directly-Injected `IQueryHandler<,>`/`ICommandHandler<,>` Either (added 2026-08-30, `DESIGN_GAP_HISTORY.md` Gap 40)
+A ViewModel must not hold a constructor-injected `IQueryHandler<,>`/`ICommandHandler<,>` field, even though that's still the correct thing for an Application-layer handler to depend on.
+
+> **Rule:** ViewModels take `IQueryDispatcher`/`ICommandDispatcher` (`Application/Interfaces/`) instead, and call `QueryAsync(query)`/`DispatchAsync(command)`. Never construct a ViewModel with an `IQueryHandler<,>`/`ICommandHandler<,>` parameter.
+>
+> **Why:** `App.axaml.cs` resolves the whole ViewModel tree from the DI root, with no scope. A directly-injected handler's repository dependencies are Scoped, and since nothing in this app's `Host.CreateDefaultBuilder` call ever enables `ValidateScopes` (only on in the `"Development"` environment), that resolution silently succeeds instead of throwing — meaning every directly-injected handler on a long-lived ViewModel ends up sharing one `DbContext` for the app's entire runtime. Two overlapping operations against it (a poll timer, an event-triggered refresh, a user action) throw an EF Core concurrency exception that vanishes silently, since ViewModel call sites are fire-and-forget via `Dispatcher.UIThread.Post`. `IQueryDispatcher`/`ICommandDispatcher` give every dispatch its own fresh DI scope internally, closing this for good.
+>
+> **Canonical example:** `PlannerPageViewModel` used to take 18 individually-injected handlers; it now takes exactly `IQueryDispatcher queryDispatcher, ICommandDispatcher commandDispatcher`.
+>
+> **Regression guard:** `CompositionRootTests.AddInfrastructure_ShellViewModel_ResolvesFromRootProviderLikeAppAxamlDoes` resolves `ShellViewModel` the same way `App.axaml.cs` does, under `ValidateScopes: true` — it fails immediately if this rule is ever violated anywhere in the ViewModel tree.
+
 #### No Domain Entity References
 ViewModels must never hold or navigate a Domain entity (`Session`, `BlockPreset`, etc.) directly.
 

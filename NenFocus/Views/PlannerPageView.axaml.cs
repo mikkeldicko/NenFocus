@@ -494,20 +494,40 @@ public partial class PlannerPageView : UserControl
             return btn;
         }
 
-        // A redemption block stays in its normal outcome/preset color family — a small
-        // "REDEMPTION" tag is the only distinguishing mark, no border treatment.
-        if (tile.IsRedemption)
+        switch (tile.ContractBadge)
         {
-            stack.Children.Add(new TextBlock
-            {
-                Text       = "REDEMPTION",
-                FontSize   = 9,
-                FontWeight = FontWeight.Bold,
-                Opacity    = 0.9
-            });
+            // A redemption block stays in its normal outcome/preset color family — a small
+            // "REDEMPTION" tag is the only distinguishing mark, no border treatment.
+            case PlannedBlockContractBadge.Redemption:
+                stack.Children.Add(new TextBlock
+                {
+                    Text       = "REDEMPTION",
+                    FontSize   = 9,
+                    FontWeight = FontWeight.Bold,
+                    Opacity    = 0.9
+                });
+                break;
 
-            btn.Content = stack;
-            return btn;
+            // Bonus Blocks can land on any tile color (Focus's gold, Background's light gray,
+            // or an outcome color) — a plain inherited-color text badge wouldn't stay legible
+            // across all of them, so this gets its own opaque chip instead, distinct from the
+            // gold Redemption badge shown elsewhere on the Done-block snapshot.
+            case PlannedBlockContractBadge.Bonus:
+                stack.Children.Add(new Border
+                {
+                    Background          = new SolidColorBrush(Color.Parse("#E3D9F7")),
+                    CornerRadius        = new CornerRadius(4),
+                    Padding             = new Thickness(4, 1),
+                    HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left,
+                    Child = new TextBlock
+                    {
+                        Text       = "BONUS BLOCK",
+                        FontSize   = 8,
+                        FontWeight = FontWeight.Bold,
+                        Foreground = new SolidColorBrush(Color.Parse("#5B3E96"))
+                    }
+                });
+                break;
         }
 
         btn.Content = stack;

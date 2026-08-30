@@ -50,7 +50,7 @@ public partial class RestDayChipViewModel : ViewModelBase
 /// </summary>
 public partial class ContractRulesStepViewModel : ViewModelBase
 {
-    private readonly IQueryHandler<GetAllContractPresetsQuery, IReadOnlyList<ContractPresetDto>>? _getPresets;
+    private readonly IQueryDispatcher _queryDispatcher;
     private readonly Action _onContinue;
     private readonly Action _onBack;
 
@@ -107,7 +107,7 @@ public partial class ContractRulesStepViewModel : ViewModelBase
         bool isAdvanced,
         DateOnly startDate,
         DateOnly endDate,
-        IQueryHandler<GetAllContractPresetsQuery, IReadOnlyList<ContractPresetDto>>? getPresets,
+        IQueryDispatcher queryDispatcher,
         Action onContinue,
         Action onBack,
         StrictnessRule? initialStrictnessRule = null,
@@ -121,7 +121,7 @@ public partial class ContractRulesStepViewModel : ViewModelBase
         IsAdvanced = isAdvanced;
         StartDate = startDate;
         EndDate = endDate;
-        _getPresets = getPresets;
+        _queryDispatcher = queryDispatcher;
         _onContinue = onContinue;
         _onBack = onBack;
         _initialStrictnessRule = initialStrictnessRule;
@@ -148,11 +148,10 @@ public partial class ContractRulesStepViewModel : ViewModelBase
 
     private async Task LoadPresetsAsync()
     {
-        if (_getPresets is null) return;
         IsLoadingPresets = true;
         try
         {
-            var presets = await _getPresets.HandleAsync(new GetAllContractPresetsQuery());
+            var presets = await _queryDispatcher.QueryAsync(new GetAllContractPresetsQuery());
             SavedPresets.Clear();
             foreach (var p in presets) SavedPresets.Add(p);
 

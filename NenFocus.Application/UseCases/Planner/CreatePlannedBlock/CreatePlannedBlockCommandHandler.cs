@@ -67,15 +67,23 @@ public sealed class CreatePlannedBlockCommandHandler : ICommandHandler<CreatePla
         PlannedBlock block;
         if (command.BlockPresetType == BlockPresetType.Focus)
         {
-            var attribution = await _computeRedemptionAttribution.HandleAsync(
-                new ComputeRedemptionAttributionQuery(command.ContractId, command.PresetId, startTime, endTime, ExcludeBlockId: null),
-                cancellationToken);
+            var contractId = command.ContractId;
+            IReadOnlyList<RedemptionEntry> redemptionEntries = [];
+
+            if (!command.DeclineRedemption)
+            {
+                var attribution = await _computeRedemptionAttribution.HandleAsync(
+                    new ComputeRedemptionAttributionQuery(command.ContractId, command.PresetId, startTime, endTime, ExcludeBlockId: null),
+                    cancellationToken);
+                contractId = attribution.ContractId;
+                redemptionEntries = attribution.Entries
+                    .Select(e => new RedemptionEntry(e.MissedBlockId, e.MinutesCovered))
+                    .ToList();
+            }
 
             block = FocusBlock.Create(Guid.NewGuid(), command.PresetId, startTime, endTime,
-                contractId: attribution.ContractId,
-                redemptionEntries: attribution.Entries
-                    .Select(e => new RedemptionEntry(e.MissedBlockId, e.MinutesCovered))
-                    .ToList());
+                contractId: contractId,
+                redemptionEntries: redemptionEntries);
         }
         else
         {

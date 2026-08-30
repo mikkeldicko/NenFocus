@@ -48,10 +48,8 @@ public partial class ContractPresetCardViewModel : ViewModelBase
 
 public partial class ContractPresetPageViewModel : ViewModelBase
 {
-    private readonly IQueryHandler<GetAllContractPresetsQuery, IReadOnlyList<ContractPresetDto>> _getPresets;
-    private readonly ICommandHandler<CreateContractPresetCommand, CreateContractPresetResult> _createPreset;
-    private readonly ICommandHandler<UpdateContractPresetCommand, UpdateContractPresetResult> _updatePreset;
-    private readonly ICommandHandler<DeleteContractPresetCommand, DeleteContractPresetResult> _deletePreset;
+    private readonly IQueryDispatcher _queryDispatcher;
+    private readonly ICommandDispatcher _commandDispatcher;
 
     private Guid? _editingPresetId;
 
@@ -85,16 +83,10 @@ public partial class ContractPresetPageViewModel : ViewModelBase
     [ObservableProperty] private string? _confirmDeleteError;
     private ContractPresetCardViewModel? _pendingDeleteCard;
 
-    public ContractPresetPageViewModel(
-        IQueryHandler<GetAllContractPresetsQuery, IReadOnlyList<ContractPresetDto>> getPresets,
-        ICommandHandler<CreateContractPresetCommand, CreateContractPresetResult> createPreset,
-        ICommandHandler<UpdateContractPresetCommand, UpdateContractPresetResult> updatePreset,
-        ICommandHandler<DeleteContractPresetCommand, DeleteContractPresetResult> deletePreset)
+    public ContractPresetPageViewModel(IQueryDispatcher queryDispatcher, ICommandDispatcher commandDispatcher)
     {
-        _getPresets = getPresets;
-        _createPreset = createPreset;
-        _updatePreset = updatePreset;
-        _deletePreset = deletePreset;
+        _queryDispatcher = queryDispatcher;
+        _commandDispatcher = commandDispatcher;
 
         for (int h = 0; h < 24; h++)
             for (int m = 0; m < 60; m += 15)
@@ -108,7 +100,7 @@ public partial class ContractPresetPageViewModel : ViewModelBase
     private async Task LoadPresetsAsync()
     {
         IsLoading = true;
-        var presets = await _getPresets.HandleAsync(new GetAllContractPresetsQuery());
+        var presets = await _queryDispatcher.QueryAsync(new GetAllContractPresetsQuery());
         Presets.Clear();
         foreach (var p in presets)
             Presets.Add(new ContractPresetCardViewModel(p));
@@ -188,7 +180,7 @@ public partial class ContractPresetPageViewModel : ViewModelBase
 
         if (IsEditing && _editingPresetId.HasValue)
         {
-            var result = await _updatePreset.HandleAsync(new UpdateContractPresetCommand
+            var result = await _commandDispatcher.DispatchAsync(new UpdateContractPresetCommand
             {
                 PresetId = _editingPresetId.Value,
                 Name = name,
@@ -202,7 +194,7 @@ public partial class ContractPresetPageViewModel : ViewModelBase
         }
         else
         {
-            var result = await _createPreset.HandleAsync(new CreateContractPresetCommand
+            var result = await _commandDispatcher.DispatchAsync(new CreateContractPresetCommand
             {
                 Name = name,
                 StrictnessRule = FormStrictnessRule,
@@ -239,7 +231,7 @@ public partial class ContractPresetPageViewModel : ViewModelBase
     private async Task ConfirmDeleteAsync()
     {
         if (_pendingDeleteCard is null) return;
-        var result = await _deletePreset.HandleAsync(
+        var result = await _commandDispatcher.DispatchAsync(
             new DeleteContractPresetCommand { PresetId = _pendingDeleteCard.Id });
         if (!result.Success)
         {

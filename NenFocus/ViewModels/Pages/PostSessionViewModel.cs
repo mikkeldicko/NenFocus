@@ -14,8 +14,7 @@ namespace NenFocus.ViewModels.Pages;
 
 public partial class PostSessionViewModel : ViewModelBase
 {
-    private readonly ICommandHandler<SaveReflectionCommand, SaveReflectionResult> _saveReflection;
-    private readonly ICommandHandler<AcknowledgePostSessionCommand, AcknowledgePostSessionResult> _acknowledgePostSession;
+    private readonly ICommandDispatcher _commandDispatcher;
     private readonly Action _onDone;
     private readonly PostSessionDto _data;
 
@@ -50,13 +49,11 @@ public partial class PostSessionViewModel : ViewModelBase
 
     public PostSessionViewModel(
         PostSessionDto data,
-        ICommandHandler<SaveReflectionCommand, SaveReflectionResult> saveReflection,
-        ICommandHandler<AcknowledgePostSessionCommand, AcknowledgePostSessionResult> acknowledgePostSession,
+        ICommandDispatcher commandDispatcher,
         Action onDone)
     {
         _data = data;
-        _saveReflection = saveReflection;
-        _acknowledgePostSession = acknowledgePostSession;
+        _commandDispatcher = commandDispatcher;
         _onDone = onDone;
 
         Goal = data.Goal;
@@ -91,7 +88,7 @@ public partial class PostSessionViewModel : ViewModelBase
             if (!string.IsNullOrWhiteSpace(ReflectionText) && !IsSaved)
             {
                 IsSaving = true;
-                var result = await _saveReflection.HandleAsync(new SaveReflectionCommand
+                var result = await _commandDispatcher.DispatchAsync(new SaveReflectionCommand
                 {
                     SessionId = _data.SessionId,
                     Reflection = ReflectionText
@@ -108,7 +105,7 @@ public partial class PostSessionViewModel : ViewModelBase
                 }
             }
 
-            await _acknowledgePostSession.HandleAsync(new AcknowledgePostSessionCommand
+            await _commandDispatcher.DispatchAsync(new AcknowledgePostSessionCommand
             {
                 SessionId = _data.SessionId
             });

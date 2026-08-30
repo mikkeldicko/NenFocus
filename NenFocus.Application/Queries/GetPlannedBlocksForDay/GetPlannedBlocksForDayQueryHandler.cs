@@ -46,6 +46,11 @@ public sealed class GetPlannedBlocksForDayQueryHandler
         foreach (var contractId in contractIds)
             contractsById[contractId] = await _contracts.GetByIdAsync(contractId, cancellationToken);
 
+        // Bonus resolution needs every contract regardless of status, not just the ones
+        // this day's blocks already link to — a block's Start date can fall inside a
+        // contract's range without ever being committed to it.
+        var allContracts = await _contracts.GetAllAsync(cancellationToken);
+
         return blocks.Select(b =>
         {
             var preset = presetMap.TryGetValue(b.BlockPresetId, out var p) ? p : null;
@@ -69,6 +74,22 @@ public sealed class GetPlannedBlocksForDayQueryHandler
                 ? sessionEndedAt
                 : b.End;
 
+            // Bonus is only meaningful for an unlinked block — a committed or redeemed block
+            // (ContractId set) already has its one true contract. Contract date ranges never
+            // overlap, so at most one contract can ever cover a given Start date.
+            var bonusContract = b.ContractId is null
+                ? allContracts.FirstOrDefault(c => DateOnly.FromDateTime(b.Start) >= c.StartDate && DateOnly.FromDateTime(b.Start) <= c.EndDate)
+                : null;
+
+            // Redemption and Bonus are mutually exclusive by construction (Redemption always
+            // has ContractId set; Bonus never does) — Redemption is checked first only because
+            // it's the linked case, not because of any real priority conflict between the two.
+            var contractBadge = focusBlock?.RedemptionEntries.Count > 0
+                ? PlannedBlockContractBadge.Redemption
+                : bonusContract is not null
+                    ? PlannedBlockContractBadge.Bonus
+                    : (PlannedBlockContractBadge?)null;
+
             return new PlannedBlockDto
             {
                 Id = b.Id,
@@ -87,7 +108,8 @@ public sealed class GetPlannedBlocksForDayQueryHandler
                     ? _classifier.Classify(b.Start, b.End, focusBlock.RitualCompletedAt, focusBlock.SessionEndedAt, now)
                     : null,
                 WasStartedLate = wasStartedLate,
-                IsRedemption = focusBlock?.RedemptionEntries.Count > 0
+                ContractBadge = contractBadge,
+                BonusContractName = bonusContract?.Name
             };
         }).ToList();
     }

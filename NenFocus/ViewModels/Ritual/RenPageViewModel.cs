@@ -33,7 +33,7 @@ public partial class RenPresetCardViewModel : ViewModelBase
 
 public partial class RenPageViewModel : ViewModelBase
 {
-    private readonly IQueryHandler<GetAllBlockPresetsQuery, IReadOnlyList<BlockPresetDto>>? _presetsQuery;
+    private readonly IQueryDispatcher _queryDispatcher;
     private readonly Action _onContinue;
     private readonly Action _onBack;
 
@@ -83,13 +83,13 @@ public partial class RenPageViewModel : ViewModelBase
     private bool _isLoading = true;
 
     public RenPageViewModel(
-        IQueryHandler<GetAllBlockPresetsQuery, IReadOnlyList<BlockPresetDto>>? presetsQuery,
+        IQueryDispatcher queryDispatcher,
         SessionOrigin mode,
         BlockPresetDto? lockedPreset,
         Action onContinue,
         Action onBack)
     {
-        _presetsQuery = presetsQuery;
+        _queryDispatcher = queryDispatcher;
         Mode = mode;
         _onContinue = onContinue;
         _onBack = onBack;
@@ -110,8 +110,7 @@ public partial class RenPageViewModel : ViewModelBase
         IsLoading = true;
         try
         {
-            if (_presetsQuery is null) return;
-            var presets = await _presetsQuery.HandleAsync(new GetAllBlockPresetsQuery { PresetType = BlockPresetType.Focus });
+            var presets = await _queryDispatcher.QueryAsync(new GetAllBlockPresetsQuery { PresetType = BlockPresetType.Focus });
             Presets.Clear();
             foreach (var p in presets)
                 Presets.Add(new RenPresetCardViewModel(p));

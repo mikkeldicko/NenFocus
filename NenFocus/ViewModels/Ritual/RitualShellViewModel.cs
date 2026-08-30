@@ -13,8 +13,8 @@ namespace NenFocus.ViewModels.Ritual;
 
 public partial class RitualShellViewModel : ViewModelBase
 {
-    private readonly IQueryHandler<GetAllBlockPresetsQuery, IReadOnlyList<BlockPresetDto>> _presetsQuery;
-    private readonly ICommandHandler<StartSessionCommand, StartSessionResult> _startSession;
+    private readonly IQueryDispatcher _queryDispatcher;
+    private readonly ICommandDispatcher _commandDispatcher;
     private readonly ISystemClock _clock;
     private readonly Action _onComplete;
     private readonly Action _onCancel;
@@ -69,8 +69,8 @@ public partial class RitualShellViewModel : ViewModelBase
     private RenPageViewModel? _renVm;
 
     public RitualShellViewModel(
-        IQueryHandler<GetAllBlockPresetsQuery, IReadOnlyList<BlockPresetDto>> presetsQuery,
-        ICommandHandler<StartSessionCommand, StartSessionResult> startSession,
+        IQueryDispatcher queryDispatcher,
+        ICommandDispatcher commandDispatcher,
         ISystemClock clock,
         Guid? originatingBlockId,
         BlockPresetDto? lockedPreset,
@@ -80,8 +80,8 @@ public partial class RitualShellViewModel : ViewModelBase
         bool isLateToBlock = false,
         TimeSpan lateBy = default)
     {
-        _presetsQuery = presetsQuery;
-        _startSession = startSession;
+        _queryDispatcher = queryDispatcher;
+        _commandDispatcher = commandDispatcher;
         _clock = clock;
         _originatingBlockId = originatingBlockId;
         _lockedPreset = lockedPreset;
@@ -140,7 +140,7 @@ public partial class RitualShellViewModel : ViewModelBase
 
         StepIndex = 2;
         _renVm = new RenPageViewModel(
-            presetsQuery: _mode == SessionOrigin.Spontaneous ? _presetsQuery : null,
+            queryDispatcher: _queryDispatcher,
             mode: _mode,
             lockedPreset: _lockedPreset,
             onContinue: NavigateToHatsu,
@@ -159,7 +159,7 @@ public partial class RitualShellViewModel : ViewModelBase
         StepIndex = 3;
         _currentBackAction = NavigateToRen;
         CurrentStep = new HatsuPageViewModel(
-            startSession: _startSession,
+            commandDispatcher: _commandDispatcher,
             clock: _clock,
             getData: () => new HatsuData
             {

@@ -12,7 +12,7 @@ namespace NenFocus.ViewModels.Ritual;
 
 public partial class HatsuPageViewModel : ViewModelBase
 {
-    private readonly ICommandHandler<StartSessionCommand, StartSessionResult> _startSession;
+    private readonly ICommandDispatcher _commandDispatcher;
     private readonly ISystemClock _clock;
     private readonly Func<HatsuData> _getData;
     private readonly Action _onSessionStarted;
@@ -96,14 +96,14 @@ public partial class HatsuPageViewModel : ViewModelBase
     public static string[] BreakLengthOptions { get; } = ["5", "10", "15", "Other"];
 
     public HatsuPageViewModel(
-        ICommandHandler<StartSessionCommand, StartSessionResult> startSession,
+        ICommandDispatcher commandDispatcher,
         ISystemClock clock,
         Func<HatsuData> getData,
         Action onSessionStarted,
         Action onBack,
         FocusBlockSchedule? plannedSchedule = null)
     {
-        _startSession = startSession;
+        _commandDispatcher = commandDispatcher;
         _clock = clock;
         _getData = getData;
         _onSessionStarted = onSessionStarted;
@@ -184,7 +184,7 @@ public partial class HatsuPageViewModel : ViewModelBase
         IsStarting = true;
         try
         {
-            var result = await _startSession.HandleAsync(command);
+            var result = await _commandDispatcher.DispatchAsync(command);
 
             if (result.Success)
                 _onSessionStarted();
