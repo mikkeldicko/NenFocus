@@ -457,7 +457,6 @@ public partial class PlannerPageView : UserControl
             FontSize          = 12,
             FontWeight        = FontWeight.SemiBold,
             TextTrimming      = TextTrimming.CharacterEllipsis,
-            TextDecorations   = tile.IsMissed ? TextDecorations.Strikethrough : null,
             VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center
         });
         stack.Children.Add(titleRow);
@@ -465,8 +464,7 @@ public partial class PlannerPageView : UserControl
         {
             Text            = $"{tile.Start:HH:mm} – {tile.End:HH:mm}",
             FontSize        = 10,
-            Opacity         = 0.85,
-            TextDecorations = tile.IsMissed ? TextDecorations.Strikethrough : null
+            Opacity         = 0.85
         });
 
         foreach (var badgeText in outcomeBadgeTexts)
@@ -508,24 +506,13 @@ public partial class PlannerPageView : UserControl
                 });
                 break;
 
-            // Bonus Blocks can land on any tile color (Focus's gold, Background's light gray,
-            // or an outcome color) — a plain inherited-color text badge wouldn't stay legible
-            // across all of them, so this gets its own opaque chip instead, distinct from the
-            // gold Redemption badge shown elsewhere on the Done-block snapshot.
             case PlannedBlockContractBadge.Bonus:
-                stack.Children.Add(new Border
+                stack.Children.Add(new TextBlock
                 {
-                    Background          = new SolidColorBrush(Color.Parse("#E3D9F7")),
-                    CornerRadius        = new CornerRadius(4),
-                    Padding             = new Thickness(4, 1),
-                    HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left,
-                    Child = new TextBlock
-                    {
-                        Text       = "BONUS BLOCK",
-                        FontSize   = 8,
-                        FontWeight = FontWeight.Bold,
-                        Foreground = new SolidColorBrush(Color.Parse("#5B3E96"))
-                    }
+                    Text       = "BONUS",
+                    FontSize   = 9,
+                    FontWeight = FontWeight.Bold,
+                    Opacity    = 0.9
                 });
                 break;
         }
