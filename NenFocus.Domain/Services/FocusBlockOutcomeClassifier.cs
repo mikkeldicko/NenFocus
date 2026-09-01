@@ -12,6 +12,20 @@ public sealed class FocusBlockOutcomeClassifier : IFocusBlockOutcomeClassifier
     /// </summary>
     public const int GracePeriodMinutes = 5;
 
+    /// <summary>
+    /// A shortfall from a block's own scheduled end this small (in minutes) is forgiven
+    /// outright — CreditedWindow credits the block as if it had run the rest of the way,
+    /// the same forgiveness GracePeriodMinutes already gives a late start, mirrored to the
+    /// other end but at a far smaller grain (this app doesn't excuse several real minutes of
+    /// quitting early the way it excuses a few minutes of Ritual setup — only a handful of
+    /// seconds). Classify is deliberately untouched — the block's own outcome still honestly
+    /// reads EndedEarly; only how much it counts toward Daily Floor/Contract Floor changes.
+    /// Shared with FocusBlock.WasRedemptionCoverageMeaningfullyCapped and
+    /// GetNenContractDeficitsQueryHandler's own write-off check — one number, one meaning,
+    /// everywhere "is this shortfall worth caring about" gets asked (Gap 44, Gap 45).
+    /// </summary>
+    public const double MinimumMeaningfulDeficitMinutes = 1;
+
     public bool IsLateStart(DateTime scheduledStart, DateTime momentToCheck)
         => momentToCheck > scheduledStart.AddMinutes(GracePeriodMinutes);
 
@@ -51,21 +65,32 @@ public sealed class FocusBlockOutcomeClassifier : IFocusBlockOutcomeClassifier
         DateTime? sessionEndedAt,
         double actualElapsedMinutes)
     {
-        if (sessionEndedAt is { } endedEarly && endedEarly < scheduledEnd)
-            return ritualCompletedAt is { } startedAt ? (startedAt, startedAt.AddMinutes(actualElapsedMinutes)) : null;
+        if (ritualCompletedAt is not { } completedAt)
+            return null;
 
-        if (ritualCompletedAt is { } completedAt)
-        {
-            if (!IsLateStart(scheduledStart, completedAt))
-                return (scheduledStart, scheduledEnd);
+        var endedEarlyShortfallMinutes = sessionEndedAt is { } endedAt && endedAt < scheduledEnd
+            ? (scheduledEnd - endedAt).TotalMinutes
+            : (double?)null;
 
-            // Started late: credit is bounded by the block's own scheduled end — a session
-            // that ran (or was force-ended, e.g. via the debug clock) past scheduledEnd earns
-            // no more credit than a full-length, on-time completion would have.
-            var cappedMinutes = Math.Min(actualElapsedMinutes, (scheduledEnd - completedAt).TotalMinutes);
-            return cappedMinutes > 0 ? (completedAt, completedAt.AddMinutes(cappedMinutes)) : null;
-        }
+        // A genuine early end — more than a sliver short of the block's own scheduled end —
+        // credits only what was actually worked, regardless of how the block started; the
+        // grace period never covers an early end (Gap 22), except the sub-minute write-off
+        // below (Gap 45).
+        if (endedEarlyShortfallMinutes is { } shortfall && shortfall > MinimumMeaningfulDeficitMinutes)
+            return (completedAt, completedAt.AddMinutes(actualElapsedMinutes));
 
-        return null;
+        if (!IsLateStart(scheduledStart, completedAt))
+            return (scheduledStart, scheduledEnd);
+
+        // Started late: credit is bounded by the block's own scheduled end — a session that
+        // ran (or was force-ended, e.g. via the debug clock) past scheduledEnd earns no more
+        // credit than a full-length, on-time completion would have. A forgiven sub-minute
+        // early-end shortfall (endedEarlyShortfallMinutes above) credits the full late-start-
+        // to-scheduled-end span rather than the fractionally-shorter real elapsed time.
+        var minutesToCredit = endedEarlyShortfallMinutes.HasValue
+            ? (scheduledEnd - completedAt).TotalMinutes
+            : actualElapsedMinutes;
+        var cappedMinutes = Math.Min(minutesToCredit, (scheduledEnd - completedAt).TotalMinutes);
+        return cappedMinutes > 0 ? (completedAt, completedAt.AddMinutes(cappedMinutes)) : null;
     }
 }

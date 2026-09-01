@@ -326,6 +326,52 @@ public class FocusBlockOutcomeClassifierTests
     }
 
     [Fact]
+    public void CreditedWindow_EndedEarlyBySubMinuteShortfall_RitualOnTime_IsTheFullScheduledWindow()
+    {
+        var sessionEndedAt = ScheduledEnd.AddSeconds(-40); // 40s short of the 3:00 scheduled end
+
+        var window = _classifier.CreditedWindow(
+            ScheduledStart, ScheduledEnd, ritualCompletedAt: ScheduledStart, sessionEndedAt: sessionEndedAt, actualElapsedMinutes: 119.33);
+
+        window.Should().Be((ScheduledStart, ScheduledEnd));
+    }
+
+    [Fact]
+    public void CreditedWindow_EndedEarlyBySubMinuteShortfall_RitualStartedLate_CreditsFullLateStartToScheduledEndSpan()
+    {
+        var ritualAt = ScheduledStart.AddMinutes(19); // started late, well past grace
+        var sessionEndedAt = ScheduledEnd.AddSeconds(-40); // still 40s short of the 3:00 scheduled end
+
+        var window = _classifier.CreditedWindow(
+            ScheduledStart, ScheduledEnd, ritualCompletedAt: ritualAt, sessionEndedAt: sessionEndedAt, actualElapsedMinutes: 100.33);
+
+        window.Should().Be((ritualAt, ScheduledEnd));
+    }
+
+    [Fact]
+    public void CreditedWindow_EndedEarlyExactlyAtGraceThreshold_IsForgiven()
+    {
+        var sessionEndedAt = ScheduledEnd.AddMinutes(-FocusBlockOutcomeClassifier.MinimumMeaningfulDeficitMinutes);
+
+        var window = _classifier.CreditedWindow(
+            ScheduledStart, ScheduledEnd, ritualCompletedAt: ScheduledStart, sessionEndedAt: sessionEndedAt, actualElapsedMinutes: 119);
+
+        window.Should().Be((ScheduledStart, ScheduledEnd));
+    }
+
+    [Fact]
+    public void CreditedWindow_EndedEarlyJustPastGraceThreshold_CreditsOnlyActualElapsed()
+    {
+        var sessionEndedAt = ScheduledEnd.AddMinutes(-FocusBlockOutcomeClassifier.MinimumMeaningfulDeficitMinutes).AddSeconds(-1);
+        var actualElapsedMinutes = (sessionEndedAt - ScheduledStart).TotalMinutes;
+
+        var window = _classifier.CreditedWindow(
+            ScheduledStart, ScheduledEnd, ritualCompletedAt: ScheduledStart, sessionEndedAt: sessionEndedAt, actualElapsedMinutes: actualElapsedMinutes);
+
+        window.Should().Be((ScheduledStart, sessionEndedAt));
+    }
+
+    [Fact]
     public void CreditedWindow_CrossMidnightScheduledBlock_WithinGracePeriod_IsTheFullOvernightWindow()
     {
         var overnightStart = new DateTime(2026, 1, 1, 22, 0, 0, DateTimeKind.Utc);

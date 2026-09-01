@@ -556,6 +556,10 @@
 							<Run Text="{Binding SnapshotBlock.Duration, Converter={StaticResource DurationConverter}, Mode=OneWay}"/>
 							<Run Text=")"/>
 						</TextBlock>
+
+						<TextBlock Text="{Binding SnapshotBlock.EndedEarlyGraceSeconds, Converter={x:Static conv:EndedEarlyGraceSecondsToNoteConverter.Instance}}"
+                                   IsVisible="{Binding SnapshotBlock.EndedEarlyGraceSeconds, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                   FontSize="12" FontStyle="Italic" Foreground="#7A7A8C"/>
 					</StackPanel>
 
 					<Border Grid.Row="1" Height="1" Background="#E8E8F0" Margin="24,0"/>

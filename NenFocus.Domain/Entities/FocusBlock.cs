@@ -1,4 +1,5 @@
 using NenFocus.Domain.Enums;
+using NenFocus.Domain.Services;
 using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Domain.Entities;
@@ -143,12 +144,13 @@ public sealed class FocusBlock : PlannedBlock
     /// GetSuggestedRedemptionPlacementsQueryHandler's own whole-minute rounding, required by
     /// the same MODULE_STANDARDS.md rule referenced above). Without this, "shortened to
     /// match" would fire on almost every ordinary Cover Deficit save, since a real-world
-    /// deficit is essentially never an exact whole number of minutes. A whole minute is the
-    /// same grain that rounding margin can never exceed, so anything smaller than that is
-    /// never a genuine overreach — only a manually lengthened block can cross it.
+    /// deficit is essentially never an exact whole number of minutes. Shares
+    /// FocusBlockOutcomeClassifier.MinimumMeaningfulDeficitMinutes with the deficit ledger's
+    /// own write-off and CreditedWindow's own sub-minute-shortfall forgiveness — one number,
+    /// one meaning, everywhere "is this shortfall worth caring about" gets asked.
     /// </summary>
     public static bool WasRedemptionCoverageMeaningfullyCapped(DateTime requestedEnd, DateTime cappedEnd)
-        => (requestedEnd - cappedEnd).TotalMinutes >= 1;
+        => (requestedEnd - cappedEnd).TotalMinutes >= FocusBlockOutcomeClassifier.MinimumMeaningfulDeficitMinutes;
 
     /// <summary>
     /// True when this block's own outcome represents an unredeemed shortfall of its own —
