@@ -108,10 +108,22 @@ public sealed class FocusBlock : PlannedBlock
     /// whose REDEMPTION badge implies its whole span is accounted-for deficit coverage.
     /// Pure and self-contained (only this block's own Start/End/RedemptionEntries), so it
     /// lives here rather than in an Application handler — the same justification already
-    /// used for MaxDurationHours/ValidateDuration on this entity. Rounds down, never up:
-    /// the opposite direction from the existing "round up before persisting a fraction into
-    /// a timestamp" rule, because that rule guarantees "covers at least X" survives tick-
-    /// rounding, while this guarantees the opposite — duration must never exceed coverage.
+    /// used for MaxDurationHours/ValidateDuration on this entity.
+    ///
+    /// Caps to the *exact* covered amount — not rounded to a whole minute. This looks like
+    /// it should collide with MODULE_STANDARDS.md's "round up before persisting a fraction
+    /// into a timestamp" rule, but it doesn't: that rule protects a value that gets read
+    /// back out of *this* timestamp later and compared against an "at least X" threshold
+    /// (e.g. a suggested tile's own size, checked against the deficit it must fully cover).
+    /// `entries` here is the opposite direction — each `RedemptionEntry.MinutesCovered` is
+    /// already a precise double, stored as-is and never re-derived from this block's own
+    /// End, so nothing downstream re-reads this timestamp to recover it. Previously this
+    /// floored to a whole minute, which silently threw away up to 59 seconds of real
+    /// coverage on every redemption whose deficit wasn't a clean whole number (i.e. nearly
+    /// all of them) and, when the remaining coverage was itself under a minute, floored to
+    /// zero — producing an End equal to Start and crashing FocusBlock.Create. Exact
+    /// arithmetic can never do that: a RedemptionEntry can never be zero or negative, so
+    /// AddMinutes(coveredMinutes) can never equal `start`.
     /// </summary>
     public static DateTime CapEndToRedemptionCoverage(DateTime start, DateTime requestedEnd, IReadOnlyList<RedemptionEntry> entries)
     {
@@ -121,8 +133,22 @@ public sealed class FocusBlock : PlannedBlock
         var requestedMinutes = (requestedEnd - start).TotalMinutes;
         if (coveredMinutes >= requestedMinutes) return requestedEnd;
 
-        return start.AddMinutes(Math.Floor(coveredMinutes));
+        return start.AddMinutes(coveredMinutes);
     }
+
+    /// <summary>
+    /// True when CapEndToRedemptionCoverage's shortening is large enough to be worth
+    /// surfacing to the user, as opposed to merely trimming off the sub-minute safety
+    /// margin every Cover Deficit suggestion is deliberately over-sized by (see
+    /// GetSuggestedRedemptionPlacementsQueryHandler's own whole-minute rounding, required by
+    /// the same MODULE_STANDARDS.md rule referenced above). Without this, "shortened to
+    /// match" would fire on almost every ordinary Cover Deficit save, since a real-world
+    /// deficit is essentially never an exact whole number of minutes. A whole minute is the
+    /// same grain that rounding margin can never exceed, so anything smaller than that is
+    /// never a genuine overreach — only a manually lengthened block can cross it.
+    /// </summary>
+    public static bool WasRedemptionCoverageMeaningfullyCapped(DateTime requestedEnd, DateTime cappedEnd)
+        => (requestedEnd - cappedEnd).TotalMinutes >= 1;
 
     /// <summary>
     /// True when this block's own outcome represents an unredeemed shortfall of its own —

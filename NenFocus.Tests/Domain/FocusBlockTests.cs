@@ -65,18 +65,56 @@ public class FocusBlockTests
     }
 
     [Fact]
-    public void CapEndToRedemptionCoverage_FractionalCoverage_RoundsDownNeverUp()
+    public void CapEndToRedemptionCoverage_FractionalCoverage_CapsToTheExactAmountNotAWholeMinute()
     {
-        // Rounding direction matters here specifically because it's the opposite of the
-        // existing "round up before persisting a fraction into a timestamp" rule
-        // (MODULE_STANDARDS.md) — that rule exists to guarantee "covers at least X" never
-        // falls short after tick-rounding. This guarantee runs the other way: duration must
-        // never exceed coverage, so rounding must only ever go down.
+        // No rounding here at all — the cap trims to precisely what the entries claim.
+        // RedemptionEntry.MinutesCovered is never re-derived from this block's own
+        // persisted End, so there's no "at least X survives tick-rounding" concern
+        // (MODULE_STANDARDS.md) to protect against; flooring away the fraction (the old
+        // behavior) only threw away real, already-earned coverage.
         var requestedEnd = Start.AddHours(2);
         var entries = new List<RedemptionEntry> { new(Guid.NewGuid(), 45.9) };
 
         var result = FocusBlock.CapEndToRedemptionCoverage(Start, requestedEnd, entries);
 
-        result.Should().Be(Start.AddMinutes(45));
+        result.Should().Be(Start.AddMinutes(45.9));
+    }
+
+    [Fact]
+    public void CapEndToRedemptionCoverage_TinyResidualDeficit_CapsToASubMinuteEndStillAfterStart()
+    {
+        // Regression test: flooring a sub-1-minute coverage sum used to round to zero
+        // minutes, making the capped End equal Start and crashing FocusBlock.Create with
+        // "End time must be after start time." — reproduces the reported bug (a residual
+        // deficit of a few seconds left after an earlier redemption block).
+        var requestedEnd = Start.AddMinutes(1); // suggestion padded up to a whole minute
+        var entries = new List<RedemptionEntry> { new(Guid.NewGuid(), 0.0667) }; // ~4 seconds owed
+
+        var result = FocusBlock.CapEndToRedemptionCoverage(Start, requestedEnd, entries);
+
+        result.Should().Be(Start.AddMinutes(0.0667));
+        result.Should().BeAfter(Start);
+    }
+
+    [Fact]
+    public void WasRedemptionCoverageMeaningfullyCapped_SubMinuteTrim_ReturnsFalse()
+    {
+        // The routine case: a Cover Deficit suggestion's whole-minute safety margin gets
+        // trimmed back off. Not worth surfacing to the user every time.
+        var requestedEnd = Start.AddMinutes(2);
+        var cappedEnd = Start.AddMinutes(1.0667);
+
+        FocusBlock.WasRedemptionCoverageMeaningfullyCapped(requestedEnd, cappedEnd).Should().BeFalse();
+    }
+
+    [Fact]
+    public void WasRedemptionCoverageMeaningfullyCapped_WholeMinuteOrMoreTrim_ReturnsTrue()
+    {
+        // A genuine overreach — e.g. a manually resized redemption block stretched well
+        // past what its entries actually cover.
+        var requestedEnd = Start.AddHours(2);
+        var cappedEnd = Start.AddMinutes(45);
+
+        FocusBlock.WasRedemptionCoverageMeaningfullyCapped(requestedEnd, cappedEnd).Should().BeTrue();
     }
 }

@@ -9,14 +9,23 @@ namespace NenFocus.Application.Queries.GetNenContractDeficits;
 public sealed class GetNenContractDeficitsQueryHandler
     : IQueryHandler<GetNenContractDeficitsQuery, IReadOnlyList<FocusBlockDeficitDto>>
 {
-    // A redemption block's duration is sized to a deficit expressed as a double, then
-    // round-tripped through a DateTime End (quantized to 100ns ticks) and read back out as
-    // TotalMinutes when its MinutesCovered is computed — that round-trip always loses a
-    // sliver of precision (observed: ~1.7e-9 minutes, about one tick), leaving a deficit
-    // that's fully covered in every way a person can perceive still reading as
-    // microscopically > 0 forever. This tolerance is many orders of magnitude above that
-    // noise floor and many orders below the smallest deficit a user could ever care about.
-    private const double DeficitToleranceMinutes = 0.01;
+    // A deficit at or below this many minutes is treated as fully honored and excluded from
+    // the ledger entirely — no Cover Deficit prompt, no redemption block ever required for
+    // it. This is a deliberate product write-off, not a precision guard: below this grain,
+    // requiring an actual Ritual + redemption tile just to close out a handful of seconds
+    // is more friction than the shortfall is worth (see DESIGN_GAP_HISTORY.md Gap 44).
+    // Mirrors FocusBlock.WasRedemptionCoverageMeaningfullyCapped's identical 1-minute
+    // cutoff for the same underlying judgment, on the opposite side of a redemption.
+    //
+    // This also, incidentally, subsumes the original, much narrower reason this comparison
+    // existed at all: a redemption block's duration is sized to a deficit expressed as a
+    // double, then round-tripped through a DateTime End (quantized to 100ns ticks) and read
+    // back out as TotalMinutes when its MinutesCovered is computed — that round-trip always
+    // loses a sliver of precision (observed: ~1.7e-9 minutes, about one tick), which could
+    // leave a deficit that's fully covered in every way a person can perceive still reading
+    // as microscopically > 0 forever (Gap 33). That noise floor is many orders of magnitude
+    // below this threshold, so one comparison now serves both purposes honestly.
+    private const double MinimumMeaningfulDeficitMinutes = 1;
 
     private readonly IPlannedBlockRepository _blocks;
     private readonly ISessionRepository _sessions;
@@ -116,7 +125,7 @@ public sealed class GetNenContractDeficitsQueryHandler
                 });
 
             var remainingDeficit = Math.Max(0, rawDeficit - coveredMinutes);
-            if (remainingDeficit <= DeficitToleranceMinutes)
+            if (remainingDeficit <= MinimumMeaningfulDeficitMinutes)
                 continue;
 
             deficits.Add(new FocusBlockDeficitDto

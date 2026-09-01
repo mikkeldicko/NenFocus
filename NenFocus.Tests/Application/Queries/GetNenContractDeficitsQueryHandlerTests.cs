@@ -413,6 +413,45 @@ public class GetNenContractDeficitsQueryHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_DeficitAtOneMinuteWriteOffThreshold_Excluded()
+    {
+        // A deficit at or below the 1-minute write-off is a deliberate product forgiveness,
+        // not tick noise — no Cover Deficit prompt should ever appear for it.
+        var block = MissedBlock(Now.AddHours(-3), Now.AddHours(-1)); // 2-hour block, 120 min
+        _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
+        _classifier.Classify(block.Start, block.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Now).Returns(FocusBlockOutcome.EndedEarly);
+        var session = Session.Create(Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(120)),
+            block.BlockPresetId, SessionOrigin.Planned, originatingBlockId: block.Id);
+        session.Start(block.Start);
+        session.Complete(block.End.AddMinutes(-1)); // exactly 1 minute short
+        _sessions.GetByOriginatingBlockIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns(session);
+        _classifier.CreditedFocusMinutes(block.Start, block.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Arg.Any<double>()).Returns(119);
+
+        var result = await CreateHandler().HandleAsync(new GetNenContractDeficitsQuery(ContractId), CancellationToken.None);
+
+        result.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task HandleAsync_DeficitJustOverWriteOffThreshold_StillSurfaces()
+    {
+        var block = MissedBlock(Now.AddHours(-3), Now.AddHours(-1)); // 2-hour block, 120 min
+        _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
+        _classifier.Classify(block.Start, block.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Now).Returns(FocusBlockOutcome.EndedEarly);
+        var session = Session.Create(Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(120)),
+            block.BlockPresetId, SessionOrigin.Planned, originatingBlockId: block.Id);
+        session.Start(block.Start);
+        session.Complete(block.End.AddSeconds(-97)); // 1 min 37 sec short
+        _sessions.GetByOriginatingBlockIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns(session);
+        _classifier.CreditedFocusMinutes(block.Start, block.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Arg.Any<double>())
+            .Returns(120 - 97 / 60.0);
+
+        var result = await CreateHandler().HandleAsync(new GetNenContractDeficitsQuery(ContractId), CancellationToken.None);
+
+        result.Should().ContainSingle().Subject.RemainingDeficitMinutes.Should().BeApproximately(97 / 60.0, 1e-9);
+    }
+
+    [Fact]
     public async Task HandleAsync_MultipleDeficits_OrderedByScheduledStart()
     {
         var later = MissedBlock(Now.AddHours(-1).AddMinutes(-30), Now.AddHours(-1));

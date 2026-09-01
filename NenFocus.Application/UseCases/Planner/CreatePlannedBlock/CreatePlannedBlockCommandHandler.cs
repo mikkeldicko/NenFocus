@@ -54,7 +54,7 @@ public sealed class CreatePlannedBlockCommandHandler : ICommandHandler<CreatePla
                 .ToList();
 
             var cappedEnd = FocusBlock.CapEndToRedemptionCoverage(startTime, endTime, redemptionEntries);
-            redemptionCapped = cappedEnd != endTime;
+            redemptionCapped = FocusBlock.WasRedemptionCoverageMeaningfullyCapped(endTime, cappedEnd);
             endTime = cappedEnd;
         }
 
