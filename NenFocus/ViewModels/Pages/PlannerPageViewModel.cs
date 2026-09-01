@@ -10,7 +10,6 @@ using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.CheckNenContractDateRangeOverlap;
 using NenFocus.Application.Queries.ComputePlannedFocusHours;
-using NenFocus.Application.Queries.ComputeRedemptionAttribution;
 using NenFocus.Application.Queries.GetActiveNenContract;
 using NenFocus.Application.Queries.GetAllBlockPresets;
 using NenFocus.Application.Queries.GetAllContractPresets;
@@ -210,12 +209,6 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     [ObservableProperty] private bool _isConfirmDeleteSnapshotVisible;
     [ObservableProperty] private string? _deleteSnapshotErrorMessage;
 
-    // Passive preview only, refreshed whenever preset/date/time change — no user action
-    // needed and nothing sent on Save. CreatePlannedBlockCommandHandler runs the exact same
-    // ComputeRedemptionAttributionQuery itself when the block is actually created, so this
-    // can never drift from what Save will really do.
-    [ObservableProperty] private string? _redemptionSuggestionNotice;
-
     // ── Split Block ────────────────────────────────────────────────────────────
     [ObservableProperty] private bool _isSplitDialogVisible;
     [ObservableProperty] private string _splitFirstStartTime = "09:00";
@@ -266,17 +259,19 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     public ObservableCollection<SuggestedRedemptionPlacementDto> CoverDeficitOptions { get; } = new();
     public bool HasCoverableDeficit => CoverDeficitOptions.Count > 0;
 
-    [ObservableProperty] private bool _isConfirmPartialRedemptionVisible;
-    [ObservableProperty] private string _confirmPartialRedemptionMessage = string.Empty;
-    private SuggestedRedemptionPlacementDto? _pendingPartialRedemption;
-
-    // ── Create-time redemption confirm gate (DESIGN_GAP_HISTORY.md Gap 39) ─────────
-    // Only reached from the plain "new block" Save path — never from editing, never from
-    // the type-changed delete-then-recreate path (which passes an already-known
-    // ContractId explicitly and never consults ComputeRedemptionAttributionQuery at all).
-    [ObservableProperty] private bool _isConfirmCreateRedemptionVisible;
-    [ObservableProperty] private string _confirmCreateRedemptionMessage = string.Empty;
-    private (Guid PresetId, DateTime Start, DateTime End)? _pendingRedemptionCreate;
+    // ── Cover Deficit → redemption creation (Open Gap N) ────────────────────────
+    // Clicking Cover Deficit opens the ordinary block-creation form, pre-filled at the
+    // suggested slot with the preset locked to the deficit's own preset — reusing every
+    // existing form/date/time/Split mechanic rather than a bespoke calendar-drag flow.
+    // This is now the ONLY path that can produce a redemption-linked block — manual tile
+    // creation always declines redemption (see SaveAsync's plain create path). The old
+    // pre-create "won't fully cover — create anyway?" warning is gone: it existed only
+    // because the previous flow instant-created with no chance to reconsider. Now the user
+    // sees an editable form before Save, same as every other block — under-covering the
+    // deficit just leaves the remainder outstanding, unremarkable like any other block.
+    private bool _isCreatingRedemption;
+    private DateOnly? _redemptionContractStartDate;
+    private DateOnly? _redemptionContractEndDate;
 
     public bool HasActiveContract => ActiveContract is not null;
 
@@ -353,12 +348,13 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     }
 
     [RelayCommand]
-    private void ToggleCoverDeficitPopover()
+    private async Task ToggleCoverDeficitPopoverAsync()
     {
+        if (IsFormVisible || IsWizardVisible || IsDraftingContract) return;
         if (CoverDeficitOptions.Count == 0) return;
         if (CoverDeficitOptions.Count == 1)
         {
-            _ = CoverDeficitAsync(CoverDeficitOptions[0]);
+            await OpenRedemptionCreateFormAsync(CoverDeficitOptions[0]);
             return;
         }
         IsCoverDeficitPopoverVisible = !IsCoverDeficitPopoverVisible;
@@ -368,55 +364,43 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     private async Task CoverDeficitAsync(SuggestedRedemptionPlacementDto option)
     {
         IsCoverDeficitPopoverVisible = false;
+        await OpenRedemptionCreateFormAsync(option);
+    }
+
+    // Opens the ordinary block-creation form pre-filled at the suggested slot, preset
+    // locked to the deficit's own preset (ShowPresetPicker/SaveAsync enforce this — the
+    // form never lets it change here). The user can freely adjust date/time, use Split
+    // Block to divide this not-yet-created placement into two, then Save creates it via
+    // the exact same CreatePlannedBlockCommand path any other Focus block uses — the only
+    // difference is DeclineRedemption stays false, letting attribution attach normally.
+    private async Task OpenRedemptionCreateFormAsync(SuggestedRedemptionPlacementDto option)
+    {
+        await EnsurePresetsLoadedAsync();
         CoverDeficitErrorMessage = null;
+        _editingBlockId = null;
+        _editingIsDraft = false;
+        IsEditing = false;
+        IsStartLocked = false;
+        FormTitle = "Cover Deficit";
+        ResetForm();
 
-        if (!option.CanFullyCover)
-        {
-            _pendingPartialRedemption = option;
-            ConfirmPartialRedemptionMessage =
-                $"This starts now and won't fully cover the {option.TotalRemainingDeficitMinutes:0.#} min owed for " +
-                $"{option.PresetName} — the rest will still show as an outstanding deficit. Create it anyway?";
-            IsConfirmPartialRedemptionVisible = true;
-            return;
-        }
+        _isCreatingRedemption = true;
+        _redemptionContractStartDate = ActiveContract?.StartDate;
+        _redemptionContractEndDate = ActiveContract?.EndDate;
+        OnPropertyChanged(nameof(CanSplitBlock));
+        OnPropertyChanged(nameof(CanChangePreset));
+        OnPropertyChanged(nameof(ShowTypeToggle));
 
-        await CreateRedemptionTileAsync(option);
-    }
+        IsFocusBlock = true; // redemption is Focus-only
+        SelectedPreset = AvailablePresets.FirstOrDefault(p => p.Id == option.PresetId);
 
-    [RelayCommand]
-    private async Task ConfirmPartialRedemptionAsync()
-    {
-        IsConfirmPartialRedemptionVisible = false;
-        if (_pendingPartialRedemption is { } option)
-            await CreateRedemptionTileAsync(option);
-        _pendingPartialRedemption = null;
-    }
+        var localStart = option.SuggestedStart.ToLocalTime();
+        var localEnd = option.SuggestedEnd.ToLocalTime();
+        var blockDate = DateTime.SpecifyKind(localStart.Date, DateTimeKind.Utc);
+        FormDate = new DateTimeOffset(blockDate, TimeSpan.Zero);
+        SetFormTimes(localStart.TimeOfDay, localEnd.TimeOfDay);
 
-    [RelayCommand]
-    private void CancelPartialRedemption()
-    {
-        IsConfirmPartialRedemptionVisible = false;
-        _pendingPartialRedemption = null;
-    }
-
-    private async Task CreateRedemptionTileAsync(SuggestedRedemptionPlacementDto option)
-    {
-        var result = await _commandDispatcher.DispatchAsync(new CreatePlannedBlockCommand
-        {
-            PresetId = option.PresetId,
-            BlockPresetType = BlockPresetType.Focus,
-            Start = option.SuggestedStart,
-            End = option.SuggestedEnd
-        });
-
-        if (!result.Success)
-        {
-            CoverDeficitErrorMessage = result.ErrorMessage;
-            return;
-        }
-
-        await LoadWeekAsync();
-        await RefreshActiveContractAsync();
+        IsFormVisible = true;
     }
 
     [RelayCommand]
@@ -486,11 +470,28 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     // relevance), and the live active-session noticeboard. The validator remains the sole
     // authority; this only gates button visibility, same relationship CanDeleteFromForm has
     // to its validator.
-    public bool CanSplitBlock =>
+    //
+    // The Cover Deficit path (_isCreatingRedemption) is a second, independent way in: the
+    // block doesn't exist yet, so none of SplitPlannedBlockValidator's rules apply at all —
+    // OpenSplitDialog/ConfirmSplitAsync branch on _isCreatingRedemption and dispatch two
+    // CreatePlannedBlockCommands instead of SplitPlannedBlockCommand.
+    public bool CanSplitBlock => _isCreatingRedemption || (
         IsEditing && !_editingIsDraft && IsFocusBlock
         && IsEditingBlockContractLocked && IsEditingBlockDailyFlexibility
         && !IsStartLocked && !IsEditingCompleted
-        && _sessionState.ActiveSession?.OriginatingBlockId != _editingBlockId;
+        && _sessionState.ActiveSession?.OriginatingBlockId != _editingBlockId);
+
+    // Preset is locked to the deficit's own preset while creating a redemption block —
+    // the popover already picked which preset this covers, so re-picking a different one
+    // here would silently disconnect the placement from the deficit it exists to cover.
+    public bool CanChangePreset => !IsBlockLocked && !_isCreatingRedemption;
+
+    // Hidden once editing an already-placed block (type can't change after the fact — see
+    // ARCHITECT_GOVERNANCE.md's sealed-contract enforcement notes) or while creating a
+    // redemption block (Focus-only by construction). Still shown for a brand-new ordinary
+    // block and for editing an in-progress (unsealed) contract-wizard draft, which remains
+    // freely re-typeable until Seal.
+    public bool ShowTypeToggle => (!IsEditing || _editingIsDraft) && !_isCreatingRedemption;
 
     // Deliberately NOT gated on session-active — confirmed with the architect: the only
     // reason to disable Make/Edit is a genuine overlay collision (a form or the wizard
@@ -513,6 +514,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(IsBlockLocked));
         OnPropertyChanged(nameof(CanSaveBlock));
         OnPropertyChanged(nameof(CanSplitBlock));
+        OnPropertyChanged(nameof(ShowTypeToggle));
     }
 
     partial void OnIsEditingCompletedChanged(bool value)
@@ -720,12 +722,8 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         UpdateVisibleEndTimeOptions(FormEndTime);
     }
 
-    partial void OnSelectedPresetChanged(BlockPresetDto? value) => _ = RefreshRedemptionPreviewAsync();
-    partial void OnFormDateChanged(DateTimeOffset value) => _ = RefreshRedemptionPreviewAsync();
     partial void OnFormStartTimeChanged(string value)
     {
-        _ = RefreshRedemptionPreviewAsync();
-
         IsFormStartTimeInvalid = !TryParseFormTime(value, out var newStart);
         if (!IsFormStartTimeInvalid) _lastValidFormStartTime = value;
         if (!IsFormStartTimeInvalid) RegenerateEndTimeOptions();
@@ -744,8 +742,6 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
     partial void OnFormEndTimeChanged(string value)
     {
-        _ = RefreshRedemptionPreviewAsync();
-
         IsFormEndTimeInvalid = !TryParseFormTime(value, out var newEnd);
         if (!IsFormEndTimeInvalid) _lastValidFormEndTime = value;
         UpdateVisibleEndTimeOptions(value);
@@ -874,33 +870,6 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
         _preservedFormDuration = PlannerTimeShiftMath.ResolvedDuration(start, end);
         UpdateEndRolloverDisplay(start, end);
-    }
-
-    // Only offered when creating a brand-new block (not editing one, not drafting a
-    // contract) — composes the same ComputeRedemptionAttributionQuery
-    // CreatePlannedBlockCommandHandler itself calls, so this preview can never drift from
-    // what Save will actually do. No toggle, no user decision: the block either qualifies
-    // or it doesn't, and this is purely informational.
-    private async Task RefreshRedemptionPreviewAsync()
-    {
-        RedemptionSuggestionNotice = null;
-
-        if (!IsFocusBlock || SelectedPreset is null || IsEditing || IsDraftingContract)
-            return;
-        if (!TryParseFormTime(FormStartTime, out var startTime) || !TryParseFormTime(FormEndTime, out var endTime))
-            return;
-
-        var (startUtc, endUtc) = ResolveFormRangeUtc(startTime, endTime);
-
-        var attribution = await _queryDispatcher.QueryAsync(
-            new ComputeRedemptionAttributionQuery(null, SelectedPreset.Id, startUtc, endUtc, ExcludeBlockId: null));
-
-        if (attribution.Entries.Count == 0) return;
-
-        var totalCovered = attribution.Entries.Sum(e => e.MinutesCovered);
-        RedemptionSuggestionNotice = attribution.Entries.Count == 1
-            ? $"This will cover {totalCovered:0.#} min of your missed {SelectedPreset.Name} block."
-            : $"This will cover {totalCovered:0.#} min across {attribution.Entries.Count} missed {SelectedPreset.Name} blocks.";
     }
 
     /// <summary>
@@ -1120,6 +1089,12 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         FormError = null;
         IsFocusBlock = true;
         SelectedPreset = null;
+        _isCreatingRedemption = false;
+        _redemptionContractStartDate = null;
+        _redemptionContractEndDate = null;
+        OnPropertyChanged(nameof(CanSplitBlock));
+        OnPropertyChanged(nameof(CanChangePreset));
+        OnPropertyChanged(nameof(ShowTypeToggle));
     }
 
     [RelayCommand] private void SetFocusBlock() => IsFocusBlock = true;
@@ -1148,6 +1123,17 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
         var blockPresetType = IsFocusBlock ? BlockPresetType.Focus : BlockPresetType.Background;
 
+        if (_isCreatingRedemption)
+        {
+            var formDateOnly = DateOnly.FromDateTime(FormDate.Date);
+            if (_redemptionContractStartDate is { } rangeStart && _redemptionContractEndDate is { } rangeEnd
+                && (formDateOnly < rangeStart || formDateOnly > rangeEnd))
+            {
+                FormError = $"This must be placed within the contract's date range ({rangeStart:MMM d} – {rangeEnd:MMM d}).";
+                return;
+            }
+        }
+
         if (IsEditing && _editingBlockId.HasValue)
         {
             var typeChanged = _blocksInWeek.TryGetValue(_editingBlockId.Value, out var originalDto)
@@ -1165,7 +1151,12 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
                     BlockPresetType = blockPresetType,
                     Start = startUtc,
                     End = endUtc,
-                    ContractId = originalDto!.ContractId
+                    ContractId = originalDto!.ContractId,
+                    // A type change is still an edit, not a new manual placement — only an
+                    // already-redemption-linked block (non-null ContractId) gets its
+                    // attribution recomputed against the same contract; an ordinary block
+                    // never gets newly linked just because its type changed.
+                    DeclineRedemption = originalDto.ContractId is null
                 };
                 var createResult = await _commandDispatcher.DispatchAsync(createCmd);
                 if (!createResult.Success) { FormError = createResult.ErrorMessage; return; }
@@ -1186,41 +1177,22 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         }
         else
         {
-            // A Focus block whose preset+date already matches an open deficit gets a confirm
-            // gate instead of silently auto-attaching — the same ComputeRedemptionAttributionQuery
-            // RefreshRedemptionPreviewAsync already previewed, called fresh here rather than
-            // trusting that possibly-stale preview at the actual moment of Save. Background
-            // blocks never reach this: no session, never redemption-eligible.
-            if (blockPresetType == BlockPresetType.Focus)
-            {
-                var attribution = await _queryDispatcher.QueryAsync(
-                    new ComputeRedemptionAttributionQuery(null, SelectedPreset.Id, startUtc, endUtc, ExcludeBlockId: null));
-
-                if (attribution.Entries.Count > 0)
-                {
-                    var totalCovered = attribution.Entries.Sum(e => e.MinutesCovered);
-                    var body = attribution.Entries.Count == 1
-                        ? $"This will cover {totalCovered:0.#} min of your missed {SelectedPreset.Name} block."
-                        : $"This will cover {totalCovered:0.#} min across {attribution.Entries.Count} missed {SelectedPreset.Name} blocks.";
-                    ConfirmCreateRedemptionMessage = $"{body} Link it as a redemption?";
-                    _pendingRedemptionCreate = (SelectedPreset.Id, startUtc, endUtc);
-                    IsConfirmCreateRedemptionVisible = true;
-                    return;
-                }
-            }
-
-            // No ContractId, no RedemptionEntries — CreatePlannedBlockCommandHandler
-            // auto-discovers whether this block should attach to a contract and cover a
-            // deficit, via the exact same query RefreshRedemptionPreviewAsync already
-            // showed a preview from.
+            // Manual creation never links to a deficit, even if the preset+time happens to
+            // match one — the only way to create a redemption-linked block is the Cover
+            // Deficit flow (_isCreatingRedemption), which leaves DeclineRedemption false so
+            // attribution attaches normally. Every other "new block" path always declines —
+            // always an ordinary block (or a Bonus block, read-time-labelled, if it falls
+            // inside a contract's date range).
             var result = await _commandDispatcher.DispatchAsync(new CreatePlannedBlockCommand
             {
                 PresetId = SelectedPreset.Id,
                 BlockPresetType = blockPresetType,
                 Start = startUtc,
-                End = endUtc
+                End = endUtc,
+                DeclineRedemption = !_isCreatingRedemption
             });
             if (!result.Success) { FormError = result.ErrorMessage; return; }
+            if (_isCreatingRedemption && result.RedemptionCapped) DragError = RedemptionCapMessage;
         }
         await FinishBlockSavedAsync();
     }
@@ -1233,44 +1205,6 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         await LoadWeekAsync();
         await RefreshActiveContractAsync();
         CloseForm();
-    }
-
-    [RelayCommand]
-    private async Task ConfirmCreateRedemptionAsync()
-    {
-        IsConfirmCreateRedemptionVisible = false;
-        if (_pendingRedemptionCreate is not { } pending) return;
-        _pendingRedemptionCreate = null;
-
-        var result = await _commandDispatcher.DispatchAsync(new CreatePlannedBlockCommand
-        {
-            PresetId = pending.PresetId,
-            BlockPresetType = BlockPresetType.Focus,
-            Start = pending.Start,
-            End = pending.End
-        });
-        if (!result.Success) { FormError = result.ErrorMessage; return; }
-        if (result.RedemptionCapped) DragError = RedemptionCapMessage;
-        await FinishBlockSavedAsync();
-    }
-
-    [RelayCommand]
-    private async Task CreateAsBonusBlockAsync()
-    {
-        IsConfirmCreateRedemptionVisible = false;
-        if (_pendingRedemptionCreate is not { } pending) return;
-        _pendingRedemptionCreate = null;
-
-        var result = await _commandDispatcher.DispatchAsync(new CreatePlannedBlockCommand
-        {
-            PresetId = pending.PresetId,
-            BlockPresetType = BlockPresetType.Focus,
-            Start = pending.Start,
-            End = pending.End,
-            DeclineRedemption = true
-        });
-        if (!result.Success) { FormError = result.ErrorMessage; return; }
-        await FinishBlockSavedAsync();
     }
 
     // Validates and commits a draft block into the in-memory _draftBlocks list — no
@@ -1353,12 +1287,28 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private void OpenSplitDialog()
     {
-        if (!CanSplitBlock || !_editingBlockId.HasValue) return;
-        if (!_blocksInWeek.TryGetValue(_editingBlockId.Value, out var dto)) return;
+        if (!CanSplitBlock) return;
+
+        DateTime localStart, localEnd;
+        if (_isCreatingRedemption)
+        {
+            // Nothing persisted yet — bisect whatever the form currently holds, using the
+            // same day-rollover resolution Save itself uses so a redemption placement that
+            // crosses midnight splits correctly too.
+            if (!TryParseFormTime(FormStartTime, out var formStart) || !TryParseFormTime(FormEndTime, out var formEnd)) return;
+            var (startUtc, endUtc) = ResolveFormRangeUtc(formStart, formEnd);
+            localStart = startUtc.ToLocalTime();
+            localEnd = endUtc.ToLocalTime();
+        }
+        else
+        {
+            if (!_editingBlockId.HasValue) return;
+            if (!_blocksInWeek.TryGetValue(_editingBlockId.Value, out var dto)) return;
+            localStart = dto.Start.ToLocalTime();
+            localEnd = dto.End.ToLocalTime();
+        }
 
         SplitError = null;
-        var localStart = dto.Start.ToLocalTime();
-        var localEnd = dto.End.ToLocalTime();
         var midpoint = localStart + TimeSpan.FromTicks((localEnd - localStart).Ticks / 2);
 
         _isPopulatingSplitTimes = true;
@@ -1424,7 +1374,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private async Task ConfirmSplitAsync()
     {
-        if (!_editingBlockId.HasValue) return;
+        if (!_isCreatingRedemption && !_editingBlockId.HasValue) return;
         SplitError = null;
 
         if (!TryParseFormTime(SplitFirstStartTime, out var firstStart) || !TryParseFormTime(SplitFirstEndTime, out var firstEnd)
@@ -1440,9 +1390,47 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         var secondStartUtc = DateTime.SpecifyKind(dayDate.Add(secondStart), DateTimeKind.Local).ToUniversalTime();
         var secondEndUtc = DateTime.SpecifyKind(dayDate.Add(secondEnd), DateTimeKind.Local).ToUniversalTime();
 
+        if (_isCreatingRedemption)
+        {
+            // Nothing exists yet, so there's no OriginalBlockId to split — two ordinary
+            // CreatePlannedBlockCommands instead, each independently redemption-eligible
+            // exactly like the single-piece Save path. Not atomic across the two calls
+            // (no multi-command transaction exists anywhere in this codebase — see
+            // DailyFlexibility's own "no multi-block atomic edit" note); a first-succeeds/
+            // second-fails outcome leaves the first half created, surfaced explicitly below
+            // rather than silently.
+            if (SelectedPreset is null) { SplitError = "Please select a block preset."; return; }
+
+            var firstResult = await _commandDispatcher.DispatchAsync(new CreatePlannedBlockCommand
+            {
+                PresetId = SelectedPreset.Id,
+                BlockPresetType = BlockPresetType.Focus,
+                Start = firstStartUtc,
+                End = firstEndUtc
+            });
+            if (!firstResult.Success) { SplitError = firstResult.ErrorMessage; return; }
+
+            var secondResult = await _commandDispatcher.DispatchAsync(new CreatePlannedBlockCommand
+            {
+                PresetId = SelectedPreset.Id,
+                BlockPresetType = BlockPresetType.Focus,
+                Start = secondStartUtc,
+                End = secondEndUtc
+            });
+            if (!secondResult.Success)
+            {
+                SplitError = $"First half created, but the second failed: {secondResult.ErrorMessage}";
+                return;
+            }
+
+            IsSplitDialogVisible = false;
+            await FinishBlockSavedAsync();
+            return;
+        }
+
         var result = await _commandDispatcher.DispatchAsync(new SplitPlannedBlockCommand
         {
-            OriginalBlockId = _editingBlockId.Value,
+            OriginalBlockId = _editingBlockId!.Value,
             FirstBlockStart = firstStartUtc,
             FirstBlockEnd = firstEndUtc,
             SecondBlockStart = secondStartUtc,
@@ -1473,9 +1461,6 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         IsEditingBlockDailyFlexibility = false;
         IsSplitDialogVisible = false;
         SplitError = null;
-        RedemptionSuggestionNotice = null;
-        IsConfirmCreateRedemptionVisible = false;
-        _pendingRedemptionCreate = null;
         _editingBlockId = null;
         _editingIsDraft = false;
     }

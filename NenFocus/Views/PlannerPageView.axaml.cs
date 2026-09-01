@@ -733,9 +733,42 @@ public partial class PlannerPageView : UserControl
             double finalTop    = Canvas.GetTop(_tileGhost);
             double finalBottom = finalTop + _tileGhost.Height;
 
-            var newLocalStart = PlannerDragMath.YToSnappedTime(finalTop,    PlannerPageViewModel.FirstHour, PlannerPageViewModel.HourRowHeight);
-            var newLocalEnd   = PlannerDragMath.YToSnappedTime(finalBottom, PlannerPageViewModel.FirstHour, PlannerPageViewModel.HourRowHeight);
-            (newLocalStart, newLocalEnd) = PlannerDragMath.ClampRange(newLocalStart, newLocalEnd, PlannerPageViewModel.FirstHour);
+            // A MOVE relocates a tile without ever resizing it, and a RESIZE only ever
+            // moves the edge actually being dragged — the other edge is an anchor pinned at
+            // its exact original (possibly non-quarter-hour, e.g. a 38-minute block) value.
+            // Snapping BOTH edges independently from their pixel position, as the old code
+            // did unconditionally, silently rounds an odd duration up/down to whatever the
+            // two independent roundings happen to produce.
+            var originalDayStart = _vm.WeekStart.AddDays(tile.ColumnIndex).Date;
+            var originalStartOffset = tile.Start - originalDayStart;
+            var originalEndOffset   = tile.End   - originalDayStart;
+
+            TimeSpan newLocalStart, newLocalEnd;
+            switch (_dragKind)
+            {
+                case DragKind.Moving:
+                {
+                    var duration = tile.End - tile.Start;
+                    var snappedStart = PlannerDragMath.YToSnappedTime(finalTop, PlannerPageViewModel.FirstHour, PlannerPageViewModel.HourRowHeight);
+                    newLocalStart = PlannerDragMath.ClampMoveStart(snappedStart, duration, PlannerPageViewModel.FirstHour);
+                    newLocalEnd   = newLocalStart + duration;
+                    break;
+                }
+                case DragKind.ResizingTop:
+                {
+                    var snappedStart = PlannerDragMath.YToSnappedTime(finalTop, PlannerPageViewModel.FirstHour, PlannerPageViewModel.HourRowHeight);
+                    newLocalEnd   = originalEndOffset;
+                    newLocalStart = PlannerDragMath.ClampResizeTopStart(snappedStart, newLocalEnd, PlannerPageViewModel.FirstHour);
+                    break;
+                }
+                default: // ResizingBottom
+                {
+                    var snappedEnd = PlannerDragMath.YToSnappedTime(finalBottom, PlannerPageViewModel.FirstHour, PlannerPageViewModel.HourRowHeight);
+                    newLocalStart = originalStartOffset;
+                    newLocalEnd   = PlannerDragMath.ClampResizeBottomEnd(snappedEnd, newLocalStart, PlannerPageViewModel.FirstHour);
+                    break;
+                }
+            }
 
             var dayDate     = _vm.WeekStart.AddDays(_effectiveDragColumn).Date;
             var newStartUtc = DateTime.SpecifyKind(dayDate.Add(newLocalStart), DateTimeKind.Local).ToUniversalTime();
@@ -885,16 +918,47 @@ public partial class PlannerPageView : UserControl
         _tileGhost.Width  = Math.Max(0, newCanvas.Bounds.Width - 4);
     }
 
+    // Mirrors OnCanvasPointerReleased's commit math exactly, so the live label shown while
+    // dragging never promises a time range the release handler then commits differently —
+    // a MOVE preserves the tile's exact original duration, a RESIZE pins whichever edge
+    // isn't being dragged at its exact original (possibly non-quarter-hour) value.
     private void UpdateTileGhostLabel()
     {
-        if (_tileGhost is null || _tileGhostTimeLabel is null) return;
+        if (_tileGhost is null || _tileGhostTimeLabel is null || _dragTile is null || _vm is null) return;
 
         double top    = Canvas.GetTop(_tileGhost);
         double bottom = top + _tileGhost.Height;
 
-        var startTime = PlannerDragMath.YToSnappedTime(top,    PlannerPageViewModel.FirstHour, PlannerPageViewModel.HourRowHeight);
-        var endTime   = PlannerDragMath.YToSnappedTime(bottom, PlannerPageViewModel.FirstHour, PlannerPageViewModel.HourRowHeight);
-        (startTime, endTime) = PlannerDragMath.ClampRange(startTime, endTime, PlannerPageViewModel.FirstHour);
+        var originalDayStart = _vm.WeekStart.AddDays(_dragTile.ColumnIndex).Date;
+        var originalStartOffset = _dragTile.Start - originalDayStart;
+        var originalEndOffset   = _dragTile.End   - originalDayStart;
+
+        TimeSpan startTime, endTime;
+        switch (_dragKind)
+        {
+            case DragKind.Moving:
+            {
+                var duration = _dragTile.End - _dragTile.Start;
+                var snappedStart = PlannerDragMath.YToSnappedTime(top, PlannerPageViewModel.FirstHour, PlannerPageViewModel.HourRowHeight);
+                startTime = PlannerDragMath.ClampMoveStart(snappedStart, duration, PlannerPageViewModel.FirstHour);
+                endTime   = startTime + duration;
+                break;
+            }
+            case DragKind.ResizingTop:
+            {
+                var snappedStart = PlannerDragMath.YToSnappedTime(top, PlannerPageViewModel.FirstHour, PlannerPageViewModel.HourRowHeight);
+                endTime   = originalEndOffset;
+                startTime = PlannerDragMath.ClampResizeTopStart(snappedStart, endTime, PlannerPageViewModel.FirstHour);
+                break;
+            }
+            default: // ResizingBottom
+            {
+                var snappedEnd = PlannerDragMath.YToSnappedTime(bottom, PlannerPageViewModel.FirstHour, PlannerPageViewModel.HourRowHeight);
+                startTime = originalStartOffset;
+                endTime   = PlannerDragMath.ClampResizeBottomEnd(snappedEnd, startTime, PlannerPageViewModel.FirstHour);
+                break;
+            }
+        }
 
         _tileGhostTimeLabel.Text = $"{FormatTime(startTime)} – {FormatTime(endTime)}";
     }
