@@ -55,7 +55,7 @@ The name and ritual terminology (Ten, Zetsu, Ren, Hatsu) are inspired by the con
 
 ## Architecture
 
-Clean Architecture with 4 code projects + 1 test project:
+Clean Architecture with 4 code projects + 1 test project, plus one non-.NET sibling:
 
 ```
 NenFocus.Domain          → Entities, value objects, domain events, enums. No dependencies.
@@ -63,9 +63,16 @@ NenFocus.Application     → Use cases (CQRS commands/queries), interfaces, vali
 NenFocus.Infrastructure  → EF Core + SQLite, Windows enforcement, toast notifications, DI wiring.
 NenFocus                 → Avalonia UI: ViewModels, Views, converters. Entry point.
 NenFocus.Tests           → xUnit unit tests for Domain and Application layers.
+NenFocusExtension        → Chrome/Edge/Brave MV3 browser extension (JS, not .NET). Talks to
+                            WindowsEnforcementService's local HTTP API (localhost:5005) as an
+                            external client — same relationship the UI has to Application, just
+                            across a process/language boundary. Deliberately not nested inside
+                            NenFocus.Infrastructure: it isn't compiled into that assembly, has its
+                            own manifest/packaging/deployment story, and nesting it there would
+                            only be cosmetic while implying a build relationship that doesn't exist.
 ```
 
-Dependencies only flow inward: UI → Application ← Infrastructure → Domain.
+Dependencies only flow inward: UI → Application ← Infrastructure → Domain. `NenFocusExtension` sits outside this flow entirely — it depends on nothing but Infrastructure's local HTTP contract (`/check`, `/report`).
 
 **Key patterns:**
 
@@ -89,6 +96,7 @@ Dependencies only flow inward: UI → Application ← Infrastructure → Domain.
 📄 TESTING\\\_GUIDE.md           ← TDD workflow, NSubstitute patterns, test inventory
 📄 UI\\\_UX\\\_STANDARDS.md         ← Colours, layout, ViewLocator, time formatting
 📄 DESIGN\\\_GAP\\\_HISTORY.md      ← Record of closed design gaps (reference only)
+📁 NenFocusExtension/          ← Browser extension (JS/MV3), own folder, not part of the .NET solution
 
 
 
@@ -344,6 +352,27 @@ Gaps that have been identified but not yet closed. Each is here because deferrin
 **Candidate detection mechanism (sketched, not designed):** compare elapsed wall-clock time (`DateTime.UtcNow` deltas between heartbeat ticks) against elapsed monotonic time (`Environment.TickCount64`/`Stopwatch`, driven by system uptime and unaffected by manual clock changes). A large mismatch — wall clock jumped backward, or forward by far more than the ~5s tick interval could explain — is a strong signal of manual tampering. The open design problem is distinguishing that from two legitimate causes of the same kind of discontinuity: sleep/hibernate (large forward jump, expected — adjacent to Open Gap B's already-tracked territory) and ordinary NTP drift correction (small, should be tolerated, not flagged).
 
 **Must be closed before:** Nothing — parked for later. Not yet interrogated: no decision on where the check lives (`ScheduledEnforcementService` heartbeat is the obvious candidate, already the sole per-tick observer of both `now` and elapsed time), what the nudge actually says, whether it's rate-limited (once per detected event? once per day?), or how sleep/wake and NTP-drift get reliably excluded from triggering a false nudge.
+
+\---
+
+### Open Gap K — Enforcement Has No Life Independent of the GUI Process (surfaced 2026-09-02; not yet interrogated)
+
+**Found while designing the "already-open tab" browser-enforcement fix (see `DESIGN_GAP_HISTORY.md` for that closed gap), not while looking for it.** The question that surfaced this: does killing `NenFocus.exe` (Task Manager / crash) still leave blocking in effect, the way Cold Turkey's separate background service keeps enforcing after its GUI is killed? Verified against the real code, not assumed: **no.**
+
+**Why not, concretely:**
+- `WindowsEnforcementService`'s `HttpListener` (the local `http://localhost:5005` API the extension calls for `/check` and `/report`) runs **inside** the main GUI process. Kill that process and the listener dies with it.
+- `NenFocusExtension/background.js`'s `onBeforeNavigate` handler (and the newly-added `poll.js` content-script check) **fails open** on a fetch error to that endpoint (`background.js` catch block: "If the C# app is closed, this will trigger. We do nothing and let the browser load naturally.") — so once the process is dead, every subsequent navigation and every open tab's periodic check silently waves traffic through.
+- The hosts-file entries `ApplyHostsRulesAsync` writes do persist on disk after the process dies (they're static file content, not actively maintained) — so DNS-level blocking nominally survives a kill. But this protection is undermined if the browser's DNS resolution bypasses the hosts file (e.g. Chrome's Secure DNS / DNS-over-HTTPS, on by default in current Chrome) — in that case there is no enforcement left at all once the app is killed.
+
+**Why Cold Turkey doesn't have this problem:** its enforcement runs in a separate, always-on Windows Service independent of its GUI's process lifetime — killing the GUI only kills the front-end. NenFocus has no such split: `WindowsEnforcementService` and its local HTTP API are hosted entirely inside the one process a user (or the user being tempted to self-sabotage) can kill from Task Manager.
+
+**Not yet interrogated — genuinely two separate open questions, not one:**
+1. **Architecture split:** would closing this require extracting enforcement into an actual Windows Service that starts at boot and runs independently of the GUI, with the GUI becoming a thin client of it? That's a materially larger change than anything in the existing Open Gaps list — full interrogation needed before any design commitment (dependency tree, IPC between GUI and service, install/uninstall of a service, startup ordering).
+2. **Fail-open vs fail-closed:** independent of the architecture question, should the extension's behavior on an unreachable `localhost:5005` change from "let traffic through" to "block by default until the app is confirmed reachable again"? This alone doesn't fix "no enforcement survives a kill" (a dead process still can't fail closed forever without some other durable signal of "should currently be blocking"), but it changes the failure posture and needs its own design pass regardless of what happens with the service-split question.
+
+**Relationship to Open Gap B:** adjacent but distinct. Gap B is about recovering *session state* correctly after a clean restart (was a session active when the app died, does enforcement get correctly re-applied). This gap is about enforcement having *no existence at all* between the process dying and the process (if ever) restarting — a different, larger failure mode that Gap B's candidate fixes don't address.
+
+**Must be closed before:** Nothing urgent — deferred until picked up, per explicit architect decision on 2026-09-02 (kept the immediate scope to the already-open-tab fix; this was parked deliberately, not overlooked).
 
 \---
 

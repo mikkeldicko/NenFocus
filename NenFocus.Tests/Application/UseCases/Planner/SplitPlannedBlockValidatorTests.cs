@@ -541,6 +541,67 @@ public class SplitPlannedBlockValidatorTests
     }
 
     [Fact]
+    public async Task Validate_FirstBlockOutsideWorkHours_IsInvalid()
+    {
+        // Work hours 15:00-18:00 — First (14:00-16:00, from ValidCommand's 2h split point)
+        // starts an hour before the window opens.
+        var blockId = Guid.NewGuid();
+        var contractId = Guid.NewGuid();
+        _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
+            .Returns(FocusBlock.Create(blockId, Guid.NewGuid(), OriginalStart, OriginalEnd, contractId: contractId));
+        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
+            .Returns(NenContract.Seal(contractId, "Contract", new NenContractGoal("Goal"),
+                DateOnly.FromDateTime(Now), DateOnly.FromDateTime(Now).AddDays(30),
+                StrictnessRule.DailyFlexibility, new DailyFloorPolicy(DailyFloor.None), null, false,
+                new Dictionary<DateOnly, double>(), sealedAt: Now,
+                workHoursPolicy: new WorkHoursPolicy(new WorkHours(new TimeOnly(15, 0), new TimeOnly(18, 0)))));
+
+        var result = await CreateValidator().ValidateAsync(ValidCommand(blockId));
+
+        result.IsValid.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Validate_SecondBlockOutsideWorkHours_IsInvalid()
+    {
+        // Work hours 9:00-16:00 — Second (16:00-17:00, from ValidCommand's 2h split point)
+        // ends an hour after the window closes.
+        var blockId = Guid.NewGuid();
+        var contractId = Guid.NewGuid();
+        _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
+            .Returns(FocusBlock.Create(blockId, Guid.NewGuid(), OriginalStart, OriginalEnd, contractId: contractId));
+        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
+            .Returns(NenContract.Seal(contractId, "Contract", new NenContractGoal("Goal"),
+                DateOnly.FromDateTime(Now), DateOnly.FromDateTime(Now).AddDays(30),
+                StrictnessRule.DailyFlexibility, new DailyFloorPolicy(DailyFloor.None), null, false,
+                new Dictionary<DateOnly, double>(), sealedAt: Now,
+                workHoursPolicy: new WorkHoursPolicy(new WorkHours(new TimeOnly(9, 0), new TimeOnly(16, 0)))));
+
+        var result = await CreateValidator().ValidateAsync(ValidCommand(blockId));
+
+        result.IsValid.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Validate_BothBlocksWithinWorkHours_IsValid()
+    {
+        var blockId = Guid.NewGuid();
+        var contractId = Guid.NewGuid();
+        _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
+            .Returns(FocusBlock.Create(blockId, Guid.NewGuid(), OriginalStart, OriginalEnd, contractId: contractId));
+        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
+            .Returns(NenContract.Seal(contractId, "Contract", new NenContractGoal("Goal"),
+                DateOnly.FromDateTime(Now), DateOnly.FromDateTime(Now).AddDays(30),
+                StrictnessRule.DailyFlexibility, new DailyFloorPolicy(DailyFloor.None), null, false,
+                new Dictionary<DateOnly, double>(), sealedAt: Now,
+                workHoursPolicy: new WorkHoursPolicy(new WorkHours(new TimeOnly(9, 0), new TimeOnly(18, 0)))));
+
+        var result = await CreateValidator().ValidateAsync(ValidCommand(blockId));
+
+        result.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task Validate_PieceItselfCrossesMidnight_IsInvalid()
     {
         // Each resulting piece must resolve to a single day — no recursive crossing.

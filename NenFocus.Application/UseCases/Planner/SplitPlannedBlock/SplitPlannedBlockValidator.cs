@@ -178,6 +178,33 @@ public sealed class SplitPlannedBlockValidator : AbstractValidator<SplitPlannedB
             })
             .WithMessage("The two resulting blocks must add up to the original block's total duration.");
 
+        // Surfaced 2026-09-02: Split never checked Work Hours at all, unlike
+        // CreatePlannedBlockValidator/UpdatePlannedBlockValidator, which both call
+        // AllowsBlockPlacement — a real pre-existing gap, not new scope creep. Split is
+        // Focus-only (enforced above) and always belongs to a sealed contract (also
+        // enforced above), so this applies unconditionally to both resulting pieces,
+        // unlike Create's own version of this rule which only applies when
+        // BlockPresetType == Focus.
+        RuleFor(x => x)
+            .MustAsync(async (command, ct) =>
+            {
+                var block = await blocks.GetByIdAsync(command.OriginalBlockId, ct);
+                if (block?.ContractId is not { } contractId) return true; // reported above
+                var contract = await contracts.GetByIdAsync(contractId, ct);
+                return contract is null || contract.AllowsBlockPlacement(clock.ToLocal(command.FirstBlockStart), clock.ToLocal(command.FirstBlockEnd));
+            })
+            .WithMessage("The first block falls outside the contract's configured Work Hours for that day.");
+
+        RuleFor(x => x)
+            .MustAsync(async (command, ct) =>
+            {
+                var block = await blocks.GetByIdAsync(command.OriginalBlockId, ct);
+                if (block?.ContractId is not { } contractId) return true; // reported above
+                var contract = await contracts.GetByIdAsync(contractId, ct);
+                return contract is null || contract.AllowsBlockPlacement(clock.ToLocal(command.SecondBlockStart), clock.ToLocal(command.SecondBlockEnd));
+            })
+            .WithMessage("The second block falls outside the contract's configured Work Hours for that day.");
+
         // Floor-protection: unlike an ordinary same-preset shrink (which conserves the
         // day's total by construction), Split can freely reallocate hours across whichever
         // day(s) the original spans — including concentrating everything on one day and

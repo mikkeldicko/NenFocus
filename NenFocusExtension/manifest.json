@@ -3,7 +3,7 @@
   "name": "NenFocus Enforcer",
   "version": "1.0",
   "description": "Seamlessly blocks sites and reports attempts to NenFocus.",
-  "permissions": [ "webNavigation", "tabs" ],
+  "permissions": [ "webNavigation", "tabs", "scripting" ],
   "host_permissions": [
     "<all_urls>",
     "http://localhost:5005/*"
@@ -11,6 +11,13 @@
   "background": {
     "service_worker": "background.js"
   },
+  "content_scripts": [
+    {
+      "matches": [ "http://*/*", "https://*/*" ],
+      "js": [ "poll.js" ],
+      "run_at": "document_idle"
+    }
+  ],
   "web_accessible_resources": [
     {
       "resources": [ "blocked.html" ],

@@ -1,3 +1,20 @@
+// Content scripts declared in the manifest only auto-inject on future page loads.
+// Tabs already open when the extension installs/updates/starts never get poll.js
+// on their own, so back-fill it into every matching tab that already exists.
+const injectPollIntoExistingTabs = () => {
+    chrome.tabs.query({ url: ["http://*/*", "https://*/*"] }, (tabs) => {
+        for (const tab of tabs) {
+            chrome.scripting.executeScript({
+                target: { tabId: tab.id },
+                files: ["poll.js"]
+            }).catch(() => { });
+        }
+    });
+};
+
+chrome.runtime.onInstalled.addListener(injectPollIntoExistingTabs);
+chrome.runtime.onStartup.addListener(injectPollIntoExistingTabs);
+
 chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
     // Only handle the main frame (top-level navigation)
     if (details.frameId !== 0) return;

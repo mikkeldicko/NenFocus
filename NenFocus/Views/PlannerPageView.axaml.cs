@@ -14,6 +14,7 @@ using NenFocus.ViewModels.Pages;
 using NenFocus.ViewModels.Components;
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Linq;
@@ -54,16 +55,44 @@ public partial class PlannerPageView : UserControl
     private TextBlock? _tileGhostTimeLabel;
 
     // Wired once in the constructor (not AttachedToVisualTree, which can fire more than
-    // once for the same control instance) since all six AutoCompleteBoxes below are part
-    // of the static form/dialog UI, never rebuilt like the day columns are. Kept as fields
-    // so OnViewModelPropertyChanged (a live user edit re-scrolling the open dropdown) can
+    // once for the same control instance) since all these fields are part of the static
+    // form/dialog UI, never rebuilt like the day columns are. Kept as fields so
+    // OnViewModelPropertyChanged (a live user edit re-scrolling the open dropdown) can
     // reach them too, not just the constructor's own GotFocus wiring.
-    private AutoCompleteBox? _formStartTimeBox;
-    private AutoCompleteBox? _formEndTimeBox;
-    private AutoCompleteBox? _splitFirstStartTimeBox;
-    private AutoCompleteBox? _splitFirstEndTimeBox;
-    private AutoCompleteBox? _splitSecondStartTimeBox;
-    private AutoCompleteBox? _splitSecondEndTimeBox;
+    //
+    // All six time fields are plain TextBox + Popup/ScrollViewer/ItemsControl that the
+    // ViewModel/this code-behind fully own now, not AutoCompleteBox — see
+    // PlannerPageViewModel's StartTimeScrollIndex doc comment for why.
+    private TextBox? _formStartTimeBox;
+    private ScrollViewer? _formStartTimeScrollViewer;
+    private ItemsControl? _formStartTimeList;
+    private Border? _formStartTimeHighlighted;
+    private int? _formStartTimeHoveredIndex;
+    private TextBox? _formEndTimeBox;
+    private ScrollViewer? _formEndTimeScrollViewer;
+    private ItemsControl? _formEndTimeList;
+    private Border? _formEndTimeHighlighted;
+    private int? _formEndTimeHoveredIndex;
+    private TextBox? _splitFirstStartTimeBox;
+    private ScrollViewer? _splitFirstStartTimeScrollViewer;
+    private ItemsControl? _splitFirstStartTimeList;
+    private Border? _splitFirstStartTimeHighlighted;
+    private int? _splitFirstStartTimeHoveredIndex;
+    private TextBox? _splitFirstEndTimeBox;
+    private ScrollViewer? _splitFirstEndTimeScrollViewer;
+    private ItemsControl? _splitFirstEndTimeList;
+    private Border? _splitFirstEndTimeHighlighted;
+    private int? _splitFirstEndTimeHoveredIndex;
+    private TextBox? _splitSecondStartTimeBox;
+    private ScrollViewer? _splitSecondStartTimeScrollViewer;
+    private ItemsControl? _splitSecondStartTimeList;
+    private Border? _splitSecondStartTimeHighlighted;
+    private int? _splitSecondStartTimeHoveredIndex;
+    private TextBox? _splitSecondEndTimeBox;
+    private ScrollViewer? _splitSecondEndTimeScrollViewer;
+    private ItemsControl? _splitSecondEndTimeList;
+    private Border? _splitSecondEndTimeHighlighted;
+    private int? _splitSecondEndTimeHoveredIndex;
 
     public PlannerPageView()
     {
@@ -71,12 +100,24 @@ public partial class PlannerPageView : UserControl
         DataContextChanged += OnDataContextChanged;
         AttachedToVisualTree += OnAttachedToVisualTree;
 
-        _formStartTimeBox = this.FindControl<AutoCompleteBox>("FormStartTimeBox")!;
-        _formEndTimeBox = this.FindControl<AutoCompleteBox>("FormEndTimeBox")!;
-        _splitFirstStartTimeBox = this.FindControl<AutoCompleteBox>("SplitFirstStartTimeBox")!;
-        _splitFirstEndTimeBox = this.FindControl<AutoCompleteBox>("SplitFirstEndTimeBox")!;
-        _splitSecondStartTimeBox = this.FindControl<AutoCompleteBox>("SplitSecondStartTimeBox")!;
-        _splitSecondEndTimeBox = this.FindControl<AutoCompleteBox>("SplitSecondEndTimeBox")!;
+        _formStartTimeBox = this.FindControl<TextBox>("FormStartTimeBox")!;
+        _formStartTimeScrollViewer = this.FindControl<ScrollViewer>("FormStartTimeScrollViewer")!;
+        _formStartTimeList = this.FindControl<ItemsControl>("FormStartTimeList")!;
+        _formEndTimeBox = this.FindControl<TextBox>("FormEndTimeBox")!;
+        _formEndTimeScrollViewer = this.FindControl<ScrollViewer>("FormEndTimeScrollViewer")!;
+        _formEndTimeList = this.FindControl<ItemsControl>("FormEndTimeList")!;
+        _splitFirstStartTimeBox = this.FindControl<TextBox>("SplitFirstStartTimeBox")!;
+        _splitFirstStartTimeScrollViewer = this.FindControl<ScrollViewer>("SplitFirstStartTimeScrollViewer")!;
+        _splitFirstStartTimeList = this.FindControl<ItemsControl>("SplitFirstStartTimeList")!;
+        _splitFirstEndTimeBox = this.FindControl<TextBox>("SplitFirstEndTimeBox")!;
+        _splitFirstEndTimeScrollViewer = this.FindControl<ScrollViewer>("SplitFirstEndTimeScrollViewer")!;
+        _splitFirstEndTimeList = this.FindControl<ItemsControl>("SplitFirstEndTimeList")!;
+        _splitSecondStartTimeBox = this.FindControl<TextBox>("SplitSecondStartTimeBox")!;
+        _splitSecondStartTimeScrollViewer = this.FindControl<ScrollViewer>("SplitSecondStartTimeScrollViewer")!;
+        _splitSecondStartTimeList = this.FindControl<ItemsControl>("SplitSecondStartTimeList")!;
+        _splitSecondEndTimeBox = this.FindControl<TextBox>("SplitSecondEndTimeBox")!;
+        _splitSecondEndTimeScrollViewer = this.FindControl<ScrollViewer>("SplitSecondEndTimeScrollViewer")!;
+        _splitSecondEndTimeList = this.FindControl<ItemsControl>("SplitSecondEndTimeList")!;
 
         // Nothing in the main form's two boxes has focus-driven behavior otherwise —
         // LostFocus isn't a Command binding target, so the code-behind wires it directly
@@ -84,125 +125,328 @@ public partial class PlannerPageView : UserControl
         _formStartTimeBox.LostFocus += (_, _) => _vm?.OnFormStartTimeLostFocus();
         _formEndTimeBox.LostFocus += (_, _) => _vm?.OnFormEndTimeLostFocus();
 
-        WireTimeDropdown(_formStartTimeBox, () => _vm?.StartTimeScrollIndex);
-        WireTimeDropdown(_formEndTimeBox, () => _vm?.EndTimeScrollIndex);
-        WireTimeDropdown(_splitFirstStartTimeBox, () => _vm?.SplitFirstStartTimeScrollIndex);
-        WireTimeDropdown(_splitFirstEndTimeBox, () => _vm?.SplitFirstEndTimeScrollIndex);
-        WireTimeDropdown(_splitSecondStartTimeBox, () => _vm?.SplitSecondStartTimeScrollIndex);
-        WireTimeDropdown(_splitSecondEndTimeBox, () => _vm?.SplitSecondEndTimeScrollIndex);
+        // Light-dismissing the popup (a genuine outside click) doesn't otherwise move
+        // keyboard focus away from the TextBox on its own — confirmed via a real repro: the
+        // text stayed selected/blue and still accepted keystrokes after clicking away. Popup
+        // also closes this way when we programmatically call Close*TimeDropdown (item click,
+        // Enter, Escape) — defocusing then too is a deliberate, low-risk choice: the field is
+        // conceptually "done" either way once its dropdown closes. Focusing the page root
+        // (Focusable="True" in XAML) rather than some other control is a neutral no-op target
+        // with no styling of its own that would make the shift visible.
+        this.FindControl<Popup>("FormStartTimePopup")!.Closed += (_, _) => Focus();
+        this.FindControl<Popup>("FormEndTimePopup")!.Closed += (_, _) => Focus();
+        this.FindControl<Popup>("SplitFirstStartTimePopup")!.Closed += (_, _) => Focus();
+        this.FindControl<Popup>("SplitFirstEndTimePopup")!.Closed += (_, _) => Focus();
+        this.FindControl<Popup>("SplitSecondStartTimePopup")!.Closed += (_, _) => Focus();
+        this.FindControl<Popup>("SplitSecondEndTimePopup")!.Closed += (_, _) => Focus();
+
+        // ScrollXTimeDropdownToWindow is called directly here rather than relying on
+        // StartTimeScrollIndex/EndTimeScrollIndex's own PropertyChanged: [ObservableProperty]'s
+        // generated setter skips raising the event when the new value equals the old one (e.g.
+        // the form was just populated by SetFormTimes, which already computed this same
+        // index) — a real repro where opening the dropdown right after creating a tile
+        // silently didn't scroll at all, leaving whatever position a previous session
+        // happened to leave the ScrollViewer at. Opening must always reposition, whether or
+        // not the index number changed.
+        WireTimePickerDropdown(_formStartTimeBox, _formStartTimeList,
+            open: () => { _formStartTimeHoveredIndex = null; _vm?.OpenStartTimeDropdown(); ScrollStartTimeDropdownToWindow(_vm?.StartTimeScrollIndex); },
+            moveNext: () => _vm?.MoveStartTimeNext(),
+            movePrevious: () => _vm?.MoveStartTimePrevious(),
+            close: () => _vm?.CloseStartTimeDropdown(),
+            commit: () =>
+            {
+                var index = _formStartTimeHoveredIndex ?? _vm?.StartTimeScrollIndex;
+                if (_vm is not null && index is { } i && i < _vm.TimeOptions.Count) _vm.SelectStartTimeOption(_vm.TimeOptions[i]);
+                else _vm?.CloseStartTimeDropdown();
+            },
+            selectFromSource: source => { if (source.DataContext is string text) _vm?.SelectStartTimeOption(text); },
+            hoverFromSource: source =>
+            {
+                if (_vm is null || _formStartTimeList is null || source.DataContext is not string text) return;
+                var index = _vm.TimeOptions.IndexOf(text);
+                if (index < 0 || index == _formStartTimeHoveredIndex) return;
+                _formStartTimeHoveredIndex = index;
+                SetHighlightedContainer(_formStartTimeList, () => _formStartTimeHighlighted, b => _formStartTimeHighlighted = b, index);
+            });
+
+        WireTimePickerDropdown(_formEndTimeBox, _formEndTimeList,
+            open: () => { _formEndTimeHoveredIndex = null; _vm?.OpenEndTimeDropdown(); ScrollEndTimeDropdownToWindow(_vm?.EndTimeScrollIndex); },
+            moveNext: () => _vm?.MoveEndTimeNext(),
+            movePrevious: () => _vm?.MoveEndTimePrevious(),
+            close: () => _vm?.CloseEndTimeDropdown(),
+            commit: () =>
+            {
+                var index = _formEndTimeHoveredIndex ?? _vm?.EndTimeScrollIndex;
+                if (_vm is not null && index is { } i && i < _vm.EndTimeOptions.Count) _vm.SelectEndTimeOption(_vm.EndTimeOptions[i].TimeText);
+                else _vm?.CloseEndTimeDropdown();
+            },
+            selectFromSource: source => { if (source.DataContext is PlannerEndTimeOptionDto dto) _vm?.SelectEndTimeOption(dto.TimeText); },
+            hoverFromSource: source =>
+            {
+                if (_vm is null || _formEndTimeList is null || source.DataContext is not PlannerEndTimeOptionDto dto) return;
+                var index = _vm.EndTimeOptions.IndexOf(dto);
+                if (index < 0 || index == _formEndTimeHoveredIndex) return;
+                _formEndTimeHoveredIndex = index;
+                SetHighlightedContainer(_formEndTimeList, () => _formEndTimeHighlighted, b => _formEndTimeHighlighted = b, index);
+            });
+
+        WireFlatTimePicker(_splitFirstStartTimeBox, _splitFirstStartTimeScrollViewer, _splitFirstStartTimeList,
+            () => _splitFirstStartTimeHoveredIndex, v => _splitFirstStartTimeHoveredIndex = v,
+            () => _splitFirstStartTimeHighlighted, b => _splitFirstStartTimeHighlighted = b,
+            () => _vm?.IsSplitFirstStartTimeDropDownOpen == true, () => _vm?.OpenSplitFirstStartTimeDropdown(),
+            () => _vm?.CloseSplitFirstStartTimeDropdown(), () => _vm?.MoveSplitFirstStartTimeNext(), () => _vm?.MoveSplitFirstStartTimePrevious(),
+            text => _vm?.SelectSplitFirstStartTimeOption(text), () => _vm?.SplitFirstStartTimeScrollIndex);
+
+        WireDurationTimePicker(_splitFirstEndTimeBox, _splitFirstEndTimeScrollViewer, _splitFirstEndTimeList,
+            () => _splitFirstEndTimeHoveredIndex, v => _splitFirstEndTimeHoveredIndex = v,
+            () => _splitFirstEndTimeHighlighted, b => _splitFirstEndTimeHighlighted = b,
+            () => _vm?.IsSplitFirstEndTimeDropDownOpen == true, () => _vm?.OpenSplitFirstEndTimeDropdown(),
+            () => _vm?.CloseSplitFirstEndTimeDropdown(), () => _vm?.MoveSplitFirstEndTimeNext(), () => _vm?.MoveSplitFirstEndTimePrevious(),
+            text => _vm?.SelectSplitFirstEndTimeOption(text), () => _vm?.SplitFirstEndTimeScrollIndex, () => _vm?.SplitFirstEndTimeOptions);
+
+        WireFlatTimePicker(_splitSecondStartTimeBox, _splitSecondStartTimeScrollViewer, _splitSecondStartTimeList,
+            () => _splitSecondStartTimeHoveredIndex, v => _splitSecondStartTimeHoveredIndex = v,
+            () => _splitSecondStartTimeHighlighted, b => _splitSecondStartTimeHighlighted = b,
+            () => _vm?.IsSplitSecondStartTimeDropDownOpen == true, () => _vm?.OpenSplitSecondStartTimeDropdown(),
+            () => _vm?.CloseSplitSecondStartTimeDropdown(), () => _vm?.MoveSplitSecondStartTimeNext(), () => _vm?.MoveSplitSecondStartTimePrevious(),
+            text => _vm?.SelectSplitSecondStartTimeOption(text), () => _vm?.SplitSecondStartTimeScrollIndex);
+
+        WireDurationTimePicker(_splitSecondEndTimeBox, _splitSecondEndTimeScrollViewer, _splitSecondEndTimeList,
+            () => _splitSecondEndTimeHoveredIndex, v => _splitSecondEndTimeHoveredIndex = v,
+            () => _splitSecondEndTimeHighlighted, b => _splitSecondEndTimeHighlighted = b,
+            () => _vm?.IsSplitSecondEndTimeDropDownOpen == true, () => _vm?.OpenSplitSecondEndTimeDropdown(),
+            () => _vm?.CloseSplitSecondEndTimeDropdown(), () => _vm?.MoveSplitSecondEndTimeNext(), () => _vm?.MoveSplitSecondEndTimePrevious(),
+            text => _vm?.SelectSplitSecondEndTimeOption(text), () => _vm?.SplitSecondEndTimeScrollIndex, () => _vm?.SplitSecondEndTimeOptions);
     }
 
     /// <summary>
-    /// Google-Calendar-style: the dropdown opens on click/focus showing every option
-    /// (MinimumPrefixLength="0" in XAML) rather than requiring a typed character first,
-    /// scrolled to a ~5-item window around the current value. AutoCompleteBox's own
-    /// built-in filtering is disabled (FilterMode="Custom" in XAML plus an always-true
-    /// predicate here) specifically so it can't re-narrow ItemsSource down to only the item
-    /// matching the typed text verbatim — the ViewModel already decides the full-list-vs-
-    /// filtered-subset split (see UpdateVisibleTimeOptions); this box must never re-narrow
-    /// it further, or the "scroll to see everything else" promise breaks.
-    ///
-    /// Both GotFocus AND PointerPressed open it — GotFocus alone isn't enough. Light-dismiss
-    /// (clicking blank space elsewhere on the form) closes the popup without necessarily
-    /// moving keyboard focus off the box (clicking non-focusable whitespace doesn't steal
-    /// focus in Avalonia), so a second click back into the same, already-focused box would
-    /// never re-fire GotFocus and the dropdown would stay stuck closed. PointerPressed is
-    /// subscribed with handledEventsToo:true because AutoCompleteBox's internal TextBox
-    /// marks its own PointerPressed handled (for caret placement), which would otherwise
-    /// stop it from ever reaching this outer handler.
+    /// Shared wiring for the four Split fields — all identical, plain-string-list pickers
+    /// (same shape as Start's own, just parametrized instead of hand-duplicated four times).
+    /// Delegates to WireTimePickerDropdown/ScrollTimeDropdownToWindow/SetHighlightedContainer,
+    /// the same shared machinery Start/End use directly — this is only the extra plumbing
+    /// specific to "plain flat list of strings", assembled once instead of four times over.
     /// </summary>
-    private void WireTimeDropdown(AutoCompleteBox box, Func<int?> getScrollIndex)
+    private void WireFlatTimePicker(TextBox? box, ScrollViewer? scrollViewer, ItemsControl? list,
+        Func<int?> getHoveredIndex, Action<int?> setHoveredIndex,
+        Func<Border?> getHighlighted, Action<Border?> setHighlighted,
+        Func<bool> isOpen, Action openViewModel, Action close, Action moveNext, Action movePrevious,
+        Action<string> select, Func<int?> getScrollIndex)
     {
-        box.TextFilter = (_, _) => true;
+        void ScrollToWindow(int? centerIndex) => ScrollTimeDropdownToWindow(scrollViewer, list, isOpen, () => _vm?.TimeOptions.Count ?? 0, getHighlighted, setHighlighted, centerIndex);
+
+        WireTimePickerDropdown(box, list,
+            open: () => { setHoveredIndex(null); openViewModel(); ScrollToWindow(getScrollIndex()); },
+            moveNext: moveNext,
+            movePrevious: movePrevious,
+            close: close,
+            commit: () =>
+            {
+                var index = getHoveredIndex() ?? getScrollIndex();
+                if (_vm is not null && index is { } i && i < _vm.TimeOptions.Count) select(_vm.TimeOptions[i]);
+                else close();
+            },
+            selectFromSource: source => { if (source.DataContext is string text) select(text); },
+            hoverFromSource: source =>
+            {
+                if (_vm is null || list is null || source.DataContext is not string text) return;
+                var index = _vm.TimeOptions.IndexOf(text);
+                if (index < 0 || index == getHoveredIndex()) return;
+                setHoveredIndex(index);
+                SetHighlightedContainer(list, getHighlighted, setHighlighted, index);
+            });
+    }
+
+    /// <summary>
+    /// Duration-space counterpart to <see cref="WireFlatTimePicker"/> — for Split's First/
+    /// Second End fields, which bind to a PlannerEndTimeOptionDto list (TimeText + Duration)
+    /// instead of a plain flat list of strings, mirroring End's own bespoke wiring in the
+    /// constructor above rather than End's methods being retrofitted onto this (see
+    /// PlannerPageViewModel's ResolveApproxDurationFrom doc comment for why).
+    /// </summary>
+    private void WireDurationTimePicker(TextBox? box, ScrollViewer? scrollViewer, ItemsControl? list,
+        Func<int?> getHoveredIndex, Action<int?> setHoveredIndex,
+        Func<Border?> getHighlighted, Action<Border?> setHighlighted,
+        Func<bool> isOpen, Action openViewModel, Action close, Action moveNext, Action movePrevious,
+        Action<string> select, Func<int?> getScrollIndex, Func<ObservableCollection<PlannerEndTimeOptionDto>?> getOptions)
+    {
+        void ScrollToWindow(int? centerIndex) => ScrollTimeDropdownToWindow(scrollViewer, list, isOpen, () => getOptions()?.Count ?? 0, getHighlighted, setHighlighted, centerIndex);
+
+        WireTimePickerDropdown(box, list,
+            open: () => { setHoveredIndex(null); openViewModel(); ScrollToWindow(getScrollIndex()); },
+            moveNext: moveNext,
+            movePrevious: movePrevious,
+            close: close,
+            commit: () =>
+            {
+                var options = getOptions();
+                var index = getHoveredIndex() ?? getScrollIndex();
+                if (options is not null && index is { } i && i < options.Count) select(options[i].TimeText);
+                else close();
+            },
+            selectFromSource: source => { if (source.DataContext is PlannerEndTimeOptionDto dto) select(dto.TimeText); },
+            hoverFromSource: source =>
+            {
+                var options = getOptions();
+                if (list is null || options is null || source.DataContext is not PlannerEndTimeOptionDto dto) return;
+                var index = options.IndexOf(dto);
+                if (index < 0 || index == getHoveredIndex()) return;
+                setHoveredIndex(index);
+                SetHighlightedContainer(list, getHighlighted, setHighlighted, index);
+            });
+    }
+
+    /// <summary>
+    /// Shared wiring behind Start's and End's custom dropdowns: select-all-on-focus (so
+    /// typing immediately replaces the old value), GotFocus/PointerPressed open it (same
+    /// light-dismiss-reopen reasoning as WireTimeDropdown below), Up/Down/Enter/Escape are
+    /// handled here rather than trusted to any list control's own keyboard navigation — the
+    /// whole reason these fields stopped using AutoCompleteBox (see PlannerPageViewModel's
+    /// StartTimeScrollIndex doc comment). Clicking an item in the popup commits it via
+    /// <paramref name="selectFromSource"/>. Enter commits via <paramref name="commit"/>
+    /// instead — a real repro showed typing "17" (a valid partial hour, dropdown showing
+    /// "17:00") then pressing Enter just closed without ever writing "17:00" into the field,
+    /// leaving the literal invalid text "17" behind. <paramref name="commit"/> is
+    /// responsible for resolving whatever's currently highlighted (hovered, or the centered
+    /// default) and committing that — Escape deliberately stays commit-less, a plain cancel.
+    /// <paramref name="open"/> is responsible for both opening the ViewModel-side dropdown
+    /// state AND explicitly triggering the initial scroll — see the caller's own comment on
+    /// why that can't be left to StartTimeScrollIndex/EndTimeScrollIndex's PropertyChanged.
+    /// </summary>
+    private static void WireTimePickerDropdown(TextBox? box, ItemsControl? list,
+        Action open, Action moveNext, Action movePrevious, Action close, Action commit,
+        Action<StyledElement> selectFromSource, Action<StyledElement> hoverFromSource)
+    {
+        if (box is null) return;
 
         void Open()
         {
-            box.IsDropDownOpen = true;
-            ScrollDropdownToWindow(box, getScrollIndex());
+            box.SelectAll();
+            open();
         }
 
         box.GotFocus += (_, _) => Open();
         box.AddHandler(InputElement.PointerPressedEvent, (_, _) => Open(), RoutingStrategies.Bubble, handledEventsToo: true);
+
+        box.KeyDown += (_, e) =>
+        {
+            switch (e.Key)
+            {
+                case Key.Down:
+                    moveNext();
+                    e.Handled = true;
+                    break;
+                case Key.Up:
+                    movePrevious();
+                    e.Handled = true;
+                    break;
+                case Key.Enter:
+                    commit();
+                    break;
+                case Key.Escape:
+                    close();
+                    break;
+            }
+        };
+
+        list?.AddHandler(InputElement.PointerPressedEvent, (_, e) =>
+        {
+            if (e.Source is StyledElement source) selectFromSource(source);
+        }, RoutingStrategies.Bubble);
+
+        // PointerMoved rather than PointerEntered/PointerExited on individual item
+        // containers: those are Direct-routed in Avalonia (deliberately non-bubbling, same
+        // as WPF's MouseEnter/MouseLeave), so a single handler up on the ItemsControl would
+        // never see them. PointerMoved bubbles, and e.Source already identifies exactly
+        // which item is under the pointer — the same DataContext-from-source trick
+        // selectFromSource above already uses. Never resetting on PointerExited/pointer
+        // leaving the list at all is deliberate — see the highlighted style's own comment.
+        list?.AddHandler(InputElement.PointerMovedEvent, (_, e) =>
+        {
+            if (e.Source is StyledElement source) hoverFromSource(source);
+        }, RoutingStrategies.Bubble);
     }
 
     /// <summary>
-    /// Positions the popup's ScrollViewer directly at the top of a 5-item window around
-    /// <paramref name="centerIndex"/> (PlannerDropdownWindow.Bounds), by setting Offset —
-    /// deliberately NOT ScrollIntoView, which only scrolls the minimum distance needed to
-    /// bring a target into view and is therefore a no-op whenever that target is already
-    /// anywhere in the viewport. That "already visible" heuristic was the real bug behind a
-    /// confirmed repro: manually scrolling the popup to 16:00, closing it, then reopening it
-    /// on a field whose value was untouched at 20:30 — ScrollIntoView left the popup exactly
-    /// where the user had last scrolled it instead of recentering, because Avalonia keeps
-    /// the same ScrollViewer instance (and its Offset) alive across a close/reopen cycle
-    /// rather than resetting it. Setting Offset directly is unconditional, so every open
-    /// lands on the box's actual current value regardless of wherever it was left last time.
-    ///
-    /// Retries a few times at Loaded priority rather than a single fire-and-forget post:
-    /// right after ItemsSource is swapped in (BuildVisibleTimeOptions reassigning the
-    /// collection — see PlannerPageViewModel), the popup's internal item containers can
-    /// still be mid-rebuild the first time this runs, reporting ItemCount == 0 or an
-    /// unmeasured (zero-height) Extent. A single attempt would silently no-op there.
-    ///
-    /// The index-to-pixels conversion is derived at runtime as Extent.Height / ItemCount
-    /// rather than a hardcoded per-row pixel constant. A prior attempt hardcoded 33px,
-    /// measured via an isolated headless Avalonia layout pass — but diagnostic logging
-    /// against the real running app (2026-08-26, see DESIGN_GAP_HISTORY.md Gap 38) showed
-    /// rows actually render at 38px there (Extent.Height == ItemCount * 38 exactly,
-    /// confirmed for both Start's 97-item list and End's 26-item list), presumably due to
-    /// real Windows theme/DPI/font metrics the headless pass didn't reproduce. That
-    /// mismatch — not a tree-traversal or timing bug — was the actual cause of Open Gap L:
-    /// the offset-setting mechanism itself always worked, it was just computing the wrong
-    /// pixel target, increasingly wrong the further into the list the value was. Deriving
-    /// the row height from the real ScrollViewer at scroll time makes this self-correcting
-    /// regardless of whatever renders it — no constant to keep in sync.
+    /// Shared machinery behind all six time fields' dropdowns — we own the ScrollViewer/
+    /// ItemsControl directly by name (no native Popup.Host visual-tree traversal needed, the
+    /// way AutoCompleteBox required). No SelectedIndex to reset either: Up/Down never touch
+    /// any list control's own selection state at all (see WireTimePickerDropdown) — the
+    /// crash class this whole replacement exists to avoid never had a foothold to begin with
+    /// here. The item count is passed in rather than read off the control, since ItemsControl
+    /// doesn't expose the same ItemCount API SelectingItemsControl does — callers read it
+    /// straight off the ViewModel (TimeOptions.Count / EndTimeOptions.Count).
     /// </summary>
-    private static void ScrollDropdownToWindow(AutoCompleteBox box, int? centerIndex, int attemptsLeft = 5)
+    private void ScrollTimeDropdownToWindow(ScrollViewer? scrollViewer, ItemsControl? list, Func<bool> isOpen, Func<int> getCount,
+        Func<Border?> getHighlighted, Action<Border?> setHighlighted, int? centerIndex, int attemptsLeft = 5)
     {
-        if (centerIndex is null) return;
+        if (centerIndex is null || scrollViewer is null) return;
 
         Dispatcher.UIThread.Post(() =>
         {
-            if (!box.IsDropDownOpen) return; // closed again before this ran — nothing to do
+            if (!isOpen()) return;
 
-            // The open popup's content is NOT part of box's own visual tree — Popup hosts
-            // its Child in a separate root (Popup.Host: an OverlayPopupHost or a native
-            // PopupRoot depending on platform), so box.GetVisualDescendants() alone can
-            // never reach it. This was the actual root cause behind every prior "scroll
-            // doesn't work" report: the SelectingItemsControl lookup was silently finding
-            // nothing every time, making the whole scroll step a no-op — everything
-            // observed (defaulting to 00:00, "remembering" a stale position, drifting on
-            // reopen) was AutoCompleteBox's own native behavior, never touched by this
-            // code at all. Confirmed via a headless Avalonia repro before landing this fix.
-            var popup = box.GetVisualDescendants().OfType<Popup>().FirstOrDefault();
-            var popupContent = popup?.Host is Visual hostVisual
-                ? hostVisual.GetSelfAndVisualDescendants()
-                : Enumerable.Empty<Visual>();
-
-            var list = popupContent.OfType<SelectingItemsControl>().FirstOrDefault();
-            var scrollViewer = list?.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault();
-
-            if (list is null || scrollViewer is null || list.ItemCount == 0 || scrollViewer.Extent.Height <= 0)
+            var count = getCount();
+            if (count == 0 || scrollViewer.Extent.Height <= 0)
             {
-                if (attemptsLeft > 0) ScrollDropdownToWindow(box, centerIndex, attemptsLeft - 1);
+                if (attemptsLeft > 0) ScrollTimeDropdownToWindow(scrollViewer, list, isOpen, getCount, getHighlighted, setHighlighted, centerIndex, attemptsLeft - 1);
                 return;
             }
 
-            var (start, _) = PlannerDropdownWindow.Bounds(centerIndex.Value, list.ItemCount, 5);
-            double itemHeight = scrollViewer.Extent.Height / list.ItemCount;
+            var (start, _) = PlannerDropdownWindow.Bounds(centerIndex.Value, count, 5);
+            double itemHeight = scrollViewer.Extent.Height / count;
+
+            // Derived at runtime rather than a hardcoded guess — this item template (plain
+            // Border+TextBlock) doesn't render at the same row height AutoCompleteBox's own
+            // internal template did (a prior hardcoded pixel constant was wrong twice over,
+            // see DESIGN_GAP_HISTORY.md Gap 37/38). XAML's
+            // MaxHeight="200" is only a placeholder to bound the flash before this first runs;
+            // this overwrite makes the popup self-correct to exactly 5 rows regardless of
+            // whatever the real rendered row height turns out to be.
+            scrollViewer.MaxHeight = 5 * itemHeight;
+
             scrollViewer.Offset = new Vector(scrollViewer.Offset.X, start * itemHeight);
+
+            // Opening the dropdown (or re-centering as you type) sets the highlight to the
+            // current value's nearest slot; hoverFromSource (WireTimePickerDropdown) can move
+            // it from there as the pointer moves, and nothing ever moves it back on its own —
+            // see the "highlighted" style's own comment on why a live pointerover-based
+            // approach was tried first and rejected.
+            if (list is not null) SetHighlightedContainer(list, getHighlighted, setHighlighted, centerIndex);
         }, DispatcherPriority.Loaded);
     }
 
     /// <summary>
-    /// A live user edit (typing/picking a new value) while the dropdown is already open
-    /// should re-center it — otherwise the window only ever reflects wherever the field
-    /// happened to be when it first gained focus.
+    /// Toggles the "highlighted" style class (see UserControl.Styles) onto whichever
+    /// container holds <paramref name="index"/>, clearing it off wherever it previously was.
+    /// The container is a plain ContentPresenter for an ItemsControl, not the Border itself —
+    /// the Border is inside it, produced by the DataTemplate — so the actual styleable
+    /// element is found via GetVisualDescendants. ContainerFromIndex always finds
+    /// it here (never null for a valid index) because this ItemsControl uses the default,
+    /// non-virtualizing panel — every item's container exists regardless of scroll position.
     /// </summary>
-    private void RescrollIfOpen(AutoCompleteBox? box, int? scrollIndex)
+    private static void SetHighlightedContainer(ItemsControl list, Func<Border?> getHighlighted, Action<Border?> setHighlighted, int? index)
     {
-        if (box is { IsDropDownOpen: true }) ScrollDropdownToWindow(box, scrollIndex);
+        getHighlighted()?.Classes.Remove("highlighted");
+        setHighlighted(null);
+
+        if (index is null) return;
+
+        var container = list.ContainerFromIndex(index.Value);
+        var border = container?.GetVisualDescendants().OfType<Border>().FirstOrDefault();
+        border?.Classes.Add("highlighted");
+        setHighlighted(border);
     }
+
+    private void ScrollStartTimeDropdownToWindow(int? centerIndex) =>
+        ScrollTimeDropdownToWindow(_formStartTimeScrollViewer, _formStartTimeList,
+            () => _vm?.IsStartTimeDropDownOpen == true, () => _vm?.TimeOptions.Count ?? 0,
+            () => _formStartTimeHighlighted, b => _formStartTimeHighlighted = b, centerIndex);
+
+    private void ScrollEndTimeDropdownToWindow(int? centerIndex) =>
+        ScrollTimeDropdownToWindow(_formEndTimeScrollViewer, _formEndTimeList,
+            () => _vm?.IsEndTimeDropDownOpen == true, () => _vm?.EndTimeOptions.Count ?? 0,
+            () => _formEndTimeHighlighted, b => _formEndTimeHighlighted = b, centerIndex);
+
 
     private void OnAttachedToVisualTree(object? sender, Avalonia.VisualTreeAttachmentEventArgs e)
     {
@@ -246,23 +490,31 @@ public partial class PlannerPageView : UserControl
 
         switch (e.PropertyName)
         {
-            case nameof(PlannerPageViewModel.FormStartTime):
-                RescrollIfOpen(_formStartTimeBox, _vm?.StartTimeScrollIndex);
+            case nameof(PlannerPageViewModel.StartTimeScrollIndex):
+                if (_vm?.IsStartTimeDropDownOpen == true) ScrollStartTimeDropdownToWindow(_vm.StartTimeScrollIndex);
                 break;
-            case nameof(PlannerPageViewModel.FormEndTime):
-                RescrollIfOpen(_formEndTimeBox, _vm?.EndTimeScrollIndex);
+            case nameof(PlannerPageViewModel.EndTimeScrollIndex):
+                if (_vm?.IsEndTimeDropDownOpen == true) ScrollEndTimeDropdownToWindow(_vm.EndTimeScrollIndex);
                 break;
-            case nameof(PlannerPageViewModel.SplitFirstStartTime):
-                RescrollIfOpen(_splitFirstStartTimeBox, _vm?.SplitFirstStartTimeScrollIndex);
+            case nameof(PlannerPageViewModel.SplitFirstStartTimeScrollIndex):
+                if (_vm?.IsSplitFirstStartTimeDropDownOpen == true)
+                    ScrollTimeDropdownToWindow(_splitFirstStartTimeScrollViewer, _splitFirstStartTimeList, () => _vm?.IsSplitFirstStartTimeDropDownOpen == true, () => _vm?.TimeOptions.Count ?? 0,
+                        () => _splitFirstStartTimeHighlighted, b => _splitFirstStartTimeHighlighted = b, _vm.SplitFirstStartTimeScrollIndex);
                 break;
-            case nameof(PlannerPageViewModel.SplitFirstEndTime):
-                RescrollIfOpen(_splitFirstEndTimeBox, _vm?.SplitFirstEndTimeScrollIndex);
+            case nameof(PlannerPageViewModel.SplitFirstEndTimeScrollIndex):
+                if (_vm?.IsSplitFirstEndTimeDropDownOpen == true)
+                    ScrollTimeDropdownToWindow(_splitFirstEndTimeScrollViewer, _splitFirstEndTimeList, () => _vm?.IsSplitFirstEndTimeDropDownOpen == true, () => _vm?.SplitFirstEndTimeOptions.Count ?? 0,
+                        () => _splitFirstEndTimeHighlighted, b => _splitFirstEndTimeHighlighted = b, _vm.SplitFirstEndTimeScrollIndex);
                 break;
-            case nameof(PlannerPageViewModel.SplitSecondStartTime):
-                RescrollIfOpen(_splitSecondStartTimeBox, _vm?.SplitSecondStartTimeScrollIndex);
+            case nameof(PlannerPageViewModel.SplitSecondStartTimeScrollIndex):
+                if (_vm?.IsSplitSecondStartTimeDropDownOpen == true)
+                    ScrollTimeDropdownToWindow(_splitSecondStartTimeScrollViewer, _splitSecondStartTimeList, () => _vm?.IsSplitSecondStartTimeDropDownOpen == true, () => _vm?.TimeOptions.Count ?? 0,
+                        () => _splitSecondStartTimeHighlighted, b => _splitSecondStartTimeHighlighted = b, _vm.SplitSecondStartTimeScrollIndex);
                 break;
-            case nameof(PlannerPageViewModel.SplitSecondEndTime):
-                RescrollIfOpen(_splitSecondEndTimeBox, _vm?.SplitSecondEndTimeScrollIndex);
+            case nameof(PlannerPageViewModel.SplitSecondEndTimeScrollIndex):
+                if (_vm?.IsSplitSecondEndTimeDropDownOpen == true)
+                    ScrollTimeDropdownToWindow(_splitSecondEndTimeScrollViewer, _splitSecondEndTimeList, () => _vm?.IsSplitSecondEndTimeDropDownOpen == true, () => _vm?.SplitSecondEndTimeOptions.Count ?? 0,
+                        () => _splitSecondEndTimeHighlighted, b => _splitSecondEndTimeHighlighted = b, _vm.SplitSecondEndTimeScrollIndex);
                 break;
         }
     }

@@ -6,6 +6,7 @@
              xmlns:conv="using:NenFocus.Converters"
              x:DataType="vm:PlannerPageViewModel"
              x:Class="NenFocus.Views.PlannerPageView"
+             Focusable="True"
              Background="#F5F5F7">
 
 	<UserControl.Resources>
@@ -184,37 +185,67 @@
 			<Setter Property="CornerRadius" Value="4"/>
 			<Setter Property="Padding" Value="8,3"/>
 		</Style>
-		<!-- Wraps the Start/End AutoCompleteBox rather than reaching into its own control
-		     template — a template-part selector on AutoCompleteBox's internal TextBox
-		     turned out not to render reliably (Fluent theme's own template structure isn't
-		     something to guess at without visually confirming it). A plain Border around
-		     the control is unaffected by any of that. -->
+		<!-- Wraps each time field's TextBox rather than reaching into any control's own
+		     template — a plain Border around the control is unaffected by whatever the
+		     Fluent theme's internal template structure looks like. -->
 		<Style Selector="Border.invalid">
 			<Setter Property="BorderBrush" Value="#C03A2B"/>
 			<Setter Property="BorderThickness" Value="2"/>
 		</Style>
 
-		<!-- Google-Calendar-style capped dropdown height, applied to all six time
-		     AutoCompleteBoxes on this page (Form Start/End + Split's four fields) — the
-		     only AutoCompleteBox instances in this view, so one page-wide selector covers
-		     them without touching each instance. AutoCompleteBox's own default
-		     MaxDropDownHeight is Infinity (confirmed via reflection on the registered
-		     StyledProperty), which is why the popup was growing to fit every item.
-		     196 replaces an earlier 171 that was derived from a headless Avalonia layout
-		     pass claiming 33px rows — that number turned out wrong for the real running
-		     app (see Open Gap L / DESIGN_GAP_HISTORY.md Gap 37/38): live diagnostic logging
-		     (Extent.Height / ItemCount, confirmed identical and exact for both Start's plain
-		     string items and End's TimeText+Duration template) showed rows actually render
-		     at 38px, and the popup's outer chrome (a Border with BorderThickness 1 and
-		     Padding 0,2,0,2 around the ListBox) adds a fixed 6px — confirmed via 8 repeated
-		     LayoutUpdated ticks per open, Viewport rock-steady the whole time, so this isn't
-		     a still-settling number. 5 * 38 + 6 = 196, landing the ScrollViewer's viewport
-		     at exactly 190px (5 whole rows, no partial 6th row).
-		     The inner ScrollViewer's VerticalScrollBarVisibility already defaults to Auto
-		     in AutoCompleteBox's stock template, so capping the height alone is enough to
-		     make the scrollbar appear for the remaining items — no retemplating needed. -->
-		<Style Selector="AutoCompleteBox">
-			<Setter Property="MaxDropDownHeight" Value="196"/>
+		<!-- Start's/End's custom dropdown item highlighting: exactly one row is highlighted
+		     at a time, tracked as real state in code-behind (see WireTimePickerDropdown's
+		     hoverFromSource and ScrollTimeDropdownToWindow's SetHighlightedContainer calls),
+		     not a live pseudo-class. A ":pointerover"-based approach was tried first and
+		     rejected after a real repro: it's inherently transient, so it snapped back to
+		     the centered item the instant the pointer left the list, instead of staying on
+		     whatever was last hovered. Opening the dropdown (or re-centering as you type)
+		     sets this to the current value's nearest slot; moving the pointer over a
+		     different row moves it there and it simply stays — nothing ever resets it back
+		     to centered on its own. -->
+		<!-- Background is set here (a style setter) rather than as a local Background="..."
+		     attribute on the Border in the DataTemplate — a real repro showed hover only
+		     working over the TextBlock's own painted glyphs, never the row's padding: a
+		     Border/Panel with no Background at all isn't hit-test visible over its empty
+		     area in Avalonia (same rule as WPF), so pointer events there passed straight
+		     through to whatever's behind the row instead of ever reaching it. The fix is
+		     Transparent, not null — but Transparent MUST be set via a style, not a local
+		     XAML attribute: local values always outrank style setters in Avalonia (confirmed
+		     against the docs before landing this), so a local Background="Transparent" would
+		     have permanently blocked the ".highlighted" override below from ever showing
+		     color at all. Declared first so ".timeOption.highlighted" (below, more specific —
+		     an extra class requirement) wins for whichever row currently has both classes. -->
+		<Style Selector="Border.timeOption">
+			<Setter Property="Background" Value="Transparent"/>
+		</Style>
+		<Style Selector="Border.timeOption.highlighted">
+			<Setter Property="Background" Value="#EEF0FF"/>
+		</Style>
+
+		<!-- Without this, each row's container (a plain ContentPresenter — ItemsControl's
+		     default, confirmed against the real Avalonia source) sizes to fit only its own
+		     text, leaving a wide unstyled gap to the right (the popup itself is stretched to
+		     match the text box's width). Hovering that gap hit the ContentPresenter directly,
+		     which doesn't carry the item's DataContext the way the Border/TextBlock inside it
+		     do — a real repro where hovering anywhere right of the visible text silently did
+		     nothing, leaving the highlight wherever it last was. Stretching both the
+		     container and the Border inside it means the whole row is "the item" for hover
+		     purposes, not just the text's own tight bounding box. -->
+		<Style Selector="ItemsControl.timeOptionsList ContentPresenter">
+			<Setter Property="HorizontalAlignment" Value="Stretch"/>
+			<Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+		</Style>
+
+		<!-- Split dialog's Total figure: normal color when it matches the original block's
+		     duration, amber (matching SplitWarningMessage's own color) when it doesn't —
+		     set via style, not a local Foreground attribute, for the same reason the
+		     timeOption background above is: a local value would permanently block the
+		     ".mismatch" override from ever applying. -->
+		<Style Selector="TextBlock.splitTotalValue">
+			<Setter Property="Foreground" Value="#1A1A2E"/>
+		</Style>
+		<Style Selector="TextBlock.splitTotalValue.mismatch">
+			<Setter Property="Foreground" Value="#C08A2B"/>
 		</Style>
 	</UserControl.Styles>
 
@@ -450,38 +481,67 @@
 							<Grid ColumnDefinitions="*,12,*">
 								<StackPanel Grid.Column="0" Spacing="4">
 									<TextBlock Text="Start" FontSize="12" Foreground="#7A7A8C"/>
-									<Border Classes.invalid="{Binding IsFormStartTimeInvalid}" CornerRadius="6">
-										<AutoCompleteBox Name="FormStartTimeBox"
-                                                         ItemsSource="{Binding VisibleStartTimeOptions}"
-                                                         Text="{Binding FormStartTime, Mode=TwoWay}"
-                                                         FilterMode="Custom"
-                                                         MinimumPrefixLength="0"
-                                                         Watermark="HH:mm"
-                                                         IsEnabled="{Binding !IsStartLocked}"/>
+									<Border Classes.invalid="{Binding ShowStartTimeInvalid}" CornerRadius="6">
+										<TextBox Name="FormStartTimeBox"
+                                                 Text="{Binding FormStartTime, Mode=TwoWay}"
+                                                 Watermark="HH:mm"
+                                                 IsEnabled="{Binding !IsStartLocked}"/>
 									</Border>
+									<Popup Name="FormStartTimePopup"
+                                           IsOpen="{Binding IsStartTimeDropDownOpen, Mode=TwoWay}"
+                                           PlacementTarget="{Binding #FormStartTimeBox}"
+                                           Placement="BottomEdgeAlignedLeft"
+                                           IsLightDismissEnabled="True"
+                                           WindowManagerAddShadowHint="False">
+										<Border Background="White" BorderBrush="#E6E6EE" BorderThickness="1" CornerRadius="6"
+                                                Width="{Binding #FormStartTimeBox.Bounds.Width}">
+											<ScrollViewer Name="FormStartTimeScrollViewer" MaxHeight="200">
+												<ItemsControl Name="FormStartTimeList" Classes="timeOptionsList" ItemsSource="{Binding TimeOptions}">
+													<ItemsControl.ItemTemplate>
+														<DataTemplate DataType="x:String">
+															<Border Classes="timeOption" Padding="10,6" HorizontalAlignment="Stretch">
+																<TextBlock Text="{Binding}"/>
+															</Border>
+														</DataTemplate>
+													</ItemsControl.ItemTemplate>
+												</ItemsControl>
+											</ScrollViewer>
+										</Border>
+									</Popup>
 								</StackPanel>
 								<StackPanel Grid.Column="2" Spacing="4">
 									<TextBlock Text="End" FontSize="12" Foreground="#7A7A8C"/>
-									<Border Classes.invalid="{Binding IsFormEndTimeInvalid}" CornerRadius="6">
-										<AutoCompleteBox Name="FormEndTimeBox"
-                                                         ItemsSource="{Binding VisibleEndTimeOptions}"
-                                                         ValueMemberBinding="{Binding TimeText}"
-                                                         Text="{Binding FormEndTime, Mode=TwoWay}"
-                                                         FilterMode="Custom"
-                                                         MinimumPrefixLength="0"
-                                                         Watermark="HH:mm"
-                                                         IsEnabled="{Binding !IsBlockLocked}">
-											<AutoCompleteBox.ItemTemplate>
-												<DataTemplate DataType="comp:PlannerEndTimeOptionDto">
-													<StackPanel Orientation="Horizontal" Spacing="6">
-														<TextBlock Text="{Binding TimeText}"/>
-														<TextBlock Text="{Binding Duration, Converter={StaticResource DurationLabelConverter}}"
-                                                                   Opacity="0.6" FontSize="11"/>
-													</StackPanel>
-												</DataTemplate>
-											</AutoCompleteBox.ItemTemplate>
-										</AutoCompleteBox>
+									<Border Classes.invalid="{Binding ShowEndTimeInvalid}" CornerRadius="6">
+										<TextBox Name="FormEndTimeBox"
+                                                 Text="{Binding FormEndTime, Mode=TwoWay}"
+                                                 Watermark="HH:mm"
+                                                 IsEnabled="{Binding !IsBlockLocked}"/>
 									</Border>
+									<Popup Name="FormEndTimePopup"
+                                           IsOpen="{Binding IsEndTimeDropDownOpen, Mode=TwoWay}"
+                                           PlacementTarget="{Binding #FormEndTimeBox}"
+                                           Placement="BottomEdgeAlignedLeft"
+                                           IsLightDismissEnabled="True"
+                                           WindowManagerAddShadowHint="False">
+										<Border Background="White" BorderBrush="#E6E6EE" BorderThickness="1" CornerRadius="6"
+                                                Width="{Binding #FormEndTimeBox.Bounds.Width}">
+											<ScrollViewer Name="FormEndTimeScrollViewer" MaxHeight="200">
+												<ItemsControl Name="FormEndTimeList" Classes="timeOptionsList" ItemsSource="{Binding EndTimeOptions}">
+													<ItemsControl.ItemTemplate>
+														<DataTemplate DataType="comp:PlannerEndTimeOptionDto">
+															<Border Classes="timeOption" Padding="10,6" HorizontalAlignment="Stretch">
+																<StackPanel Orientation="Horizontal" Spacing="6">
+																	<TextBlock Text="{Binding TimeText}"/>
+																	<TextBlock Text="{Binding Duration, Converter={StaticResource DurationLabelConverter}}"
+                                                                               Opacity="0.6"/>
+																</StackPanel>
+															</Border>
+														</DataTemplate>
+													</ItemsControl.ItemTemplate>
+												</ItemsControl>
+											</ScrollViewer>
+										</Border>
+									</Popup>
 									<TextBlock Text="{Binding FormEndDateText}"
                                                IsVisible="{Binding FormEndRollsToNextDay}"
                                                FontSize="11" Foreground="#7A7A8C" FontStyle="Italic"/>
@@ -665,33 +725,136 @@
 				<StackPanel Spacing="16">
 					<StackPanel Spacing="4">
 						<TextBlock Text="Split Block" FontSize="18" FontWeight="SemiBold" Foreground="#1A1A2E"/>
-						<TextBlock Text="Choose the two resulting time ranges — both stay on the same day and must add up to the original block's duration."
-                                   FontSize="12" Foreground="#7A7A8C" TextWrapping="Wrap"/>
+						<TextBlock FontSize="12" Foreground="#7A7A8C" TextWrapping="Wrap">
+							<Run Text="This block is"/>
+							<Run Text="{Binding SplitOriginalDuration, Converter={StaticResource DurationLabelConverter}, Mode=OneWay}" FontWeight="SemiBold" Foreground="#1A1A2E"/>
+							<Run Text="- the two pieces can be placed anywhere on the day, they just need to add up to that total."/>
+						</TextBlock>
 					</StackPanel>
 
 					<StackPanel Spacing="4">
-						<TextBlock Text="First Block" FontSize="12" Foreground="#7A7A8C"/>
+						<StackPanel Orientation="Horizontal" Spacing="6">
+							<TextBlock Text="First Block" FontSize="12" Foreground="#7A7A8C"/>
+							<TextBlock Text="{Binding SplitFirstBlockDuration, Converter={StaticResource DurationLabelConverter}}"
+                                       FontSize="12" Foreground="#7A7A8C" FontWeight="SemiBold"/>
+						</StackPanel>
 						<Grid ColumnDefinitions="*,12,*">
-							<AutoCompleteBox Name="SplitFirstStartTimeBox" Grid.Column="0" ItemsSource="{Binding VisibleSplitFirstStartTimeOptions}"
-                                              Text="{Binding SplitFirstStartTime, Mode=TwoWay}"
-                                              FilterMode="Custom" MinimumPrefixLength="0" Watermark="HH:mm"/>
-							<AutoCompleteBox Name="SplitFirstEndTimeBox" Grid.Column="2" ItemsSource="{Binding VisibleSplitFirstEndTimeOptions}"
-                                              Text="{Binding SplitFirstEndTime, Mode=TwoWay}"
-                                              FilterMode="Custom" MinimumPrefixLength="0" Watermark="HH:mm"/>
+							<StackPanel Grid.Column="0" Spacing="4">
+								<TextBox Name="SplitFirstStartTimeBox" Text="{Binding SplitFirstStartTime, Mode=TwoWay}" Watermark="HH:mm"/>
+								<Popup Name="SplitFirstStartTimePopup" IsOpen="{Binding IsSplitFirstStartTimeDropDownOpen, Mode=TwoWay}"
+                                       PlacementTarget="{Binding #SplitFirstStartTimeBox}" Placement="BottomEdgeAlignedLeft"
+                                       IsLightDismissEnabled="True" WindowManagerAddShadowHint="False">
+									<Border Background="White" BorderBrush="#E6E6EE" BorderThickness="1" CornerRadius="6"
+                                            Width="{Binding #SplitFirstStartTimeBox.Bounds.Width}">
+										<ScrollViewer Name="SplitFirstStartTimeScrollViewer" MaxHeight="200">
+											<ItemsControl Name="SplitFirstStartTimeList" Classes="timeOptionsList" ItemsSource="{Binding TimeOptions}">
+												<ItemsControl.ItemTemplate>
+													<DataTemplate DataType="x:String">
+														<Border Classes="timeOption" Padding="10,6" HorizontalAlignment="Stretch">
+															<TextBlock Text="{Binding}"/>
+														</Border>
+													</DataTemplate>
+												</ItemsControl.ItemTemplate>
+											</ItemsControl>
+										</ScrollViewer>
+									</Border>
+								</Popup>
+							</StackPanel>
+							<StackPanel Grid.Column="2" Spacing="4">
+								<TextBox Name="SplitFirstEndTimeBox" Text="{Binding SplitFirstEndTime, Mode=TwoWay}" Watermark="HH:mm"/>
+								<Popup Name="SplitFirstEndTimePopup" IsOpen="{Binding IsSplitFirstEndTimeDropDownOpen, Mode=TwoWay}"
+                                       PlacementTarget="{Binding #SplitFirstEndTimeBox}" Placement="BottomEdgeAlignedLeft"
+                                       IsLightDismissEnabled="True" WindowManagerAddShadowHint="False">
+									<Border Background="White" BorderBrush="#E6E6EE" BorderThickness="1" CornerRadius="6"
+                                            Width="{Binding #SplitFirstEndTimeBox.Bounds.Width}">
+										<ScrollViewer Name="SplitFirstEndTimeScrollViewer" MaxHeight="200">
+											<ItemsControl Name="SplitFirstEndTimeList" Classes="timeOptionsList" ItemsSource="{Binding SplitFirstEndTimeOptions}">
+												<ItemsControl.ItemTemplate>
+													<DataTemplate DataType="comp:PlannerEndTimeOptionDto">
+														<Border Classes="timeOption" Padding="10,6" HorizontalAlignment="Stretch">
+															<StackPanel Orientation="Horizontal" Spacing="6">
+																<TextBlock Text="{Binding TimeText}"/>
+																<TextBlock Text="{Binding Duration, Converter={StaticResource DurationLabelConverter}}" Opacity="0.6"/>
+															</StackPanel>
+														</Border>
+													</DataTemplate>
+												</ItemsControl.ItemTemplate>
+											</ItemsControl>
+										</ScrollViewer>
+									</Border>
+								</Popup>
+							</StackPanel>
 						</Grid>
 					</StackPanel>
 
 					<StackPanel Spacing="4">
-						<TextBlock Text="Second Block" FontSize="12" Foreground="#7A7A8C"/>
+						<StackPanel Orientation="Horizontal" Spacing="6">
+							<TextBlock Text="Second Block" FontSize="12" Foreground="#7A7A8C"/>
+							<TextBlock Text="{Binding SplitSecondBlockDuration, Converter={StaticResource DurationLabelConverter}}"
+                                       FontSize="12" Foreground="#7A7A8C" FontWeight="SemiBold"/>
+						</StackPanel>
 						<Grid ColumnDefinitions="*,12,*">
-							<AutoCompleteBox Name="SplitSecondStartTimeBox" Grid.Column="0" ItemsSource="{Binding VisibleSplitSecondStartTimeOptions}"
-                                              Text="{Binding SplitSecondStartTime, Mode=TwoWay}"
-                                              FilterMode="Custom" MinimumPrefixLength="0" Watermark="HH:mm"/>
-							<AutoCompleteBox Name="SplitSecondEndTimeBox" Grid.Column="2" ItemsSource="{Binding VisibleSplitSecondEndTimeOptions}"
-                                              Text="{Binding SplitSecondEndTime, Mode=TwoWay}"
-                                              FilterMode="Custom" MinimumPrefixLength="0" Watermark="HH:mm"/>
+							<StackPanel Grid.Column="0" Spacing="4">
+								<TextBox Name="SplitSecondStartTimeBox" Text="{Binding SplitSecondStartTime, Mode=TwoWay}" Watermark="HH:mm"/>
+								<Popup Name="SplitSecondStartTimePopup" IsOpen="{Binding IsSplitSecondStartTimeDropDownOpen, Mode=TwoWay}"
+                                       PlacementTarget="{Binding #SplitSecondStartTimeBox}" Placement="BottomEdgeAlignedLeft"
+                                       IsLightDismissEnabled="True" WindowManagerAddShadowHint="False">
+									<Border Background="White" BorderBrush="#E6E6EE" BorderThickness="1" CornerRadius="6"
+                                            Width="{Binding #SplitSecondStartTimeBox.Bounds.Width}">
+										<ScrollViewer Name="SplitSecondStartTimeScrollViewer" MaxHeight="200">
+											<ItemsControl Name="SplitSecondStartTimeList" Classes="timeOptionsList" ItemsSource="{Binding TimeOptions}">
+												<ItemsControl.ItemTemplate>
+													<DataTemplate DataType="x:String">
+														<Border Classes="timeOption" Padding="10,6" HorizontalAlignment="Stretch">
+															<TextBlock Text="{Binding}"/>
+														</Border>
+													</DataTemplate>
+												</ItemsControl.ItemTemplate>
+											</ItemsControl>
+										</ScrollViewer>
+									</Border>
+								</Popup>
+							</StackPanel>
+							<StackPanel Grid.Column="2" Spacing="4">
+								<TextBox Name="SplitSecondEndTimeBox" Text="{Binding SplitSecondEndTime, Mode=TwoWay}" Watermark="HH:mm"/>
+								<Popup Name="SplitSecondEndTimePopup" IsOpen="{Binding IsSplitSecondEndTimeDropDownOpen, Mode=TwoWay}"
+                                       PlacementTarget="{Binding #SplitSecondEndTimeBox}" Placement="BottomEdgeAlignedLeft"
+                                       IsLightDismissEnabled="True" WindowManagerAddShadowHint="False">
+									<Border Background="White" BorderBrush="#E6E6EE" BorderThickness="1" CornerRadius="6"
+                                            Width="{Binding #SplitSecondEndTimeBox.Bounds.Width}">
+										<ScrollViewer Name="SplitSecondEndTimeScrollViewer" MaxHeight="200">
+											<ItemsControl Name="SplitSecondEndTimeList" Classes="timeOptionsList" ItemsSource="{Binding SplitSecondEndTimeOptions}">
+												<ItemsControl.ItemTemplate>
+													<DataTemplate DataType="comp:PlannerEndTimeOptionDto">
+														<Border Classes="timeOption" Padding="10,6" HorizontalAlignment="Stretch">
+															<StackPanel Orientation="Horizontal" Spacing="6">
+																<TextBlock Text="{Binding TimeText}"/>
+																<TextBlock Text="{Binding Duration, Converter={StaticResource DurationLabelConverter}}" Opacity="0.6"/>
+															</StackPanel>
+														</Border>
+													</DataTemplate>
+												</ItemsControl.ItemTemplate>
+											</ItemsControl>
+										</ScrollViewer>
+									</Border>
+								</Popup>
+							</StackPanel>
 						</Grid>
 					</StackPanel>
+
+					<StackPanel Orientation="Horizontal" Spacing="6">
+						<TextBlock Text="Total" FontSize="12" Foreground="#7A7A8C"/>
+						<TextBlock Text="{Binding SplitTotalDuration, Converter={StaticResource DurationLabelConverter}}"
+                                   Classes="splitTotalValue" Classes.mismatch="{Binding IsSplitTotalMismatched}"
+                                   FontSize="12" FontWeight="SemiBold"/>
+						<TextBlock Text="should be" IsVisible="{Binding IsSplitTotalMismatched}" FontSize="12" Foreground="#C08A2B"/>
+						<TextBlock Text="{Binding SplitOriginalDuration, Converter={StaticResource DurationLabelConverter}}"
+                                   IsVisible="{Binding IsSplitTotalMismatched}" FontSize="12" Foreground="#C08A2B" FontWeight="SemiBold"/>
+					</StackPanel>
+
+					<TextBlock Text="{Binding SplitWarningMessage}"
+                               IsVisible="{Binding SplitWarningMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                               FontSize="12" Foreground="#C08A2B" TextWrapping="Wrap"/>
 
 					<TextBlock Text="{Binding SplitError}"
                                IsVisible="{Binding SplitError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
