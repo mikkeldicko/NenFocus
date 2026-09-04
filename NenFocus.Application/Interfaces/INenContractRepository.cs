@@ -59,4 +59,11 @@ public interface INenContractRepository
 
     /// <summary>Removes a contract by Id. No-op if it doesn't exist.</summary>
     Task DeleteAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns every Completed or Broken contract whose Post-Contract recap screen has
+    /// never been dismissed (PostContractAcknowledgedAt is null) — mirrors
+    /// ISessionRepository.GetUnacknowledgedPostSessionsAsync exactly, same idiom.
+    /// </summary>
+    Task<IReadOnlyList<NenContract>> GetUnacknowledgedPostContractsAsync(CancellationToken cancellationToken = default);
 }

@@ -175,26 +175,28 @@ public class FocusBlockOutcomeClassifierTests
     }
 
     [Fact]
-    public void CreditedFocusMinutes_WithinGracePeriod_CreditsFullScheduledDuration()
+    public void CreditedFocusMinutes_WithinGracePeriod_CreditsActualElapsed()
     {
         var ritualAt = ScheduledStart.AddMinutes(3);
 
-        // Real elapsed time is short (started 3 min late), but grace period rounds up.
+        // Grace period only affects Classify's on-time/late label — credit accrues
+        // progressively from completedAt regardless of grace, so a 3-min-late Ritual
+        // credits only what was actually worked, not the full scheduled duration.
         var credited = _classifier.CreditedFocusMinutes(
             ScheduledStart, ScheduledEnd, ritualCompletedAt: ritualAt, sessionEndedAt: null, actualElapsedMinutes: 117);
 
-        credited.Should().Be((ScheduledEnd - ScheduledStart).TotalMinutes); // full 120 minutes
+        credited.Should().Be(117);
     }
 
     [Fact]
-    public void CreditedFocusMinutes_AtGraceBoundary_CreditsFullScheduledDuration()
+    public void CreditedFocusMinutes_AtGraceBoundary_CreditsActualElapsed()
     {
         var ritualAt = ScheduledStart.AddMinutes(FocusBlockOutcomeClassifier.GracePeriodMinutes);
 
         var credited = _classifier.CreditedFocusMinutes(
             ScheduledStart, ScheduledEnd, ritualCompletedAt: ritualAt, sessionEndedAt: null, actualElapsedMinutes: 115);
 
-        credited.Should().Be((ScheduledEnd - ScheduledStart).TotalMinutes);
+        credited.Should().Be(115);
     }
 
     [Fact]
@@ -259,12 +261,39 @@ public class FocusBlockOutcomeClassifierTests
     }
 
     [Fact]
-    public void CreditedWindow_WithinGracePeriod_IsTheFullScheduledWindow()
+    public void CreditedWindow_WithinGracePeriod_StartsAtCompletedAt()
     {
         var ritualAt = ScheduledStart.AddMinutes(3);
 
         var window = _classifier.CreditedWindow(
             ScheduledStart, ScheduledEnd, ritualCompletedAt: ritualAt, sessionEndedAt: null, actualElapsedMinutes: 117);
+
+        window.Should().Be((ritualAt, ScheduledEnd));
+    }
+
+    [Fact]
+    public void CreditedWindow_OnTimeStartStillRunning_CreditsOnlyElapsedSoFar()
+    {
+        // On-time start, session hasn't ended yet — credit must track real progress, not
+        // jump to the full scheduled duration the instant the Ritual completes (progressive
+        // accrual, so Planner badges/banner move live during an in-progress block).
+        var window = _classifier.CreditedWindow(
+            ScheduledStart, ScheduledEnd, ritualCompletedAt: ScheduledStart, sessionEndedAt: null, actualElapsedMinutes: 30);
+
+        window.Should().Be((ScheduledStart, ScheduledStart.AddMinutes(30)));
+    }
+
+    [Fact]
+    public void CreditedWindow_OnTimeStartSessionEnded_CreditsFullScheduledWindow()
+    {
+        // Once the session has actually ended (not just a live in-progress query) and the
+        // Ritual completed within grace, the block credits its full scheduled duration —
+        // the grace period's purpose is to not dock a few minutes of Ritual setup once the
+        // block has genuinely run its course.
+        var ritualAt = ScheduledStart.AddMinutes(3);
+
+        var window = _classifier.CreditedWindow(
+            ScheduledStart, ScheduledEnd, ritualCompletedAt: ritualAt, sessionEndedAt: ScheduledEnd, actualElapsedMinutes: 117);
 
         window.Should().Be((ScheduledStart, ScheduledEnd));
     }
@@ -372,7 +401,7 @@ public class FocusBlockOutcomeClassifierTests
     }
 
     [Fact]
-    public void CreditedWindow_CrossMidnightScheduledBlock_WithinGracePeriod_IsTheFullOvernightWindow()
+    public void CreditedWindow_CrossMidnightScheduledBlock_WithinGracePeriod_StartsAtCompletedAt()
     {
         var overnightStart = new DateTime(2026, 1, 1, 22, 0, 0, DateTimeKind.Utc);
         var overnightEnd = new DateTime(2026, 1, 2, 1, 0, 0, DateTimeKind.Utc); // 22:00-01:00, 3h
@@ -381,6 +410,6 @@ public class FocusBlockOutcomeClassifierTests
         var window = _classifier.CreditedWindow(
             overnightStart, overnightEnd, ritualCompletedAt: ritualAt, sessionEndedAt: null, actualElapsedMinutes: 178);
 
-        window.Should().Be((overnightStart, overnightEnd));
+        window.Should().Be((ritualAt, overnightEnd));
     }
 }

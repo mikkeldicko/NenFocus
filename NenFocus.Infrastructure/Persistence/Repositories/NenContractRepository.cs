@@ -103,4 +103,14 @@ public sealed class NenContractRepository : INenContractRepository
 
         _context.NenContracts.Remove(contract);
     }
+
+    public async Task<IReadOnlyList<NenContract>> GetUnacknowledgedPostContractsAsync(CancellationToken cancellationToken = default)
+    {
+        return await _context.NenContracts
+            .Where(c =>
+                (c.Status == NenContractStatus.Completed || c.Status == NenContractStatus.Broken) &&
+                c.PostContractAcknowledgedAt == null)
+            .OrderBy(c => c.EndDate)
+            .ToListAsync(cancellationToken);
+    }
 }

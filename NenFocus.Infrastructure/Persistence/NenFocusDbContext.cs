@@ -437,6 +437,11 @@ public class NenFocusDbContext : DbContext
             entity.Property(c => c.CommittedFocusHours)
                 .IsRequired();
 
+            entity.Property(c => c.Reflection)
+                .HasMaxLength(2000);
+
+            entity.Property(c => c.PostContractAcknowledgedAt);
+
             // ChangeWindow stays unmapped — parked for v1, no Application-layer consumer
             // exists yet (see ARCHITECT_GOVERNANCE.md), unlike WorkHoursPolicy/DailyFloorPolicy
             // which already have real guards built against them even without wizard UI.

@@ -56,6 +56,15 @@ public class NenContract : AggregateRoot
     /// </summary>
     public double CommittedFocusHours { get; private set; }
 
+    /// <summary>User's own words on how this contract went — set via the Post-Contract
+    /// recap screen, mirrors Session.Reflection exactly.</summary>
+    public string? Reflection { get; private set; }
+
+    /// <summary>Stamped when the user dismisses the Post-Contract recap screen, regardless
+    /// of whether they wrote a reflection — mirrors Session.PostSessionAcknowledgedAt's
+    /// idiom exactly, including the "blank is a valid, deliberate outcome" reasoning.</summary>
+    public DateTime? PostContractAcknowledgedAt { get; private set; }
+
     private NenContract() { } // EF Core
 
     /// <param name="dailyFloorPolicy">
@@ -179,6 +188,26 @@ public class NenContract : AggregateRoot
 
         Status = NenContractStatus.Completed;
         Raise(new NenContractCompletedEvent(Id, completedAt));
+    }
+
+    public void SetReflection(string? reflection)
+    {
+        if (Status != NenContractStatus.Completed && Status != NenContractStatus.Broken)
+            throw new InvalidOperationException(
+                "Reflection can only be set on a completed or broken contract.");
+
+        Reflection = string.IsNullOrWhiteSpace(reflection)
+            ? null
+            : reflection.Trim();
+    }
+
+    public void MarkPostContractAcknowledged(DateTime acknowledgedAt)
+    {
+        if (Status != NenContractStatus.Completed && Status != NenContractStatus.Broken)
+            throw new InvalidOperationException(
+                "Post-contract can only be acknowledged for a completed or broken contract.");
+
+        PostContractAcknowledgedAt = acknowledgedAt;
     }
 
     // AllowCancellation is deliberately not enforced here (interim, 2026-08-18) — see

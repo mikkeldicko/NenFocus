@@ -185,8 +185,15 @@ namespace NenFocus.Infrastructure.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime?>("PostContractAcknowledgedAt")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("RedemptionPlacementPolicy")
                         .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Reflection")
+                        .HasMaxLength(2000)
                         .HasColumnType("TEXT");
 
                     b.Property<DateOnly>("StartDate")

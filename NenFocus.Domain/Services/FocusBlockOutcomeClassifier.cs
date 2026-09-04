@@ -79,13 +79,22 @@ public sealed class FocusBlockOutcomeClassifier : IFocusBlockOutcomeClassifier
         if (endedEarlyShortfallMinutes is { } shortfall && shortfall > MinimumMeaningfulDeficitMinutes)
             return (completedAt, completedAt.AddMinutes(actualElapsedMinutes));
 
-        if (!IsLateStart(scheduledStart, completedAt))
+        // A session that has actually ended — not still running — and started within the
+        // grace period credits the block's full scheduled duration: the grace period's whole
+        // purpose is to not dock a few minutes of Ritual setup once the block has genuinely
+        // run its course (sessionEndedAt present, and not an unforgiven early end — already
+        // ruled out above). A live, in-progress query (sessionEndedAt still null — the
+        // session hasn't ended yet) is a different question: "how much has this block earned
+        // so far," which must accrue progressively with real elapsed time rather than jump to
+        // the full duration the instant the Ritual completes, so the Planner badges/banner
+        // move live while a block is still active.
+        if (sessionEndedAt.HasValue && !IsLateStart(scheduledStart, completedAt))
             return (scheduledStart, scheduledEnd);
 
-        // Started late: credit is bounded by the block's own scheduled end — a session that
-        // ran (or was force-ended, e.g. via the debug clock) past scheduledEnd earns no more
-        // credit than a full-length, on-time completion would have. A forgiven sub-minute
-        // early-end shortfall (endedEarlyShortfallMinutes above) credits the full late-start-
+        // Started late, or still running: credit is bounded by the block's own scheduled end —
+        // a session that ran (or was force-ended, e.g. via the debug clock) past scheduledEnd
+        // earns no more credit than a full-length completion would have. A forgiven sub-minute
+        // early-end shortfall (endedEarlyShortfallMinutes above) credits the full completedAt-
         // to-scheduled-end span rather than the fractionally-shorter real elapsed time.
         var minutesToCredit = endedEarlyShortfallMinutes.HasValue
             ? (scheduledEnd - completedAt).TotalMinutes

@@ -454,6 +454,86 @@ public class NenContractTests
         contract.IsInEffect.Should().BeFalse();
     }
 
+    [Fact]
+    public void SetReflection_OnCompletedContract_TrimsAndStores()
+    {
+        var contract = Seal(sealedAt: SealedOnStart);
+        contract.Complete(SealedOnStart.AddDays(7));
+
+        contract.SetReflection("  Went well  ");
+
+        contract.Reflection.Should().Be("Went well");
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void SetReflection_BlankValue_ClearsReflection(string? blank)
+    {
+        var contract = Seal(sealedAt: SealedOnStart);
+        contract.Complete(SealedOnStart.AddDays(7));
+
+        contract.SetReflection(blank);
+
+        contract.Reflection.Should().BeNull();
+    }
+
+    [Fact]
+    public void SetReflection_OnBrokenContract_Succeeds()
+    {
+        var contract = Seal(sealedAt: SealedOnStart, allowCancellation: true);
+        contract.Break(SealedOnStart.AddDays(2));
+
+        contract.SetReflection("Had to stop early");
+
+        contract.Reflection.Should().Be("Had to stop early");
+    }
+
+    [Fact]
+    public void SetReflection_StillActive_Throws()
+    {
+        var contract = Seal(sealedAt: SealedOnStart);
+
+        var act = () => contract.SetReflection("Too soon");
+
+        act.Should().Throw<InvalidOperationException>();
+    }
+
+    [Fact]
+    public void MarkPostContractAcknowledged_OnCompletedContract_StampsTimestamp()
+    {
+        var contract = Seal(sealedAt: SealedOnStart);
+        contract.Complete(SealedOnStart.AddDays(7));
+        var acknowledgedAt = SealedOnStart.AddDays(7);
+
+        contract.MarkPostContractAcknowledged(acknowledgedAt);
+
+        contract.PostContractAcknowledgedAt.Should().Be(acknowledgedAt);
+    }
+
+    [Fact]
+    public void MarkPostContractAcknowledged_OnBrokenContract_Succeeds()
+    {
+        var contract = Seal(sealedAt: SealedOnStart, allowCancellation: true);
+        contract.Break(SealedOnStart.AddDays(2));
+        var acknowledgedAt = SealedOnStart.AddDays(2);
+
+        contract.MarkPostContractAcknowledged(acknowledgedAt);
+
+        contract.PostContractAcknowledgedAt.Should().Be(acknowledgedAt);
+    }
+
+    [Fact]
+    public void MarkPostContractAcknowledged_StillActive_Throws()
+    {
+        var contract = Seal(sealedAt: SealedOnStart);
+
+        var act = () => contract.MarkPostContractAcknowledged(SealedOnStart);
+
+        act.Should().Throw<InvalidOperationException>();
+    }
+
     // CheckRedemptionEligibility(proposedDate, today) is governed entirely by
     // RedemptionPlacementPolicy — never by StrictnessRule, and never by which day the
     // missed block was originally due (that date isn't even a parameter anymore; a
