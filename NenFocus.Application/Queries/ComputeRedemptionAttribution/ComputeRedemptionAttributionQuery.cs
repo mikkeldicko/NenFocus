@@ -1,3 +1,4 @@
+using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 
 namespace NenFocus.Application.Queries.ComputeRedemptionAttribution;
@@ -17,10 +18,22 @@ namespace NenFocus.Application.Queries.ComputeRedemptionAttribution;
 /// excludes the block's own stale, pre-edit RedemptionEntries from the "already covered"
 /// sum for whatever it's covering, so the block doesn't see its own prior contribution as
 /// someone else's coverage and shrink its own new entry toward zero on every edit.
+///
+/// ExistingEntries carries forward the block's own already-attached entries (empty on a
+/// brand-new block). Each is treated as an already-validated commitment: its amount
+/// rescales with current reality (Rule 13's own principle, applied one level up — see
+/// GetNenContractDeficitsQueryHandler), but it is never re-gated by
+/// CheckRedemptionEligibility. Only capacity left over after carrying every existing
+/// entry forward is eligible to originate a genuinely new claim, which *is* day-gated —
+/// see the handler.
 /// </summary>
 public sealed record ComputeRedemptionAttributionQuery(
     Guid? ContractId,
     Guid PresetId,
     DateTime BlockStart,
     DateTime BlockEnd,
-    Guid? ExcludeBlockId) : IQuery<RedemptionAttributionResult>;
+    Guid? ExcludeBlockId,
+    IReadOnlyList<RedemptionEntryDto>? ExistingEntries = null) : IQuery<RedemptionAttributionResult>
+{
+    public IReadOnlyList<RedemptionEntryDto> ExistingEntries { get; init; } = ExistingEntries ?? [];
+}

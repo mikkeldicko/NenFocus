@@ -107,6 +107,9 @@
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <TextBlock Text="{Binding SelectedPresetCancellationLabel}" FontSize="12" FontWeight="Medium" Foreground="#1A1A2E"/>
                         </StackPanel>
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock Text="{Binding SelectedPresetRedemptionPlacementLabel}" FontSize="12" FontWeight="Medium" Foreground="#1A1A2E"/>
+                        </StackPanel>
                     </StackPanel>
                 </Border>
 

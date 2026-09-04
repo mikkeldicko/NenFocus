@@ -83,8 +83,16 @@ public sealed class GetActiveNenContractQueryHandler : IQueryHandler<GetActiveNe
             var timing = date == today ? DayTiming.Today : date < today ? DayTiming.Past : DayTiming.Future;
             var isRestDay = !isContractFloorMode && contract.IsRestDay(date);
             var plannedForDay = plannedHoursByDay.GetValueOrDefault(date);
-            var currentHours = isRestDay ? 0
-                : timing != DayTiming.Future ? completedHoursByDay.GetValueOrDefault(date)
+
+            // A rest day carries no committed floor, but that's never been a reason to
+            // discard real activity that landed there anyway (a redemption block, or any
+            // other block scheduled on an originally-unplanned day) — completedHoursByDay
+            // already sums every contract-linked block's credited hours per day regardless
+            // of rest-day status; this used to zero it back out for display only. IsRestDay
+            // itself is untouched (still governs DailyFloorPolicy/IsDayMet/scoring exactly
+            // as before) — this only changes what the day's own hours read as.
+            var currentHours = timing != DayTiming.Future
+                ? completedHoursByDay.GetValueOrDefault(date)
                 : plannedForDay;
 
             dayStatuses.Add(new NenContractDayStatusDto
@@ -112,6 +120,7 @@ public sealed class GetActiveNenContractQueryHandler : IQueryHandler<GetActiveNe
             StartDate = contract.StartDate,
             EndDate = contract.EndDate,
             StrictnessRule = contract.StrictnessRule,
+            RedemptionPlacementPolicy = contract.RedemptionPlacementPolicy,
             DayNumber = dayNumber,
             TotalDays = totalDays,
             DaysBehind = daysBehind,

@@ -12,6 +12,7 @@ public sealed record ContractPresetDto
     public TimeOnly? WorkHoursStart { get; init; }
     public TimeOnly? WorkHoursEnd { get; init; }
     public bool AllowCancellation { get; init; }
+    public RedemptionPlacementPolicy RedemptionPlacementPolicy { get; init; }
 
     public static ContractPresetDto FromEntity(ContractPreset preset) => new()
     {
@@ -21,6 +22,7 @@ public sealed record ContractPresetDto
         DailyFloorHours = preset.DailyFloor?.Hours,
         WorkHoursStart = preset.WorkHours?.Start,
         WorkHoursEnd = preset.WorkHours?.End,
-        AllowCancellation = preset.AllowCancellation
+        AllowCancellation = preset.AllowCancellation,
+        RedemptionPlacementPolicy = preset.RedemptionPlacementPolicy
     };
 }

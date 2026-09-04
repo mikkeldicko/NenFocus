@@ -23,7 +23,7 @@ public sealed class DayFloorStatusToForegroundConverter : IValueConverter
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
         if (value is not DayFloorPreviewViewModel status) return null;
-        if (status.IsRestDay) return DarkText;
+        if (status.IsRestDay) return DarkText; // TODO: see DayFloorPreviewViewModel.Label
 
         var isSaturatedBackground = status.Timing is DayTiming.Today or DayTiming.Past || status.IsMet;
         return isSaturatedBackground ? Brushes.White : DarkText;

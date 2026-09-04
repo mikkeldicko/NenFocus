@@ -86,7 +86,8 @@ public sealed class SealNenContractCommandHandler : ICommandHandler<SealNenContr
                 sealedAt: _clock.UtcNow,
                 workHoursPolicy: workHoursPolicy,
                 contractPresetId: command.ContractPresetId,
-                contractFloor: contractFloor);
+                contractFloor: contractFloor,
+                redemptionPlacementPolicy: command.RedemptionPlacementPolicy);
         }
         catch (ArgumentException ex)
         {

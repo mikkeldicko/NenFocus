@@ -27,64 +27,102 @@ public sealed class ComputeRedemptionAttributionQueryHandler
         ComputeRedemptionAttributionQuery query,
         CancellationToken ct = default)
     {
-        var candidates = query.ContractId is { } contractId
-            ? await _contracts.GetByIdAsync(contractId, ct) is { } scoped ? [scoped] : []
-            : await _contracts.GetAllInEffectAsync(ct);
-
         var proposedDate = _clock.ToLocalDate(query.BlockStart);
-        var eligible = new List<(NenContract Contract, FocusBlockDeficitDto Deficit)>();
+        var today = _clock.ToLocalDate(_clock.UtcNow);
+        var remainingDuration = (query.BlockEnd - query.BlockStart).TotalMinutes;
+        var entries = new List<RedemptionEntryDto>();
+        var carriedMissedBlockIds = new HashSet<Guid>();
 
-        foreach (var contract in candidates)
+        // Carry forward: this block's already-existing entries are continuations of an
+        // already-validated commitment, not new ones — never re-gated by
+        // CheckRedemptionEligibility (the day may no longer qualify, and that's fine; only
+        // *new* claims are day-gated). Only their amount rescales, against the same missed
+        // block they already targeted. Only reachable with an explicit ContractId — an
+        // already-linked block always has one; auto-discovery never carries entries.
+        if (query.ContractId is { } linkedContractId && query.ExistingEntries.Count > 0)
         {
-            var deficits = await _deficits.HandleAsync(
-                new GetNenContractDeficitsQuery(contract.Id, ExcludeCoverageFromBlockId: query.ExcludeBlockId), ct);
-            foreach (var deficit in deficits)
+            var linkedDeficits = await _deficits.HandleAsync(
+                new GetNenContractDeficitsQuery(linkedContractId, ExcludeCoverageFromBlockId: query.ExcludeBlockId), ct);
+            var byMissedBlock = linkedDeficits.ToDictionary(d => d.FocusBlockId);
+
+            foreach (var existing in query.ExistingEntries)
             {
-                if (deficit.BlockPresetId != query.PresetId) continue;
-                if (deficit.FocusBlockId == query.ExcludeBlockId) continue;
+                if (remainingDuration <= 0) break;
+                if (!byMissedBlock.TryGetValue(existing.MissedBlockId, out var deficit)) continue;
 
-                var missedDate = _clock.ToLocalDate(deficit.ScheduledStart);
-                if (contract.CheckRedemptionEligibility(missedDate, proposedDate) != RedemptionEligibility.Allowed)
-                    continue;
+                var covered = Math.Min(remainingDuration, deficit.RemainingDeficitMinutes);
+                if (covered <= 0) continue;
 
-                eligible.Add((contract, deficit));
+                entries.Add(new RedemptionEntryDto(existing.MissedBlockId, covered));
+                carriedMissedBlockIds.Add(existing.MissedBlockId);
+                remainingDuration -= covered;
             }
         }
 
-        // No eligible deficit found: an explicit query.ContractId is echoed back as-is
-        // (this block still belongs to that contract, it just doesn't happen to cover
-        // anything right now — e.g. an ordinary contract-tied block, or one whose deficit
-        // was already fully covered elsewhere); auto-discovery (null) stays null, since
-        // there's no reason to attach an ordinary new block to any contract at all.
-        if (eligible.Count == 0)
-            return new RedemptionAttributionResult(query.ContractId, []);
+        Guid? newClaimContractId = null;
 
-        // Every entry a single block ends up carrying must belong to one contract —
-        // PlannedBlock.ContractId is a single value. The oldest eligible deficit across
-        // every candidate decides which contract this block attaches to; only that
-        // contract's deficits are considered for the spillover walk below.
-        var resolvedContractId = eligible.OrderBy(e => e.Deficit.ScheduledStart).First().Contract.Id;
-        var ordered = eligible
-            .Where(e => e.Contract.Id == resolvedContractId)
-            .OrderBy(e => e.Deficit.ScheduledStart)
-            .ToList();
-
-        var remainingDuration = (query.BlockEnd - query.BlockStart).TotalMinutes;
-        var entries = new List<RedemptionEntryDto>();
-
-        foreach (var (_, deficit) in ordered)
+        // New claims: only against capacity the carry-forward pass didn't use, and only
+        // for a contract/day currently eligible to originate a fresh commitment.
+        if (remainingDuration > 0)
         {
-            if (remainingDuration <= 0) break;
+            var candidates = query.ContractId is { } contractId
+                ? await _contracts.GetByIdAsync(contractId, ct) is { } scoped ? [scoped] : []
+                : await _contracts.GetAllInEffectAsync(ct);
 
-            var covered = Math.Min(remainingDuration, deficit.RemainingDeficitMinutes);
-            if (covered <= 0) continue;
+            var eligible = new List<(NenContract Contract, FocusBlockDeficitDto Deficit)>();
+            foreach (var contract in candidates)
+            {
+                if (contract.CheckRedemptionEligibility(proposedDate, today) != RedemptionEligibility.Allowed)
+                    continue;
 
-            entries.Add(new RedemptionEntryDto(deficit.FocusBlockId, covered));
-            remainingDuration -= covered;
+                var deficits = await _deficits.HandleAsync(
+                    new GetNenContractDeficitsQuery(contract.Id, ExcludeCoverageFromBlockId: query.ExcludeBlockId), ct);
+                foreach (var deficit in deficits)
+                {
+                    if (deficit.BlockPresetId != query.PresetId) continue;
+                    if (deficit.FocusBlockId == query.ExcludeBlockId) continue;
+                    if (carriedMissedBlockIds.Contains(deficit.FocusBlockId)) continue;
+
+                    eligible.Add((contract, deficit));
+                }
+            }
+
+            if (eligible.Count > 0)
+            {
+                // Every entry a single block ends up carrying must belong to one contract —
+                // PlannedBlock.ContractId is a single value. The oldest eligible deficit
+                // across every candidate decides which contract a new claim attaches to;
+                // only that contract's deficits are considered for the spillover walk below.
+                var resolvedContractId = query.ContractId
+                    ?? eligible.OrderBy(e => e.Deficit.ScheduledStart).First().Contract.Id;
+                var ordered = eligible
+                    .Where(e => e.Contract.Id == resolvedContractId)
+                    .OrderBy(e => e.Deficit.ScheduledStart)
+                    .ToList();
+
+                foreach (var (_, deficit) in ordered)
+                {
+                    if (remainingDuration <= 0) break;
+
+                    var covered = Math.Min(remainingDuration, deficit.RemainingDeficitMinutes);
+                    if (covered <= 0) continue;
+
+                    entries.Add(new RedemptionEntryDto(deficit.FocusBlockId, covered));
+                    remainingDuration -= covered;
+                }
+
+                if (entries.Count > 0) newClaimContractId = resolvedContractId;
+            }
         }
 
-        return entries.Count > 0
-            ? new RedemptionAttributionResult(resolvedContractId, entries)
-            : new RedemptionAttributionResult(query.ContractId, []);
+        // No entries at all (neither carried forward nor newly claimed): an explicit
+        // query.ContractId is echoed back as-is (this block still belongs to that
+        // contract, it just doesn't happen to cover anything right now); auto-discovery
+        // (null) stays null, since there's no reason to attach an ordinary new block to
+        // any contract at all.
+        if (entries.Count == 0)
+            return new RedemptionAttributionResult(query.ContractId, []);
+
+        return new RedemptionAttributionResult(query.ContractId ?? newClaimContractId, entries);
     }
 }

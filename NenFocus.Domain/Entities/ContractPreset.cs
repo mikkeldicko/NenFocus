@@ -20,6 +20,13 @@ public sealed class ContractPreset : AggregateRoot
     public WorkHours? WorkHours { get; private set; }
     public bool AllowCancellation { get; private set; }
 
+    /// <summary>
+    /// Which days a redemption block placed under a contract sealed from this preset may
+    /// originate a new deficit claim on — see RedemptionPlacementPolicy and
+    /// NenContract.CheckRedemptionEligibility.
+    /// </summary>
+    public RedemptionPlacementPolicy RedemptionPlacementPolicy { get; private set; }
+
     private ContractPreset() { } // EF Core
 
     public static ContractPreset Create(
@@ -28,7 +35,8 @@ public sealed class ContractPreset : AggregateRoot
         StrictnessRule strictnessRule,
         DailyFloor? dailyFloor,
         WorkHours? workHours,
-        bool allowCancellation)
+        bool allowCancellation,
+        RedemptionPlacementPolicy redemptionPlacementPolicy = RedemptionPlacementPolicy.AnywhereInContract)
     {
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Preset name cannot be empty.", nameof(name));
@@ -40,7 +48,8 @@ public sealed class ContractPreset : AggregateRoot
             StrictnessRule = strictnessRule,
             DailyFloor = dailyFloor,
             WorkHours = workHours,
-            AllowCancellation = allowCancellation
+            AllowCancellation = allowCancellation,
+            RedemptionPlacementPolicy = redemptionPlacementPolicy
         };
     }
 
@@ -55,7 +64,8 @@ public sealed class ContractPreset : AggregateRoot
         StrictnessRule strictnessRule,
         DailyFloor? dailyFloor,
         WorkHours? workHours,
-        bool allowCancellation)
+        bool allowCancellation,
+        RedemptionPlacementPolicy redemptionPlacementPolicy = RedemptionPlacementPolicy.AnywhereInContract)
     {
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Preset name cannot be empty.", nameof(name));
@@ -65,5 +75,6 @@ public sealed class ContractPreset : AggregateRoot
         DailyFloor = dailyFloor;
         WorkHours = workHours;
         AllowCancellation = allowCancellation;
+        RedemptionPlacementPolicy = redemptionPlacementPolicy;
     }
 }

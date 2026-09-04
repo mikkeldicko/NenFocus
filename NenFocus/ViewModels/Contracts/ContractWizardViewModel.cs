@@ -147,7 +147,8 @@ public partial class ContractWizardViewModel : ViewModelBase
             initialWorkHoursStart: _editingContract?.WorkHoursStart,
             initialWorkHoursEnd: _editingContract?.WorkHoursEnd,
             initialRestDays: _editingContract?.RestDays,
-            initialContractPresetId: _editingContract?.ContractPresetId);
+            initialContractPresetId: _editingContract?.ContractPresetId,
+            initialRedemptionPlacementPolicy: _editingContract?.RedemptionPlacementPolicy);
         _currentBackAction = NavigateToMode;
         CurrentStep = _rulesVm;
     }
@@ -163,6 +164,7 @@ public partial class ContractWizardViewModel : ViewModelBase
         var workHoursStart = rules?.ResolvedWorkHoursStart;
         var workHoursEnd = rules?.ResolvedWorkHoursEnd;
         var contractPresetId = rules?.ResolvedContractPresetId;
+        var redemptionPlacementPolicy = rules?.ResolvedRedemptionPlacementPolicy ?? RedemptionPlacementPolicy.AnywhereInContract;
         var modeLabel = rules?.ResolvedSummaryLabel ?? "Simple";
 
         StepIndex = 3;
@@ -181,6 +183,7 @@ public partial class ContractWizardViewModel : ViewModelBase
                 WorkHoursStart = workHoursStart,
                 WorkHoursEnd = workHoursEnd,
                 ContractPresetId = contractPresetId,
+                RedemptionPlacementPolicy = redemptionPlacementPolicy,
                 EditingContractId = _editingContract?.Id
             },
             summaryName: _name,
@@ -192,6 +195,9 @@ public partial class ContractWizardViewModel : ViewModelBase
                 ? $"{workHoursStart:HH:mm} – {workHoursEnd:HH:mm}"
                 : "No constraint",
             summaryRestDays: restDays.Count > 0 ? string.Join(", ", restDays) : "None",
+            summaryRedemptionPlacement: redemptionPlacementPolicy == RedemptionPlacementPolicy.CurrentDayOnly
+                ? "Current day only"
+                : "Anywhere in the contract",
             onReadyToSchedule: _onReadyToSchedule,
             onBack: NavigateToRules);
     }

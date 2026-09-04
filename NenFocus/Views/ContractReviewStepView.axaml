@@ -32,6 +32,7 @@
                 <Grid ColumnDefinitions="120,*"><TextBlock Grid.Column="0" Classes="summaryLabel" Text="Daily floor"/><TextBlock Grid.Column="1" Classes="summaryValue" Text="{Binding SummaryFloor}"/></Grid>
                 <Grid ColumnDefinitions="120,*"><TextBlock Grid.Column="0" Classes="summaryLabel" Text="Work hours"/><TextBlock Grid.Column="1" Classes="summaryValue" Text="{Binding SummaryWorkHours}"/></Grid>
                 <Grid ColumnDefinitions="120,*"><TextBlock Grid.Column="0" Classes="summaryLabel" Text="Rest days"/><TextBlock Grid.Column="1" Classes="summaryValue" Text="{Binding SummaryRestDays}" TextWrapping="Wrap"/></Grid>
+                <Grid ColumnDefinitions="120,*"><TextBlock Grid.Column="0" Classes="summaryLabel" Text="Redemption"/><TextBlock Grid.Column="1" Classes="summaryValue" Text="{Binding SummaryRedemptionPlacement}"/></Grid>
             </StackPanel>
         </Border>
 

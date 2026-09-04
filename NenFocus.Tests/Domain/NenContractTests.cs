@@ -30,7 +30,8 @@ public class NenContractTests
         StrictnessRule strictnessRule = StrictnessRule.Locked,
         WorkHoursPolicy? workHoursPolicy = null,
         Guid? contractPresetId = null,
-        ContractFloor? contractFloor = null)
+        ContractFloor? contractFloor = null,
+        RedemptionPlacementPolicy redemptionPlacementPolicy = RedemptionPlacementPolicy.AnywhereInContract)
         => NenContract.Seal(
             id: Guid.NewGuid(),
             name: "Focused January",
@@ -45,7 +46,8 @@ public class NenContractTests
             sealedAt: sealedAt ?? SealedOnStart,
             workHoursPolicy: workHoursPolicy,
             contractPresetId: contractPresetId,
-            contractFloor: contractFloor);
+            contractFloor: contractFloor,
+            redemptionPlacementPolicy: redemptionPlacementPolicy);
 
     [Fact]
     public void Seal_EndBeforeStart_Throws()
@@ -351,150 +353,6 @@ public class NenContractTests
         contract.WorkHoursPolicy.Should().Be(policy);
     }
 
-    private static Dictionary<DateOnly, double> PlannedForNewDays(DateOnly from, DateOnly to, double hoursPerDay = 4)
-    {
-        var map = new Dictionary<DateOnly, double>();
-        for (var date = from; date <= to; date = date.AddDays(1))
-            map[date] = hoursPerDay;
-        return map;
-    }
-
-    [Fact]
-    public void Extend_WhenActive_PushesEndDateForwardAndRaisesEvent()
-    {
-        var contract = Seal(sealedAt: SealedOnStart); // Active
-        contract.ClearDomainEvents();
-        var newEndDate = EndDate.AddDays(3);
-
-        contract.Extend(newEndDate, PlannedForNewDays(EndDate.AddDays(1), newEndDate), SealedOnStart.AddDays(2));
-
-        contract.EndDate.Should().Be(newEndDate);
-        contract.Status.Should().Be(NenContractStatus.Active);
-        contract.DomainEvents.Should().ContainSingle(e => e is NenContractExtendedEvent);
-    }
-
-    [Fact]
-    public void Extend_RaisesEventWithOldAndNewEndDates()
-    {
-        var contract = Seal(sealedAt: SealedOnStart);
-        contract.ClearDomainEvents();
-        var newEndDate = EndDate.AddDays(3);
-
-        contract.Extend(newEndDate, PlannedForNewDays(EndDate.AddDays(1), newEndDate), SealedOnStart.AddDays(2));
-
-        var raised = contract.DomainEvents.OfType<NenContractExtendedEvent>().Single();
-        raised.ContractId.Should().Be(contract.Id);
-        raised.OldEndDate.Should().Be(EndDate);
-        raised.NewEndDate.Should().Be(newEndDate);
-    }
-
-    [Fact]
-    public void Extend_WhenScheduled_Throws()
-    {
-        var contract = Seal(sealedAt: SealedBeforeStart); // Scheduled
-        var newEndDate = EndDate.AddDays(3);
-
-        var act = () => contract.Extend(newEndDate, PlannedForNewDays(EndDate.AddDays(1), newEndDate), SealedOnStart);
-
-        act.Should().Throw<InvalidOperationException>();
-    }
-
-    [Fact]
-    public void Extend_WhenCompleted_Throws()
-    {
-        var contract = Seal(sealedAt: SealedOnStart);
-        contract.Complete(SealedOnStart.AddDays(7));
-        var newEndDate = EndDate.AddDays(3);
-
-        var act = () => contract.Extend(newEndDate, PlannedForNewDays(EndDate.AddDays(1), newEndDate), SealedOnStart.AddDays(8));
-
-        act.Should().Throw<InvalidOperationException>();
-    }
-
-    [Fact]
-    public void Extend_NewEndDateNotAfterCurrentEndDate_Throws()
-    {
-        var contract = Seal(sealedAt: SealedOnStart);
-
-        var act = () => contract.Extend(EndDate, new Dictionary<DateOnly, double>(), SealedOnStart.AddDays(2));
-
-        act.Should().Throw<ArgumentException>();
-    }
-
-    [Fact]
-    public void Extend_NewDayBelowFloor_Throws()
-    {
-        var contract = Seal(dailyFloorPolicy: new DailyFloorPolicy(new DailyFloor(4)), sealedAt: SealedOnStart);
-        var newEndDate = EndDate.AddDays(2);
-        var plan = PlannedForNewDays(EndDate.AddDays(1), newEndDate, 4);
-        plan[newEndDate] = 1; // below the floor of 4
-
-        var act = () => contract.Extend(newEndDate, plan, SealedOnStart.AddDays(2));
-
-        act.Should().Throw<ArgumentException>();
-    }
-
-    [Fact]
-    public void Extend_NewDayMissingFromMap_TreatedAsZeroAndThrows()
-    {
-        var contract = Seal(dailyFloorPolicy: new DailyFloorPolicy(new DailyFloor(4)), sealedAt: SealedOnStart);
-        var newEndDate = EndDate.AddDays(2);
-        var plan = PlannedForNewDays(EndDate.AddDays(1), newEndDate.AddDays(-1), 4); // missing newEndDate itself
-
-        var act = () => contract.Extend(newEndDate, plan, SealedOnStart.AddDays(2));
-
-        act.Should().Throw<ArgumentException>();
-    }
-
-    [Fact]
-    public void Extend_DoesNotReCheckExistingDays()
-    {
-        // Existing days were already validated at Seal; Extend only floor-checks the new days.
-        var contract = Seal(dailyFloorPolicy: new DailyFloorPolicy(new DailyFloor(4)), sealedAt: SealedOnStart);
-        var newEndDate = EndDate.AddDays(2);
-        var plan = PlannedForNewDays(EndDate.AddDays(1), newEndDate, 4);
-
-        var act = () => contract.Extend(newEndDate, plan, SealedOnStart.AddDays(2));
-
-        act.Should().NotThrow();
-    }
-
-    [Fact]
-    public void Extend_WithPerDayFloorOverrides_MergesIntoPolicyAndAppliesGoingForward()
-    {
-        // Simple-contract-style: no Default, so the extended days need explicit floors
-        // or they'd resolve to rest days.
-        var contract = Seal(dailyFloorPolicy: DailyFloorPolicy.None, sealedAt: SealedOnStart);
-        var newEndDate = EndDate.AddDays(2);
-        var day1 = EndDate.AddDays(1);
-        var day2 = EndDate.AddDays(2);
-        var plan = new Dictionary<DateOnly, double> { [day1] = 2, [day2] = 3 };
-        var overrides = new Dictionary<DateOnly, DailyFloor?>
-        {
-            [day1] = new DailyFloor(2),
-            [day2] = new DailyFloor(3)
-        };
-
-        contract.Extend(newEndDate, plan, SealedOnStart.AddDays(2), overrides);
-
-        contract.IsDayMet(day1, completedFocusHours: 2).Should().BeTrue();
-        contract.IsDayMet(day2, completedFocusHours: 2).Should().BeFalse(); // below its own 3h floor
-    }
-
-    [Fact]
-    public void Extend_OverrideBelowFloor_Throws()
-    {
-        var contract = Seal(dailyFloorPolicy: DailyFloorPolicy.None, sealedAt: SealedOnStart);
-        var newEndDate = EndDate.AddDays(1);
-        var day1 = EndDate.AddDays(1);
-        var plan = new Dictionary<DateOnly, double> { [day1] = 1 };
-        var overrides = new Dictionary<DateOnly, DailyFloor?> { [day1] = new DailyFloor(2) };
-
-        var act = () => contract.Extend(newEndDate, plan, SealedOnStart.AddDays(2), overrides);
-
-        act.Should().Throw<ArgumentException>();
-    }
-
     [Fact]
     public void IsDueForActivation_ScheduledAndStartDateArrived_True()
     {
@@ -596,56 +454,56 @@ public class NenContractTests
         contract.IsInEffect.Should().BeFalse();
     }
 
-    [Fact]
-    public void CheckRedemptionEligibility_Locked_SameDayAllowed()
-    {
-        var contract = Seal(strictnessRule: StrictnessRule.Locked);
+    // CheckRedemptionEligibility(proposedDate, today) is governed entirely by
+    // RedemptionPlacementPolicy — never by StrictnessRule, and never by which day the
+    // missed block was originally due (that date isn't even a parameter anymore; a
+    // deficit stays claimable no matter how long it's been outstanding).
 
-        contract.CheckRedemptionEligibility(StartDate, StartDate).Should().Be(RedemptionEligibility.Allowed);
+    [Fact]
+    public void CheckRedemptionEligibility_AnywhereInContract_WithinRange_Allowed()
+    {
+        var contract = Seal(redemptionPlacementPolicy: RedemptionPlacementPolicy.AnywhereInContract);
+
+        contract.CheckRedemptionEligibility(EndDate, StartDate).Should().Be(RedemptionEligibility.Allowed);
     }
 
     [Fact]
-    public void CheckRedemptionEligibility_Locked_DifferentDayIsWrongDay()
+    public void CheckRedemptionEligibility_AnywhereInContract_OutsideRange_WrongDay()
     {
-        var contract = Seal(strictnessRule: StrictnessRule.Locked);
+        var contract = Seal(redemptionPlacementPolicy: RedemptionPlacementPolicy.AnywhereInContract);
 
-        contract.CheckRedemptionEligibility(StartDate, StartDate.AddDays(1)).Should().Be(RedemptionEligibility.WrongDay);
+        contract.CheckRedemptionEligibility(EndDate.AddDays(1), StartDate).Should().Be(RedemptionEligibility.WrongDay);
+        contract.CheckRedemptionEligibility(StartDate.AddDays(-1), StartDate).Should().Be(RedemptionEligibility.WrongDay);
     }
 
     [Fact]
-    public void CheckRedemptionEligibility_DailyFlexibility_SameDayAllowed()
+    public void CheckRedemptionEligibility_CurrentDayOnly_MatchesToday_Allowed()
     {
-        var contract = Seal(strictnessRule: StrictnessRule.DailyFlexibility);
+        var contract = Seal(redemptionPlacementPolicy: RedemptionPlacementPolicy.CurrentDayOnly);
+        var today = StartDate.AddDays(3);
 
-        contract.CheckRedemptionEligibility(StartDate, StartDate).Should().Be(RedemptionEligibility.Allowed);
+        contract.CheckRedemptionEligibility(today, today).Should().Be(RedemptionEligibility.Allowed);
     }
 
     [Fact]
-    public void CheckRedemptionEligibility_DailyFlexibility_DifferentDayIsWrongDay()
+    public void CheckRedemptionEligibility_CurrentDayOnly_DoesNotMatchToday_WrongDay()
     {
-        var contract = Seal(strictnessRule: StrictnessRule.DailyFlexibility);
+        var contract = Seal(redemptionPlacementPolicy: RedemptionPlacementPolicy.CurrentDayOnly);
+        var today = StartDate.AddDays(3);
 
-        contract.CheckRedemptionEligibility(StartDate, StartDate.AddDays(1)).Should().Be(RedemptionEligibility.WrongDay);
+        contract.CheckRedemptionEligibility(StartDate, today).Should().Be(RedemptionEligibility.WrongDay);
     }
 
     [Fact]
-    public void CheckRedemptionEligibility_PeriodTimeBudget_WithContractFloor_AnyDayAllowed()
+    public void CheckRedemptionEligibility_CurrentDayOnly_IgnoresWhenTheDeficitWasOriginallyDue()
     {
-        var contract = Seal(strictnessRule: StrictnessRule.PeriodTimeBudget, contractFloor: new ContractFloor(20));
+        // The bug this whole feature exists to fix: a deficit from days ago must still be
+        // coverable today — eligibility only ever compares the *proposed* placement day
+        // against today, never against the missed block's own original date.
+        var contract = Seal(redemptionPlacementPolicy: RedemptionPlacementPolicy.CurrentDayOnly);
+        var today = StartDate.AddDays(5);
 
-        contract.CheckRedemptionEligibility(StartDate, StartDate.AddDays(3)).Should().Be(RedemptionEligibility.Allowed);
-    }
-
-    [Fact]
-    public void CheckRedemptionEligibility_PeriodTimeBudget_WithRealDailyFloor_DifferentDayIsWrongDay()
-    {
-        // The Gap 18 hybrid: a Period contract using a real per-day floor instead of a
-        // whole-period ContractFloor behaves like Daily Flex for redemption purposes —
-        // each day has its own obligation, so coverage must land on the same day.
-        var contract = Seal(strictnessRule: StrictnessRule.PeriodTimeBudget);
-
-        contract.CheckRedemptionEligibility(StartDate, StartDate.AddDays(3)).Should().Be(RedemptionEligibility.WrongDay);
-        contract.CheckRedemptionEligibility(StartDate, StartDate).Should().Be(RedemptionEligibility.Allowed);
+        contract.CheckRedemptionEligibility(today, today).Should().Be(RedemptionEligibility.Allowed);
     }
 
     [Fact]

@@ -1,3 +1,4 @@
+using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.ComputeRedemptionAttribution;
 using NenFocus.Domain.Entities;
@@ -54,8 +55,12 @@ public sealed class UpdatePlannedBlockCommandHandler : ICommandHandler<UpdatePla
             // persisted (post-cap), not the longer one the caller originally asked for.
             if (existingFocusBlock.ContractId is { } contractId)
             {
+                var existingEntries = existingFocusBlock.RedemptionEntries
+                    .Select(e => new RedemptionEntryDto(e.MissedBlockId, e.MinutesCovered))
+                    .ToList();
+
                 var attribution = await _computeRedemptionAttribution.HandleAsync(
-                    new ComputeRedemptionAttributionQuery(contractId, command.PresetId, startTime, endTime, existing.Id),
+                    new ComputeRedemptionAttributionQuery(contractId, command.PresetId, startTime, endTime, existing.Id, existingEntries),
                     cancellationToken);
                 redemptionEntries = attribution.Entries
                     .Select(e => new RedemptionEntry(e.MissedBlockId, e.MinutesCovered))

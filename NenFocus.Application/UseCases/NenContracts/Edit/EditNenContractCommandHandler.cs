@@ -104,7 +104,8 @@ public sealed class EditNenContractCommandHandler : ICommandHandler<EditNenContr
                 sealedAt: _clock.UtcNow,
                 workHoursPolicy: workHoursPolicy,
                 contractPresetId: command.ContractPresetId,
-                contractFloor: contractFloor);
+                contractFloor: contractFloor,
+                redemptionPlacementPolicy: command.RedemptionPlacementPolicy);
         }
         catch (ArgumentException ex)
         {

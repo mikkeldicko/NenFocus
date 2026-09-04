@@ -24,6 +24,7 @@ public partial class ContractReviewStepViewModel : ViewModelBase
     public string SummaryFloor { get; }
     public string SummaryWorkHours { get; }
     public string SummaryRestDays { get; }
+    public string SummaryRedemptionPlacement { get; }
 
     public ContractReviewStepViewModel(
         Func<NenContractDraftRules> getData,
@@ -34,6 +35,7 @@ public partial class ContractReviewStepViewModel : ViewModelBase
         string summaryFloor,
         string summaryWorkHours,
         string summaryRestDays,
+        string summaryRedemptionPlacement,
         Action<NenContractDraftRules> onReadyToSchedule,
         Action onBack)
     {
@@ -45,6 +47,7 @@ public partial class ContractReviewStepViewModel : ViewModelBase
         SummaryFloor = summaryFloor;
         SummaryWorkHours = summaryWorkHours;
         SummaryRestDays = summaryRestDays;
+        SummaryRedemptionPlacement = summaryRedemptionPlacement;
         _onReadyToSchedule = onReadyToSchedule;
         _onBack = onBack;
     }

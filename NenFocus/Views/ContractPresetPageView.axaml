@@ -164,6 +164,7 @@
 										<TextBlock Text="{Binding FloorLabel}" FontSize="12" Foreground="#AAAABC"/>
 										<TextBlock Text="{Binding WorkHoursLabel}" FontSize="12" Foreground="#AAAABC"/>
 										<TextBlock Text="{Binding CancellationLabel}" FontSize="12" Foreground="#AAAABC"/>
+										<TextBlock Text="{Binding RedemptionPlacementLabel}" FontSize="12" Foreground="#AAAABC"/>
 									</StackPanel>
 									<StackPanel Grid.Column="1" Classes="card-actions"
                                                 Orientation="Horizontal" Spacing="2"
@@ -240,6 +241,22 @@
 								<TextBlock Text="Daily floor (whole hours)" FontSize="12" Foreground="#7A7A8C"/>
 								<TextBox Classes="form-field" Text="{Binding DailyFloorHoursText}" Watermark="e.g. 3"/>
 							</StackPanel>
+						</StackPanel>
+
+						<StackPanel Spacing="8">
+							<TextBlock Text="REDEMPTION PLACEMENT" FontSize="9" FontWeight="Medium"
+                                       Foreground="#AAAABC" LetterSpacing="4"/>
+							<ComboBox ItemsSource="{Binding RedemptionPlacementOptions}"
+                                      SelectedItem="{Binding FormRedemptionPlacementPolicy}"
+                                      HorizontalAlignment="Stretch">
+								<ComboBox.ItemTemplate>
+									<DataTemplate>
+										<TextBlock Text="{Binding Converter={x:Static conv:RedemptionPlacementPolicyToLabelConverter.Instance}}"/>
+									</DataTemplate>
+								</ComboBox.ItemTemplate>
+							</ComboBox>
+							<TextBlock Text="Which days a redemption block may be placed on to cover a missed or incomplete block."
+                                       FontSize="12" Foreground="#AAAABC" TextWrapping="Wrap"/>
 						</StackPanel>
 
 						<StackPanel Spacing="6">

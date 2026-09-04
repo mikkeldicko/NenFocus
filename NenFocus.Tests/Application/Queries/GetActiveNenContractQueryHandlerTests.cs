@@ -404,6 +404,28 @@ public class GetActiveNenContractQueryHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_DayStatuses_RestDayWithRealActivity_ShowsCompletedHoursNotZero()
+    {
+        // A rest day carries no committed floor, but a redemption block (or any other
+        // block) can still land on it — its real completed hours must show up ("Bonus"
+        // display on the Planner), not get discarded just because the day is a rest day.
+        var restDay = StartDate.AddDays(1); // Jan 2 — a past day relative to "Today" (Jan 4)
+        var policy = new DailyFloorPolicy(new DailyFloor(2), new Dictionary<DateOnly, DailyFloor?> { [restDay] = null });
+        var contract = Contract(dailyFloorPolicy: policy, plannedFocusHoursByDay: FullyPlanned(StartDate, EndDate, 2));
+        SetInEffect(contract);
+        _completedHours.HandleAsync(Arg.Any<GetNenContractCompletedFocusHoursQuery>(), Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyDictionary<DateOnly, double>)new Dictionary<DateOnly, double> { [restDay] = 1.5 });
+
+        var result = await CreateHandler().HandleAsync(AnyWeek);
+
+        var day = result!.DayStatuses.Single(d => d.Date == restDay);
+        day.IsRestDay.Should().BeTrue();
+        day.IsMet.Should().BeTrue(); // still trivially met — nothing was owed
+        day.FloorHours.Should().Be(0); // still no real obligation
+        day.CurrentHours.Should().Be(1.5); // but the real activity is no longer hidden
+    }
+
+    [Fact]
     public async Task HandleAsync_DayStatuses_ResolvesFloorHoursPerDay()
     {
         var policy = new DailyFloorPolicy(null, new Dictionary<DateOnly, DailyFloor?>

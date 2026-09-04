@@ -54,6 +54,10 @@ public sealed record DayFloorPreviewViewModel(
         !IsRestDay && Timing == DayTiming.Future && ContractStrictnessRule.HasValue
         && (!RequiredFloorHours.HasValue || CurrentHours <= RequiredFloorHours.Value);
 
+    // TODO: rest-day/floor-counting-vs-Bonus redesign in progress (see TECHNICAL_SPEC_INFRA.md)
+    // — CurrentHours below no longer gets zeroed for a rest day (that part's correct and
+    // final), but this label still needs the ad-hoc-floor + genuinely-separate-Bonus split
+    // before it's done. Left as plain "Rest" for now rather than the wrong "Bonus:" wording.
     public string Label => IsRestDay
         ? "Rest"
         : IsContractFloorMode && Timing == DayTiming.Past

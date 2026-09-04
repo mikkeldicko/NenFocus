@@ -35,7 +35,8 @@ public sealed class UpdateContractPresetCommandHandler
                 command.StrictnessRule,
                 command.DailyFloorHours is { } floor ? new DailyFloor(floor) : null,
                 workHours,
-                command.AllowCancellation);
+                command.AllowCancellation,
+                command.RedemptionPlacementPolicy);
         }
         catch (ArgumentException ex)
         {

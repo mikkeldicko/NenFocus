@@ -76,6 +76,7 @@ public sealed class GetNenContractForEditQueryHandler
             WorkHoursEnd = contract.WorkHoursPolicy?.Default?.End,
             NoWorkHoursDays = noWorkHoursDays,
             ContractPresetId = contract.ContractPresetId,
+            RedemptionPlacementPolicy = contract.RedemptionPlacementPolicy,
             Blocks = blockDtos
         };
     }

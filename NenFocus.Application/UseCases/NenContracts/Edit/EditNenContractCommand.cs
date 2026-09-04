@@ -31,4 +31,5 @@ public sealed record EditNenContractCommand : ICommand<EditNenContractResult>
     public IReadOnlyList<DateOnly> NoWorkHoursDays { get; init; } = [];
     public IReadOnlyList<NenContractBlockSpec> Blocks { get; init; } = [];
     public Guid? ContractPresetId { get; init; }
+    public RedemptionPlacementPolicy RedemptionPlacementPolicy { get; init; }
 }

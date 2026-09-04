@@ -450,8 +450,17 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         ResetForm();
 
         _isCreatingRedemption = true;
-        _redemptionContractStartDate = ActiveContract?.StartDate;
-        _redemptionContractEndDate = ActiveContract?.EndDate;
+        if (ActiveContract?.RedemptionPlacementPolicy == RedemptionPlacementPolicy.CurrentDayOnly)
+        {
+            var today = DateOnly.FromDateTime(_clockService.LocalNow.Date);
+            _redemptionContractStartDate = today;
+            _redemptionContractEndDate = today;
+        }
+        else
+        {
+            _redemptionContractStartDate = ActiveContract?.StartDate;
+            _redemptionContractEndDate = ActiveContract?.EndDate;
+        }
         OnPropertyChanged(nameof(CanSplitBlock));
         OnPropertyChanged(nameof(CanChangePreset));
         OnPropertyChanged(nameof(ShowTypeToggle));
@@ -1437,7 +1446,9 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
             if (_redemptionContractStartDate is { } rangeStart && _redemptionContractEndDate is { } rangeEnd
                 && (formDateOnly < rangeStart || formDateOnly > rangeEnd))
             {
-                FormError = $"This must be placed within the contract's date range ({rangeStart:MMM d} – {rangeEnd:MMM d}).";
+                FormError = ActiveContract?.RedemptionPlacementPolicy == RedemptionPlacementPolicy.CurrentDayOnly
+                    ? $"This contract only allows redemption on the current day ({rangeStart:MMM d})."
+                    : $"This must be placed within the contract's date range ({rangeStart:MMM d} – {rangeEnd:MMM d}).";
                 return;
             }
         }
@@ -2135,7 +2146,8 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
                     WorkHoursStart = _draftRules.WorkHoursStart,
                     WorkHoursEnd = _draftRules.WorkHoursEnd,
                     Blocks = blocks,
-                    ContractPresetId = _draftRules.ContractPresetId
+                    ContractPresetId = _draftRules.ContractPresetId,
+                    RedemptionPlacementPolicy = _draftRules.RedemptionPlacementPolicy
                 });
                 success = editResult.Success;
                 errorMessage = editResult.ErrorMessage;
@@ -2155,7 +2167,8 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
                     WorkHoursStart = _draftRules.WorkHoursStart,
                     WorkHoursEnd = _draftRules.WorkHoursEnd,
                     Blocks = blocks,
-                    ContractPresetId = _draftRules.ContractPresetId
+                    ContractPresetId = _draftRules.ContractPresetId,
+                    RedemptionPlacementPolicy = _draftRules.RedemptionPlacementPolicy
                 });
                 success = sealResult.Success;
                 errorMessage = sealResult.ErrorMessage;

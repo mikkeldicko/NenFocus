@@ -28,6 +28,13 @@ public class NenContract : AggregateRoot
     public Guid? ContractPresetId { get; private set; }
 
     /// <summary>
+    /// Which days a redemption block may originate a new deficit claim on — see
+    /// CheckRedemptionEligibility. Independent of StrictnessRule, which only governs
+    /// whether an already-placed block can move afterward (AllowsBlockTimeChange).
+    /// </summary>
+    public RedemptionPlacementPolicy RedemptionPlacementPolicy { get; private set; }
+
+    /// <summary>
     /// A whole-period minimum, as an alternative to DailyFloorPolicy's per-day
     /// resolution — mutually exclusive with a real (non-empty) DailyFloorPolicy, enforced
     /// in Seal. Null for every contract except a Period Time Budget contract that opted
@@ -62,7 +69,8 @@ public class NenContract : AggregateRoot
         DateTime sealedAt,
         WorkHoursPolicy? workHoursPolicy = null,
         Guid? contractPresetId = null,
-        ContractFloor? contractFloor = null)
+        ContractFloor? contractFloor = null,
+        RedemptionPlacementPolicy redemptionPlacementPolicy = RedemptionPlacementPolicy.AnywhereInContract)
     {
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Contract name cannot be empty.", nameof(name));
@@ -100,6 +108,7 @@ public class NenContract : AggregateRoot
             WorkHoursPolicy = workHoursPolicy,
             ContractPresetId = contractPresetId,
             ContractFloor = contractFloor,
+            RedemptionPlacementPolicy = redemptionPlacementPolicy,
             Status = DateOnly.FromDateTime(sealedAt) >= startDate
                 ? NenContractStatus.Active
                 : NenContractStatus.Scheduled
@@ -216,23 +225,28 @@ public class NenContract : AggregateRoot
         => ContractFloor is null || ContractFloor.IsSatisfiedBy(totalFocusHours);
 
     /// <summary>
-    /// Whether a missed Focus block due on <paramref name="missedBlockDate"/> can be
-    /// covered by a redemption block on <paramref name="proposedDate"/>, per this contract's
-    /// StrictnessRule. Locked and DailyFlexibility both require same-day coverage — for
-    /// DailyFlexibility that's its whole model of same-day rearrangement; for Locked,
-    /// new blocks can always be inserted (only editing/moving an existing sealed block
-    /// is forbidden), so redemption is allowed but confined to the day it's owed, same
-    /// as Daily Flex. PeriodTimeBudget follows the same day constraint only when it
-    /// carries a real per-day floor (the Gap 18 hybrid) — with a pure whole-period
-    /// ContractFloor instead, there is no per-day obligation to be same-day about, so
-    /// any day within the contract period is allowed.
+    /// Whether a redemption block may originate a new claim against an outstanding deficit
+    /// if placed on <paramref name="proposedDate"/>, given <paramref name="today"/> — governed
+    /// entirely by RedemptionPlacementPolicy, never by which day the missed block was
+    /// originally due (a deficit stays claimable no matter how long it's been outstanding)
+    /// and never by StrictnessRule (which only governs whether an already-placed block can
+    /// move afterward — see AllowsBlockTimeChange). Deliberately not consulted again once a
+    /// RedemptionEntry already exists — see ComputeRedemptionAttributionQueryHandler's
+    /// carry-forward pass, which rescales an existing claim's amount without re-gating
+    /// whether it's still allowed to exist.
     /// </summary>
-    public RedemptionEligibility CheckRedemptionEligibility(DateOnly missedBlockDate, DateOnly proposedDate)
+    public RedemptionEligibility CheckRedemptionEligibility(DateOnly proposedDate, DateOnly today)
     {
-        if (StrictnessRule == StrictnessRule.PeriodTimeBudget && ContractFloor is not null)
-            return RedemptionEligibility.Allowed;
-
-        return proposedDate == missedBlockDate ? RedemptionEligibility.Allowed : RedemptionEligibility.WrongDay;
+        return RedemptionPlacementPolicy switch
+        {
+            RedemptionPlacementPolicy.AnywhereInContract => proposedDate >= StartDate && proposedDate <= EndDate
+                ? RedemptionEligibility.Allowed
+                : RedemptionEligibility.WrongDay,
+            RedemptionPlacementPolicy.CurrentDayOnly => proposedDate == today
+                ? RedemptionEligibility.Allowed
+                : RedemptionEligibility.WrongDay,
+            _ => RedemptionEligibility.WrongDay
+        };
     }
 
     /// <summary>
@@ -285,55 +299,4 @@ public class NenContract : AggregateRoot
         return newStartDate >= StartDate && newEndDate <= EndDate; // PeriodTimeBudget
     }
 
-    /// <param name="plannedFocusHoursByNewDays">
-    /// Focus block hours only, keyed by calendar day within (current EndDate, newEndDate].
-    /// Only the new days are floor-checked — days already covered by the original Seal
-    /// are not re-validated. Days missing from the map are treated as 0 planned hours.
-    /// </param>
-    /// <param name="dailyFloorOverridesForNewDays">
-    /// Per-day floor exceptions for the newly added days only, merged into the existing
-    /// DailyFloorPolicy's PerDayExceptions. A day not present here falls back to the
-    /// policy's Default (or is a rest day if there is no Default). Required for Simple
-    /// contracts, whose floor always varies per day; Advanced contracts extending with
-    /// their existing fixed Default typically pass an empty map.
-    /// </param>
-    public void Extend(
-        DateOnly newEndDate,
-        IReadOnlyDictionary<DateOnly, double> plannedFocusHoursByNewDays,
-        DateTime extendedAt,
-        IReadOnlyDictionary<DateOnly, DailyFloor?>? dailyFloorOverridesForNewDays = null)
-    {
-        if (Status != NenContractStatus.Active)
-            throw new InvalidOperationException("Only an active contract can be extended.");
-
-        if (newEndDate <= EndDate)
-            throw new ArgumentException("New end date must be after the current end date.");
-
-        var overrides = dailyFloorOverridesForNewDays ?? new Dictionary<DateOnly, DailyFloor?>();
-
-        for (var date = EndDate.AddDays(1); date <= newEndDate; date = date.AddDays(1))
-        {
-            var floor = overrides.TryGetValue(date, out var overrideFloor) ? overrideFloor : DailyFloorPolicy.Default;
-            if (floor is null)
-                continue; // rest day — no obligation, skipped entirely
-
-            var plannedHours = plannedFocusHoursByNewDays.GetValueOrDefault(date);
-            if (!floor.IsSatisfiedBy(plannedHours))
-                throw new ArgumentException(
-                    $"Day {date:yyyy-MM-dd} is planned below the daily floor of {floor.Hours}h (planned: {plannedHours}h).");
-        }
-
-        if (overrides.Count > 0)
-        {
-            var mergedExceptions = new Dictionary<DateOnly, DailyFloor?>(DailyFloorPolicy.PerDayExceptions);
-            foreach (var (date, floor) in overrides)
-                mergedExceptions[date] = floor;
-
-            DailyFloorPolicy = new DailyFloorPolicy(DailyFloorPolicy.Default, mergedExceptions);
-        }
-
-        var oldEndDate = EndDate;
-        EndDate = newEndDate;
-        Raise(new NenContractExtendedEvent(Id, oldEndDate, newEndDate, extendedAt));
-    }
 }

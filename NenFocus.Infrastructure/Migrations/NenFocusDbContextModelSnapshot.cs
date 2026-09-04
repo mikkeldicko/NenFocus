@@ -133,6 +133,10 @@ namespace NenFocus.Infrastructure.Migrations
                         .HasColumnType("TEXT")
                         .UseCollation("NOCASE");
 
+                    b.Property<string>("RedemptionPlacementPolicy")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("StrictnessRule")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -176,6 +180,10 @@ namespace NenFocus.Infrastructure.Migrations
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RedemptionPlacementPolicy")
+                        .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.Property<DateOnly>("StartDate")

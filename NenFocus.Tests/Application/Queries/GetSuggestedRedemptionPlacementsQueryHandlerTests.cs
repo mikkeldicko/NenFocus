@@ -25,7 +25,8 @@ public class GetSuggestedRedemptionPlacementsQueryHandlerTests
     private static NenContract SameDayContract(Guid id, WorkHoursPolicy? workHours = null) =>
         NenContract.Seal(id, "Contract", new NenContractGoal("Goal"), Today.AddDays(-1), Today.AddDays(7),
             StrictnessRule.Locked, new DailyFloorPolicy(DailyFloor.None), null, false,
-            new Dictionary<DateOnly, double>(), Today.ToDateTime(TimeOnly.MinValue), workHoursPolicy: workHours);
+            new Dictionary<DateOnly, double>(), Today.ToDateTime(TimeOnly.MinValue), workHoursPolicy: workHours,
+            redemptionPlacementPolicy: RedemptionPlacementPolicy.CurrentDayOnly);
 
     private static FocusBlockDeficitDto Deficit(Guid presetId, DateTime scheduledStart, double remaining) =>
         new()
@@ -69,19 +70,48 @@ public class GetSuggestedRedemptionPlacementsQueryHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_SameDayContract_DeficitMissedYesterday_NotCoverableToday_ReturnsEmpty()
+    public async Task HandleAsync_SameDayContract_DeficitMissedYesterday_StillCoverableToday()
     {
+        // The bug this feature exists to fix: the Cover Deficit button must stay available
+        // today for a deficit from any earlier day, under CurrentDayOnly — eligibility no
+        // longer compares against the missed block's own date at all.
         var contractId = Guid.NewGuid();
         var presetId = Guid.NewGuid();
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>()).Returns(SameDayContract(contractId));
         var deficit = Deficit(presetId, Today.AddDays(-1).ToDateTime(new TimeOnly(10, 0)), remaining: 30);
         _deficits.HandleAsync(new GetNenContractDeficitsQuery(contractId), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<FocusBlockDeficitDto>)[deficit]);
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Today.ToDateTime(TimeOnly.MinValue)));
+        NoConflicts();
 
         var result = await CreateHandler().HandleAsync(
             new GetSuggestedRedemptionPlacementsQuery(contractId, Today.ToDateTime(new TimeOnly(10, 0))), CancellationToken.None);
 
-        result.Should().BeEmpty();
+        result.Should().ContainSingle(p => p.PresetId == presetId && p.TotalRemainingDeficitMinutes == 30);
+    }
+
+    [Fact]
+    public async Task HandleAsync_AnywhereInContractPolicy_DeficitMissedYesterday_CoverableToday()
+    {
+        var contractId = Guid.NewGuid();
+        var presetId = Guid.NewGuid();
+        var contract = NenContract.Seal(contractId, "Contract", new NenContractGoal("Goal"), Today.AddDays(-1), Today.AddDays(7),
+            StrictnessRule.Locked, new DailyFloorPolicy(DailyFloor.None), null, false,
+            new Dictionary<DateOnly, double>(), Today.ToDateTime(TimeOnly.MinValue),
+            redemptionPlacementPolicy: RedemptionPlacementPolicy.AnywhereInContract);
+        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>()).Returns(contract);
+        var deficit = Deficit(presetId, Today.AddDays(-1).ToDateTime(new TimeOnly(10, 0)), remaining: 30);
+        _deficits.HandleAsync(new GetNenContractDeficitsQuery(contractId), Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyList<FocusBlockDeficitDto>)[deficit]);
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Today.ToDateTime(TimeOnly.MinValue)));
+        NoConflicts();
+
+        var result = await CreateHandler().HandleAsync(
+            new GetSuggestedRedemptionPlacementsQuery(contractId, Today.ToDateTime(new TimeOnly(10, 0))), CancellationToken.None);
+
+        result.Should().ContainSingle(p => p.PresetId == presetId && p.TotalRemainingDeficitMinutes == 30);
     }
 
     [Fact]

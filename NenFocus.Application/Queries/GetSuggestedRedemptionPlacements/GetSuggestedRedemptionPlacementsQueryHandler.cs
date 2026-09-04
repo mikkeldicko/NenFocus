@@ -33,12 +33,16 @@ public sealed class GetSuggestedRedemptionPlacementsQueryHandler
         if (contract is null) return [];
 
         var today = DateOnly.FromDateTime(query.AsOf);
-        var deficits = await _deficits.HandleAsync(new GetNenContractDeficitsQuery(query.ContractId), ct);
 
-        var coverableToday = deficits
-            .Where(d => contract.CheckRedemptionEligibility(DateOnly.FromDateTime(d.ScheduledStart), today) == Domain.Enums.RedemptionEligibility.Allowed)
-            .GroupBy(d => d.BlockPresetId)
-            .ToList();
+        // Eligibility to originate a *new* claim today no longer depends on any individual
+        // deficit (missed-block date isn't even a parameter of CheckRedemptionEligibility
+        // anymore) — it's a single yes/no for the whole contract, so it's checked once, not
+        // per deficit. If today doesn't qualify, there's nothing to suggest at all.
+        if (contract.CheckRedemptionEligibility(today, today) != Domain.Enums.RedemptionEligibility.Allowed)
+            return [];
+
+        var deficits = await _deficits.HandleAsync(new GetNenContractDeficitsQuery(query.ContractId), ct);
+        var coverableToday = deficits.GroupBy(d => d.BlockPresetId).ToList();
 
         if (coverableToday.Count == 0) return [];
 

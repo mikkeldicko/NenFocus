@@ -29,10 +29,14 @@ public partial class ContractPresetCardViewModel : ViewModelBase
     public TimeOnly? WorkHoursStart { get; }
     public TimeOnly? WorkHoursEnd { get; }
     public bool AllowCancellation { get; }
+    public RedemptionPlacementPolicy RedemptionPlacementPolicy { get; }
 
     public string FloorLabel => DailyFloorHours is { } floor ? $"{floor:0.##}h / day" : "Derived from scheduled blocks";
     public string WorkHoursLabel => WorkHoursStart is { } s && WorkHoursEnd is { } e ? $"{s:HH:mm} – {e:HH:mm}" : "No constraint";
     public string CancellationLabel => AllowCancellation ? "Cancellation allowed" : "No cancellation";
+    public string RedemptionPlacementLabel => RedemptionPlacementPolicy == RedemptionPlacementPolicy.CurrentDayOnly
+        ? "Redemption: current day only"
+        : "Redemption: anywhere in the contract";
 
     public ContractPresetCardViewModel(ContractPresetDto dto)
     {
@@ -43,6 +47,7 @@ public partial class ContractPresetCardViewModel : ViewModelBase
         WorkHoursStart = dto.WorkHoursStart;
         WorkHoursEnd = dto.WorkHoursEnd;
         AllowCancellation = dto.AllowCancellation;
+        RedemptionPlacementPolicy = dto.RedemptionPlacementPolicy;
     }
 }
 
@@ -58,6 +63,7 @@ public partial class ContractPresetPageViewModel : ViewModelBase
     public bool HasNoPresets => Presets.Count == 0 && !IsLoading;
 
     public IReadOnlyList<StrictnessRule> StrictnessOptions { get; } = Enum.GetValues<StrictnessRule>();
+    public IReadOnlyList<RedemptionPlacementPolicy> RedemptionPlacementOptions { get; } = Enum.GetValues<RedemptionPlacementPolicy>();
     public ObservableCollection<string> TimeOptions { get; } = new();
 
     // ── Form state ────────────────────────────────────────────────────────
@@ -74,6 +80,7 @@ public partial class ContractPresetPageViewModel : ViewModelBase
     [ObservableProperty] private bool _isWorkHoursEnabled;
     [ObservableProperty] private string _workHoursStartText = "09:00";
     [ObservableProperty] private string _workHoursEndText = "17:00";
+    [ObservableProperty] private RedemptionPlacementPolicy _formRedemptionPlacementPolicy = RedemptionPlacementPolicy.AnywhereInContract;
 
     public string SaveButtonLabel => IsEditing ? "Save Changes" : "Create Preset";
     partial void OnIsEditingChanged(bool value) => OnPropertyChanged(nameof(SaveButtonLabel));
@@ -117,6 +124,7 @@ public partial class ContractPresetPageViewModel : ViewModelBase
         IsWorkHoursEnabled = false;
         WorkHoursStartText = "09:00";
         WorkHoursEndText = "17:00";
+        FormRedemptionPlacementPolicy = RedemptionPlacementPolicy.AnywhereInContract;
         FormError = null;
     }
 
@@ -145,6 +153,7 @@ public partial class ContractPresetPageViewModel : ViewModelBase
         IsWorkHoursEnabled = card.WorkHoursStart.HasValue;
         if (card.WorkHoursStart.HasValue) WorkHoursStartText = FormatTime(card.WorkHoursStart.Value);
         if (card.WorkHoursEnd.HasValue) WorkHoursEndText = FormatTime(card.WorkHoursEnd.Value);
+        FormRedemptionPlacementPolicy = card.RedemptionPlacementPolicy;
         IsFormVisible = true;
     }
 
@@ -188,7 +197,8 @@ public partial class ContractPresetPageViewModel : ViewModelBase
                 DailyFloorHours = floor,
                 WorkHoursStart = workHoursStart,
                 WorkHoursEnd = workHoursEnd,
-                AllowCancellation = AllowCancellation
+                AllowCancellation = AllowCancellation,
+                RedemptionPlacementPolicy = FormRedemptionPlacementPolicy
             });
             if (!result.Success) { FormError = result.ErrorMessage; return; }
         }
@@ -201,7 +211,8 @@ public partial class ContractPresetPageViewModel : ViewModelBase
                 DailyFloorHours = floor,
                 WorkHoursStart = workHoursStart,
                 WorkHoursEnd = workHoursEnd,
-                AllowCancellation = AllowCancellation
+                AllowCancellation = AllowCancellation,
+                RedemptionPlacementPolicy = FormRedemptionPlacementPolicy
             });
             if (!result.Success) { FormError = result.ErrorMessage; return; }
         }

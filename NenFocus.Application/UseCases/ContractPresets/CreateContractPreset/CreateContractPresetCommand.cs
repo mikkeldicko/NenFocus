@@ -11,4 +11,5 @@ public sealed record CreateContractPresetCommand : ICommand<CreateContractPreset
     public TimeOnly? WorkHoursStart { get; init; }
     public TimeOnly? WorkHoursEnd { get; init; }
     public bool AllowCancellation { get; init; }
+    public RedemptionPlacementPolicy RedemptionPlacementPolicy { get; init; }
 }

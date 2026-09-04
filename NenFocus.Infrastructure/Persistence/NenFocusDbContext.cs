@@ -365,6 +365,10 @@ public class NenFocusDbContext : DbContext
 
             entity.Property(p => p.AllowCancellation)
                 .IsRequired();
+
+            entity.Property(p => p.RedemptionPlacementPolicy)
+                .HasConversion<string>()
+                .IsRequired();
         });
 
         modelBuilder.Entity<NenContract>(entity =>
@@ -401,6 +405,10 @@ public class NenFocusDbContext : DbContext
                 .IsRequired();
 
             entity.Property(c => c.AllowCancellation)
+                .IsRequired();
+
+            entity.Property(c => c.RedemptionPlacementPolicy)
+                .HasConversion<string>()
                 .IsRequired();
 
             entity.Property(c => c.ContractPresetId);

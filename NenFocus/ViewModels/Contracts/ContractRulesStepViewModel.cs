@@ -64,6 +64,7 @@ public partial class ContractRulesStepViewModel : ViewModelBase
     private readonly TimeOnly? _initialWorkHoursStart;
     private readonly TimeOnly? _initialWorkHoursEnd;
     private readonly Guid? _initialContractPresetId;
+    private readonly RedemptionPlacementPolicy? _initialRedemptionPlacementPolicy;
 
     public bool IsAdvanced { get; }
     public DateOnly StartDate { get; }
@@ -84,6 +85,7 @@ public partial class ContractRulesStepViewModel : ViewModelBase
         OnPropertyChanged(nameof(SelectedPresetFloorLabel));
         OnPropertyChanged(nameof(SelectedPresetWorkHoursLabel));
         OnPropertyChanged(nameof(SelectedPresetCancellationLabel));
+        OnPropertyChanged(nameof(SelectedPresetRedemptionPlacementLabel));
     }
 
     // Read-only confirmation text for the picked preset — mirrors the exact formatting
@@ -96,6 +98,11 @@ public partial class ContractRulesStepViewModel : ViewModelBase
 
     public string SelectedPresetCancellationLabel =>
         (SelectedPreset?.AllowCancellation ?? false) ? "Cancellation allowed" : "No cancellation";
+
+    public string SelectedPresetRedemptionPlacementLabel =>
+        SelectedPreset?.RedemptionPlacementPolicy == RedemptionPlacementPolicy.CurrentDayOnly
+            ? "Redemption: current day only"
+            : "Redemption: anywhere in the contract";
 
     public ObservableCollection<RestDayChipViewModel> RestDayChips { get; } = new();
     public ObservableCollection<ContractPresetDto> SavedPresets { get; } = new();
@@ -116,7 +123,8 @@ public partial class ContractRulesStepViewModel : ViewModelBase
         TimeOnly? initialWorkHoursStart = null,
         TimeOnly? initialWorkHoursEnd = null,
         IReadOnlyCollection<DateOnly>? initialRestDays = null,
-        Guid? initialContractPresetId = null)
+        Guid? initialContractPresetId = null,
+        RedemptionPlacementPolicy? initialRedemptionPlacementPolicy = null)
     {
         IsAdvanced = isAdvanced;
         StartDate = startDate;
@@ -130,6 +138,7 @@ public partial class ContractRulesStepViewModel : ViewModelBase
         _initialWorkHoursStart = initialWorkHoursStart;
         _initialWorkHoursEnd = initialWorkHoursEnd;
         _initialContractPresetId = initialContractPresetId;
+        _initialRedemptionPlacementPolicy = initialRedemptionPlacementPolicy;
 
         SimpleOptions.Add(new SimpleContractOptionViewModel("Lockdown", "This schedule is law. I will not touch it.", StrictnessRule.Locked, true));
         SimpleOptions.Add(new SimpleContractOptionViewModel("Daily Flex", "I can shuffle blocks around within each day.", StrictnessRule.DailyFlexibility, true));
@@ -233,4 +242,11 @@ public partial class ContractRulesStepViewModel : ViewModelBase
     public Guid? ResolvedContractPresetId => IsAdvanced
         ? SelectedPreset?.Id ?? _initialContractPresetId
         : null;
+
+    // Simple contracts always get the more permissive setting — no preset step exists to
+    // pick anything else. Advanced always prefers the picked preset's current value, same
+    // fallback-to-initial rule as every other Resolved* property above.
+    public RedemptionPlacementPolicy ResolvedRedemptionPlacementPolicy => IsAdvanced
+        ? SelectedPreset?.RedemptionPlacementPolicy ?? _initialRedemptionPlacementPolicy ?? RedemptionPlacementPolicy.AnywhereInContract
+        : RedemptionPlacementPolicy.AnywhereInContract;
 }

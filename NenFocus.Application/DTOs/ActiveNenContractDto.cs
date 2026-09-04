@@ -15,6 +15,9 @@ public sealed record ActiveNenContractDto
     public DateOnly EndDate { get; init; }
     public StrictnessRule StrictnessRule { get; init; }
 
+    /// <summary>Drives how tightly the Planner's Cover Deficit form bounds its date field.</summary>
+    public RedemptionPlacementPolicy RedemptionPlacementPolicy { get; init; }
+
     /// <summary>1-based day of the contract "today" falls on — clamped into [1, TotalDays].</summary>
     public int DayNumber { get; init; }
     public int TotalDays { get; init; }

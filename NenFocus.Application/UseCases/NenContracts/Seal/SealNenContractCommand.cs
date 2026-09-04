@@ -57,4 +57,11 @@ public sealed record SealNenContractCommand : ICommand<SealNenContractResult>
     /// can check whether a live commitment still traces back to it.
     /// </summary>
     public Guid? ContractPresetId { get; init; }
+
+    /// <summary>
+    /// Which days a redemption block may originate a new deficit claim on — copied from
+    /// the picked ContractPreset (Advanced) or hardcoded AnywhereInContract (Simple), the
+    /// same split every other rule field already follows.
+    /// </summary>
+    public RedemptionPlacementPolicy RedemptionPlacementPolicy { get; init; }
 }
