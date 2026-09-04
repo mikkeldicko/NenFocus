@@ -733,6 +733,42 @@ public class NenContractTests
         contract.ContractFloorHours.Should().BeNull();
     }
 
+    [Fact]
+    public void CommittedFocusHours_SumsPlannedFocusHoursByDay_AtSeal()
+    {
+        // Deliberately NOT the same as the daily floor total: a day can be planned above
+        // its own floor (e.g. 4h scheduled against a 1h/day fixed floor) — the real
+        // commitment is what was actually planned, not the minimum Seal's own validation
+        // would have accepted.
+        var plan = new Dictionary<DateOnly, double> { [StartDate] = 4, [StartDate.AddDays(1)] = 1 };
+        var policy = new DailyFloorPolicy(null, new Dictionary<DateOnly, DailyFloor?>
+        {
+            [StartDate] = new DailyFloor(1),
+            [StartDate.AddDays(1)] = new DailyFloor(1)
+        });
+        var contract = Seal(dailyFloorPolicy: policy, plannedFocusHoursByDay: plan);
+
+        contract.CommittedFocusHours.Should().Be(5);
+    }
+
+    [Fact]
+    public void CommittedFocusHours_NoDailyFloorPolicyAtAll_StillReflectsWhatWasPlanned()
+    {
+        var plan = new Dictionary<DateOnly, double> { [StartDate] = 1 };
+        var contract = Seal(dailyFloorPolicy: DailyFloorPolicy.None, plannedFocusHoursByDay: plan);
+
+        contract.CommittedFocusHours.Should().Be(1);
+    }
+
+    [Fact]
+    public void CommittedFocusHours_MatchesContractFloorHours_ForAContractFloorModeContract()
+    {
+        var plan = new Dictionary<DateOnly, double> { [StartDate] = 9 };
+        var contract = Seal(dailyFloorPolicy: DailyFloorPolicy.None, plannedFocusHoursByDay: plan, contractFloor: new ContractFloor(9));
+
+        contract.CommittedFocusHours.Should().Be(contract.ContractFloorHours);
+    }
+
     [Theory]
     [InlineData(8.9, false)]
     [InlineData(9, true)]

@@ -10,9 +10,13 @@ public sealed class MinutesToStringConverter : IValueConverter
     public static readonly MinutesToStringConverter Instance = new();
 
     public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
-    {
-        if (value is not double minutes) return string.Empty;
+        => value is double minutes ? FormatMinutes(minutes) : string.Empty;
 
+    /// <summary>Plain static entry point for non-XAML callers (e.g. a ViewModel string
+    /// property) that need the exact same "1h 30m"/"30m" format without going through
+    /// IValueConverter — one formatting rule, reusable from either side.</summary>
+    public static string FormatMinutes(double minutes)
+    {
         var total = Math.Max(0, (int)Math.Round(minutes));
         var hours = total / 60;
         var mins = total % 60;

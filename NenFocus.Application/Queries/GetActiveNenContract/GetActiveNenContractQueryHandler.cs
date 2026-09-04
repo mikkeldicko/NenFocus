@@ -146,12 +146,17 @@ public sealed class GetActiveNenContractQueryHandler : IQueryHandler<GetActiveNe
         }
 
         // The banner's numerator/denominator, uniform across every strictness rule: total
-        // completed hours is always a straight sum; the target is either this contract's
-        // ContractFloor or the sum of every day's resolved floor (dayStatuses.FloorHours
-        // already holds exactly that per-day number, ad-hoc floors included, for a
-        // non-ContractFloor contract).
+        // completed hours is always a straight sum; the target is CommittedFocusHours,
+        // frozen at Seal from what was actually planned then — never derived from live
+        // DailyFloorPolicy/dayStatuses data, which would double-count a redemption's
+        // ad-hoc floor on top of the missed day's own floor for what's really the same
+        // hour, or under-count entirely for a contract using DailyFloorPolicy.None (no
+        // per-day floor at all, yet still a real originally-planned schedule). For a
+        // ContractFloor-mode contract this is numerically identical to ContractFloorHours
+        // (both computed the same way at Seal) — CommittedFocusHours works uniformly
+        // across every strictness rule without needing that special case here.
         var totalCompletedHours = completedHoursByDay.Values.Sum();
-        var totalFloorHours = contract.ContractFloorHours ?? dayStatuses.Sum(d => d.FloorHours);
+        var totalFloorHours = contract.CommittedFocusHours;
         var totalBonusHours = bonusHoursByDay.Values.Sum();
 
         return new ActiveNenContractDto

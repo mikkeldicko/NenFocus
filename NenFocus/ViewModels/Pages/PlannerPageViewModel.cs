@@ -29,6 +29,7 @@ using NenFocus.Application.UseCases.Planner.CreatePlannedBlock;
 using NenFocus.Application.UseCases.Planner.DeletePlannedBlock;
 using NenFocus.Application.UseCases.Planner.SplitPlannedBlock;
 using NenFocus.Application.UseCases.Planner.UpdatePlannedBlock;
+using NenFocus.Converters;
 using NenFocus.Domain.Enums;
 using NenFocus.Domain.ValueObjects;
 using NenFocus.ViewModels.Components;
@@ -352,8 +353,9 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     public string ActiveContractBannerText => ActiveContract is not { } c
         ? string.Empty
         : $"Contract: {c.Name} — Day {c.DayNumber}/{c.TotalDays} — " +
-          $"{c.TotalCompletedHours:0.#}h / {c.TotalFloorHours:0.#}h completed — {c.DeficitHours:0.#}h deficit" +
-          (c.TotalBonusHours > 0 ? $" — {c.TotalBonusHours:0.#}h bonus" : string.Empty);
+          $"{c.TotalCompletedHours:0.#}h / {c.TotalFloorHours:0.#}h completed" +
+          (c.DeficitHours > 0 ? $" — {MinutesToStringConverter.FormatMinutes(c.DeficitHours * 60)} deficit" : string.Empty) +
+          (c.TotalBonusHours > 0 ? $" — {MinutesToStringConverter.FormatMinutes(c.TotalBonusHours * 60)} bonus" : string.Empty);
 
     // 3-second live poll for the day-header floor badges while an active contract is in
     // view — so today's badge reflects an in-progress session's elapsed hours without

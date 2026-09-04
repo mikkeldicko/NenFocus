@@ -434,6 +434,9 @@ public class NenFocusDbContext : DbContext
                     hours => hours == null ? null : new ContractFloor(hours.Value))
                 .HasColumnName("ContractFloor");
 
+            entity.Property(c => c.CommittedFocusHours)
+                .IsRequired();
+
             // ChangeWindow stays unmapped — parked for v1, no Application-layer consumer
             // exists yet (see ARCHITECT_GOVERNANCE.md), unlike WorkHoursPolicy/DailyFloorPolicy
             // which already have real guards built against them even without wizard UI.

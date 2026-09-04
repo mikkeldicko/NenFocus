@@ -10,10 +10,17 @@ public sealed class EditNenContractValidator : AbstractValidator<EditNenContract
     public EditNenContractValidator(
         INenContractRepository contracts,
         IBlockPresetRepository presets,
+        IContractPresetRepository contractPresets,
         IQueryHandler<CheckNenContractDateRangeOverlapQuery, string?> checkOverlap)
     {
         RuleFor(x => x.ContractId)
             .NotEmpty().WithMessage("Contract ID is required.");
+
+        // See SealNenContractValidator for the full rationale — defense in depth behind the
+        // wizard's own guard; null is untouched (a Simple contract legitimately has none).
+        RuleFor(x => x.ContractPresetId)
+            .MustAsync(async (id, ct) => id is null || await contractPresets.GetByIdAsync(id.Value, ct) is not null)
+            .WithMessage("The selected contract preset no longer exists — please pick another.");
 
         RuleFor(x => x)
             .MustAsync(async (command, ct) =>

@@ -1,3 +1,4 @@
+using System.Linq;
 using NenFocus.Domain.Enums;
 using NenFocus.Domain.Events;
 using NenFocus.Domain.Services;
@@ -41,6 +42,19 @@ public class NenContract : AggregateRoot
     /// out of a per-day obligation entirely.
     /// </summary>
     public ContractFloor? ContractFloor { get; private set; }
+
+    /// <summary>
+    /// Total Focus hours actually planned at Seal — sum(plannedFocusHoursByDay), frozen
+    /// forever after (there is no Extend to revisit it — see DESIGN_GAP_HISTORY.md Gap 51).
+    /// This is deliberately NOT derived from DailyFloorPolicy: a day can be planned above
+    /// its own floor (e.g. 4h scheduled against a 1h/day fixed floor), and the true
+    /// commitment is what was actually planned, not the minimum that would have passed
+    /// Seal's own validation. The single source of truth for "how many hours did this
+    /// contract commit to" — used for the completion grade (Open Gap L piece 2) and the
+    /// Planner banner's total-floor number alike, so a later redemption or bonus block can
+    /// only ever move the *achieved* side (TotalCompletedHours), never this target.
+    /// </summary>
+    public double CommittedFocusHours { get; private set; }
 
     private NenContract() { } // EF Core
 
@@ -109,6 +123,7 @@ public class NenContract : AggregateRoot
             ContractPresetId = contractPresetId,
             ContractFloor = contractFloor,
             RedemptionPlacementPolicy = redemptionPlacementPolicy,
+            CommittedFocusHours = plannedFocusHoursByDay.Values.Sum(),
             Status = DateOnly.FromDateTime(sealedAt) >= startDate
                 ? NenContractStatus.Active
                 : NenContractStatus.Scheduled

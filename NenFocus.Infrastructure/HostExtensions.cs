@@ -48,13 +48,16 @@ public static class HostExtensions
     /// "today" at seed time rather than baked into the migration, so wiping the DB and
     /// relaunching always produces a genuinely testable deficit with no manual setup.
     ///
-    /// Contract date ranges are sequential, never overlapping — NenContract ranges are a
-    /// system invariant relied on elsewhere (see ARCHITECT_GOVERNANCE.md, Open Gap G's Bonus
-    /// Block resolution) and only one contract can ever be "the" active one the Planner
-    /// banner/Cover Deficit button operate against at a time. Contract 1 is active
-    /// immediately; reaching 2-4 means jumping the debug clock forward (Ctrl+Shift+T) into
-    /// their windows — each one's own "missed" block is dated on its own first day, so it
-    /// only becomes a real deficit once the clock has advanced at least one day past that.
+    /// Each contract is backed by a real, saved ContractPreset (ContractPresetId set, visible
+    /// on the Presets page) — matching actual user experience, since Advanced contracts can
+    /// only ever be sealed from a saved preset (Gap 27), never freeform rules. Contract date
+    /// ranges are sequential, never overlapping — NenContract ranges are a system invariant
+    /// relied on elsewhere (see ARCHITECT_GOVERNANCE.md, Open Gap G's Bonus Block resolution)
+    /// and only one contract can ever be "the" active one the Planner banner/Cover Deficit
+    /// button operate against at a time. Contract 1 is active immediately; reaching the rest
+    /// means jumping the debug clock forward (Ctrl+Shift+T) into their windows — each one's
+    /// own first-day block only becomes a real deficit once the clock has advanced at least
+    /// one day past it.
     /// </summary>
     private static void SeedDebugTestContracts(NenFocusDbContext context, ILogger logger)
     {
@@ -67,60 +70,97 @@ public static class HostExtensions
             var focusPresetId = new Guid("a0000001-0000-0000-0000-000000000002");
             var today = DateTime.UtcNow.Date;
 
-            void SeedContract(string name, StrictnessRule strictness, RedemptionPlacementPolicy policy,
-                DateOnly startDate, DateOnly endDate, DateTime missedBlockStart, ContractFloor? contractFloor = null)
+            ContractPreset SeedPreset(string name, StrictnessRule strictness, RedemptionPlacementPolicy policy, DailyFloor? dailyFloor = null)
             {
+                var preset = ContractPreset.Create(Guid.NewGuid(), name, strictness, dailyFloor, workHours: null,
+                    allowCancellation: true, redemptionPlacementPolicy: policy);
+                context.ContractPresets.Add(preset);
+                return preset;
+            }
+
+            void SeedContract(ContractPreset preset, DateOnly startDate, DateOnly endDate,
+                IReadOnlyDictionary<DateOnly, double> plannedFocusHoursByDay, ContractFloor? contractFloor = null)
+            {
+                // Mirrors exactly how a real Advanced contract's DailyFloorPolicy gets built
+                // from a picked preset (SealNenContractCommandHandler): a preset with a real
+                // DailyFloor becomes a fixed policy with no rest days; one with none (Period
+                // Budget's own no-per-day-floor mode, or these mostly-None test presets)
+                // stays DailyFloorPolicy.None.
+                var dailyFloorPolicy = preset.DailyFloor is { } floor
+                    ? DailyFloorPolicy.Fixed(floor, restDays: [])
+                    : DailyFloorPolicy.None;
+
                 var contractId = Guid.NewGuid();
                 var contract = NenContract.Seal(
                     id: contractId,
-                    name: name,
+                    name: preset.Name,
                     goal: new NenContractGoal("Exercise the redemption placement policy fix"),
                     startDate: startDate,
                     endDate: endDate,
-                    strictnessRule: strictness,
-                    dailyFloorPolicy: DailyFloorPolicy.None,
+                    strictnessRule: preset.StrictnessRule,
+                    dailyFloorPolicy: dailyFloorPolicy,
                     changeWindow: null,
-                    allowCancellation: true,
-                    plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
+                    allowCancellation: preset.AllowCancellation,
+                    plannedFocusHoursByDay: plannedFocusHoursByDay,
                     sealedAt: today,
-                    redemptionPlacementPolicy: policy,
+                    contractPresetId: preset.Id,
+                    redemptionPlacementPolicy: preset.RedemptionPlacementPolicy,
                     contractFloor: contractFloor);
 
-                var missedBlock = FocusBlock.Create(
-                    Guid.NewGuid(), focusPresetId, missedBlockStart, missedBlockStart.AddHours(1), contractId: contractId);
-
                 context.NenContracts.Add(contract);
-                context.PlannedBlocks.Add(missedBlock);
+
+                foreach (var (date, hours) in plannedFocusHoursByDay)
+                {
+                    var blockStart = date.ToDateTime(new TimeOnly(9, 0));
+                    context.PlannedBlocks.Add(FocusBlock.Create(
+                        Guid.NewGuid(), focusPresetId, blockStart, blockStart.AddHours(hours), contractId: contractId));
+                }
             }
 
             // Contract 1 — active from first launch, no clock jump needed. Directly
             // reproduces the originally-reported bug: a block missed yesterday must still
             // be coverable today.
-            SeedContract("Redemption Test — Current Day Only", StrictnessRule.DailyFlexibility,
-                RedemptionPlacementPolicy.CurrentDayOnly,
+            SeedContract(
+                SeedPreset("Redemption Test — Current Day Only", StrictnessRule.DailyFlexibility, RedemptionPlacementPolicy.CurrentDayOnly),
                 DateOnly.FromDateTime(today.AddDays(-3)), DateOnly.FromDateTime(today.AddDays(7)),
-                today.AddDays(-1).AddHours(9));
+                new Dictionary<DateOnly, double> { [DateOnly.FromDateTime(today.AddDays(-1))] = 1.0 });
 
             // Contract 2 — starts 8 days out. Jump the debug clock to at least +9 days to
             // make its own Day-1 block count as "missed."
-            SeedContract("Redemption Test — Anywhere In Contract", StrictnessRule.DailyFlexibility,
-                RedemptionPlacementPolicy.AnywhereInContract,
+            SeedContract(
+                SeedPreset("Redemption Test — Anywhere In Contract", StrictnessRule.DailyFlexibility, RedemptionPlacementPolicy.AnywhereInContract),
                 DateOnly.FromDateTime(today.AddDays(8)), DateOnly.FromDateTime(today.AddDays(18)),
-                today.AddDays(8).AddHours(9));
+                new Dictionary<DateOnly, double> { [DateOnly.FromDateTime(today.AddDays(8))] = 1.0 });
 
             // Contract 3 — starts 19 days out. Jump to at least +20 days. Period strictness
             // is what makes the "move a redemption block to another day" test meaningful.
-            SeedContract("Redemption Test — Period + Move", StrictnessRule.PeriodTimeBudget,
-                RedemptionPlacementPolicy.CurrentDayOnly,
+            SeedContract(
+                SeedPreset("Redemption Test — Period + Move", StrictnessRule.PeriodTimeBudget, RedemptionPlacementPolicy.CurrentDayOnly),
                 DateOnly.FromDateTime(today.AddDays(19)), DateOnly.FromDateTime(today.AddDays(29)),
-                today.AddDays(19).AddHours(9), contractFloor: new ContractFloor(5));
+                new Dictionary<DateOnly, double> { [DateOnly.FromDateTime(today.AddDays(19))] = 1.0 },
+                contractFloor: new ContractFloor(5));
 
             // Contract 4 — starts 30 days out. Jump to at least +31 days. Confirms a
             // redemption block gets no special exemption from Lockdown's immovability.
-            SeedContract("Redemption Test — Lockdown", StrictnessRule.Locked,
-                RedemptionPlacementPolicy.AnywhereInContract,
+            SeedContract(
+                SeedPreset("Redemption Test — Lockdown", StrictnessRule.Locked, RedemptionPlacementPolicy.AnywhereInContract),
                 DateOnly.FromDateTime(today.AddDays(30)), DateOnly.FromDateTime(today.AddDays(40)),
-                today.AddDays(30).AddHours(9));
+                new Dictionary<DateOnly, double> { [DateOnly.FromDateTime(today.AddDays(30))] = 1.0 });
+
+            // Contract 5 — starts 41 days out, only 3 days long. Jump to at least +41 days.
+            // A REAL fixed 1h/day floor (unlike 1-4, which all use DailyFloorPolicy.None) —
+            // every day is pre-planned with exactly 1h so Seal's own floor check passes.
+            // Resize/extend one day's block past 1h and complete it to confirm the floor
+            // badge stays pinned at "Xh / 1h" (surplus shown) instead of becoming "Xh / Xh."
+            var floorContractStart = DateOnly.FromDateTime(today.AddDays(41));
+            var floorContractEnd = DateOnly.FromDateTime(today.AddDays(43));
+            var floorContractPlan = new Dictionary<DateOnly, double>();
+            for (var date = floorContractStart; date <= floorContractEnd; date = date.AddDays(1))
+                floorContractPlan[date] = 1.0;
+            SeedContract(
+                SeedPreset("Redemption Test — Daily Floor Surplus", StrictnessRule.DailyFlexibility,
+                    RedemptionPlacementPolicy.AnywhereInContract, dailyFloor: new DailyFloor(1)),
+                floorContractStart, floorContractEnd, floorContractPlan);
 
             context.SaveChanges();
         }

@@ -14,7 +14,7 @@
 
 	<UserControl.Styles>
 
-		<!-- Use Nen button -->
+		<!-- Activate Nen button -->
 		<Style Selector="Button.use-nen">
 			<Setter Property="Background" Value="#FFFFFF"/>
 			<Setter Property="BorderBrush" Value="#B8922A"/>
@@ -106,7 +106,7 @@
                            Foreground="#AAAABC"/>
 			</StackPanel>
 
-			<!-- ── Use Nen button (idle state) ───────────────────── -->
+			<!-- ── Activate Nen button (idle state) ───────────────────── -->
 			<Button Classes="use-nen"
                     IsVisible="{Binding !HasActiveSession}"
                     Command="{Binding StartRitualCommand}">
@@ -115,7 +115,7 @@
                                FontSize="17"
                                Foreground="#B8922A"
                                VerticalAlignment="Center"/>
-					<TextBlock Text="USE NEN"
+					<TextBlock Text="ACTIVATE NEN"
                                FontSize="15"
                                FontWeight="Bold"
                                Foreground="#B8922A"

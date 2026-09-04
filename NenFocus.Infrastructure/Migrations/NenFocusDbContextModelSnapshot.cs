@@ -157,6 +157,9 @@ namespace NenFocus.Infrastructure.Migrations
                     b.Property<bool>("AllowCancellation")
                         .HasColumnType("INTEGER");
 
+                    b.Property<double>("CommittedFocusHours")
+                        .HasColumnType("REAL");
+
                     b.Property<double?>("ContractFloor")
                         .HasColumnType("REAL")
                         .HasColumnName("ContractFloor");

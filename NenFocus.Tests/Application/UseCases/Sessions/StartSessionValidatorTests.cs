@@ -91,6 +91,29 @@ public class StartSessionValidatorTests
     }
 
     [Fact]
+    public async Task Validate_Spontaneous_PresetDoesNotExist_IsInvalid()
+    {
+        // A stale/deleted PresetId must not silently start a session with no real
+        // blocking behind it — GetByIdAsync unstubbed already returns null, matching
+        // "doesn't exist."
+        var result = await CreateValidator().ValidateAsync(ValidCommand(Guid.NewGuid()));
+
+        result.IsValid.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Validate_Planned_PresetDoesNotExist_SkipsExistenceCheck()
+    {
+        // Same relationship as the Focus-type check below: a Planned session's preset was
+        // already validated at scheduling time, so this rule doesn't apply to it either.
+        var command = ValidCommand(Guid.NewGuid()) with { OriginatingBlockId = Guid.NewGuid() };
+
+        var result = await CreateValidator().ValidateAsync(command);
+
+        result.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task Validate_Spontaneous_WithBackgroundPreset_IsInvalid()
     {
         var presetId = Guid.NewGuid();

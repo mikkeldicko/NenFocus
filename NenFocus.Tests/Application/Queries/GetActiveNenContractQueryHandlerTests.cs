@@ -81,7 +81,11 @@ public class GetActiveNenContractQueryHandlerTests
         NenContract.Seal(
             Guid.NewGuid(), "Period Contract", new NenContractGoal("Ship it"),
             StartDate, EndDate, StrictnessRule.PeriodTimeBudget, DailyFloorPolicy.None,
-            null, false, new Dictionary<DateOnly, double>(), StartDate.ToDateTime(TimeOnly.MinValue),
+            // CommittedFocusHours is computed from this same map at Seal — matching real
+            // usage (SealNenContractCommandHandler derives ContractFloor from the identical
+            // sum), so the two stay numerically consistent here too.
+            null, false, new Dictionary<DateOnly, double> { [StartDate] = contractFloorHours },
+            StartDate.ToDateTime(TimeOnly.MinValue),
             contractFloor: new ContractFloor(contractFloorHours));
 
     [Fact]
@@ -509,6 +513,54 @@ public class GetActiveNenContractQueryHandlerTests
         day.CurrentHours.Should().Be(0); // Bonus never enters the floor badge's numerator
         day.IsRestDay.Should().BeTrue(); // Bonus alone never un-rests a day
         day.FloorHours.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task HandleAsync_TotalFloorHours_NoDailyFloorPolicyAtAll_StillReflectsWhatWasPlannedAtSeal()
+    {
+        // Reproduces the second reported bug: a contract with DailyFloorPolicy.None (no
+        // per-day floor anywhere — exactly what the debug seed fixtures use) still had a
+        // real 1h block planned at Seal. TotalFloorHours must be 1h, not 0 — it was 0
+        // under the previous "sum only DailyFloorPolicy.For(date) days" approach, since
+        // None means every DailyFloorPolicy.For(date) call returns null regardless of
+        // what was actually planned.
+        var missedDay = StartDate;
+        var contract = Contract(dailyFloorPolicy: DailyFloorPolicy.None,
+            plannedFocusHoursByDay: new Dictionary<DateOnly, double> { [missedDay] = 1.0 });
+        SetInEffect(contract);
+        // The block is still scheduled there (missed, not deleted) — ComputePlannedFocusHoursQuery
+        // still reports its scheduled duration; nothing was ever completed.
+        _plannedHours.HandleAsync(Arg.Any<ComputePlannedFocusHoursQuery>(), Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyDictionary<DateOnly, double>)new Dictionary<DateOnly, double> { [missedDay] = 1.0 });
+
+        var result = await CreateHandler().HandleAsync(AnyWeek);
+
+        result!.TotalFloorHours.Should().Be(1.0);
+        result.TotalCompletedHours.Should().Be(0.0);
+    }
+
+    [Fact]
+    public async Task HandleAsync_TotalFloorHours_RedemptionOnAdHocDay_DoesNotDoubleCountTheRelocatedHour()
+    {
+        // Reproduces the reported bug: 1h was committed at Seal (StartDate). It was missed,
+        // then fully redeemed by a 1h block on a day that had no committed floor of its own
+        // (StartDate + 1). TotalFloorHours must stay 1h (the real commitment) — not 2h from
+        // also counting the redemption's ad-hoc floor on top of it.
+        var committedDay = StartDate;
+        var redemptionDay = StartDate.AddDays(1);
+        var policy = new DailyFloorPolicy(null, new Dictionary<DateOnly, DailyFloor?> { [committedDay] = new DailyFloor(1) });
+        var contract = Contract(dailyFloorPolicy: policy, plannedFocusHoursByDay: new Dictionary<DateOnly, double> { [committedDay] = 1.0 });
+        SetInEffect(contract);
+        // Missed day: nothing completed. Redemption day: 1h scheduled and completed there instead.
+        _plannedHours.HandleAsync(Arg.Any<ComputePlannedFocusHoursQuery>(), Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyDictionary<DateOnly, double>)new Dictionary<DateOnly, double> { [redemptionDay] = 1.0 });
+        _completedHours.HandleAsync(Arg.Any<GetNenContractCompletedFocusHoursQuery>(), Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyDictionary<DateOnly, double>)new Dictionary<DateOnly, double> { [redemptionDay] = 1.0 });
+
+        var result = await CreateHandler().HandleAsync(AnyWeek);
+
+        result!.TotalFloorHours.Should().Be(1.0);
+        result.TotalCompletedHours.Should().Be(1.0);
     }
 
     [Fact]

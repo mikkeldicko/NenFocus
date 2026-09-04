@@ -16,6 +16,7 @@ public class EditNenContractValidatorTests
 
     private readonly INenContractRepository _contracts = Substitute.For<INenContractRepository>();
     private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
+    private readonly IContractPresetRepository _contractPresets = Substitute.For<IContractPresetRepository>();
     private readonly IQueryHandler<CheckNenContractDateRangeOverlapQuery, string?> _checkOverlap =
         Substitute.For<IQueryHandler<CheckNenContractDateRangeOverlapQuery, string?>>();
 
@@ -25,7 +26,7 @@ public class EditNenContractValidatorTests
             .Returns((string?)null);
     }
 
-    private EditNenContractValidator CreateValidator() => new(_contracts, _presets, _checkOverlap);
+    private EditNenContractValidator CreateValidator() => new(_contracts, _presets, _contractPresets, _checkOverlap);
 
     private static NenContract Seal(DateTime sealedAt) => NenContract.Seal(
         id: Guid.NewGuid(), name: "Original", goal: new NenContractGoal("Goal"),
@@ -64,6 +65,19 @@ public class EditNenContractValidatorTests
         var result = await CreateValidator().ValidateAsync(BaseCommand(contract.Id));
 
         result.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Validate_ContractPresetIdDoesNotExist_IsInvalid()
+    {
+        var contract = Seal(sealedAt: StartDate.AddDays(-5).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
+        _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
+        var presetId = Guid.NewGuid();
+        _contractPresets.GetByIdAsync(presetId, Arg.Any<CancellationToken>()).Returns((ContractPreset?)null);
+
+        var result = await CreateValidator().ValidateAsync(BaseCommand(contract.Id) with { ContractPresetId = presetId });
+
+        result.IsValid.Should().BeFalse();
     }
 
     [Fact]

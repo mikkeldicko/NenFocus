@@ -394,7 +394,7 @@
                                                            FontSize="9" FontWeight="SemiBold" HorizontalAlignment="Center"/>
 											</Border>
 											<Border Background="#7BA7C9"
-                                                    IsVisible="{Binding DayFloorStatus.HasBonus}"
+                                                    IsVisible="{Binding DayFloorStatus, Converter={x:Static conv:DayFloorStatusHasBonusConverter.Instance}}"
                                                     CornerRadius="3" Padding="5,2" Margin="0,2,0,0">
 												<TextBlock Text="{Binding DayFloorStatus.BonusLabel}"
                                                            Foreground="White"

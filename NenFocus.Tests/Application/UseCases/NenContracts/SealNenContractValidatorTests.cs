@@ -15,6 +15,7 @@ public class SealNenContractValidatorTests
     private static readonly DateOnly EndDate = new(2026, 1, 7);
 
     private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
+    private readonly IContractPresetRepository _contractPresets = Substitute.For<IContractPresetRepository>();
     private readonly IQueryHandler<CheckNenContractDateRangeOverlapQuery, string?> _checkOverlap =
         Substitute.For<IQueryHandler<CheckNenContractDateRangeOverlapQuery, string?>>();
 
@@ -24,7 +25,7 @@ public class SealNenContractValidatorTests
             .Returns((string?)null);
     }
 
-    private SealNenContractValidator CreateValidator() => new(_presets, _checkOverlap);
+    private SealNenContractValidator CreateValidator() => new(_presets, _contractPresets, _checkOverlap);
 
     private static SealNenContractCommand ValidCommand() => new()
     {
@@ -42,6 +43,38 @@ public class SealNenContractValidatorTests
         var result = await CreateValidator().ValidateAsync(ValidCommand() with { Name = "  " });
 
         result.IsValid.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Validate_NoContractPresetId_IsValid()
+    {
+        // A Simple contract legitimately has no preset at all.
+        var result = await CreateValidator().ValidateAsync(ValidCommand() with { ContractPresetId = null });
+
+        result.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Validate_ContractPresetIdDoesNotExist_IsInvalid()
+    {
+        var presetId = Guid.NewGuid();
+        _contractPresets.GetByIdAsync(presetId, Arg.Any<CancellationToken>()).Returns((ContractPreset?)null);
+
+        var result = await CreateValidator().ValidateAsync(ValidCommand() with { ContractPresetId = presetId });
+
+        result.IsValid.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Validate_ContractPresetIdExists_IsValid()
+    {
+        var presetId = Guid.NewGuid();
+        _contractPresets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
+            .Returns(ContractPreset.Create(presetId, "My Preset", StrictnessRule.Locked, null, null, true));
+
+        var result = await CreateValidator().ValidateAsync(ValidCommand() with { ContractPresetId = presetId });
+
+        result.IsValid.Should().BeTrue();
     }
 
     [Fact]

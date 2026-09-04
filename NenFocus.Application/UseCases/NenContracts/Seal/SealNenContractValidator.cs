@@ -8,10 +8,20 @@ public sealed class SealNenContractValidator : AbstractValidator<SealNenContract
 {
     public SealNenContractValidator(
         IBlockPresetRepository presets,
+        IContractPresetRepository contractPresets,
         IQueryHandler<CheckNenContractDateRangeOverlapQuery, string?> checkOverlap)
     {
         RuleFor(x => x.Name)
             .NotEmpty().WithMessage("Contract name is required.");
+
+        // Defense in depth behind the wizard's own guard (ContractRulesStepViewModel.Continue
+        // already refuses to proceed in Advanced mode without a preset picked) — this is the
+        // real gate for whatever actually reaches the command, the same relationship the
+        // date-range-overlap check above already has to its own wizard-side live check. Null
+        // is untouched: a Simple contract legitimately has no preset at all.
+        RuleFor(x => x.ContractPresetId)
+            .MustAsync(async (id, ct) => id is null || await contractPresets.GetByIdAsync(id.Value, ct) is not null)
+            .WithMessage("The selected contract preset no longer exists — please pick another.");
 
         RuleFor(x => x.EndDate)
             .GreaterThanOrEqualTo(x => x.StartDate)
