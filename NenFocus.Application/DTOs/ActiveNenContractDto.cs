@@ -58,6 +58,10 @@ public sealed record ActiveNenContractDto
     /// strictness or ContractFloor mode — a straight sum of completed hours per day.</summary>
     public double TotalCompletedHours { get; init; }
 
+    /// <summary>Completed hours from Bonus blocks across the whole contract — never part of
+    /// TotalFloorHours/TotalCompletedHours above, shown as its own separate banner stat.</summary>
+    public double TotalBonusHours { get; init; }
+
     /// <summary>
     /// One entry per day across the contract's full [StartDate, EndDate] range (unlike
     /// DaysBehind/DaysConsidered, which only ever look at StartDate..today) — feeds the

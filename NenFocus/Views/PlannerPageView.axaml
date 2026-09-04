@@ -393,6 +393,13 @@
                                                            Foreground="{Binding DayFloorStatus, Converter={x:Static conv:DayFloorStatusToForegroundConverter.Instance}}"
                                                            FontSize="9" FontWeight="SemiBold" HorizontalAlignment="Center"/>
 											</Border>
+											<Border Background="#7BA7C9"
+                                                    IsVisible="{Binding DayFloorStatus.HasBonus}"
+                                                    CornerRadius="3" Padding="5,2" Margin="0,2,0,0">
+												<TextBlock Text="{Binding DayFloorStatus.BonusLabel}"
+                                                           Foreground="White"
+                                                           FontSize="9" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+											</Border>
 										</StackPanel>
 									</Border>
 								</DataTemplate>

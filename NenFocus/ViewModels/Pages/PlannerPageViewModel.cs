@@ -352,7 +352,8 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     public string ActiveContractBannerText => ActiveContract is not { } c
         ? string.Empty
         : $"Contract: {c.Name} — Day {c.DayNumber}/{c.TotalDays} — " +
-          $"{c.TotalCompletedHours:0.#}h / {c.TotalFloorHours:0.#}h completed — {c.DeficitHours:0.#}h deficit";
+          $"{c.TotalCompletedHours:0.#}h / {c.TotalFloorHours:0.#}h completed — {c.DeficitHours:0.#}h deficit" +
+          (c.TotalBonusHours > 0 ? $" — {c.TotalBonusHours:0.#}h bonus" : string.Empty);
 
     // 3-second live poll for the day-header floor badges while an active contract is in
     // view — so today's badge reflects an in-progress session's elapsed hours without
@@ -393,7 +394,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
             d => d.Date,
             d => new DayFloorPreviewViewModel(
                 d.Date, d.CurrentHours, d.IsRestDay ? null : d.FloorHours, d.IsRestDay, d.Timing,
-                ActiveContract.StrictnessRule, ActiveContract.ContractFloorHours.HasValue))
+                ActiveContract.StrictnessRule, ActiveContract.ContractFloorHours.HasValue, d.BonusHours))
             ?? new Dictionary<DateOnly, DayFloorPreviewViewModel>();
 
         await RefreshCoverDeficitOptionsAsync();

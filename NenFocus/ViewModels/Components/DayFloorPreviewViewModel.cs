@@ -30,6 +30,11 @@ namespace NenFocus.ViewModels.Components;
 /// hours still need making up," which the single completed-hours number plus red/green
 /// already says.
 /// </param>
+/// <param name="BonusHours">
+/// Completed hours from Bonus blocks (ContractId null) on this day — genuinely separate
+/// from CurrentHours/RequiredFloorHours above, never folded into the floor badge itself.
+/// Zero while drafting (a brand-new contract has no blocks yet to be Bonus to).
+/// </param>
 public sealed record DayFloorPreviewViewModel(
     DateOnly Date,
     double CurrentHours,
@@ -37,8 +42,13 @@ public sealed record DayFloorPreviewViewModel(
     bool IsRestDay,
     DayTiming Timing = DayTiming.Future,
     StrictnessRule? ContractStrictnessRule = null,
-    bool IsContractFloorMode = false)
+    bool IsContractFloorMode = false,
+    double BonusHours = 0)
 {
+    public bool HasBonus => BonusHours > 0;
+    public string BonusLabel => $"+{BonusHours:0.#}h bonus";
+
+
     public bool IsMet => IsRestDay || RequiredFloorHours is null || CurrentHours >= RequiredFloorHours.Value;
 
     // Unified across every strictness rule: a sealed contract's future day never needs a
@@ -54,10 +64,10 @@ public sealed record DayFloorPreviewViewModel(
         !IsRestDay && Timing == DayTiming.Future && ContractStrictnessRule.HasValue
         && (!RequiredFloorHours.HasValue || CurrentHours <= RequiredFloorHours.Value);
 
-    // TODO: rest-day/floor-counting-vs-Bonus redesign in progress (see TECHNICAL_SPEC_INFRA.md)
-    // — CurrentHours below no longer gets zeroed for a rest day (that part's correct and
-    // final), but this label still needs the ad-hoc-floor + genuinely-separate-Bonus split
-    // before it's done. Left as plain "Rest" for now rather than the wrong "Bonus:" wording.
+    // IsRestDay/RequiredFloorHours already carry whatever the Application layer resolved
+    // (a real committed floor stays pinned; an originally-rest day that later got a
+    // floor-counting block gets an ad-hoc floor and IsRestDay=false) — no special-casing
+    // needed here, this already renders correctly either way.
     public string Label => IsRestDay
         ? "Rest"
         : IsContractFloorMode && Timing == DayTiming.Past

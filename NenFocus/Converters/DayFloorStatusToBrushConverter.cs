@@ -35,7 +35,7 @@ public sealed class DayFloorStatusToBrushConverter : IValueConverter
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
         if (value is not DayFloorPreviewViewModel status) return null;
-        if (status.IsRestDay) return RestBrush; // TODO: see DayFloorPreviewViewModel.Label
+        if (status.IsRestDay) return RestBrush;
         if (status.ShowSimplifiedFuture) return FutureMetBrush;
 
         return (status.Timing, status.IsMet) switch

@@ -3,6 +3,7 @@ using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.ComputePlannedFocusHours;
 using NenFocus.Application.Queries.GetActiveNenContract;
+using NenFocus.Application.Queries.GetNenContractBonusFocusHours;
 using NenFocus.Application.Queries.GetNenContractCompletedFocusHours;
 using NenFocus.Application.Queries.GetNenContractDeficits;
 using NenFocus.Domain.Entities;
@@ -29,6 +30,8 @@ public class GetActiveNenContractQueryHandlerTests
         Substitute.For<IQueryHandler<GetNenContractCompletedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>>>();
     private readonly IQueryHandler<ComputePlannedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> _plannedHours =
         Substitute.For<IQueryHandler<ComputePlannedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>>>();
+    private readonly IQueryHandler<GetNenContractBonusFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> _bonusHours =
+        Substitute.For<IQueryHandler<GetNenContractBonusFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>>>();
     private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
 
     public GetActiveNenContractQueryHandlerTests()
@@ -41,9 +44,11 @@ public class GetActiveNenContractQueryHandlerTests
             .Returns((IReadOnlyDictionary<DateOnly, double>)new Dictionary<DateOnly, double>());
         _plannedHours.HandleAsync(Arg.Any<ComputePlannedFocusHoursQuery>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyDictionary<DateOnly, double>)new Dictionary<DateOnly, double>());
+        _bonusHours.HandleAsync(Arg.Any<GetNenContractBonusFocusHoursQuery>(), Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyDictionary<DateOnly, double>)new Dictionary<DateOnly, double>());
     }
 
-    private GetActiveNenContractQueryHandler CreateHandler() => new(_contracts, _deficits, _completedHours, _plannedHours, _clock);
+    private GetActiveNenContractQueryHandler CreateHandler() => new(_contracts, _deficits, _completedHours, _plannedHours, _bonusHours, _clock);
 
     private void SetInEffect(params NenContract[] contracts) =>
         _contracts.GetAllInEffectAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<NenContract>)contracts);
@@ -403,26 +408,124 @@ public class GetActiveNenContractQueryHandlerTests
         day.CurrentHours.Should().Be(0);
     }
 
+    // ── Live daily-floor badges: ad-hoc floor for an originally-rest day, pinned floor
+    // for a committed day, and a genuinely separate Bonus number (Open Gap L, piece 1) ──
+
     [Fact]
-    public async Task HandleAsync_DayStatuses_RestDayWithRealActivity_ShowsCompletedHoursNotZero()
+    public async Task HandleAsync_DayStatuses_TrueRestDay_NothingScheduled_StaysRest()
     {
-        // A rest day carries no committed floor, but a redemption block (or any other
-        // block) can still land on it — its real completed hours must show up ("Bonus"
-        // display on the Planner), not get discarded just because the day is a rest day.
-        var restDay = StartDate.AddDays(1); // Jan 2 — a past day relative to "Today" (Jan 4)
+        var restDay = StartDate.AddDays(1);
         var policy = new DailyFloorPolicy(new DailyFloor(2), new Dictionary<DateOnly, DailyFloor?> { [restDay] = null });
         var contract = Contract(dailyFloorPolicy: policy, plannedFocusHoursByDay: FullyPlanned(StartDate, EndDate, 2));
         SetInEffect(contract);
-        _completedHours.HandleAsync(Arg.Any<GetNenContractCompletedFocusHoursQuery>(), Arg.Any<CancellationToken>())
-            .Returns((IReadOnlyDictionary<DateOnly, double>)new Dictionary<DateOnly, double> { [restDay] = 1.5 });
 
         var result = await CreateHandler().HandleAsync(AnyWeek);
 
         var day = result!.DayStatuses.Single(d => d.Date == restDay);
         day.IsRestDay.Should().BeTrue();
-        day.IsMet.Should().BeTrue(); // still trivially met — nothing was owed
-        day.FloorHours.Should().Be(0); // still no real obligation
-        day.CurrentHours.Should().Be(1.5); // but the real activity is no longer hidden
+        day.IsMet.Should().BeTrue();
+        day.FloorHours.Should().Be(0);
+        day.CurrentHours.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task HandleAsync_DayStatuses_OriginallyRestDay_RedemptionLandsThere_GetsAdHocFloorNoLongerRest()
+    {
+        // A redemption (or any committed block moved in under Period Time Budget) lands
+        // on a day with no committed floor — it stops reading as "Rest" and gets an
+        // ad-hoc target equal to its own currently-scheduled duration, fully met once
+        // that duration is completed.
+        var restDay = StartDate.AddDays(1);
+        var policy = new DailyFloorPolicy(new DailyFloor(2), new Dictionary<DateOnly, DailyFloor?> { [restDay] = null });
+        var contract = Contract(dailyFloorPolicy: policy, plannedFocusHoursByDay: FullyPlanned(StartDate, EndDate, 2));
+        SetInEffect(contract);
+        _plannedHours.HandleAsync(Arg.Any<ComputePlannedFocusHoursQuery>(), Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyDictionary<DateOnly, double>)new Dictionary<DateOnly, double> { [restDay] = 1.0 });
+        _completedHours.HandleAsync(Arg.Any<GetNenContractCompletedFocusHoursQuery>(), Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyDictionary<DateOnly, double>)new Dictionary<DateOnly, double> { [restDay] = 1.0 });
+
+        var result = await CreateHandler().HandleAsync(AnyWeek);
+
+        var day = result!.DayStatuses.Single(d => d.Date == restDay);
+        day.IsRestDay.Should().BeFalse();
+        day.FloorHours.Should().Be(1.0);
+        day.CurrentHours.Should().Be(1.0);
+        day.IsMet.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task HandleAsync_DayStatuses_OriginallyRestDay_ScheduledNotYetCompleted_AdHocFloorNotMet()
+    {
+        var restDay = StartDate.AddDays(1);
+        var policy = new DailyFloorPolicy(new DailyFloor(2), new Dictionary<DateOnly, DailyFloor?> { [restDay] = null });
+        var contract = Contract(dailyFloorPolicy: policy, plannedFocusHoursByDay: FullyPlanned(StartDate, EndDate, 2));
+        SetInEffect(contract);
+        _plannedHours.HandleAsync(Arg.Any<ComputePlannedFocusHoursQuery>(), Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyDictionary<DateOnly, double>)new Dictionary<DateOnly, double> { [restDay] = 1.0 });
+        // completedHours defaults to empty — nothing done there yet.
+
+        var result = await CreateHandler().HandleAsync(AnyWeek);
+
+        var day = result!.DayStatuses.Single(d => d.Date == restDay);
+        day.IsRestDay.Should().BeFalse();
+        day.FloorHours.Should().Be(1.0);
+        day.CurrentHours.Should().Be(0);
+        day.IsMet.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task HandleAsync_DayStatuses_CommittedFloorDay_SurplusHours_FloorStaysPinned()
+    {
+        // A real committed floor never becomes "whatever got scheduled" — surplus hours
+        // show as visible over-delivery against the same pinned target.
+        var contract = Contract(dailyFloorPolicy: new DailyFloorPolicy(new DailyFloor(1)),
+            plannedFocusHoursByDay: FullyPlanned(StartDate, EndDate, 3));
+        SetInEffect(contract);
+        _completedHours.HandleAsync(Arg.Any<GetNenContractCompletedFocusHoursQuery>(), Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyDictionary<DateOnly, double>)new Dictionary<DateOnly, double> { [StartDate] = 3.0 });
+
+        var result = await CreateHandler().HandleAsync(AnyWeek);
+
+        var day = result!.DayStatuses.Single(d => d.Date == StartDate);
+        day.FloorHours.Should().Be(1.0);
+        day.CurrentHours.Should().Be(3.0);
+        day.IsMet.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task HandleAsync_DayStatuses_BonusHours_NeverCountTowardFloorOrCurrentHours()
+    {
+        var restDay = StartDate.AddDays(1);
+        var policy = new DailyFloorPolicy(new DailyFloor(2), new Dictionary<DateOnly, DailyFloor?> { [restDay] = null });
+        var contract = Contract(dailyFloorPolicy: policy, plannedFocusHoursByDay: FullyPlanned(StartDate, EndDate, 2));
+        SetInEffect(contract);
+        _bonusHours.HandleAsync(Arg.Any<GetNenContractBonusFocusHoursQuery>(), Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyDictionary<DateOnly, double>)new Dictionary<DateOnly, double> { [restDay] = 2.5 });
+
+        var result = await CreateHandler().HandleAsync(AnyWeek);
+
+        var day = result!.DayStatuses.Single(d => d.Date == restDay);
+        day.BonusHours.Should().Be(2.5);
+        day.CurrentHours.Should().Be(0); // Bonus never enters the floor badge's numerator
+        day.IsRestDay.Should().BeTrue(); // Bonus alone never un-rests a day
+        day.FloorHours.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task HandleAsync_TotalBonusHours_SumsAcrossContract()
+    {
+        var contract = Contract();
+        SetInEffect(contract);
+        _bonusHours.HandleAsync(Arg.Any<GetNenContractBonusFocusHoursQuery>(), Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyDictionary<DateOnly, double>)new Dictionary<DateOnly, double>
+            {
+                [StartDate] = 1.5,
+                [StartDate.AddDays(2)] = 0.5
+            });
+
+        var result = await CreateHandler().HandleAsync(AnyWeek);
+
+        result!.TotalBonusHours.Should().Be(2.0);
     }
 
     [Fact]

@@ -27,4 +27,11 @@ public sealed record NenContractDayStatusDto
     public bool IsMet { get; init; }
     public bool IsRestDay { get; init; }
     public DayTiming Timing { get; init; }
+
+    /// <summary>
+    /// Completed hours from Bonus blocks (ContractId null) on this day — never counted
+    /// toward FloorHours/CurrentHours/IsMet above; a genuinely separate number, shown
+    /// alongside the floor badge, not folded into it.
+    /// </summary>
+    public double BonusHours { get; init; }
 }
