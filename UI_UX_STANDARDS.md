@@ -20,9 +20,13 @@ For the *rules* on what ViewModels are forbidden from doing, see `MODULE_STANDAR
 
 | Role | Hex | Usage |
 |------|-----|-------|
-| Accent / gold | `#B8922A` | Active nav dot, Ritual step dots, "USE NEN" button text, break timer, break progress bar |
+| Accent / gold | `#B8922A` | Active nav dot, Ritual step dots, "USE NEN" button text, break timer, break progress bar, Nen Contract banner/popover "Active" status pill |
 | Active nav background | `#F5F0E8` | Selected sidebar item fill |
-| Inactive dot | `#DDDDE8` | Non-active Ritual step indicators |
+| Inactive dot | `#DDDDE8` | Non-active Ritual step indicators; Planner day-header badge — any day belonging to a Scheduled (Upcoming) contract, overriding met/unmet/rest (2026-09-06, see `DESIGN_GAP_HISTORY.md` Gap 55) |
+| Upcoming-contract tag | `#6C7A96` | Nen Contract banner/popover "Upcoming" status pill (2026-09-06, Gap 55) |
+| Active-contract rest day — future | `#C5E4DE` | Planner day-header badge, Active contract, rest day, `Timing == Future` (2026-09-06, Gap 55) |
+| Active-contract rest day — today | `#4FA89C` | Planner day-header badge, Active contract, rest day, `Timing == Today` (2026-09-06, Gap 55) |
+| Active-contract rest day — past | `#2E7A70` | Planner day-header badge, Active contract, rest day, `Timing == Past` (2026-09-06, Gap 55) |
 | Page background | `#F5F5F7` | All page backgrounds |
 | Card background | `#FFFFFF` | Session panel, modal cards |
 | Card border | `#E8E8F0` | Card outlines |

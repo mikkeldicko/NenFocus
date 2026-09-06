@@ -2,10 +2,10 @@ using FluentAssertions;
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.ComputePlannedFocusHours;
-using NenFocus.Application.Queries.GetActiveNenContract;
 using NenFocus.Application.Queries.GetNenContractBonusFocusHours;
 using NenFocus.Application.Queries.GetNenContractCompletedFocusHours;
 using NenFocus.Application.Queries.GetNenContractDeficits;
+using NenFocus.Application.Queries.GetNenContractsForDateRange;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
 using NenFocus.Domain.ValueObjects;
@@ -13,15 +13,15 @@ using NSubstitute;
 
 namespace NenFocus.Tests.Application.Queries;
 
-public class GetActiveNenContractQueryHandlerTests
+public class GetNenContractsForDateRangeQueryHandlerTests
 {
     private static readonly DateOnly StartDate = new(2026, 1, 1);
     private static readonly DateOnly EndDate = new(2026, 1, 10); // 10-day range
     private static readonly DateTime Today = new(2026, 1, 4, 12, 0, 0, DateTimeKind.Utc); // Day 4
 
-    // Deliberately huge so tests that aren't about the week-filter itself always see
+    // Deliberately huge so tests that aren't about the range-filter itself always see
     // whatever contract(s) they set up, regardless of the contract's own date range.
-    private static readonly GetActiveNenContractQuery AnyWeek = new(new DateOnly(2000, 1, 1), new DateOnly(2100, 1, 1));
+    private static readonly GetNenContractsForDateRangeQuery AnyRange = new(new DateOnly(2000, 1, 1), new DateOnly(2100, 1, 1));
 
     private readonly INenContractRepository _contracts = Substitute.For<INenContractRepository>();
     private readonly IQueryHandler<GetNenContractDeficitsQuery, IReadOnlyList<FocusBlockDeficitDto>> _deficits =
@@ -34,7 +34,7 @@ public class GetActiveNenContractQueryHandlerTests
         Substitute.For<IQueryHandler<GetNenContractBonusFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>>>();
     private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
 
-    public GetActiveNenContractQueryHandlerTests()
+    public GetNenContractsForDateRangeQueryHandlerTests()
     {
         _clock.UtcNow.Returns(Today);
         _clock.ToLocal(Arg.Any<DateTime>()).Returns(ci => ci.Arg<DateTime>());
@@ -48,7 +48,7 @@ public class GetActiveNenContractQueryHandlerTests
             .Returns((IReadOnlyDictionary<DateOnly, double>)new Dictionary<DateOnly, double>());
     }
 
-    private GetActiveNenContractQueryHandler CreateHandler() => new(_contracts, _deficits, _completedHours, _plannedHours, _bonusHours, _clock);
+    private GetNenContractsForDateRangeQueryHandler CreateHandler() => new(_contracts, _deficits, _completedHours, _plannedHours, _bonusHours, _clock);
 
     private void SetInEffect(params NenContract[] contracts) =>
         _contracts.GetAllInEffectAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<NenContract>)contracts);
@@ -89,13 +89,13 @@ public class GetActiveNenContractQueryHandlerTests
             contractFloor: new ContractFloor(contractFloorHours));
 
     [Fact]
-    public async Task HandleAsync_NoContractInEffect_ReturnsNull()
+    public async Task HandleAsync_NoContractInEffect_ReturnsEmpty()
     {
         SetInEffect();
 
-        var result = await CreateHandler().HandleAsync(AnyWeek);
+        var result = await CreateHandler().HandleAsync(AnyRange);
 
-        result.Should().BeNull();
+        result.Should().BeEmpty();
     }
 
     [Fact]
@@ -104,15 +104,26 @@ public class GetActiveNenContractQueryHandlerTests
         var contract = Contract();
         SetInEffect(contract);
 
-        var result = await CreateHandler().HandleAsync(AnyWeek);
+        var result = (await CreateHandler().HandleAsync(AnyRange)).Single();
 
-        result!.Id.Should().Be(contract.Id);
+        result.Id.Should().Be(contract.Id);
         result.Name.Should().Be("Study Month");
         result.StartDate.Should().Be(StartDate);
         result.EndDate.Should().Be(EndDate);
         result.TotalDays.Should().Be(10);
         result.DayNumber.Should().Be(4); // Today is Jan 4, contract starts Jan 1
         result.StrictnessRule.Should().Be(StrictnessRule.DailyFlexibility);
+    }
+
+    [Fact]
+    public async Task HandleAsync_MapsStatus()
+    {
+        var contract = Contract(sealedAt: StartDate.ToDateTime(TimeOnly.MinValue)); // Active — sealed on/after its own StartDate
+        SetInEffect(contract);
+
+        var result = (await CreateHandler().HandleAsync(AnyRange)).Single();
+
+        result.Status.Should().Be(NenContractStatus.Active);
     }
 
     [Fact]
@@ -126,9 +137,9 @@ public class GetActiveNenContractQueryHandlerTests
         var contract = Contract();
         SetInEffect(contract);
 
-        var result = await CreateHandler().HandleAsync(AnyWeek);
+        var result = (await CreateHandler().HandleAsync(AnyRange)).Single();
 
-        result!.DayNumber.Should().Be(4);
+        result.DayNumber.Should().Be(4);
     }
 
     [Fact]
@@ -138,9 +149,9 @@ public class GetActiveNenContractQueryHandlerTests
         var contract = Contract(startDate: futureStart, endDate: futureStart.AddDays(9), sealedAt: StartDate.ToDateTime(TimeOnly.MinValue));
         SetInEffect(contract);
 
-        var result = await CreateHandler().HandleAsync(AnyWeek);
+        var result = (await CreateHandler().HandleAsync(AnyRange)).Single();
 
-        result!.DayNumber.Should().Be(1);
+        result.DayNumber.Should().Be(1);
     }
 
     [Fact]
@@ -149,9 +160,9 @@ public class GetActiveNenContractQueryHandlerTests
         var pastRange = Contract(startDate: StartDate.AddDays(-20), endDate: StartDate.AddDays(-10));
         SetInEffect(pastRange);
 
-        var result = await CreateHandler().HandleAsync(AnyWeek);
+        var result = (await CreateHandler().HandleAsync(AnyRange)).Single();
 
-        result!.DayNumber.Should().Be(result.TotalDays);
+        result.DayNumber.Should().Be(result.TotalDays);
     }
 
     [Fact]
@@ -167,9 +178,9 @@ public class GetActiveNenContractQueryHandlerTests
                 [StartDate] = 2, [StartDate.AddDays(1)] = 2, [StartDate.AddDays(2)] = 2, [StartDate.AddDays(3)] = 2
             });
 
-        var result = await CreateHandler().HandleAsync(AnyWeek);
+        var result = (await CreateHandler().HandleAsync(AnyRange)).Single();
 
-        result!.DaysBehind.Should().Be(0);
+        result.DaysBehind.Should().Be(0);
         result.DaysConsidered.Should().Be(4); // Jan 1..4 inclusive (Today)
     }
 
@@ -186,9 +197,9 @@ public class GetActiveNenContractQueryHandlerTests
                 [StartDate] = 2, [StartDate.AddDays(1)] = 0, [StartDate.AddDays(2)] = 2, [StartDate.AddDays(3)] = 2
             });
 
-        var result = await CreateHandler().HandleAsync(AnyWeek);
+        var result = (await CreateHandler().HandleAsync(AnyRange)).Single();
 
-        result!.DaysBehind.Should().Be(1);
+        result.DaysBehind.Should().Be(1);
     }
 
     [Fact]
@@ -199,9 +210,9 @@ public class GetActiveNenContractQueryHandlerTests
         var contract = Contract(dailyFloorPolicy: policy, plannedFocusHoursByDay: FullyPlanned(StartDate, EndDate, 2));
         SetInEffect(contract);
         // No completed hours anywhere — the rest day must still not count as "behind".
-        var result = await CreateHandler().HandleAsync(AnyWeek);
+        var result = (await CreateHandler().HandleAsync(AnyRange)).Single();
 
-        result!.DaysConsidered.Should().Be(3); // Jan 1, 3, 4 — Jan 2 excluded as a rest day
+        result.DaysConsidered.Should().Be(3); // Jan 1, 3, 4 — Jan 2 excluded as a rest day
         result.DaysBehind.Should().Be(3); // the three non-rest days are all unmet (0 hours logged)
     }
 
@@ -217,9 +228,9 @@ public class GetActiveNenContractQueryHandlerTests
                 new FocusBlockDeficitDto { FocusBlockId = Guid.NewGuid(), RemainingDeficitMinutes = 30 }
             ]);
 
-        var result = await CreateHandler().HandleAsync(AnyWeek);
+        var result = (await CreateHandler().HandleAsync(AnyRange)).Single();
 
-        result!.DeficitHours.Should().Be(2.0);
+        result.DeficitHours.Should().Be(2.0);
     }
 
     [Theory]
@@ -233,53 +244,58 @@ public class GetActiveNenContractQueryHandlerTests
             allowCancellation, new Dictionary<DateOnly, double>(), StartDate.ToDateTime(TimeOnly.MinValue));
         SetInEffect(contract);
 
-        var result = await CreateHandler().HandleAsync(AnyWeek);
+        var result = (await CreateHandler().HandleAsync(AnyRange)).Single();
 
-        result!.AllowCancellation.Should().Be(allowCancellation);
+        result.AllowCancellation.Should().Be(allowCancellation);
     }
 
-    // ── Week-overlap filter + tiebreak ──────────────────────────────────────────
+    // ── Range-overlap filter + ordering ─────────────────────────────────────────
 
     [Fact]
-    public async Task HandleAsync_ContractDoesNotOverlapViewedWeek_ReturnsNull()
+    public async Task HandleAsync_ContractDoesNotOverlapViewedRange_ReturnsEmpty()
     {
-        // Contract is Jan 1-10; viewed week is Jan 20-26 — no shared days.
+        // Contract is Jan 1-10; viewed range is Jan 20-26 — no shared days.
         var contract = Contract();
         SetInEffect(contract);
 
-        var result = await CreateHandler().HandleAsync(new GetActiveNenContractQuery(new DateOnly(2026, 1, 20), new DateOnly(2026, 1, 26)));
+        var result = await CreateHandler().HandleAsync(new GetNenContractsForDateRangeQuery(new DateOnly(2026, 1, 20), new DateOnly(2026, 1, 26)));
 
-        result.Should().BeNull();
+        result.Should().BeEmpty();
     }
 
     [Fact]
-    public async Task HandleAsync_ContractSharesOnlyOneBoundaryDayWithWeek_StillOverlaps()
+    public async Task HandleAsync_ContractSharesOnlyOneBoundaryDayWithRange_StillOverlaps()
     {
-        // Contract ends Jan 10; viewed week starts Jan 10 — exactly one shared day.
+        // Contract ends Jan 10; viewed range starts Jan 10 — exactly one shared day.
         var contract = Contract();
         SetInEffect(contract);
 
-        var result = await CreateHandler().HandleAsync(new GetActiveNenContractQuery(EndDate, EndDate.AddDays(6)));
+        var result = await CreateHandler().HandleAsync(new GetNenContractsForDateRangeQuery(EndDate, EndDate.AddDays(6)));
 
-        result.Should().NotBeNull();
+        result.Should().ContainSingle();
     }
 
     [Fact]
-    public async Task HandleAsync_TwoNonOverlappingContractsInSameWeek_PrefersActiveOverScheduled()
+    public async Task HandleAsync_TwoNonOverlappingContractsInSameRange_BothReturned_ActiveOrderedFirst()
     {
+        // Reproduces the reported bug: a viewed range straddling the boundary between an
+        // ending contract and the next one starting mid-range must surface both, not just
+        // whichever used to win the old single-contract tiebreak.
         var scheduled = Contract(name: "Later Contract", startDate: new DateOnly(2026, 1, 8), endDate: new DateOnly(2026, 1, 14),
             sealedAt: new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)); // Scheduled (sealed before its own StartDate)
         var active = Contract(name: "Active Contract", startDate: StartDate, endDate: new DateOnly(2026, 1, 7),
             sealedAt: StartDate.ToDateTime(TimeOnly.MinValue)); // Active
         SetInEffect(scheduled, active);
 
-        var result = await CreateHandler().HandleAsync(new GetActiveNenContractQuery(StartDate, new DateOnly(2026, 1, 14)));
+        var result = await CreateHandler().HandleAsync(new GetNenContractsForDateRangeQuery(StartDate, new DateOnly(2026, 1, 14)));
 
-        result!.Name.Should().Be("Active Contract");
+        result.Should().HaveCount(2);
+        result[0].Name.Should().Be("Active Contract"); // Active preferred first
+        result[1].Name.Should().Be("Later Contract");
     }
 
     [Fact]
-    public async Task HandleAsync_TwoScheduledContractsInSameWeek_PrefersEarlierStartDate()
+    public async Task HandleAsync_TwoScheduledContractsInSameRange_OrderedByEarlierStartDate()
     {
         var later = Contract(name: "Starts Later", startDate: new DateOnly(2026, 1, 8), endDate: new DateOnly(2026, 1, 14),
             sealedAt: new DateTime(2025, 12, 1, 0, 0, 0, DateTimeKind.Utc));
@@ -287,9 +303,11 @@ public class GetActiveNenContractQueryHandlerTests
             sealedAt: new DateTime(2025, 12, 1, 0, 0, 0, DateTimeKind.Utc));
         SetInEffect(later, earlier);
 
-        var result = await CreateHandler().HandleAsync(new GetActiveNenContractQuery(StartDate, new DateOnly(2026, 1, 14)));
+        var result = await CreateHandler().HandleAsync(new GetNenContractsForDateRangeQuery(StartDate, new DateOnly(2026, 1, 14)));
 
-        result!.Name.Should().Be("Starts Earlier");
+        result.Should().HaveCount(2);
+        result[0].Name.Should().Be("Starts Earlier");
+        result[1].Name.Should().Be("Starts Later");
     }
 
     // ── DayStatuses (per-day floor badges) ──────────────────────────────────────
@@ -304,9 +322,9 @@ public class GetActiveNenContractQueryHandlerTests
             plannedFocusHoursByDay: FullyPlanned(StartDate, EndDate, 2));
         SetInEffect(contract);
 
-        var result = await CreateHandler().HandleAsync(AnyWeek);
+        var result = (await CreateHandler().HandleAsync(AnyRange)).Single();
 
-        result!.DayStatuses.Should().HaveCount(10);
+        result.DayStatuses.Should().HaveCount(10);
         result.DayStatuses.Select(d => d.Date).Should().Contain(EndDate); // Jan 10, well after "today"
     }
 
@@ -320,9 +338,9 @@ public class GetActiveNenContractQueryHandlerTests
         _completedHours.HandleAsync(Arg.Any<GetNenContractCompletedFocusHoursQuery>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyDictionary<DateOnly, double>)new Dictionary<DateOnly, double> { [StartDate] = 2 });
 
-        var result = await CreateHandler().HandleAsync(AnyWeek);
+        var result = (await CreateHandler().HandleAsync(AnyRange)).Single();
 
-        var day = result!.DayStatuses.Single(d => d.Date == StartDate);
+        var day = result.DayStatuses.Single(d => d.Date == StartDate);
         day.CurrentHours.Should().Be(2);
         day.FloorHours.Should().Be(2);
         day.IsMet.Should().BeTrue();
@@ -340,9 +358,9 @@ public class GetActiveNenContractQueryHandlerTests
         _completedHours.HandleAsync(Arg.Any<GetNenContractCompletedFocusHoursQuery>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyDictionary<DateOnly, double>)new Dictionary<DateOnly, double> { [StartDate] = 1 });
 
-        var result = await CreateHandler().HandleAsync(AnyWeek);
+        var result = (await CreateHandler().HandleAsync(AnyRange)).Single();
 
-        result!.DayStatuses.Single(d => d.Date == StartDate).IsMet.Should().BeFalse();
+        result.DayStatuses.Single(d => d.Date == StartDate).IsMet.Should().BeFalse();
     }
 
     [Fact]
@@ -359,9 +377,9 @@ public class GetActiveNenContractQueryHandlerTests
         _plannedHours.HandleAsync(Arg.Any<ComputePlannedFocusHoursQuery>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyDictionary<DateOnly, double>)new Dictionary<DateOnly, double> { [futureDate] = 3 });
 
-        var result = await CreateHandler().HandleAsync(AnyWeek);
+        var result = (await CreateHandler().HandleAsync(AnyRange)).Single();
 
-        var day = result!.DayStatuses.Single(d => d.Date == futureDate);
+        var day = result.DayStatuses.Single(d => d.Date == futureDate);
         day.CurrentHours.Should().Be(3); // planned, not the 0 completed hours
         day.IsMet.Should().BeTrue();
         day.Timing.Should().Be(DayTiming.Future);
@@ -375,9 +393,9 @@ public class GetActiveNenContractQueryHandlerTests
             plannedFocusHoursByDay: FullyPlanned(StartDate, EndDate, 2));
         SetInEffect(contract);
 
-        var result = await CreateHandler().HandleAsync(AnyWeek);
+        var result = (await CreateHandler().HandleAsync(AnyRange)).Single();
 
-        var day = result!.DayStatuses.Single(d => d.Date == DateOnly.FromDateTime(Today));
+        var day = result.DayStatuses.Single(d => d.Date == DateOnly.FromDateTime(Today));
         day.Timing.Should().Be(DayTiming.Today);
     }
 
@@ -389,9 +407,9 @@ public class GetActiveNenContractQueryHandlerTests
             plannedFocusHoursByDay: FullyPlanned(StartDate, EndDate, 2));
         SetInEffect(contract);
 
-        var result = await CreateHandler().HandleAsync(AnyWeek);
+        var result = (await CreateHandler().HandleAsync(AnyRange)).Single();
 
-        var day = result!.DayStatuses.Single(d => d.Date == StartDate); // Jan 1, today is Jan 4
+        var day = result.DayStatuses.Single(d => d.Date == StartDate); // Jan 1, today is Jan 4
         day.Timing.Should().Be(DayTiming.Past);
     }
 
@@ -403,9 +421,9 @@ public class GetActiveNenContractQueryHandlerTests
         var contract = Contract(dailyFloorPolicy: policy, plannedFocusHoursByDay: FullyPlanned(StartDate, EndDate, 2));
         SetInEffect(contract);
 
-        var result = await CreateHandler().HandleAsync(AnyWeek);
+        var result = (await CreateHandler().HandleAsync(AnyRange)).Single();
 
-        var day = result!.DayStatuses.Single(d => d.Date == restDay);
+        var day = result.DayStatuses.Single(d => d.Date == restDay);
         day.IsRestDay.Should().BeTrue();
         day.IsMet.Should().BeTrue();
         day.FloorHours.Should().Be(0);
@@ -423,9 +441,9 @@ public class GetActiveNenContractQueryHandlerTests
         var contract = Contract(dailyFloorPolicy: policy, plannedFocusHoursByDay: FullyPlanned(StartDate, EndDate, 2));
         SetInEffect(contract);
 
-        var result = await CreateHandler().HandleAsync(AnyWeek);
+        var result = (await CreateHandler().HandleAsync(AnyRange)).Single();
 
-        var day = result!.DayStatuses.Single(d => d.Date == restDay);
+        var day = result.DayStatuses.Single(d => d.Date == restDay);
         day.IsRestDay.Should().BeTrue();
         day.IsMet.Should().BeTrue();
         day.FloorHours.Should().Be(0);
@@ -448,9 +466,9 @@ public class GetActiveNenContractQueryHandlerTests
         _completedHours.HandleAsync(Arg.Any<GetNenContractCompletedFocusHoursQuery>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyDictionary<DateOnly, double>)new Dictionary<DateOnly, double> { [restDay] = 1.0 });
 
-        var result = await CreateHandler().HandleAsync(AnyWeek);
+        var result = (await CreateHandler().HandleAsync(AnyRange)).Single();
 
-        var day = result!.DayStatuses.Single(d => d.Date == restDay);
+        var day = result.DayStatuses.Single(d => d.Date == restDay);
         day.IsRestDay.Should().BeFalse();
         day.FloorHours.Should().Be(1.0);
         day.CurrentHours.Should().Be(1.0);
@@ -468,9 +486,9 @@ public class GetActiveNenContractQueryHandlerTests
             .Returns((IReadOnlyDictionary<DateOnly, double>)new Dictionary<DateOnly, double> { [restDay] = 1.0 });
         // completedHours defaults to empty — nothing done there yet.
 
-        var result = await CreateHandler().HandleAsync(AnyWeek);
+        var result = (await CreateHandler().HandleAsync(AnyRange)).Single();
 
-        var day = result!.DayStatuses.Single(d => d.Date == restDay);
+        var day = result.DayStatuses.Single(d => d.Date == restDay);
         day.IsRestDay.Should().BeFalse();
         day.FloorHours.Should().Be(1.0);
         day.CurrentHours.Should().Be(0);
@@ -488,9 +506,9 @@ public class GetActiveNenContractQueryHandlerTests
         _completedHours.HandleAsync(Arg.Any<GetNenContractCompletedFocusHoursQuery>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyDictionary<DateOnly, double>)new Dictionary<DateOnly, double> { [StartDate] = 3.0 });
 
-        var result = await CreateHandler().HandleAsync(AnyWeek);
+        var result = (await CreateHandler().HandleAsync(AnyRange)).Single();
 
-        var day = result!.DayStatuses.Single(d => d.Date == StartDate);
+        var day = result.DayStatuses.Single(d => d.Date == StartDate);
         day.FloorHours.Should().Be(1.0);
         day.CurrentHours.Should().Be(3.0);
         day.IsMet.Should().BeTrue();
@@ -506,9 +524,9 @@ public class GetActiveNenContractQueryHandlerTests
         _bonusHours.HandleAsync(Arg.Any<GetNenContractBonusFocusHoursQuery>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyDictionary<DateOnly, double>)new Dictionary<DateOnly, double> { [restDay] = 2.5 });
 
-        var result = await CreateHandler().HandleAsync(AnyWeek);
+        var result = (await CreateHandler().HandleAsync(AnyRange)).Single();
 
-        var day = result!.DayStatuses.Single(d => d.Date == restDay);
+        var day = result.DayStatuses.Single(d => d.Date == restDay);
         day.BonusHours.Should().Be(2.5);
         day.CurrentHours.Should().Be(0); // Bonus never enters the floor badge's numerator
         day.IsRestDay.Should().BeTrue(); // Bonus alone never un-rests a day
@@ -533,9 +551,9 @@ public class GetActiveNenContractQueryHandlerTests
         _plannedHours.HandleAsync(Arg.Any<ComputePlannedFocusHoursQuery>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyDictionary<DateOnly, double>)new Dictionary<DateOnly, double> { [missedDay] = 1.0 });
 
-        var result = await CreateHandler().HandleAsync(AnyWeek);
+        var result = (await CreateHandler().HandleAsync(AnyRange)).Single();
 
-        result!.TotalFloorHours.Should().Be(1.0);
+        result.TotalFloorHours.Should().Be(1.0);
         result.TotalCompletedHours.Should().Be(0.0);
     }
 
@@ -557,9 +575,9 @@ public class GetActiveNenContractQueryHandlerTests
         _completedHours.HandleAsync(Arg.Any<GetNenContractCompletedFocusHoursQuery>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyDictionary<DateOnly, double>)new Dictionary<DateOnly, double> { [redemptionDay] = 1.0 });
 
-        var result = await CreateHandler().HandleAsync(AnyWeek);
+        var result = (await CreateHandler().HandleAsync(AnyRange)).Single();
 
-        result!.TotalFloorHours.Should().Be(1.0);
+        result.TotalFloorHours.Should().Be(1.0);
         result.TotalCompletedHours.Should().Be(1.0);
     }
 
@@ -575,9 +593,9 @@ public class GetActiveNenContractQueryHandlerTests
                 [StartDate.AddDays(2)] = 0.5
             });
 
-        var result = await CreateHandler().HandleAsync(AnyWeek);
+        var result = (await CreateHandler().HandleAsync(AnyRange)).Single();
 
-        result!.TotalBonusHours.Should().Be(2.0);
+        result.TotalBonusHours.Should().Be(2.0);
     }
 
     [Fact]
@@ -593,9 +611,9 @@ public class GetActiveNenContractQueryHandlerTests
             plannedFocusHoursByDay: new Dictionary<DateOnly, double> { [StartDate] = 2, [StartDate.AddDays(1)] = 5 });
         SetInEffect(contract);
 
-        var result = await CreateHandler().HandleAsync(AnyWeek);
+        var result = (await CreateHandler().HandleAsync(AnyRange)).Single();
 
-        result!.DayStatuses.Single(d => d.Date == StartDate).FloorHours.Should().Be(2);
+        result.DayStatuses.Single(d => d.Date == StartDate).FloorHours.Should().Be(2);
         result.DayStatuses.Single(d => d.Date == StartDate.AddDays(1)).FloorHours.Should().Be(5);
     }
 
@@ -607,9 +625,9 @@ public class GetActiveNenContractQueryHandlerTests
         var contract = Contract();
         SetInEffect(contract);
 
-        var result = await CreateHandler().HandleAsync(AnyWeek);
+        var result = (await CreateHandler().HandleAsync(AnyRange)).Single();
 
-        result!.ContractFloorHours.Should().BeNull();
+        result.ContractFloorHours.Should().BeNull();
     }
 
     [Fact]
@@ -622,9 +640,9 @@ public class GetActiveNenContractQueryHandlerTests
                 [StartDate] = 3, [StartDate.AddDays(1)] = 1.5
             });
 
-        var result = await CreateHandler().HandleAsync(AnyWeek);
+        var result = (await CreateHandler().HandleAsync(AnyRange)).Single();
 
-        result!.ContractFloorHours.Should().Be(9);
+        result.ContractFloorHours.Should().Be(9);
         result.TotalFloorHours.Should().Be(9);
         result.TotalCompletedHours.Should().Be(4.5);
     }
@@ -637,9 +655,9 @@ public class GetActiveNenContractQueryHandlerTests
             plannedFocusHoursByDay: FullyPlanned(StartDate, EndDate, 2));
         SetInEffect(contract);
 
-        var result = await CreateHandler().HandleAsync(AnyWeek);
+        var result = (await CreateHandler().HandleAsync(AnyRange)).Single();
 
-        result!.TotalFloorHours.Should().Be(20); // 2h * 10 days
+        result.TotalFloorHours.Should().Be(20); // 2h * 10 days
     }
 
     [Fact]
@@ -655,9 +673,9 @@ public class GetActiveNenContractQueryHandlerTests
                 [StartDate] = 2, [StartDate.AddDays(1)] = 1.5
             });
 
-        var result = await CreateHandler().HandleAsync(AnyWeek);
+        var result = (await CreateHandler().HandleAsync(AnyRange)).Single();
 
-        result!.TotalCompletedHours.Should().Be(3.5);
+        result.TotalCompletedHours.Should().Be(3.5);
     }
 
     [Fact]
@@ -667,9 +685,9 @@ public class GetActiveNenContractQueryHandlerTests
         // every day to a rest day (no floor); ContractFloor mode never does.
         SetInEffect(ContractFloorContract(9));
 
-        var result = await CreateHandler().HandleAsync(AnyWeek);
+        var result = (await CreateHandler().HandleAsync(AnyRange)).Single();
 
-        result!.DayStatuses.Should().OnlyContain(d => !d.IsRestDay);
+        result.DayStatuses.Should().OnlyContain(d => !d.IsRestDay);
     }
 
     [Fact]
@@ -681,9 +699,9 @@ public class GetActiveNenContractQueryHandlerTests
         _completedHours.HandleAsync(Arg.Any<GetNenContractCompletedFocusHoursQuery>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyDictionary<DateOnly, double>)new Dictionary<DateOnly, double> { [StartDate] = 2 });
 
-        var result = await CreateHandler().HandleAsync(AnyWeek);
+        var result = (await CreateHandler().HandleAsync(AnyRange)).Single();
 
-        var day = result!.DayStatuses.Single(d => d.Date == StartDate);
+        var day = result.DayStatuses.Single(d => d.Date == StartDate);
         day.CurrentHours.Should().Be(2);
         day.FloorHours.Should().Be(2); // that day's planned hours, not a real floor
         day.IsMet.Should().BeTrue();
@@ -698,9 +716,9 @@ public class GetActiveNenContractQueryHandlerTests
         _completedHours.HandleAsync(Arg.Any<GetNenContractCompletedFocusHoursQuery>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyDictionary<DateOnly, double>)new Dictionary<DateOnly, double> { [StartDate] = 1 });
 
-        var result = await CreateHandler().HandleAsync(AnyWeek);
+        var result = (await CreateHandler().HandleAsync(AnyRange)).Single();
 
-        var day = result!.DayStatuses.Single(d => d.Date == StartDate);
+        var day = result.DayStatuses.Single(d => d.Date == StartDate);
         day.CurrentHours.Should().Be(1);
         day.IsMet.Should().BeFalse();
     }
@@ -712,9 +730,9 @@ public class GetActiveNenContractQueryHandlerTests
         // 0 completed against 0 planned is trivially satisfied.
         SetInEffect(ContractFloorContract(9));
 
-        var result = await CreateHandler().HandleAsync(AnyWeek);
+        var result = (await CreateHandler().HandleAsync(AnyRange)).Single();
 
-        var day = result!.DayStatuses.Single(d => d.Date == StartDate);
+        var day = result.DayStatuses.Single(d => d.Date == StartDate);
         day.CurrentHours.Should().Be(0);
         day.FloorHours.Should().Be(0);
         day.IsMet.Should().BeTrue();
@@ -728,9 +746,9 @@ public class GetActiveNenContractQueryHandlerTests
         _plannedHours.HandleAsync(Arg.Any<ComputePlannedFocusHoursQuery>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyDictionary<DateOnly, double>)new Dictionary<DateOnly, double> { [futureDate] = 4 });
 
-        var result = await CreateHandler().HandleAsync(AnyWeek);
+        var result = (await CreateHandler().HandleAsync(AnyRange)).Single();
 
-        var day = result!.DayStatuses.Single(d => d.Date == futureDate);
+        var day = result.DayStatuses.Single(d => d.Date == futureDate);
         day.CurrentHours.Should().Be(4);
         day.FloorHours.Should().Be(4);
         day.Timing.Should().Be(DayTiming.Future);
@@ -743,9 +761,9 @@ public class GetActiveNenContractQueryHandlerTests
         // loop naturally yields zero since every day resolves to "no per-day obligation."
         SetInEffect(ContractFloorContract(9));
 
-        var result = await CreateHandler().HandleAsync(AnyWeek);
+        var result = (await CreateHandler().HandleAsync(AnyRange)).Single();
 
-        result!.DaysBehind.Should().Be(0);
+        result.DaysBehind.Should().Be(0);
         result.DaysConsidered.Should().Be(0);
     }
 }

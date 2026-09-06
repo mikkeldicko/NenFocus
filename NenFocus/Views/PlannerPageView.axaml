@@ -270,19 +270,23 @@
 			</Grid>
 
 			<Border Grid.Row="1"
-                    IsVisible="{Binding HasActiveContract}"
+                    IsVisible="{Binding HasSelectedContract}"
                     Background="#F0F0F8"
                     BorderBrush="#DDDDE8"
                     BorderThickness="1"
                     CornerRadius="8"
                     Padding="14,10"
+                    MinHeight="50"
                     Margin="0,0,0,16">
 				<Grid ColumnDefinitions="*,Auto,Auto">
 					<StackPanel Grid.Column="0" Spacing="4">
-						<TextBlock Text="{Binding ActiveContractBannerText}" FontSize="13" FontWeight="SemiBold" Foreground="#1A1A2E"/>
-						<TextBlock Text="{Binding CancelContractErrorMessage}"
-                                   IsVisible="{Binding CancelContractErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                                   FontSize="12" Foreground="#C03A2B" TextWrapping="Wrap"/>
+						<StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+							<TextBlock Text="{Binding SelectedContractBannerText}" FontSize="13" FontWeight="SemiBold" Foreground="#1A1A2E"/>
+							<Border Background="#6C7A96" CornerRadius="4" Padding="6,2"
+                                    IsVisible="{Binding IsSelectedContractUpcoming}" VerticalAlignment="Center">
+								<TextBlock Text="Upcoming" FontSize="10" FontWeight="Medium" Foreground="White"/>
+							</Border>
+						</StackPanel>
 						<TextBlock Text="{Binding CoverDeficitErrorMessage}"
                                    IsVisible="{Binding CoverDeficitErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                                    FontSize="12" Foreground="#C03A2B" TextWrapping="Wrap"/>
@@ -296,12 +300,15 @@
                             VerticalAlignment="Center"
                             Margin="8,0,0,0"/>
 					<Button Grid.Column="2"
-                            Classes="bannerCancelBtn"
-                            Content="✕"
-                            ToolTip.Tip="Cancel contract"
-                            Command="{Binding RequestCancelContractCommand}"
-                            IsVisible="{Binding CanCancelActiveContract}"
-                            VerticalAlignment="Center"/>
+                            Classes="navButton"
+                            Content="⇄"
+                            FontSize="12"
+                            Padding="6,4"
+                            ToolTip.Tip="{Binding SwitchContractButtonText}"
+                            Command="{Binding SwitchToOtherContractThisWeekCommand}"
+                            IsVisible="{Binding HasOtherContractThisWeek}"
+                            VerticalAlignment="Center"
+                            Margin="8,0,0,0"/>
 				</Grid>
 			</Border>
 
@@ -932,32 +939,31 @@
 					<TextBlock Text="No active contracts" FontSize="13" Foreground="#888899"
                                IsVisible="{Binding HasNoContracts}"/>
 
-					<StackPanel Spacing="8" IsVisible="{Binding HasActiveContract}">
+					<StackPanel Spacing="8" IsVisible="{Binding PopoverActiveContract, Converter={x:Static ObjectConverters.IsNotNull}}">
 						<TextBlock Text="ACTIVE" FontSize="10" FontWeight="Medium" LetterSpacing="1" Foreground="#AAAABC"/>
 						<Border Background="#F0F0F8" CornerRadius="8" Padding="12,10">
 							<Grid ColumnDefinitions="*,Auto">
 								<StackPanel Grid.Column="0" Spacing="4">
-									<TextBlock Text="{Binding ActiveContract.Name}" FontSize="14" FontWeight="SemiBold" Foreground="#1A1A2E"/>
+									<TextBlock Text="{Binding PopoverActiveContract.Name}" FontSize="14" FontWeight="SemiBold" Foreground="#1A1A2E"/>
 									<StackPanel Orientation="Horizontal" Spacing="4">
-										<TextBlock Text="{Binding ActiveContract.StartDate, StringFormat='{}{0:MMM d}'}" FontSize="12" Foreground="#888899"/>
+										<TextBlock Text="{Binding PopoverActiveContract.StartDate, StringFormat='{}{0:MMM d}'}" FontSize="12" Foreground="#888899"/>
 										<TextBlock Text="–" FontSize="12" Foreground="#888899"/>
-										<TextBlock Text="{Binding ActiveContract.EndDate, StringFormat='{}{0:MMM d, yyyy}'}" FontSize="12" Foreground="#888899"/>
+										<TextBlock Text="{Binding PopoverActiveContract.EndDate, StringFormat='{}{0:MMM d, yyyy}'}" FontSize="12" Foreground="#888899"/>
 									</StackPanel>
 									<StackPanel Orientation="Horizontal" Spacing="6">
 										<Border Background="#B8922A" CornerRadius="4" Padding="6,2">
 											<TextBlock Text="Active" FontSize="10" FontWeight="Medium" Foreground="White"/>
 										</Border>
-										<TextBlock Text="{Binding ActiveContract.StrictnessRule, Converter={x:Static conv:StrictnessRuleToLabelConverter.Instance}}"
+										<TextBlock Text="{Binding PopoverActiveContract.StrictnessRule, Converter={x:Static conv:StrictnessRuleToLabelConverter.Instance}}"
                                                    FontSize="12" Foreground="#888899"/>
 									</StackPanel>
 									<TextBlock Text="{Binding CancelContractErrorMessage}"
                                                IsVisible="{Binding CancelContractErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                                                FontSize="11" Foreground="#C03A2B" TextWrapping="Wrap"/>
 								</StackPanel>
-								<Button Grid.Column="1" Classes="bannerCancelBtn" Content="✕"
-                                        ToolTip.Tip="Cancel contract"
+								<Button Grid.Column="1" Classes="bannerCancelBtn" Content="Cancel"
+                                        ToolTip.Tip="Cancel this contract"
                                         Command="{Binding RequestCancelContractCommand}"
-                                        IsVisible="{Binding CanCancelActiveContract}"
                                         VerticalAlignment="Top"/>
 							</Grid>
 						</Border>
@@ -972,7 +978,7 @@
 								</ItemsPanelTemplate>
 							</ItemsControl.ItemsPanel>
 							<ItemsControl.ItemTemplate>
-								<DataTemplate DataType="dto:ScheduledNenContractDto">
+								<DataTemplate DataType="dto:NenContractSummaryDto">
 									<Border Background="#F8F8FB" CornerRadius="8" Padding="12,10">
 										<Grid ColumnDefinitions="*,Auto,Auto">
 											<StackPanel Grid.Column="0" Spacing="4">

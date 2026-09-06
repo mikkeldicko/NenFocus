@@ -4,11 +4,13 @@ using NenFocus.Application.Queries.ComputePlannedFocusHours;
 using NenFocus.Application.Queries.GetNenContractBonusFocusHours;
 using NenFocus.Application.Queries.GetNenContractCompletedFocusHours;
 using NenFocus.Application.Queries.GetNenContractDeficits;
+using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
 
-namespace NenFocus.Application.Queries.GetActiveNenContract;
+namespace NenFocus.Application.Queries.GetNenContractsForDateRange;
 
-public sealed class GetActiveNenContractQueryHandler : IQueryHandler<GetActiveNenContractQuery, ActiveNenContractDto?>
+public sealed class GetNenContractsForDateRangeQueryHandler
+    : IQueryHandler<GetNenContractsForDateRangeQuery, IReadOnlyList<NenContractRangeViewDto>>
 {
     private readonly INenContractRepository _contracts;
     private readonly IQueryHandler<GetNenContractDeficitsQuery, IReadOnlyList<FocusBlockDeficitDto>> _deficits;
@@ -17,7 +19,7 @@ public sealed class GetActiveNenContractQueryHandler : IQueryHandler<GetActiveNe
     private readonly IQueryHandler<GetNenContractBonusFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> _bonusHours;
     private readonly ISystemClock _clock;
 
-    public GetActiveNenContractQueryHandler(
+    public GetNenContractsForDateRangeQueryHandler(
         INenContractRepository contracts,
         IQueryHandler<GetNenContractDeficitsQuery, IReadOnlyList<FocusBlockDeficitDto>> deficits,
         IQueryHandler<GetNenContractCompletedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> completedHours,
@@ -33,19 +35,26 @@ public sealed class GetActiveNenContractQueryHandler : IQueryHandler<GetActiveNe
         _clock = clock;
     }
 
-    public async Task<ActiveNenContractDto?> HandleAsync(GetActiveNenContractQuery query, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<NenContractRangeViewDto>> HandleAsync(
+        GetNenContractsForDateRangeQuery query, CancellationToken cancellationToken = default)
     {
         var inEffect = await _contracts.GetAllInEffectAsync(cancellationToken);
 
-        var contract = inEffect
-            .Where(c => c.StartDate <= query.WeekEnd && c.EndDate >= query.WeekStart)
+        var candidates = inEffect
+            .Where(c => c.StartDate <= query.RangeEnd && c.EndDate >= query.RangeStart)
             .OrderByDescending(c => c.Status == NenContractStatus.Active)
             .ThenBy(c => c.StartDate)
-            .FirstOrDefault();
+            .ToList();
 
-        if (contract is null)
-            return null;
+        var results = new List<NenContractRangeViewDto>(candidates.Count);
+        foreach (var contract in candidates)
+            results.Add(await BuildViewAsync(contract, cancellationToken));
 
+        return results;
+    }
+
+    private async Task<NenContractRangeViewDto> BuildViewAsync(NenContract contract, CancellationToken cancellationToken)
+    {
         var today = _clock.ToLocalDate(_clock.UtcNow);
         var clampedToday = today < contract.StartDate ? contract.StartDate
             : today > contract.EndDate ? contract.EndDate
@@ -159,13 +168,14 @@ public sealed class GetActiveNenContractQueryHandler : IQueryHandler<GetActiveNe
         var totalFloorHours = contract.CommittedFocusHours;
         var totalBonusHours = bonusHoursByDay.Values.Sum();
 
-        return new ActiveNenContractDto
+        return new NenContractRangeViewDto
         {
             Id = contract.Id,
             Name = contract.Name,
             StartDate = contract.StartDate,
             EndDate = contract.EndDate,
             StrictnessRule = contract.StrictnessRule,
+            Status = contract.Status,
             RedemptionPlacementPolicy = contract.RedemptionPlacementPolicy,
             DayNumber = dayNumber,
             TotalDays = totalDays,

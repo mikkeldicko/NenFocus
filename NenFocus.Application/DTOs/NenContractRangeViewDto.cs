@@ -3,17 +3,27 @@ using NenFocus.Domain.Enums;
 namespace NenFocus.Application.DTOs;
 
 /// <summary>
-/// Feeds the Planner's persistent active-contract banner:
-/// "Contract: [Name] — Day X/Y — Hh / Th completed — Dh deficit".
-/// Also feeds the Nen Contract popover's Active section.
+/// One contract's view within a caller-chosen date range — feeds the Planner's
+/// contract banner and per-day floor badges. Renamed from ActiveNenContractDto: a single
+/// visible range can now surface more than one in-effect contract (one ending, the next
+/// starting, mid-range) and the Planner lets the user switch which one the banner/badges
+/// currently reflect, so "the active one" is no longer an accurate name for what an
+/// individual entry holds — Status makes that explicit per entry instead.
 /// </summary>
-public sealed record ActiveNenContractDto
+public sealed record NenContractRangeViewDto
 {
     public Guid Id { get; init; }
     public string Name { get; init; } = string.Empty;
     public DateOnly StartDate { get; init; }
     public DateOnly EndDate { get; init; }
     public StrictnessRule StrictnessRule { get; init; }
+
+    /// <summary>
+    /// Scheduled or Active — GetNenContractsForDateRangeQuery only ever returns in-effect
+    /// contracts. Drives the Planner's "Upcoming" banner indicator directly (Scheduled),
+    /// with no separate derived flag needed.
+    /// </summary>
+    public NenContractStatus Status { get; init; }
 
     /// <summary>Drives how tightly the Planner's Cover Deficit form bounds its date field.</summary>
     public RedemptionPlacementPolicy RedemptionPlacementPolicy { get; init; }

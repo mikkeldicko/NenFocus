@@ -11,13 +11,13 @@ using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.CheckNenContractDateRangeOverlap;
 using NenFocus.Application.Queries.ComputePlannedFocusHours;
-using NenFocus.Application.Queries.GetActiveNenContract;
+using NenFocus.Application.Queries.GetNenContractsForDateRange;
 using NenFocus.Application.Queries.GetAllBlockPresets;
 using NenFocus.Application.Queries.GetAllContractPresets;
 using NenFocus.Application.Queries.GetContractWorkHoursForDate;
 using NenFocus.Application.Queries.GetNenContractForEdit;
 using NenFocus.Application.Queries.GetPlannedBlocksForDay;
-using NenFocus.Application.Queries.GetScheduledNenContracts;
+using NenFocus.Application.Queries.GetInEffectNenContracts;
 using NenFocus.Application.Queries.GetSessionSnapshotForBlock;
 using NenFocus.Application.Queries.GetSuggestedRedemptionPlacements;
 using NenFocus.Application.UseCases.ContractPresets.CreateContractPreset;
@@ -140,7 +140,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     [ObservableProperty] private int? _splitSecondStartTimeScrollIndex;
     [ObservableProperty] private int? _splitSecondEndTimeScrollIndex;
     // Per-day floor badge lookup, keyed by date — feeds the day-header badges. Populated
-    // either by RefreshDayFloorPreviewsAsync (drafting) or RefreshActiveContractAsync
+    // either by RefreshDayFloorPreviewsAsync (drafting) or RefreshSelectedContractAsync
     // (sealed/active contract); the two are mutually exclusive for any viewed week, since
     // an in-effect contract can never overlap the date range being drafted. Not an
     // ObservableCollection — the whole dictionary is replaced on refresh so day-header
@@ -301,17 +301,34 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     [ObservableProperty] private bool _isConfirmDiscardDraftVisible;
     [ObservableProperty] private string _confirmDiscardDraftMessage = string.Empty;
 
-    // ── Active-contract banner (persists for the contract's full duration, independent
-    // of drafting mode) ─────────────────────────────────────────────────────────────
-    [ObservableProperty] private ActiveNenContractDto? _activeContract;
+    // ── Selected-contract banner (persists for the contract's full duration, independent
+    // of drafting mode). "Selected" rather than "Active": when the viewed week straddles
+    // two in-effect contracts (one ending, the next starting mid-week), the switch button
+    // below lets the user page between them, so this can hold either one — not only
+    // whichever is domain-Active. Everything keyed off it (Cancel, redemption bounds,
+    // new-block ContractId attribution) re-targets to whichever is currently selected. ──
+    [ObservableProperty] private NenContractRangeViewDto? _selectedContract;
     [ObservableProperty] private bool _isConfirmCancelContractVisible;
     [ObservableProperty] private string _confirmCancelContractMessage = string.Empty;
     [ObservableProperty] private string? _cancelContractErrorMessage;
 
-    // ── Nen Contract popover (replaces the old top-right "Make Nen Contract" button) ──
+    // Every in-effect contract touching the currently viewed week, default-first (the same
+    // order GetNenContractsForDateRangeQuery returns) — SelectedContract is always one of
+    // these. Refreshed alongside SelectedContract in RefreshSelectedContractAsync; the
+    // selection always resets to the default (index 0) on a week navigation, never carried
+    // across a range change.
+    private IReadOnlyList<NenContractRangeViewDto> _contractsThisWeek = [];
+    private int _selectedContractIndex;
+
+    // ── Nen Contract popover (replaces the old top-right "Make Nen Contract" button).
+    // Deliberately independent of SelectedContract/_contractsThisWeek — this is a global
+    // "manage your contracts" surface, not scoped to whatever week the Planner grid
+    // currently has on screen. The Active row (at most one ever exists) and the Scheduled
+    // list both come from one GetInEffectNenContractsQuery call. ──────────────────────────
     [ObservableProperty] private bool _isNenContractPopoverVisible;
-    public ObservableCollection<ScheduledNenContractDto> ScheduledContracts { get; } = new();
-    public bool HasNoContracts => ActiveContract is null && ScheduledContracts.Count == 0;
+    [ObservableProperty] private NenContractSummaryDto? _popoverActiveContract;
+    public ObservableCollection<NenContractSummaryDto> ScheduledContracts { get; } = new();
+    public bool HasNoContracts => PopoverActiveContract is null && ScheduledContracts.Count == 0;
 
     [ObservableProperty] private bool _isConfirmDeleteContractVisible;
     [ObservableProperty] private string _confirmDeleteContractMessage = string.Empty;
@@ -339,73 +356,154 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     private DateOnly? _redemptionContractStartDate;
     private DateOnly? _redemptionContractEndDate;
 
-    public bool HasActiveContract => ActiveContract is not null;
+    public bool HasSelectedContract => SelectedContract is not null;
 
-    // AllowCancellation is deliberately not enforced here (interim, 2026-08-18) — mirrors
-    // NenContract.Break's own comment; every active contract can be cancelled until Strict
-    // Mode exists as the real gate. Only presence of an active contract matters now.
-    public bool CanCancelActiveContract => HasActiveContract;
+    // True only when a second in-effect contract also touches the currently viewed week —
+    // drives the banner's switch-button visibility. A simple two-way toggle by design
+    // (cycles for the rare 3+-contracts-in-one-week case); no dedicated picker.
+    public bool HasOtherContractThisWeek => _contractsThisWeek.Count > 1;
+
+    // Names whichever contract clicking the switch button would jump to next.
+    public string SwitchContractButtonText =>
+        _contractsThisWeek.Count > 1
+            ? $"Switch to {_contractsThisWeek[(_selectedContractIndex + 1) % _contractsThisWeek.Count].Name}"
+            : string.Empty;
+
+    // Drives the banner's "Upcoming" tag — reflects real domain Status directly, not
+    // switch history, so a future week where nothing has started yet still reads as
+    // Upcoming even while it's the default (unswitched) selection.
+    public bool IsSelectedContractUpcoming => SelectedContract?.Status == NenContractStatus.Scheduled;
 
     // One format for every strictness rule — total completed vs. total committed hours,
     // plus outstanding deficit. Uniform across Locked/DailyFlexibility/PeriodTimeBudget
     // (with or without ContractFloor) since TotalFloorHours/TotalCompletedHours are
     // already computed the same way for all of them.
-    public string ActiveContractBannerText => ActiveContract is not { } c
+    public string SelectedContractBannerText => SelectedContract is not { } c
         ? string.Empty
         : $"Contract: {c.Name} — Day {c.DayNumber}/{c.TotalDays} — " +
           $"{c.TotalCompletedHours:0.#}h / {c.TotalFloorHours:0.#}h completed" +
           (c.DeficitHours > 0 ? $" — {MinutesToStringConverter.FormatMinutes(c.DeficitHours * 60)} deficit" : string.Empty) +
           (c.TotalBonusHours > 0 ? $" — {MinutesToStringConverter.FormatMinutes(c.TotalBonusHours * 60)} bonus" : string.Empty);
 
-    // 3-second live poll for the day-header floor badges while an active contract is in
+    // 3-second live poll for the day-header floor badges while a selected contract is in
     // view — so today's badge reflects an in-progress session's elapsed hours without
     // waiting for the next week-nav/seal/session-end refresh. No page-visibility gating:
     // this ViewModel already lives for the app's whole lifetime (not recreated on
     // navigation, and there's no such hook anywhere in this codebase), and the cost is
     // comparable to ScheduledEnforcementService's own always-on 5s heartbeat. Started/
-    // stopped by OnActiveContractChanged, not by a page-visible/hidden signal.
+    // stopped by OnSelectedContractChanged, not by a page-visible/hidden signal.
     private readonly System.Timers.Timer _floorStatusPollTimer = new(3000) { AutoReset = true };
 
-    partial void OnActiveContractChanged(ActiveNenContractDto? value)
+    partial void OnSelectedContractChanged(NenContractRangeViewDto? value)
     {
-        OnPropertyChanged(nameof(HasActiveContract));
-        OnPropertyChanged(nameof(ActiveContractBannerText));
-        OnPropertyChanged(nameof(CanCancelActiveContract));
+        OnPropertyChanged(nameof(HasSelectedContract));
+        OnPropertyChanged(nameof(SelectedContractBannerText));
         OnPropertyChanged(nameof(HasNoContracts));
+        OnPropertyChanged(nameof(IsSelectedContractUpcoming));
+        OnPropertyChanged(nameof(HasOtherContractThisWeek));
+        OnPropertyChanged(nameof(SwitchContractButtonText));
 
         if (value is not null) _floorStatusPollTimer.Start();
         else _floorStatusPollTimer.Stop();
     }
 
-    // Scoped to the currently viewed week — the banner only shows when a contract's date
-    // range overlaps the week actually on screen, not just "some contract is in effect
-    // somewhere." Must be re-run on every week navigation, not only on init/seal/session-end.
-    private async Task RefreshActiveContractAsync()
+    // Scoped to the currently viewed week — badges and the banner only reflect contracts
+    // whose date range overlaps the week actually on screen, not just "some contract is in
+    // effect somewhere." Must be re-run on every week navigation, not only on init/seal/
+    // session-end. Always resets the banner selection to the default (index 0) — a
+    // switched-to contract is a momentary "peek," never carried forward to a different week.
+    // The calendar's day badges are independent of that selection entirely (see
+    // RebuildMergedDayFloorByDate) — every contract touching the week always shows its own
+    // days, regardless of which one the banner currently names.
+    private async Task RefreshSelectedContractAsync()
+    {
+        _contractsThisWeek = await FetchContractsThisWeekAsync();
+        _selectedContractIndex = 0;
+        await ApplySelectedIndexAsync();
+    }
+
+    // Re-fetches live data for the currently viewed week (elapsed hours, deficit, banner
+    // numbers, merged badges) without disturbing a manually switched banner selection —
+    // used by every incidental refresh that isn't an actual week navigation (the 3-second
+    // live poll, saving/dragging/splitting a block, sealing, cancelling). Re-locates the
+    // previously selected contract by Id in the freshly fetched list; falls back to the
+    // default (index 0) only if that contract is no longer in it — e.g. it was just Broken
+    // or Completed by the very refresh that triggered this call.
+    private async Task RefreshContractsPreservingSelectionAsync()
+    {
+        var previouslySelectedId = SelectedContract?.Id;
+        _contractsThisWeek = await FetchContractsThisWeekAsync();
+
+        _selectedContractIndex = 0;
+        if (previouslySelectedId is { } id)
+        {
+            for (var i = 0; i < _contractsThisWeek.Count; i++)
+            {
+                if (_contractsThisWeek[i].Id == id) { _selectedContractIndex = i; break; }
+            }
+        }
+
+        await ApplySelectedIndexAsync();
+    }
+
+    private async Task<IReadOnlyList<NenContractRangeViewDto>> FetchContractsThisWeekAsync()
     {
         var weekStartDate = DateOnly.FromDateTime(WeekStart);
         var weekEndDate = weekStartDate.AddDays(6);
-        ActiveContract = await _queryDispatcher.QueryAsync(new GetActiveNenContractQuery(weekStartDate, weekEndDate));
+        return await _queryDispatcher.QueryAsync(new GetNenContractsForDateRangeQuery(weekStartDate, weekEndDate));
+    }
 
+    private async Task ApplySelectedIndexAsync()
+    {
+        SelectedContract = _contractsThisWeek.Count > 0 ? _contractsThisWeek[_selectedContractIndex] : null;
+        RebuildMergedDayFloorByDate();
+        await RefreshCoverDeficitOptionsAsync();
+    }
+
+    // Every in-effect contract touching the week contributes its own DayStatuses — contract
+    // date ranges never overlap, so no two contracts can ever contribute the same date and
+    // there is nothing to reconcile. Independent of SelectedContract entirely: switching the
+    // banner never adds, removes, or recolors a single badge.
+    private void RebuildMergedDayFloorByDate()
+    {
         // Drafting owns DayFloorByDate while it's active (RefreshDayFloorPreviewsAsync) —
         // an in-effect contract can never overlap the date range being drafted, so this
         // never runs concurrently with a real draft, but skip anyway rather than relying
         // on that invariant holding forever.
         if (IsDraftingContract) return;
 
-        DayFloorByDate = ActiveContract?.DayStatuses.ToDictionary(
-            d => d.Date,
-            d => new DayFloorPreviewViewModel(
-                d.Date, d.CurrentHours, d.IsRestDay ? null : d.FloorHours, d.IsRestDay, d.Timing,
-                ActiveContract.StrictnessRule, ActiveContract.ContractFloorHours.HasValue, d.BonusHours))
-            ?? new Dictionary<DateOnly, DayFloorPreviewViewModel>();
+        var merged = new Dictionary<DateOnly, DayFloorPreviewViewModel>();
+        foreach (var contract in _contractsThisWeek)
+        {
+            foreach (var d in contract.DayStatuses)
+            {
+                merged[d.Date] = new DayFloorPreviewViewModel(
+                    d.Date, d.CurrentHours, d.IsRestDay ? null : d.FloorHours, d.IsRestDay, d.Timing,
+                    contract.StrictnessRule, contract.ContractFloorHours.HasValue, d.BonusHours,
+                    contract.Status);
+            }
+        }
+        DayFloorByDate = merged;
+    }
 
+    // Re-targets the banner text and Cover Deficit options to the other in-effect contract
+    // touching this week — a deliberate switch of what the banner names and what Cover
+    // Deficit acts on, not a change to the calendar's badges (see RebuildMergedDayFloorByDate,
+    // never called here). Cycles through _contractsThisWeek for the rare 3+-in-one-week case
+    // rather than a dedicated picker.
+    [RelayCommand]
+    private async Task SwitchToOtherContractThisWeekAsync()
+    {
+        if (_contractsThisWeek.Count < 2) return;
+        _selectedContractIndex = (_selectedContractIndex + 1) % _contractsThisWeek.Count;
+        SelectedContract = _contractsThisWeek[_selectedContractIndex];
         await RefreshCoverDeficitOptionsAsync();
     }
 
     private async Task RefreshCoverDeficitOptionsAsync()
     {
         CoverDeficitOptions.Clear();
-        if (ActiveContract is { } contract)
+        if (SelectedContract is { } contract)
         {
             var suggestions = await _queryDispatcher.QueryAsync(
                 new GetSuggestedRedemptionPlacementsQuery(contract.Id, _clockService.LocalNow.ToUniversalTime()));
@@ -453,7 +551,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         ResetForm();
 
         _isCreatingRedemption = true;
-        if (ActiveContract?.RedemptionPlacementPolicy == RedemptionPlacementPolicy.CurrentDayOnly)
+        if (SelectedContract?.RedemptionPlacementPolicy == RedemptionPlacementPolicy.CurrentDayOnly)
         {
             var today = DateOnly.FromDateTime(_clockService.LocalNow.Date);
             _redemptionContractStartDate = today;
@@ -461,8 +559,8 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         }
         else
         {
-            _redemptionContractStartDate = ActiveContract?.StartDate;
-            _redemptionContractEndDate = ActiveContract?.EndDate;
+            _redemptionContractStartDate = SelectedContract?.StartDate;
+            _redemptionContractEndDate = SelectedContract?.EndDate;
         }
         OnPropertyChanged(nameof(CanSplitBlock));
         OnPropertyChanged(nameof(CanChangePreset));
@@ -483,7 +581,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private void RequestCancelContract()
     {
-        if (ActiveContract is null) return;
+        if (PopoverActiveContract is null) return;
         CancelContractErrorMessage = null;
         ConfirmCancelContractMessage = "Are you sure you want to cancel this contract? This cannot be undone.";
         IsConfirmCancelContractVisible = true;
@@ -492,9 +590,9 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private async Task ConfirmCancelContractAsync()
     {
-        if (ActiveContract is null) { IsConfirmCancelContractVisible = false; return; }
+        if (PopoverActiveContract is null) { IsConfirmCancelContractVisible = false; return; }
 
-        var result = await _commandDispatcher.DispatchAsync(new BreakNenContractCommand { ContractId = ActiveContract.Id });
+        var result = await _commandDispatcher.DispatchAsync(new BreakNenContractCommand { ContractId = PopoverActiveContract.Id });
         IsConfirmCancelContractVisible = false;
 
         if (!result.Success)
@@ -504,7 +602,8 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         }
 
         IsNenContractPopoverVisible = false;
-        await RefreshActiveContractAsync();
+        await RefreshContractsPopoverAsync();
+        await RefreshContractsPreservingSelectionAsync();
         await LoadWeekAsync();
     }
 
@@ -662,7 +761,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
     private void OnFloorStatusPollTick(object? sender, System.Timers.ElapsedEventArgs e)
     {
-        Dispatcher.UIThread.Post(() => _ = RefreshActiveContractAsync());
+        Dispatcher.UIThread.Post(() => _ = RefreshContractsPreservingSelectionAsync());
     }
 
     private void OnSessionChanged(object? sender, SessionDto? session)
@@ -679,7 +778,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
             // session can move Day Met/deficit, so that refresh stays end-only.
             _ = LoadWeekAsync();
             if (session is null)
-                _ = RefreshActiveContractAsync();
+                _ = RefreshContractsPreservingSelectionAsync();
         });
     }
 
@@ -724,7 +823,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     {
         await LoadPresetsAsync();
         await LoadWeekAsync();
-        await RefreshActiveContractAsync();
+        await RefreshSelectedContractAsync();
     }
 
     [RelayCommand]
@@ -751,7 +850,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         BuildDayHeaders();
         UpdateCurrentTimePosition();
         await LoadWeekAsync();
-        await RefreshActiveContractAsync();
+        await RefreshSelectedContractAsync();
     }
 
     private bool WeekOverlapsDraftRange(DateTime candidateWeekStart)
@@ -1449,7 +1548,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
             if (_redemptionContractStartDate is { } rangeStart && _redemptionContractEndDate is { } rangeEnd
                 && (formDateOnly < rangeStart || formDateOnly > rangeEnd))
             {
-                FormError = ActiveContract?.RedemptionPlacementPolicy == RedemptionPlacementPolicy.CurrentDayOnly
+                FormError = SelectedContract?.RedemptionPlacementPolicy == RedemptionPlacementPolicy.CurrentDayOnly
                     ? $"This contract only allows redemption on the current day ({rangeStart:MMM d})."
                     : $"This must be placed within the contract's date range ({rangeStart:MMM d} – {rangeEnd:MMM d}).";
                 return;
@@ -1525,7 +1624,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     private async Task FinishBlockSavedAsync()
     {
         await LoadWeekAsync();
-        await RefreshActiveContractAsync();
+        await RefreshContractsPreservingSelectionAsync();
         CloseForm();
     }
 
@@ -1618,14 +1717,14 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
             // Nothing persisted yet — bisect whatever the form currently holds, using the
             // same day-rollover resolution Save itself uses so a redemption placement that
             // crosses midnight splits correctly too. No _blocksInWeek entry exists yet
-            // either, so the contract comes from ActiveContract instead (the same source
+            // either, so the contract comes from SelectedContract instead (the same source
             // _redemptionContractStartDate/EndDate were populated from when redemption mode
             // began — see OpenRedemptionCreateFormAsync).
             if (!TryParseFormTime(FormStartTime, out var formStart) || !TryParseFormTime(FormEndTime, out var formEnd)) return;
             var (startUtc, endUtc) = ResolveFormRangeUtc(formStart, formEnd);
             localStart = startUtc.ToLocalTime();
             localEnd = endUtc.ToLocalTime();
-            contractId = ActiveContract?.Id;
+            contractId = SelectedContract?.Id;
         }
         else
         {
@@ -1796,7 +1895,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
         IsSplitDialogVisible = false;
         await LoadWeekAsync();
-        await RefreshActiveContractAsync(); // badge refresh — same mechanism drag-end and form-save now also use
+        await RefreshContractsPreservingSelectionAsync(); // badge refresh — same mechanism drag-end and form-save now also use
         CloseForm();
     }
 
@@ -1937,7 +2036,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         await LoadWeekAsync();
         // Badge/banner refresh — previously only caught up on the next 3s poll tick,
         // which read as a laggy update right after the drag that actually caused it.
-        await RefreshActiveContractAsync();
+        await RefreshContractsPreservingSelectionAsync();
     }
 
     // ── Nen Contract wizard + drafting mode ───────────────────────────────────
@@ -2185,8 +2284,8 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
             ExitDraftingMode();
             await LoadWeekAsync();
-            await RefreshActiveContractAsync();
-            await RefreshScheduledContractsAsync();
+            await RefreshContractsPreservingSelectionAsync();
+            await RefreshContractsPopoverAsync();
         }
         finally
         {
@@ -2212,7 +2311,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         IsConfirmDiscardDraftVisible = false;
         ExitDraftingMode();
         await LoadWeekAsync();
-        await RefreshActiveContractAsync();
+        await RefreshContractsPreservingSelectionAsync();
     }
 
     [RelayCommand]
@@ -2240,19 +2339,22 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        await RefreshScheduledContractsAsync();
+        await RefreshContractsPopoverAsync();
         IsNenContractPopoverVisible = true;
     }
 
     [RelayCommand]
     private void CloseNenContractPopover() => IsNenContractPopoverVisible = false;
 
-    private async Task RefreshScheduledContractsAsync()
+    private async Task RefreshContractsPopoverAsync()
     {
-        var scheduled = await _queryDispatcher.QueryAsync(new GetScheduledNenContractsQuery());
+        var contracts = await _queryDispatcher.QueryAsync(new GetInEffectNenContractsQuery());
+        PopoverActiveContract = contracts.FirstOrDefault(c => c.Status == NenContractStatus.Active);
+
         ScheduledContracts.Clear();
-        foreach (var contract in scheduled)
+        foreach (var contract in contracts.Where(c => c.Status == NenContractStatus.Scheduled))
             ScheduledContracts.Add(contract);
+
         OnPropertyChanged(nameof(HasNoContracts));
     }
 
@@ -2280,7 +2382,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        await RefreshScheduledContractsAsync();
+        await RefreshContractsPopoverAsync();
     }
 
     [RelayCommand]

@@ -121,21 +121,21 @@ public static class HostExtensions
             // reproduces the originally-reported bug: a block missed yesterday must still
             // be coverable today.
             SeedContract(
-                SeedPreset("Redemption Test — Current Day Only", StrictnessRule.DailyFlexibility, RedemptionPlacementPolicy.CurrentDayOnly),
+                SeedPreset("Current Day Only", StrictnessRule.DailyFlexibility, RedemptionPlacementPolicy.CurrentDayOnly),
                 DateOnly.FromDateTime(today.AddDays(-3)), DateOnly.FromDateTime(today.AddDays(7)),
                 new Dictionary<DateOnly, double> { [DateOnly.FromDateTime(today.AddDays(-1))] = 1.0 });
 
             // Contract 2 — starts 8 days out. Jump the debug clock to at least +9 days to
             // make its own Day-1 block count as "missed."
             SeedContract(
-                SeedPreset("Redemption Test — Anywhere In Contract", StrictnessRule.DailyFlexibility, RedemptionPlacementPolicy.AnywhereInContract),
+                SeedPreset("Anywhere In Contract", StrictnessRule.DailyFlexibility, RedemptionPlacementPolicy.AnywhereInContract),
                 DateOnly.FromDateTime(today.AddDays(8)), DateOnly.FromDateTime(today.AddDays(18)),
                 new Dictionary<DateOnly, double> { [DateOnly.FromDateTime(today.AddDays(8))] = 1.0 });
 
             // Contract 3 — starts 19 days out. Jump to at least +20 days. Period strictness
             // is what makes the "move a redemption block to another day" test meaningful.
             SeedContract(
-                SeedPreset("Redemption Test — Period + Move", StrictnessRule.PeriodTimeBudget, RedemptionPlacementPolicy.CurrentDayOnly),
+                SeedPreset("Period + Move", StrictnessRule.PeriodTimeBudget, RedemptionPlacementPolicy.CurrentDayOnly),
                 DateOnly.FromDateTime(today.AddDays(19)), DateOnly.FromDateTime(today.AddDays(29)),
                 new Dictionary<DateOnly, double> { [DateOnly.FromDateTime(today.AddDays(19))] = 1.0 },
                 contractFloor: new ContractFloor(5));
@@ -143,7 +143,7 @@ public static class HostExtensions
             // Contract 4 — starts 30 days out. Jump to at least +31 days. Confirms a
             // redemption block gets no special exemption from Lockdown's immovability.
             SeedContract(
-                SeedPreset("Redemption Test — Lockdown", StrictnessRule.Locked, RedemptionPlacementPolicy.AnywhereInContract),
+                SeedPreset("Lockdown", StrictnessRule.Locked, RedemptionPlacementPolicy.AnywhereInContract),
                 DateOnly.FromDateTime(today.AddDays(30)), DateOnly.FromDateTime(today.AddDays(40)),
                 new Dictionary<DateOnly, double> { [DateOnly.FromDateTime(today.AddDays(30))] = 1.0 });
 
@@ -158,7 +158,7 @@ public static class HostExtensions
             for (var date = floorContractStart; date <= floorContractEnd; date = date.AddDays(1))
                 floorContractPlan[date] = 1.0;
             SeedContract(
-                SeedPreset("Redemption Test — Daily Floor Surplus", StrictnessRule.DailyFlexibility,
+                SeedPreset("Daily Floor Surplus", StrictnessRule.DailyFlexibility,
                     RedemptionPlacementPolicy.AnywhereInContract, dailyFloor: new DailyFloor(1)),
                 floorContractStart, floorContractEnd, floorContractPlan);
 

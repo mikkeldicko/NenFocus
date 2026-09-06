@@ -7,7 +7,7 @@ namespace NenFocus.ViewModels.Components;
 /// Live per-day floor status shown on the Planner, either while drafting a Nen
 /// Contract (rebuilt via ComputePlannedFocusHoursQuery whenever the draft blocks or
 /// the visible week changes) or for an already-sealed/active contract (rebuilt via
-/// GetActiveNenContractQuery's DayStatuses). Not observable — the whole collection is
+/// GetNenContractsForDateRangeQuery's DayStatuses). Not observable — the whole collection is
 /// replaced instead. Timing defaults to Future while drafting (draft blocks can only
 /// ever be placed in the future), so drafting badges always render as "planned"; only
 /// a sealed contract's Today/Past days ever render as "in progress" or "completed".
@@ -23,7 +23,7 @@ namespace NenFocus.ViewModels.Components;
 /// </param>
 /// <param name="IsContractFloorMode">
 /// True only for a Period Time Budget contract using a whole-period ContractFloor
-/// instead of a per-day floor (see ActiveNenContractDto.ContractFloorHours). RequiredFloorHours
+/// instead of a per-day floor (see NenContractRangeViewDto.ContractFloorHours). RequiredFloorHours
 /// still carries a comparison number in this mode — that day's currently-planned hours,
 /// not a real obligation — which is why Past drops the "/planned" half entirely: a day's
 /// shortfall there isn't a boolean pass/fail the way a real floor is, it's "this many
@@ -35,6 +35,15 @@ namespace NenFocus.ViewModels.Components;
 /// from CurrentHours/RequiredFloorHours above, never folded into the floor badge itself.
 /// Zero while drafting (a brand-new contract has no blocks yet to be Bonus to).
 /// </param>
+/// <param name="ContractStatus">
+/// The owning contract's real Status (Scheduled or Active) — null while drafting, same
+/// nullability convention as ContractStrictnessRule. Every day belonging to a Scheduled
+/// (Upcoming) contract renders as a uniform passive grey regardless of anything else about
+/// it (met/unmet/rest) — see DayFloorStatusToBrushConverter — since none of that is
+/// actionable until the contract actually starts. An Active contract's rest day, by
+/// contrast, reads as green ("nothing left to do today"), now that grey means Upcoming
+/// exclusively instead of "rest" generically.
+/// </param>
 public sealed record DayFloorPreviewViewModel(
     DateOnly Date,
     double CurrentHours,
@@ -43,7 +52,8 @@ public sealed record DayFloorPreviewViewModel(
     DayTiming Timing = DayTiming.Future,
     StrictnessRule? ContractStrictnessRule = null,
     bool IsContractFloorMode = false,
-    double BonusHours = 0)
+    double BonusHours = 0,
+    NenContractStatus? ContractStatus = null)
 {
     public bool HasBonus => BonusHours > 0;
     public string BonusLabel => $"+{BonusHours:0.#}h bonus";
