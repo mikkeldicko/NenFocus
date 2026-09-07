@@ -21,7 +21,7 @@ chrome.runtime.onStartup.addListener(injectPollIntoExistingTabs);
 // versions deny outright under Local Network Access ("Permission was denied for this
 // request to access the `loopback` address space") before any CORS response header is
 // even consulted. So poll.js can't call this endpoint directly; it has to ask us to.
-const checkAndReport = async (domain) => {
+const checkDomain = async (domain) => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 500);
 
@@ -31,16 +31,16 @@ const checkAndReport = async (domain) => {
         });
         clearTimeout(timeoutId);
         const data = await response.json();
-
-        if (data.blocked) {
-            fetch(`http://localhost:5005/report?domain=${domain}`).catch(() => { });
-        }
         return !!data.blocked;
     } catch (error) {
         // If the C# app is closed, this will trigger.
         clearTimeout(timeoutId);
         return false;
     }
+};
+
+const reportBlocked = (domain) => {
+    fetch(`http://localhost:5005/report?domain=${domain}`).catch(() => { });
 };
 
 chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
@@ -54,12 +54,15 @@ chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
         if (url.protocol.startsWith('chrome') || url.hostname === "localhost") return;
 
         const domain = url.hostname.replace(/^www\./, '');
-        const blocked = await checkAndReport(domain);
+        const blocked = await checkDomain(domain);
 
         if (blocked) {
             chrome.tabs.update(details.tabId, {
                 url: chrome.runtime.getURL("blocked.html")
             });
+            // A real navigation (typed URL, clicked link) checked against an already-active
+            // block - a genuine attempt to access a blocked resource. Report it.
+            reportBlocked(domain);
         }
     } catch (error) {
         // If the C# app is closed, this will trigger.
@@ -69,10 +72,13 @@ chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
 });
 
 // poll.js (content script) relays its periodic already-open-tab check through here
-// instead of fetching localhost itself - see checkAndReport's comment above for why.
+// instead of fetching localhost itself - see checkDomain's comment above for why.
+// Deliberately never reports: this only ever fires for a page that was already sitting
+// there when a block activated (or briefly mid-load when it did - see
+// DESIGN_GAP_HISTORY.md's Gap 46 write-up), not a fresh attempt to reach it.
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message?.type !== "nenFocusCheck") return false;
 
-    checkAndReport(message.domain).then((blocked) => sendResponse({ blocked }));
+    checkDomain(message.domain).then((blocked) => sendResponse({ blocked }));
     return true; // keep the message channel open for the async sendResponse above
 });

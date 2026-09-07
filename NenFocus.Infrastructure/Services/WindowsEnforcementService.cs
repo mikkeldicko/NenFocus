@@ -68,7 +68,12 @@ public sealed class WindowsEnforcementService : IEnforcementService, IDisposable
 
             if (_blockedProcessNames.Count > 0)
             {
-                KillBlockedProcessesImmediate();
+                // This first sweep catches apps that were already running before/when the
+                // block activated - the app equivalent of an already-open browser tab. That's
+                // not an attempt to access something blocked, just something ambiently caught
+                // by a new policy; the process-kill timer below is what catches a genuine
+                // relaunch attempt made *during* the active block, which does count.
+                KillBlockedProcessesImmediate(reportAttempts: false);
                 _processKillTimer.Start();
             }
             else
@@ -93,7 +98,7 @@ public sealed class WindowsEnforcementService : IEnforcementService, IDisposable
         finally { _lock.Release(); }
     }
 
-    private void KillBlockedProcessesImmediate()
+    private void KillBlockedProcessesImmediate(bool reportAttempts)
     {
         var processes = Process.GetProcesses();
         foreach (var p in processes)
@@ -108,7 +113,7 @@ public sealed class WindowsEnforcementService : IEnforcementService, IDisposable
                 string? filePath = GetProcessPath(p);
                 if (string.IsNullOrEmpty(filePath) || IsSystemProtected(filePath)) continue;
 
-                if (_currentPolicy?.ActiveSessionId != null)
+                if (reportAttempts && _currentPolicy?.ActiveSessionId != null)
                 {
                     _ = _attemptTracker.RecordAppBlockedAsync(_currentPolicy.ActiveSessionId.Value, pName);
                 }
@@ -308,6 +313,8 @@ public sealed class WindowsEnforcementService : IEnforcementService, IDisposable
         _lock.Dispose();
     }
 
+    // Anything this ongoing loop catches is a relaunch attempted while the block was already
+    // active - a genuine attempt, unlike ApplyPolicyAsync's initial sweep above.
     private void OnProcessKillTimerElapsed(object? sender, System.Timers.ElapsedEventArgs e)
-    => KillBlockedProcessesImmediate();
+    => KillBlockedProcessesImmediate(reportAttempts: true);
 }
