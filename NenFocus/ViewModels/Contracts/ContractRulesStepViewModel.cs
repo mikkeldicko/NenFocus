@@ -8,6 +8,7 @@ using CommunityToolkit.Mvvm.Input;
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.GetAllContractPresets;
+using NenFocus.Converters;
 using NenFocus.Domain.Enums;
 
 namespace NenFocus.ViewModels.Contracts;
@@ -88,13 +89,12 @@ public partial class ContractRulesStepViewModel : ViewModelBase
         OnPropertyChanged(nameof(SelectedPresetRedemptionPlacementLabel));
     }
 
-    // Read-only confirmation text for the picked preset — mirrors the exact formatting
-    // ContractWizardViewModel's own Review-step summary strings already use.
-    public string SelectedPresetFloorLabel => SelectedPreset?.DailyFloorHours is { } floor
-        ? $"{floor:0.##}h / day" : "Derived from scheduled blocks";
+    // Read-only confirmation text for the picked preset — shares its formatters with
+    // ContractWizardViewModel's own Review-step summary strings, so the two can't drift apart.
+    public string SelectedPresetFloorLabel => DailyFloorToLabelConverter.FormatFloor(SelectedPreset?.DailyFloorHours);
 
-    public string SelectedPresetWorkHoursLabel => SelectedPreset?.WorkHoursStart is { } start && SelectedPreset?.WorkHoursEnd is { } end
-        ? $"{start:HH:mm} – {end:HH:mm}" : "No constraint";
+    public string SelectedPresetWorkHoursLabel =>
+        WorkHoursRangeToLabelConverter.FormatRange(SelectedPreset?.WorkHoursStart, SelectedPreset?.WorkHoursEnd);
 
     public string SelectedPresetCancellationLabel =>
         (SelectedPreset?.AllowCancellation ?? false) ? "Cancellation allowed" : "No cancellation";

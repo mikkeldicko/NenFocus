@@ -13,7 +13,12 @@ public sealed class MinutesToStringConverter : IValueConverter
     public static readonly MinutesToStringConverter Instance = new();
 
     public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
-        => value is double minutes ? FormatMinutes(minutes) : string.Empty;
+        => value switch
+        {
+            double minutes => FormatMinutes(minutes),
+            int minutes => FormatMinutes(minutes),
+            _ => string.Empty
+        };
 
     /// <summary>Plain static entry point for non-XAML callers (e.g. a ViewModel string
     /// property) that need the exact same format without going through IValueConverter —

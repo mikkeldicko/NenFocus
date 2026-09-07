@@ -6,6 +6,10 @@
              x:Class="NenFocus.Views.HatsuPageView"
              Background="Transparent">
 
+	<UserControl.Resources>
+		<conv:DateTimeToStringConverter x:Key="DateTimeConverter"/>
+	</UserControl.Resources>
+
 	<UserControl.Styles>
 		<Style Selector="Button.chip">
 			<Setter Property="Background" Value="#FFFFFF"/>
@@ -67,15 +71,18 @@
                             CornerRadius="8"
                             Padding="16,14">
 						<StackPanel Spacing="6">
-							<TextBlock Text="{Binding PlannedTimeRangeLabel}"
-                                       FontSize="22"
+							<TextBlock FontSize="22"
                                        FontWeight="Light"
-                                       Foreground="#1A1A2E"/>
+                                       Foreground="#1A1A2E">
+								<Run Text="{Binding PlannedRangeStartLocal, Converter={StaticResource DateTimeConverter}, ConverterParameter='HH:mm', Mode=OneWay}"/>
+								<Run Text=" – "/>
+								<Run Text="{Binding PlannedRangeEndLocal, Converter={StaticResource DateTimeConverter}, ConverterParameter='HH:mm', Mode=OneWay}"/>
+							</TextBlock>
 							<StackPanel Orientation="Horizontal" Spacing="8">
 								<Border Background="#E8E8F4"
                                         CornerRadius="4"
                                         Padding="8,3">
-									<TextBlock Text="{Binding PlannedDurationLabel}"
+									<TextBlock Text="{Binding PlannedSchedule.TotalMinutes, Converter={x:Static conv:MinutesToStringConverter.Instance}}"
                                                FontSize="11"
                                                Foreground="#555566"/>
 								</Border>

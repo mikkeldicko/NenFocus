@@ -6,6 +6,7 @@ using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.CheckNenContractDateRangeOverlap;
 using NenFocus.Application.Queries.GetAllContractPresets;
+using NenFocus.Converters;
 using NenFocus.Domain.Enums;
 using NenFocus.ViewModels.Components;
 
@@ -187,13 +188,11 @@ public partial class ContractWizardViewModel : ViewModelBase
                 EditingContractId = _editingContract?.Id
             },
             summaryName: _name,
-            summaryDateRange: $"{_startDate:MMM d, yyyy} – {_endDate:MMM d, yyyy}",
+            summaryDateRange: DateRangeToLabelConverter.FormatRange(_startDate, _endDate),
             summaryMode: modeLabel,
             summaryStrictness: FriendlyStrictnessLabel(strictness),
-            summaryFloor: fixedFloor.HasValue ? $"{fixedFloor.Value:0.##}h / day" : "Derived from scheduled blocks",
-            summaryWorkHours: workHoursStart.HasValue && workHoursEnd.HasValue
-                ? $"{workHoursStart:HH:mm} – {workHoursEnd:HH:mm}"
-                : "No constraint",
+            summaryFloor: DailyFloorToLabelConverter.FormatFloor(fixedFloor),
+            summaryWorkHours: WorkHoursRangeToLabelConverter.FormatRange(workHoursStart, workHoursEnd),
             summaryRestDays: restDays.Count > 0 ? string.Join(", ", restDays) : "None",
             summaryRedemptionPlacement: redemptionPlacementPolicy == RedemptionPlacementPolicy.CurrentDayOnly
                 ? "Current day only"

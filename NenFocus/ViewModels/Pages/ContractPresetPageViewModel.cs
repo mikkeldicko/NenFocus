@@ -11,6 +11,7 @@ using NenFocus.Application.Queries.GetAllContractPresets;
 using NenFocus.Application.UseCases.ContractPresets.CreateContractPreset;
 using NenFocus.Application.UseCases.ContractPresets.DeleteContractPreset;
 using NenFocus.Application.UseCases.ContractPresets.UpdateContractPreset;
+using NenFocus.Converters;
 using NenFocus.Domain.Enums;
 
 namespace NenFocus.ViewModels.Pages;
@@ -31,8 +32,8 @@ public partial class ContractPresetCardViewModel : ViewModelBase
     public bool AllowCancellation { get; }
     public RedemptionPlacementPolicy RedemptionPlacementPolicy { get; }
 
-    public string FloorLabel => DailyFloorHours is { } floor ? $"{floor:0.##}h / day" : "Derived from scheduled blocks";
-    public string WorkHoursLabel => WorkHoursStart is { } s && WorkHoursEnd is { } e ? $"{s:HH:mm} – {e:HH:mm}" : "No constraint";
+    public string FloorLabel => DailyFloorToLabelConverter.FormatFloor(DailyFloorHours);
+    public string WorkHoursLabel => WorkHoursRangeToLabelConverter.FormatRange(WorkHoursStart, WorkHoursEnd);
     public string CancellationLabel => AllowCancellation ? "Cancellation allowed" : "No cancellation";
     public string RedemptionPlacementLabel => RedemptionPlacementPolicy == RedemptionPlacementPolicy.CurrentDayOnly
         ? "Redemption: current day only"

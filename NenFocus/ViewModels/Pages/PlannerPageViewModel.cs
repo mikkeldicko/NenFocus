@@ -1244,7 +1244,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
                 {
                     var otherStart = other.Start.ToLocalTime();
                     var otherEnd = other.End.ToLocalTime();
-                    return $"{label} overlaps an existing block from {otherStart:HH:mm} to {otherEnd:HH:mm}.";
+                    return $"{label} overlaps an existing block ({DateTimeRangeToLabelConverter.FormatRange24Hour(otherStart, otherEnd)}).";
                 }
             }
             return null;
@@ -1265,7 +1265,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
         var workHours = new WorkHours(wh.Start, wh.End);
         var dayDate = FormDate.Date;
-        var windowText = $"{wh.Start:h:mm tt} – {wh.End:h:mm tt}";
+        var windowText = WorkHoursRangeToLabelConverter.FormatKnownWindow12Hour(wh.Start, wh.End);
 
         if (!workHours.ContainsRange(dayDate.Add(firstStart), dayDate.Add(firstEnd)))
             return $"First Block falls outside the contract's Work Hours ({windowText}).";
@@ -1549,8 +1549,8 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
                 && (formDateOnly < rangeStart || formDateOnly > rangeEnd))
             {
                 FormError = SelectedContract?.RedemptionPlacementPolicy == RedemptionPlacementPolicy.CurrentDayOnly
-                    ? $"This contract only allows redemption on the current day ({rangeStart:MMM d})."
-                    : $"This must be placed within the contract's date range ({rangeStart:MMM d} – {rangeEnd:MMM d}).";
+                    ? $"This contract only allows redemption on the current day ({DateRangeToLabelConverter.FormatDateShort(rangeStart)})."
+                    : $"This must be placed within the contract's date range ({DateRangeToLabelConverter.FormatRangeShort(rangeStart, rangeEnd)}).";
                 return;
             }
         }
@@ -2172,13 +2172,13 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
             var startDate = DateOnly.FromDateTime(localStart);
             var endDate = DateOnly.FromDateTime(localEnd);
             if (startDate < _draftRules.StartDate || endDate > _draftRules.EndDate)
-                return $"Blocks must be placed within the contract's date range ({_draftRules.StartDate:MMM d} – {_draftRules.EndDate:MMM d}).";
+                return $"Blocks must be placed within the contract's date range ({DateRangeToLabelConverter.FormatRangeShort(_draftRules.StartDate, _draftRules.EndDate)}).";
 
             if (isFocus && _draftRules.WorkHoursStart is { } workHoursStart && _draftRules.WorkHoursEnd is { } workHoursEnd)
             {
                 var workHours = new WorkHours(workHoursStart, workHoursEnd);
                 if (!workHours.ContainsRange(localStart, localEnd))
-                    return $"This block falls outside the contract's Work Hours ({workHoursStart:h:mm tt} – {workHoursEnd:h:mm tt}).";
+                    return $"This block falls outside the contract's Work Hours ({WorkHoursRangeToLabelConverter.FormatKnownWindow12Hour(workHoursStart, workHoursEnd)}).";
             }
         }
 

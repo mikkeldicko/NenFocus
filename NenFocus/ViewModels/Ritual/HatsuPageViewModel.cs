@@ -21,25 +21,13 @@ public partial class HatsuPageViewModel : ViewModelBase
     public FocusBlockSchedule? PlannedSchedule { get; }
     public bool IsPlannedMode => PlannedSchedule is not null;
 
-    // Formatted as "14:00 – 15:00"
-    public string PlannedTimeRangeLabel => PlannedSchedule is { } s
-        ? $"{s.Start.ToLocalTime():HH:mm} – {s.End.ToLocalTime():HH:mm}"
-        : string.Empty;
-
-    // Total block duration (e.g. "1 h", "30 min") — shown for context
-    public string PlannedDurationLabel
-    {
-        get
-        {
-            if (PlannedSchedule is null) return string.Empty;
-            var total = PlannedSchedule.TotalMinutes;
-            var h = total / 60;
-            var m = total % 60;
-            if (h == 0) return $"{m} min";
-            if (m == 0) return $"{h} h";
-            return $"{h} h {m} min";
-        }
-    }
+    // Raw local-time values only — actual "HH:mm"/"1h 30m" string formatting happens in
+    // DateTimeToStringConverter/MinutesToStringConverter in the View, not here (ViewModel
+    // Forbidden Zone — no display formatting in a ViewModel). ToLocalTime() is a data
+    // conversion, not formatting, mirroring the same precedent RitualShellViewModel already
+    // uses for its own late-block Start/End.
+    public DateTime? PlannedRangeStartLocal => PlannedSchedule?.Start.ToLocalTime();
+    public DateTime? PlannedRangeEndLocal => PlannedSchedule?.End.ToLocalTime();
 
     public static int[] HourOptions { get; } = { 0, 1, 2, 3, 4, 5, 6, 7, 8 };
     public static int[] MinuteOptions { get; } = { 0, 5, 10, 15, 20, 30, 45 };
@@ -56,7 +44,7 @@ public partial class HatsuPageViewModel : ViewModelBase
 
     // In planned mode this is evaluated fresh at the moment Start is clicked.
     public int TotalMinutes => IsPlannedMode
-        ? Math.Max(1, (int)(PlannedSchedule!.End - _clock.UtcNow).TotalMinutes)
+        ? PlannedSchedule!.RemainingMinutes(_clock.UtcNow)
         : SelectedHours * 60 + SelectedMinutes;
     public bool ShowZeroError => !IsPlannedMode && TotalMinutes == 0;
 
