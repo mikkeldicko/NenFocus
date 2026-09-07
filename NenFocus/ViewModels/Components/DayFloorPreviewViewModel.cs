@@ -1,4 +1,5 @@
 using System;
+using NenFocus.Converters;
 using NenFocus.Domain.Enums;
 
 namespace NenFocus.ViewModels.Components;
@@ -66,7 +67,7 @@ public sealed record DayFloorPreviewViewModel(
     bool IsMet = true)
 {
     public bool HasBonus => BonusHours > 0;
-    public string BonusLabel => $"+{BonusHours:0.#}h bonus";
+    public string BonusLabel => $"+{HoursToStringConverter.FormatHours(BonusHours)} bonus";
 
     // Unified across every strictness rule: a sealed contract's future day never needs a
     // met/unmet comparison shown, since it's provably always at-or-above its floor by the
@@ -88,10 +89,10 @@ public sealed record DayFloorPreviewViewModel(
     public string Label => IsRestDay
         ? "Rest"
         : IsContractFloorMode && Timing == DayTiming.Past
-            ? $"{CurrentHours:0.#}h"
+            ? HoursToStringConverter.FormatHours(CurrentHours)
             : ShowSimplifiedFuture
-                ? $"{CurrentHours:0.#}h"
+                ? HoursToStringConverter.FormatHours(CurrentHours)
                 : RequiredFloorHours.HasValue
-                    ? $"{CurrentHours:0.#}h / {RequiredFloorHours.Value:0.#}h"
-                    : $"{CurrentHours:0.#}h";
+                    ? $"{HoursToStringConverter.FormatHours(CurrentHours)} / {HoursToStringConverter.FormatHours(RequiredFloorHours.Value)}"
+                    : HoursToStringConverter.FormatHours(CurrentHours);
 }
