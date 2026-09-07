@@ -117,4 +117,30 @@ public class FocusBlockTests
 
         FocusBlock.WasRedemptionCoverageMeaningfullyCapped(requestedEnd, cappedEnd).Should().BeTrue();
     }
+
+    [Fact]
+    public void RawDeficitMinutes_NothingCredited_ReturnsFullScheduledDuration()
+    {
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, Start.AddHours(1));
+
+        block.RawDeficitMinutes(creditedMinutes: 0).Should().Be(60);
+    }
+
+    [Fact]
+    public void RawDeficitMinutes_PartiallyCredited_ReturnsShortfallOnly()
+    {
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, Start.AddHours(1));
+
+        block.RawDeficitMinutes(creditedMinutes: 20).Should().Be(40);
+    }
+
+    [Fact]
+    public void RawDeficitMinutes_FullyCredited_ReturnsZero_NeverNegative()
+    {
+        // Credited can legitimately exceed the scheduled window (e.g. a session that ran
+        // past the block's own end) — the deficit floors at zero rather than going negative.
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, Start.AddHours(1));
+
+        block.RawDeficitMinutes(creditedMinutes: 75).Should().Be(0);
+    }
 }

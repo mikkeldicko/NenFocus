@@ -157,13 +157,24 @@ public class Session : AggregateRoot
     /// (naturally or ended early) rather than null-checking the raw field themselves.</summary>
     public bool HasEnded => EndedAt.HasValue;
 
+    /// <summary>
+    /// Floored to whole minutes — the single source every accounting consumer (credited
+    /// focus time, the deficit ledger, completed/bonus hours, Post-Session's duration,
+    /// session history) reads elapsed time from, so none of them ever have to reconcile
+    /// sub-minute click-timing noise from real StartedAt/EndedAt timestamps against each
+    /// other. Deliberately not used by any live, second-by-second UI display — those read
+    /// StartedAt/EndAt directly and tick on their own; this method exists purely for "how
+    /// much does this count for," where a whole minute is already the smallest unit that
+    /// means anything.
+    /// </summary>
     public TimeSpan? GetElapsedTime(DateTime asOf)
     {
         // A missed session never ran — its StartedAt/EndedAt hold the scheduled
         // window (inherited from the originating block), not real elapsed time.
         if (Status == SessionStatus.Missed) return TimeSpan.Zero;
         if (StartedAt is null) return null;
-        return (EndedAt ?? asOf) - StartedAt.Value;
+        var raw = (EndedAt ?? asOf) - StartedAt.Value;
+        return TimeSpan.FromMinutes(Math.Floor(raw.TotalMinutes));
     }
 
     public TimeSpan? GetRemainingTime(DateTime asOf)

@@ -44,6 +44,15 @@ namespace NenFocus.ViewModels.Components;
 /// contrast, reads as green ("nothing left to do today"), now that grey means Upcoming
 /// exclusively instead of "rest" generically.
 /// </param>
+/// <param name="IsMet">
+/// Passed in, never re-derived from CurrentHours/RequiredFloorHours here — for a sealed/
+/// active contract this is NenContractDayStatusDto.IsMet exactly as GetNenContractsForDateRangeQueryHandler
+/// already decided; the ViewModel trusting a second, independently-computed copy of the same
+/// comparison was itself a bug risk (the two could silently disagree). Drafting has no
+/// Application-layer answer to defer to, so RefreshDayFloorPreviewsAsync computes it locally
+/// and passes it in like every other consumer. Defaults to true only so a caller that
+/// genuinely has no floor to compare against (IsRestDay) doesn't need to pass anything.
+/// </param>
 public sealed record DayFloorPreviewViewModel(
     DateOnly Date,
     double CurrentHours,
@@ -53,13 +62,11 @@ public sealed record DayFloorPreviewViewModel(
     StrictnessRule? ContractStrictnessRule = null,
     bool IsContractFloorMode = false,
     double BonusHours = 0,
-    NenContractStatus? ContractStatus = null)
+    NenContractStatus? ContractStatus = null,
+    bool IsMet = true)
 {
     public bool HasBonus => BonusHours > 0;
     public string BonusLabel => $"+{BonusHours:0.#}h bonus";
-
-
-    public bool IsMet => IsRestDay || RequiredFloorHours is null || CurrentHours >= RequiredFloorHours.Value;
 
     // Unified across every strictness rule: a sealed contract's future day never needs a
     // met/unmet comparison shown, since it's provably always at-or-above its floor by the

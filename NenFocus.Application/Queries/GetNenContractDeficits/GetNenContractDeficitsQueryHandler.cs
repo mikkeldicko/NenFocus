@@ -82,7 +82,7 @@ public sealed class GetNenContractDeficitsQueryHandler
                 continue;
 
             var scheduledMinutes = block.GetDuration().TotalMinutes;
-            var rawDeficit = Math.Max(0, scheduledMinutes - creditedMinutes);
+            var rawDeficit = block.RawDeficitMinutes(creditedMinutes);
 
             // Rule 13's second half: a covering block's RedemptionEntry only counts for as
             // much as that block actually delivered. Still-open (null outcome, scheduled
@@ -106,18 +106,18 @@ public sealed class GetNenContractDeficitsQueryHandler
                     };
                 });
 
-            // A deficit at or below this many minutes is treated as fully honored and
-            // excluded from the ledger entirely — no Cover Deficit prompt, no redemption
-            // block ever required for it. This is a deliberate product write-off, not a
-            // precision guard: below this grain, requiring an actual Ritual + redemption
-            // tile just to close out a handful of seconds is more friction than the
-            // shortfall is worth (DESIGN_GAP_HISTORY.md Gap 44). Since Gap 45,
-            // CreditedFocusMinutes above already forgives a sub-minute early-end shortfall
-            // outright, so rawDeficit is usually already 0 by the time this check runs —
-            // this still matters for a residual left after partial redemption coverage from
-            // another block, or any other path that can leave a small remainder.
+            // No product-level write-off any more (Gap 44 removed) — every whole-minute
+            // shortfall is a real, visible deficit, recoverable through Cover Deficit down
+            // to the last minute. What's left is a pure floating-point safety guard, several
+            // orders of magnitude below a minute: MinutesCovered round-trips through a
+            // DateTime's tick quantization, which can leave a microscopic (sub-microsecond)
+            // residual behind for a redemption that visibly, functionally fully covers its
+            // target. That residual isn't a real deficit and must never keep Cover Deficit
+            // alive forever — a completely different concern from the removed 1-minute
+            // product forgiveness, so it gets a completely different-sized threshold.
+            const double floatingPointEpsilonMinutes = 1e-6;
             var remainingDeficit = Math.Max(0, rawDeficit - coveredMinutes);
-            if (remainingDeficit <= FocusBlockOutcomeClassifier.MinimumMeaningfulDeficitMinutes)
+            if (remainingDeficit <= floatingPointEpsilonMinutes)
                 continue;
 
             deficits.Add(new FocusBlockDeficitDto

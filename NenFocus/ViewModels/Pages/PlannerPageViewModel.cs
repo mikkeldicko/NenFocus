@@ -480,7 +480,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
                 merged[d.Date] = new DayFloorPreviewViewModel(
                     d.Date, d.CurrentHours, d.IsRestDay ? null : d.FloorHours, d.IsRestDay, d.Timing,
                     contract.StrictnessRule, contract.ContractFloorHours.HasValue, d.BonusHours,
-                    contract.Status);
+                    contract.Status, d.IsMet);
             }
         }
         DayFloorByDate = merged;
@@ -2210,8 +2210,9 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
             double? requiredFloor = _draftRules.FixedDailyFloorHours.HasValue && !isRestDay
                 ? _draftRules.FixedDailyFloorHours
                 : null;
+            var isMet = isRestDay || requiredFloor is null || scheduled >= requiredFloor.Value;
 
-            byDate[date] = new DayFloorPreviewViewModel(date, scheduled, requiredFloor, isRestDay);
+            byDate[date] = new DayFloorPreviewViewModel(date, scheduled, requiredFloor, isRestDay, IsMet: isMet);
         }
 
         DayFloorByDate = byDate;

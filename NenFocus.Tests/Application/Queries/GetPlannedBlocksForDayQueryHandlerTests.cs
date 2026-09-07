@@ -153,50 +153,6 @@ public class GetPlannedBlocksForDayQueryHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_FocusBlockEndedEarlyBySubMinuteShortfall_EndedEarlyGraceSecondsSet()
-    {
-        var sessionEndedAt = End.AddSeconds(-40);
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End);
-        block.MarkRitualCompleted(Start);
-        block.MarkSessionEnded(sessionEndedAt);
-        _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
-        _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
-
-        var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
-
-        var dto = result.Should().ContainSingle().Subject;
-        dto.Outcome.Should().Be(FocusBlockOutcome.EndedEarly); // tile badge unaffected
-        dto.End.Should().Be(sessionEndedAt); // display window still trimmed to the real early end
-        dto.EndedEarlyGraceSeconds.Should().Be(40);
-    }
-
-    [Fact]
-    public async Task HandleAsync_FocusBlockEndedEarlyByMoreThanAMinute_EndedEarlyGraceSecondsNull()
-    {
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End);
-        block.MarkRitualCompleted(Start);
-        block.MarkSessionEnded(Start.AddMinutes(20));
-        _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
-        _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
-
-        var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
-
-        result.Should().ContainSingle().Subject.EndedEarlyGraceSeconds.Should().BeNull();
-    }
-
-    [Fact]
-    public async Task HandleAsync_FocusBlockNotEndedEarly_EndedEarlyGraceSecondsNull()
-    {
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End);
-        _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
-        _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
-
-        var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
-
-        result.Should().ContainSingle().Subject.EndedEarlyGraceSeconds.Should().BeNull();
-    }
-
-    [Fact]
     public async Task HandleAsync_CancelledBlock_ExcludedFromResults()
     {
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End);

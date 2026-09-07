@@ -74,15 +74,6 @@ public sealed class GetPlannedBlocksForDayQueryHandler
                 ? sessionEndedAt
                 : b.End;
 
-            // Null unless the session ended early by a shortfall small enough to be
-            // forgiven outright (Gap 45) — the tile's display window above stays trimmed to
-            // the real early end regardless (that's the fact this note explains), only the
-            // credited-hours math treats it as full duration.
-            var endedEarlyGraceSeconds = focusBlock?.SessionEndedAt is { } endedAt && endedAt < b.End
-                && (b.End - endedAt).TotalMinutes <= FocusBlockOutcomeClassifier.MinimumMeaningfulDeficitMinutes
-                ? (b.End - endedAt).TotalSeconds
-                : (double?)null;
-
             // Bonus is only meaningful for an unlinked block — a committed or redeemed block
             // (ContractId set) already has its one true contract. Contract date ranges never
             // overlap, so at most one contract can ever cover a given Start date.
@@ -118,8 +109,7 @@ public sealed class GetPlannedBlocksForDayQueryHandler
                     : null,
                 WasStartedLate = wasStartedLate,
                 ContractBadge = contractBadge,
-                BonusContractName = bonusContract?.Name,
-                EndedEarlyGraceSeconds = endedEarlyGraceSeconds
+                BonusContractName = bonusContract?.Name
             };
         }).ToList();
     }

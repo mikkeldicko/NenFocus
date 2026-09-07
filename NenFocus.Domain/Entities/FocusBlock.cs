@@ -143,11 +143,12 @@ public sealed class FocusBlock : PlannedBlock
     /// margin every Cover Deficit suggestion is deliberately over-sized by (see
     /// GetSuggestedRedemptionPlacementsQueryHandler's own whole-minute rounding, required by
     /// the same MODULE_STANDARDS.md rule referenced above). Without this, "shortened to
-    /// match" would fire on almost every ordinary Cover Deficit save, since a real-world
-    /// deficit is essentially never an exact whole number of minutes. Shares
-    /// FocusBlockOutcomeClassifier.MinimumMeaningfulDeficitMinutes with the deficit ledger's
-    /// own write-off and CreditedWindow's own sub-minute-shortfall forgiveness — one number,
-    /// one meaning, everywhere "is this shortfall worth caring about" gets asked.
+    /// match" would fire on that deliberate safety margin every ordinary Cover Deficit save.
+    /// Shares FocusBlockOutcomeClassifier.MinimumMeaningfulDeficitMinutes purely as a
+    /// UI-notice threshold now — the deficit ledger's own write-off and CreditedWindow's
+    /// sub-minute-shortfall forgiveness this constant used to also gate were both removed
+    /// (Gap 44/45): every deficit is now whole minutes and fully recoverable, no write-off
+    /// anywhere. This is the one remaining consumer of the constant.
     /// </summary>
     public static bool WasRedemptionCoverageMeaningfullyCapped(DateTime requestedEnd, DateTime cappedEnd)
         => (requestedEnd - cappedEnd).TotalMinutes >= FocusBlockOutcomeClassifier.MinimumMeaningfulDeficitMinutes;
@@ -166,4 +167,20 @@ public sealed class FocusBlock : PlannedBlock
     public bool CanContributeOwnDeficit(FocusBlockOutcome? outcome) =>
         outcome is FocusBlockOutcome.Missed or FocusBlockOutcome.StartedLate or FocusBlockOutcome.EndedEarly
         && RedemptionEntries.Count == 0;
+
+    /// <summary>
+    /// How much of this block's own scheduled duration was never delivered — this block's
+    /// side of the deficit ledger, independent of how many other blocks have since attempted
+    /// to redeem it. Fixed forever once this block has concluded (RitualCompletedAt/
+    /// SessionEndedAt are set-once fields), so callers can treat it as a stable, cacheable
+    /// fact rather than something that drifts as later redemption attempts come and go.
+    /// Pure and self-contained (this block's own Start/End plus a credited-minutes figure the
+    /// caller already resolved via IFocusBlockOutcomeClassifier), the same justification
+    /// already used for CanContributeOwnDeficit/WasRedemptionCoverageMeaningfullyCapped — the
+    /// rule belongs with the data it's about, not re-derived inline by every caller that needs
+    /// it (GetNenContractDeficitsQueryHandler and GetNenContractsForDateRangeQueryHandler both
+    /// need this exact number and must never be allowed to disagree about what it means).
+    /// </summary>
+    public double RawDeficitMinutes(double creditedMinutes) =>
+        Math.Max(0, GetDuration().TotalMinutes - creditedMinutes);
 }

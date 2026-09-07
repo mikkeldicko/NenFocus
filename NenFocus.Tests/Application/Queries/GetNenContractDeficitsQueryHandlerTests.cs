@@ -413,10 +413,12 @@ public class GetNenContractDeficitsQueryHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_DeficitAtOneMinuteWriteOffThreshold_Excluded()
+    public async Task HandleAsync_DeficitOfExactlyOneMinute_Surfaces()
     {
-        // A deficit at or below the 1-minute write-off is a deliberate product forgiveness,
-        // not tick noise — no Cover Deficit prompt should ever appear for it.
+        // Gap 44's 1-minute write-off is gone — every whole-minute shortfall is a real,
+        // visible deficit now, recoverable through Cover Deficit down to the last minute.
+        // A clean 1-minute deficit is the smallest one that can exist once credited minutes
+        // are floored at the source, and it must surface, not be silently forgiven.
         var block = MissedBlock(Now.AddHours(-3), Now.AddHours(-1)); // 2-hour block, 120 min
         _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
         _classifier.Classify(block.Start, block.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Now).Returns(FocusBlockOutcome.EndedEarly);
@@ -429,7 +431,7 @@ public class GetNenContractDeficitsQueryHandlerTests
 
         var result = await CreateHandler().HandleAsync(new GetNenContractDeficitsQuery(ContractId), CancellationToken.None);
 
-        result.Should().BeEmpty();
+        result.Should().ContainSingle().Subject.RemainingDeficitMinutes.Should().Be(1);
     }
 
     [Fact]

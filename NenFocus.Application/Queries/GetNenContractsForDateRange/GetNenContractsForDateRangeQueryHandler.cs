@@ -6,6 +6,8 @@ using NenFocus.Application.Queries.GetNenContractCompletedFocusHours;
 using NenFocus.Application.Queries.GetNenContractDeficits;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
+using NenFocus.Domain.Services;
+using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Application.Queries.GetNenContractsForDateRange;
 
@@ -17,6 +19,9 @@ public sealed class GetNenContractsForDateRangeQueryHandler
     private readonly IQueryHandler<GetNenContractCompletedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> _completedHours;
     private readonly IQueryHandler<ComputePlannedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> _plannedHours;
     private readonly IQueryHandler<GetNenContractBonusFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> _bonusHours;
+    private readonly IPlannedBlockRepository _blocks;
+    private readonly ISessionRepository _sessions;
+    private readonly IFocusBlockOutcomeClassifier _classifier;
     private readonly ISystemClock _clock;
 
     public GetNenContractsForDateRangeQueryHandler(
@@ -25,6 +30,9 @@ public sealed class GetNenContractsForDateRangeQueryHandler
         IQueryHandler<GetNenContractCompletedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> completedHours,
         IQueryHandler<ComputePlannedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> plannedHours,
         IQueryHandler<GetNenContractBonusFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> bonusHours,
+        IPlannedBlockRepository blocks,
+        ISessionRepository sessions,
+        Domain.Services.IFocusBlockOutcomeClassifier classifier,
         ISystemClock clock)
     {
         _contracts = contracts;
@@ -32,6 +40,9 @@ public sealed class GetNenContractsForDateRangeQueryHandler
         _completedHours = completedHours;
         _plannedHours = plannedHours;
         _bonusHours = bonusHours;
+        _blocks = blocks;
+        _sessions = sessions;
+        _classifier = classifier;
         _clock = clock;
     }
 
@@ -81,6 +92,7 @@ public sealed class GetNenContractsForDateRangeQueryHandler
 
         var plannedHoursByDay = await _plannedHours.HandleAsync(
             new ComputePlannedFocusHoursQuery(contract.Id, DraftFocusBlockRanges: []), cancellationToken);
+        var redemptionDedupAdjustmentByDay = await ComputeRedemptionDedupAdjustmentByDayAsync(contract, cancellationToken);
         var bonusHoursByDay = await _bonusHours.HandleAsync(
             new GetNenContractBonusFocusHoursQuery(contract.Id), cancellationToken);
 
@@ -96,7 +108,17 @@ public sealed class GetNenContractsForDateRangeQueryHandler
         for (var date = contract.StartDate; date <= contract.EndDate; date = date.AddDays(1))
         {
             var timing = date == today ? DayTiming.Today : date < today ? DayTiming.Past : DayTiming.Future;
-            var plannedForDay = plannedHoursByDay.GetValueOrDefault(date);
+
+            // Redemption-aware, not a raw scheduled-span sum: a redemption block that ended
+            // early (or was outright missed) never trims its own End, so the raw sum would
+            // keep counting its full original claim *and* whatever a later block claims to
+            // cover the very same leftover — double-booking one deficit. The adjustment below
+            // collapses same-day, same-missed-block claims down to that missed block's own
+            // settled deficit; a retry on a *different* day is deliberately left alone (each
+            // day is its own historical record of what was scheduled there, not retroactively
+            // rewritten once a leftover is redeemed elsewhere).
+            var plannedForDay = plannedHoursByDay.GetValueOrDefault(date)
+                + redemptionDedupAdjustmentByDay.GetValueOrDefault(date);
 
             // Live, not a Seal-time snapshot: completedHoursByDay/plannedHoursByDay already
             // sum every currently contract-linked (committed or redemption) block's hours
@@ -119,12 +141,19 @@ public sealed class GetNenContractsForDateRangeQueryHandler
             var hasAdHocFloor = !isContractFloorMode && committedFloor is null && plannedForDay > 0;
             var isRestDay = !isContractFloorMode && committedFloor is null && !hasAdHocFloor;
 
+            // Every "is this met" decision — real committed floor, ad-hoc floor, or Period
+            // Time Budget's live period-total comparison — now funnels through the exact
+            // same Domain method, DailyFloor.IsSatisfiedBy. The ad-hoc/period cases build a
+            // transient DailyFloor from the live target rather than a persisted one; the
+            // no-overlapping-blocks invariant CreatePlannedBlockValidator/UpdatePlannedBlockValidator
+            // already enforce keeps plannedForDay within DailyFloor's 0-24h range by
+            // construction — a day's own blocks can never sum past a real calendar day.
             double floorHours;
             bool isMet;
             if (isContractFloorMode)
             {
                 floorHours = plannedForDay;
-                isMet = currentHours >= plannedForDay;
+                isMet = new DailyFloor(plannedForDay).IsSatisfiedBy(currentHours);
             }
             else if (committedFloor is { } floor)
             {
@@ -134,7 +163,7 @@ public sealed class GetNenContractsForDateRangeQueryHandler
             else if (hasAdHocFloor)
             {
                 floorHours = plannedForDay;
-                isMet = currentHours >= plannedForDay;
+                isMet = new DailyFloor(plannedForDay).IsSatisfiedBy(currentHours);
             }
             else
             {
@@ -189,5 +218,75 @@ public sealed class GetNenContractsForDateRangeQueryHandler
             TotalCompletedHours = totalCompletedHours,
             TotalBonusHours = totalBonusHours
         };
+    }
+
+    /// <summary>
+    /// Per-day correction (in hours, usually zero or negative) to subtract the raw-span
+    /// double-count a stale redemption attempt leaves behind. A redemption block's own End is
+    /// never trimmed once it ends early or is missed, so ComputePlannedFocusHoursQueryHandler's
+    /// raw sum keeps counting its full original claim even after a later block picks up the
+    /// leftover deficit. Grouped by (local day, missed block) — same-day retries against the
+    /// same missed block collapse to that missed block's own settled deficit
+    /// (FocusBlock.RawDeficitMinutes); a retry on a different day is left alone, since each
+    /// day's badge is its own historical record, not retroactively rewritten once a leftover
+    /// is redeemed elsewhere. Grouping by the covering block's local Start date (not the
+    /// day-splitting IPlannedFocusHoursCalculator ComputePlannedFocusHoursQueryHandler itself
+    /// uses) is a deliberate simplification — a redemption block spanning midnight would be
+    /// mis-attributed by one day, an accepted edge case given FocusBlock.MaxDurationHours and
+    /// how these blocks are actually sized in practice.
+    /// </summary>
+    private async Task<IReadOnlyDictionary<DateOnly, double>> ComputeRedemptionDedupAdjustmentByDayAsync(
+        NenContract contract, CancellationToken cancellationToken)
+    {
+        var focusBlocks = (await _blocks.GetForContractAsync(contract.Id, cancellationToken))
+            .OfType<FocusBlock>()
+            .ToList();
+        var blocksById = focusBlocks.ToDictionary(b => b.Id);
+        var now = _clock.UtcNow;
+
+        var groups = focusBlocks
+            .Where(b => b.RedemptionEntries.Count > 0)
+            .SelectMany(b => b.RedemptionEntries.Select(e =>
+                (Date: DateOnly.FromDateTime(_clock.ToLocal(b.Start)), e.MissedBlockId, e.MinutesCovered)))
+            .GroupBy(x => (x.Date, x.MissedBlockId));
+
+        var rawMinutesByDay = new Dictionary<DateOnly, double>();
+        var dedupedMinutesByDay = new Dictionary<DateOnly, double>();
+        var rawDeficitCache = new Dictionary<Guid, double>();
+
+        foreach (var group in groups)
+        {
+            var claimedMinutes = group.Sum(x => x.MinutesCovered);
+            rawMinutesByDay[group.Key.Date] = rawMinutesByDay.GetValueOrDefault(group.Key.Date) + claimedMinutes;
+
+            if (!rawDeficitCache.TryGetValue(group.Key.MissedBlockId, out var cap))
+            {
+                cap = await ResolveMissedBlockRawDeficitMinutesAsync(group.Key.MissedBlockId, blocksById, now, cancellationToken)
+                      ?? claimedMinutes; // missed block not found (shouldn't happen) — trust the claim, no capping
+                rawDeficitCache[group.Key.MissedBlockId] = cap;
+            }
+
+            dedupedMinutesByDay[group.Key.Date] = dedupedMinutesByDay.GetValueOrDefault(group.Key.Date) + Math.Min(claimedMinutes, cap);
+        }
+
+        var adjustmentByDay = new Dictionary<DateOnly, double>();
+        foreach (var date in rawMinutesByDay.Keys)
+            adjustmentByDay[date] = (dedupedMinutesByDay.GetValueOrDefault(date) - rawMinutesByDay[date]) / 60.0;
+
+        return adjustmentByDay;
+    }
+
+    private async Task<double?> ResolveMissedBlockRawDeficitMinutesAsync(
+        Guid missedBlockId, Dictionary<Guid, FocusBlock> blocksById, DateTime now, CancellationToken cancellationToken)
+    {
+        if (!blocksById.TryGetValue(missedBlockId, out var missedBlock))
+            return null;
+
+        var session = await _sessions.GetByOriginatingBlockIdAsync(missedBlockId, cancellationToken);
+        var actualElapsedMinutes = session?.GetElapsedTime(now)?.TotalMinutes ?? 0;
+        var creditedMinutes = _classifier.CreditedFocusMinutes(
+            missedBlock.Start, missedBlock.End, missedBlock.RitualCompletedAt, session?.EndedAt, actualElapsedMinutes);
+
+        return missedBlock.RawDeficitMinutes(creditedMinutes);
     }
 }

@@ -76,17 +76,6 @@ public sealed record PlannedBlockDto
     /// <summary>The covering contract's Name when ContractBadge is Bonus, otherwise null.</summary>
     public string? BonusContractName { get; init; }
 
-    /// <summary>
-    /// How many seconds this block ended before its own scheduled end, when that shortfall
-    /// was small enough to be forgiven outright (FocusBlockOutcomeClassifier.
-    /// MinimumMeaningfulDeficitMinutes, Gap 45) — null whenever Outcome isn't EndedEarly, or
-    /// when it is but the shortfall exceeded that threshold and so wasn't forgiven. Drives
-    /// the Block Snapshot's "ended Ns early — full credit given" note; the tile's own ENDED
-    /// EARLY badge is unaffected by this field — the badge stays honest about what happened,
-    /// this just explains that it didn't cost anything.
-    /// </summary>
-    public double? EndedEarlyGraceSeconds { get; init; }
-
     public int DurationMinutes => (int)(End - Start).TotalMinutes;
 
     /// <summary>

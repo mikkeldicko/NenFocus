@@ -13,16 +13,12 @@ public sealed class FocusBlockOutcomeClassifier : IFocusBlockOutcomeClassifier
     public const int GracePeriodMinutes = 5;
 
     /// <summary>
-    /// A shortfall from a block's own scheduled end this small (in minutes) is forgiven
-    /// outright — CreditedWindow credits the block as if it had run the rest of the way,
-    /// the same forgiveness GracePeriodMinutes already gives a late start, mirrored to the
-    /// other end but at a far smaller grain (this app doesn't excuse several real minutes of
-    /// quitting early the way it excuses a few minutes of Ritual setup — only a handful of
-    /// seconds). Classify is deliberately untouched — the block's own outcome still honestly
-    /// reads EndedEarly; only how much it counts toward Daily Floor/Contract Floor changes.
-    /// Shared with FocusBlock.WasRedemptionCoverageMeaningfullyCapped and
-    /// GetNenContractDeficitsQueryHandler's own write-off check — one number, one meaning,
-    /// everywhere "is this shortfall worth caring about" gets asked (Gap 44, Gap 45).
+    /// No longer a credited-time write-off (Gap 44/45 removed — every shortfall now counts,
+    /// however small, and is always recoverable through Cover Deficit; nothing is silently
+    /// forgiven any more). Still used by FocusBlock.WasRedemptionCoverageMeaningfullyCapped,
+    /// a genuinely separate, narrower question: whether a redemption block's save-time
+    /// shortening from its requested End is worth surfacing as a UI notice, not whether the
+    /// shortfall itself counts.
     /// </summary>
     public const double MinimumMeaningfulDeficitMinutes = 1;
 
@@ -58,7 +54,31 @@ public sealed class FocusBlockOutcomeClassifier : IFocusBlockOutcomeClassifier
         return window is { } w ? (w.End - w.Start).TotalMinutes : 0;
     }
 
+    /// <summary>
+    /// Floored to whole minutes as the final step — the single source every consumer of
+    /// "how much did this block earn" reads from, whether they read the duration through
+    /// CreditedFocusMinutes or use this window's Start/End directly (GetNenContractCompletedFocusHoursQueryHandler
+    /// and GetNenContractBonusFocusHoursQueryHandler both do). Flooring only the returned
+    /// End here, never the raw RitualCompletedAt/SessionEndedAt timestamps a caller might
+    /// separately read for genuinely different purposes (e.g. GetPlannedBlocksForDayQueryHandler's
+    /// tile trimming reads FocusBlock.SessionEndedAt directly, not through this method, and
+    /// stays exact — that's a display concern, not a credit one).
+    /// </summary>
     public (DateTime Start, DateTime End)? CreditedWindow(
+        DateTime scheduledStart,
+        DateTime scheduledEnd,
+        DateTime? ritualCompletedAt,
+        DateTime? sessionEndedAt,
+        double actualElapsedMinutes)
+    {
+        var raw = ComputeRawWindow(scheduledStart, scheduledEnd, ritualCompletedAt, sessionEndedAt, actualElapsedMinutes);
+        if (raw is not { } w) return null;
+
+        var flooredMinutes = Math.Floor((w.End - w.Start).TotalMinutes);
+        return flooredMinutes > 0 ? (w.Start, w.Start.AddMinutes(flooredMinutes)) : null;
+    }
+
+    private (DateTime Start, DateTime End)? ComputeRawWindow(
         DateTime scheduledStart,
         DateTime scheduledEnd,
         DateTime? ritualCompletedAt,
@@ -68,38 +88,30 @@ public sealed class FocusBlockOutcomeClassifier : IFocusBlockOutcomeClassifier
         if (ritualCompletedAt is not { } completedAt)
             return null;
 
-        var endedEarlyShortfallMinutes = sessionEndedAt is { } endedAt && endedAt < scheduledEnd
-            ? (scheduledEnd - endedAt).TotalMinutes
-            : (double?)null;
+        // The grace period forgives a late start unconditionally, regardless of what happens
+        // to the session afterward — blocking enforcement is already active on the user's
+        // computer from the block's own scheduled Start onward (PolicyEngine.ComputeSlice
+        // keys entirely off PlannedBlock.Start/End, never RitualCompletedAt), so crediting
+        // that setup window is honestly counting real enforcement time, not inventing work
+        // that didn't happen. A start beyond grace gets no such allowance — credit starts
+        // from the moment the Ritual actually completed.
+        var effectiveStart = IsLateStart(scheduledStart, completedAt) ? completedAt : scheduledStart;
 
-        // A genuine early end — more than a sliver short of the block's own scheduled end —
-        // credits only what was actually worked, regardless of how the block started; the
-        // grace period never covers an early end (Gap 22), except the sub-minute write-off
-        // below (Gap 45).
-        if (endedEarlyShortfallMinutes is { } shortfall && shortfall > MinimumMeaningfulDeficitMinutes)
-            return (completedAt, completedAt.AddMinutes(actualElapsedMinutes));
+        // A genuine early end always counts exactly what was delivered, however small the
+        // shortfall — no forgiveness (Gap 45 removed): every shortfall is now recoverable
+        // through Cover Deficit instead of being silently written off.
+        if (sessionEndedAt is { } endedEarly && endedEarly < scheduledEnd)
+            return endedEarly > effectiveStart ? (effectiveStart, endedEarly) : null;
 
-        // A session that has actually ended — not still running — and started within the
-        // grace period credits the block's full scheduled duration: the grace period's whole
-        // purpose is to not dock a few minutes of Ritual setup once the block has genuinely
-        // run its course (sessionEndedAt present, and not an unforgiven early end — already
-        // ruled out above). A live, in-progress query (sessionEndedAt still null — the
-        // session hasn't ended yet) is a different question: "how much has this block earned
-        // so far," which must accrue progressively with real elapsed time rather than jump to
-        // the full duration the instant the Ritual completes, so the Planner badges/banner
-        // move live while a block is still active.
-        if (sessionEndedAt.HasValue && !IsLateStart(scheduledStart, completedAt))
-            return (scheduledStart, scheduledEnd);
+        // Ran to completion — or was force-ended at/after scheduledEnd (e.g. via the debug
+        // clock) — credit never exceeds the block's own scheduled window.
+        if (sessionEndedAt.HasValue)
+            return (effectiveStart, scheduledEnd);
 
-        // Started late, or still running: credit is bounded by the block's own scheduled end —
-        // a session that ran (or was force-ended, e.g. via the debug clock) past scheduledEnd
-        // earns no more credit than a full-length completion would have. A forgiven sub-minute
-        // early-end shortfall (endedEarlyShortfallMinutes above) credits the full completedAt-
-        // to-scheduled-end span rather than the fractionally-shorter real elapsed time.
-        var minutesToCredit = endedEarlyShortfallMinutes.HasValue
-            ? (scheduledEnd - completedAt).TotalMinutes
-            : actualElapsedMinutes;
-        var cappedMinutes = Math.Min(minutesToCredit, (scheduledEnd - completedAt).TotalMinutes);
-        return cappedMinutes > 0 ? (completedAt, completedAt.AddMinutes(cappedMinutes)) : null;
+        // Still running: credit accrues progressively with real elapsed time, bounded by the
+        // block's own scheduled end, so the Planner badges/banner move live while active.
+        var liveEnd = completedAt.AddMinutes(actualElapsedMinutes);
+        var cappedEnd = liveEnd < scheduledEnd ? liveEnd : scheduledEnd;
+        return cappedEnd > effectiveStart ? (effectiveStart, cappedEnd) : null;
     }
 }

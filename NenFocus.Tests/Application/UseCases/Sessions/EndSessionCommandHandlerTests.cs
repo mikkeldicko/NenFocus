@@ -270,8 +270,13 @@ public class EndSessionCommandHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_SubMinuteSession_PreservesFractionalMinutes_DoesNotTruncateToZero()
+    public async Task HandleAsync_SubMinuteSession_FlooredToZeroCreditedMinutes()
     {
+        // Session.GetElapsedTime floors to whole minutes at the single source — seconds
+        // never matter for crediting, only for the Main Page's own live countdown, which
+        // never reads this method. A 45-second spontaneous session honestly credits 0
+        // minutes rather than preserving a fractional value nothing downstream can compare
+        // against cleanly.
         var session = Session.Create(
             Guid.NewGuid(), new SessionGoal("Quick check"), new SessionDuration(TimeSpan.FromMinutes(1)),
             Guid.NewGuid(), SessionOrigin.Spontaneous);
@@ -280,6 +285,6 @@ public class EndSessionCommandHandlerTests
 
         var result = await CreateHandler().HandleAsync(new EndSessionCommand { SessionId = session.Id });
 
-        result.PostSession!.ActualDuration.Should().BeCloseTo(TimeSpan.FromSeconds(45), TimeSpan.FromSeconds(1));
+        result.PostSession!.ActualDuration.Should().Be(TimeSpan.Zero);
     }
 }

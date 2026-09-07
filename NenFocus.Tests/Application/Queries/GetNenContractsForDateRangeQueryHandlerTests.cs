@@ -8,6 +8,7 @@ using NenFocus.Application.Queries.GetNenContractDeficits;
 using NenFocus.Application.Queries.GetNenContractsForDateRange;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
+using NenFocus.Domain.Services;
 using NenFocus.Domain.ValueObjects;
 using NSubstitute;
 
@@ -32,6 +33,9 @@ public class GetNenContractsForDateRangeQueryHandlerTests
         Substitute.For<IQueryHandler<ComputePlannedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>>>();
     private readonly IQueryHandler<GetNenContractBonusFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> _bonusHours =
         Substitute.For<IQueryHandler<GetNenContractBonusFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>>>();
+    private readonly IPlannedBlockRepository _blocks = Substitute.For<IPlannedBlockRepository>();
+    private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
+    private readonly IFocusBlockOutcomeClassifier _classifier = Substitute.For<IFocusBlockOutcomeClassifier>();
     private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
 
     public GetNenContractsForDateRangeQueryHandlerTests()
@@ -46,9 +50,14 @@ public class GetNenContractsForDateRangeQueryHandlerTests
             .Returns((IReadOnlyDictionary<DateOnly, double>)new Dictionary<DateOnly, double>());
         _bonusHours.HandleAsync(Arg.Any<GetNenContractBonusFocusHoursQuery>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyDictionary<DateOnly, double>)new Dictionary<DateOnly, double>());
+        _blocks.GetForContractAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyList<PlannedBlock>)[]);
+        _sessions.GetByOriginatingBlockIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+            .Returns((Session?)null);
     }
 
-    private GetNenContractsForDateRangeQueryHandler CreateHandler() => new(_contracts, _deficits, _completedHours, _plannedHours, _bonusHours, _clock);
+    private GetNenContractsForDateRangeQueryHandler CreateHandler() =>
+        new(_contracts, _deficits, _completedHours, _plannedHours, _bonusHours, _blocks, _sessions, _classifier, _clock);
 
     private void SetInEffect(params NenContract[] contracts) =>
         _contracts.GetAllInEffectAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<NenContract>)contracts);
@@ -579,6 +588,92 @@ public class GetNenContractsForDateRangeQueryHandlerTests
 
         result.TotalFloorHours.Should().Be(1.0);
         result.TotalCompletedHours.Should().Be(1.0);
+    }
+
+    [Fact]
+    public async Task HandleAsync_DayStatuses_TwoSameDayRedemptionAttemptsForSameMissedBlock_FloorCapsAtOriginalDeficit()
+    {
+        // Reproduces the reported bug directly: a redemption block ends early, a second
+        // redemption block on the *same day* covers the remaining deficit and completes.
+        // The floor badge must cap at the missed block's own original 1h deficit (1h/1h),
+        // not sum both attempts' raw scheduled spans (1h/2h) — the first attempt's stale,
+        // superseded claim must not count twice alongside the second attempt's claim.
+        var missedDay = StartDate;
+        var redemptionDay = StartDate.AddDays(1);
+        var contract = Contract(dailyFloorPolicy: DailyFloorPolicy.None);
+        SetInEffect(contract);
+
+        var missed = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),
+            missedDay.ToDateTime(new TimeOnly(9, 0)), missedDay.ToDateTime(new TimeOnly(10, 0)), contractId: contract.Id);
+        // First attempt: claimed the full 60-minute deficit, ended early after 20 minutes.
+        var attempt1 = FocusBlock.Create(Guid.NewGuid(), missed.BlockPresetId,
+            redemptionDay.ToDateTime(new TimeOnly(9, 0)), redemptionDay.ToDateTime(new TimeOnly(10, 0)),
+            contractId: contract.Id, redemptionEntries: [new RedemptionEntry(missed.Id, 60)]);
+        // Second attempt, same day: claims exactly what's left after the first attempt's
+        // real 20-minute credit (40 minutes), and completes it fully.
+        var attempt2 = FocusBlock.Create(Guid.NewGuid(), missed.BlockPresetId,
+            redemptionDay.ToDateTime(new TimeOnly(11, 0)), redemptionDay.ToDateTime(new TimeOnly(11, 40)),
+            contractId: contract.Id, redemptionEntries: [new RedemptionEntry(missed.Id, 40)]);
+
+        _blocks.GetForContractAsync(contract.Id, Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyList<PlannedBlock>)[missed, attempt1, attempt2]);
+        // The missed block itself never started — nothing credited, its full 60 minutes
+        // stays owed forever once settled.
+        _classifier.CreditedFocusMinutes(missed.Start, missed.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Arg.Any<double>())
+            .Returns(0);
+        // The raw (buggy) scheduled-span sum a naive read would report for redemptionDay:
+        // attempt1's full 1h claim plus attempt2's 40-minute claim = 1h40m.
+        _plannedHours.HandleAsync(Arg.Any<ComputePlannedFocusHoursQuery>(), Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyDictionary<DateOnly, double>)new Dictionary<DateOnly, double> { [redemptionDay] = 1.0 + 40.0 / 60.0 });
+        // Completed hours (real, credited): 20 min from attempt1 + 40 min from attempt2 = 1h.
+        _completedHours.HandleAsync(Arg.Any<GetNenContractCompletedFocusHoursQuery>(), Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyDictionary<DateOnly, double>)new Dictionary<DateOnly, double> { [redemptionDay] = 1.0 });
+
+        var result = (await CreateHandler().HandleAsync(AnyRange)).Single();
+
+        var day = result.DayStatuses.Single(d => d.Date == redemptionDay);
+        day.FloorHours.Should().BeApproximately(1.0, 1e-9);
+        day.CurrentHours.Should().Be(1.0);
+        day.IsMet.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task HandleAsync_DayStatuses_RedemptionRetryOnADifferentDay_DoesNotReduceEitherDaysFloor()
+    {
+        // A retry on a *different* day must not retroactively shrink the original day's
+        // floor, and the original day's own claim must not reduce the new day's floor
+        // either — each day keeps its own historically-scheduled target, unlike the
+        // same-day case above where the two attempts share one day's badge.
+        var missedDay = StartDate;
+        var firstAttemptDay = StartDate.AddDays(1);
+        var secondAttemptDay = StartDate.AddDays(2);
+        var contract = Contract(dailyFloorPolicy: DailyFloorPolicy.None);
+        SetInEffect(contract);
+
+        var missed = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),
+            missedDay.ToDateTime(new TimeOnly(9, 0)), missedDay.ToDateTime(new TimeOnly(10, 0)), contractId: contract.Id);
+        var attempt1 = FocusBlock.Create(Guid.NewGuid(), missed.BlockPresetId,
+            firstAttemptDay.ToDateTime(new TimeOnly(9, 0)), firstAttemptDay.ToDateTime(new TimeOnly(10, 0)),
+            contractId: contract.Id, redemptionEntries: [new RedemptionEntry(missed.Id, 60)]);
+        var attempt2 = FocusBlock.Create(Guid.NewGuid(), missed.BlockPresetId,
+            secondAttemptDay.ToDateTime(new TimeOnly(9, 0)), secondAttemptDay.ToDateTime(new TimeOnly(9, 30)),
+            contractId: contract.Id, redemptionEntries: [new RedemptionEntry(missed.Id, 30)]);
+
+        _blocks.GetForContractAsync(contract.Id, Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyList<PlannedBlock>)[missed, attempt1, attempt2]);
+        _classifier.CreditedFocusMinutes(missed.Start, missed.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Arg.Any<double>())
+            .Returns(0);
+        _plannedHours.HandleAsync(Arg.Any<ComputePlannedFocusHoursQuery>(), Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyDictionary<DateOnly, double>)new Dictionary<DateOnly, double>
+            {
+                [firstAttemptDay] = 1.0,
+                [secondAttemptDay] = 0.5
+            });
+
+        var result = (await CreateHandler().HandleAsync(AnyRange)).Single();
+
+        result.DayStatuses.Single(d => d.Date == firstAttemptDay).FloorHours.Should().Be(1.0);
+        result.DayStatuses.Single(d => d.Date == secondAttemptDay).FloorHours.Should().Be(0.5);
     }
 
     [Fact]

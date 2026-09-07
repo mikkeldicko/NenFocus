@@ -175,28 +175,28 @@ public class FocusBlockOutcomeClassifierTests
     }
 
     [Fact]
-    public void CreditedFocusMinutes_WithinGracePeriod_CreditsActualElapsed()
+    public void CreditedFocusMinutes_WithinGracePeriod_StillRunning_CreditsElapsedPlusForgivenSetupTime()
     {
         var ritualAt = ScheduledStart.AddMinutes(3);
 
-        // Grace period only affects Classify's on-time/late label — credit accrues
-        // progressively from completedAt regardless of grace, so a 3-min-late Ritual
-        // credits only what was actually worked, not the full scheduled duration.
+        // Grace forgives the late start unconditionally, even for a live, in-progress query —
+        // blocking enforcement was already active from ScheduledStart, so the 3 minutes of
+        // Ritual setup counts alongside the 117 minutes of real elapsed progress.
         var credited = _classifier.CreditedFocusMinutes(
             ScheduledStart, ScheduledEnd, ritualCompletedAt: ritualAt, sessionEndedAt: null, actualElapsedMinutes: 117);
 
-        credited.Should().Be(117);
+        credited.Should().Be(120);
     }
 
     [Fact]
-    public void CreditedFocusMinutes_AtGraceBoundary_CreditsActualElapsed()
+    public void CreditedFocusMinutes_AtGraceBoundary_CreditsElapsedPlusForgivenSetupTime()
     {
         var ritualAt = ScheduledStart.AddMinutes(FocusBlockOutcomeClassifier.GracePeriodMinutes);
 
         var credited = _classifier.CreditedFocusMinutes(
             ScheduledStart, ScheduledEnd, ritualCompletedAt: ritualAt, sessionEndedAt: null, actualElapsedMinutes: 115);
 
-        credited.Should().Be(115);
+        credited.Should().Be(120);
     }
 
     [Fact]
@@ -261,14 +261,16 @@ public class FocusBlockOutcomeClassifierTests
     }
 
     [Fact]
-    public void CreditedWindow_WithinGracePeriod_StartsAtCompletedAt()
+    public void CreditedWindow_WithinGracePeriod_StillRunning_StartsAtScheduledStart()
     {
         var ritualAt = ScheduledStart.AddMinutes(3);
 
+        // Grace forgives the late start unconditionally, even while the session is still
+        // live (sessionEndedAt null) — the window starts at ScheduledStart, not ritualAt.
         var window = _classifier.CreditedWindow(
             ScheduledStart, ScheduledEnd, ritualCompletedAt: ritualAt, sessionEndedAt: null, actualElapsedMinutes: 117);
 
-        window.Should().Be((ritualAt, ScheduledEnd));
+        window.Should().Be((ScheduledStart, ritualAt.AddMinutes(117)));
     }
 
     [Fact]
@@ -355,53 +357,71 @@ public class FocusBlockOutcomeClassifierTests
     }
 
     [Fact]
-    public void CreditedWindow_EndedEarlyBySubMinuteShortfall_RitualOnTime_IsTheFullScheduledWindow()
+    public void CreditedWindow_EndedEarlyBy40Seconds_RitualOnTime_FlooredToWholeMinutes()
     {
+        // Gap 45's sub-minute write-off is gone — even a 40-second shortfall counts, however
+        // small; nothing is silently forgiven any more, only the grace period's late-start
+        // allowance survives, and that's untouched by how the session ends. The window's own
+        // End is floored to whole minutes here (not just at Session.GetElapsedTime) so every
+        // consumer of this window — not just CreditedFocusMinutes — inherits a clean value:
+        // 120 min scheduled - 40s = 119.3333 raw minutes, floored to 119.
         var sessionEndedAt = ScheduledEnd.AddSeconds(-40); // 40s short of the 3:00 scheduled end
 
         var window = _classifier.CreditedWindow(
             ScheduledStart, ScheduledEnd, ritualCompletedAt: ScheduledStart, sessionEndedAt: sessionEndedAt, actualElapsedMinutes: 119.33);
 
-        window.Should().Be((ScheduledStart, ScheduledEnd));
+        window.Should().Be((ScheduledStart, ScheduledStart.AddMinutes(119)));
     }
 
     [Fact]
-    public void CreditedWindow_EndedEarlyBySubMinuteShortfall_RitualStartedLate_CreditsFullLateStartToScheduledEndSpan()
+    public void CreditedWindow_EndedEarlyBy40Seconds_RitualStartedLatePastGrace_CreditsFromCompletedAt_FlooredToWholeMinutes()
     {
         var ritualAt = ScheduledStart.AddMinutes(19); // started late, well past grace
-        var sessionEndedAt = ScheduledEnd.AddSeconds(-40); // still 40s short of the 3:00 scheduled end
+        var sessionEndedAt = ScheduledEnd.AddSeconds(-40); // 40s short of the 3:00 scheduled end
 
         var window = _classifier.CreditedWindow(
             ScheduledStart, ScheduledEnd, ritualCompletedAt: ritualAt, sessionEndedAt: sessionEndedAt, actualElapsedMinutes: 100.33);
 
-        window.Should().Be((ritualAt, ScheduledEnd));
+        // 120 - 19 min late - 40s early = 100.3333 raw minutes, floored to 100.
+        window.Should().Be((ritualAt, ritualAt.AddMinutes(100)));
     }
 
     [Fact]
-    public void CreditedWindow_EndedEarlyExactlyAtGraceThreshold_IsForgiven()
+    public void CreditedWindow_LateStartWithinGraceThenEndedEarly_GraceCoversTheSetupTimeOnly()
     {
-        var sessionEndedAt = ScheduledEnd.AddMinutes(-FocusBlockOutcomeClassifier.MinimumMeaningfulDeficitMinutes);
+        // The concrete scenario from the architect's own example, on a 1-hour block: Ritual
+        // completed 2:30 late (within the 5-minute grace period), block ended 2:30 early.
+        // Grace forgives the late start unconditionally — window starts at the block's own
+        // scheduled start — but the early end always counts fully, however small. 60 - 2:30
+        // = 57:30 raw, floored to 57 credited minutes (3 min deficit against the 60-minute
+        // scheduled duration) — this window's own End is already the floored value, the
+        // single source every consumer of "how much did this earn" reads from.
+        var oneHourStart = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+        var oneHourEnd = oneHourStart.AddHours(1);
+        var ritualAt = oneHourStart.AddSeconds(150); // 2 min 30 sec late
+        var sessionEndedAt = oneHourEnd.AddSeconds(-150); // 2 min 30 sec early
 
         var window = _classifier.CreditedWindow(
-            ScheduledStart, ScheduledEnd, ritualCompletedAt: ScheduledStart, sessionEndedAt: sessionEndedAt, actualElapsedMinutes: 119);
+            oneHourStart, oneHourEnd, ritualCompletedAt: ritualAt, sessionEndedAt: sessionEndedAt, actualElapsedMinutes: 55);
 
-        window.Should().Be((ScheduledStart, ScheduledEnd));
+        window.Should().Be((oneHourStart, oneHourStart.AddMinutes(57)));
     }
 
     [Fact]
-    public void CreditedWindow_EndedEarlyJustPastGraceThreshold_CreditsOnlyActualElapsed()
+    public void CreditedWindow_EndedEarlyBy1Minute1Second_FlooredToWholeMinutes()
     {
-        var sessionEndedAt = ScheduledEnd.AddMinutes(-FocusBlockOutcomeClassifier.MinimumMeaningfulDeficitMinutes).AddSeconds(-1);
+        var sessionEndedAt = ScheduledEnd.AddSeconds(-61); // 1 min 1 sec short
         var actualElapsedMinutes = (sessionEndedAt - ScheduledStart).TotalMinutes;
 
         var window = _classifier.CreditedWindow(
             ScheduledStart, ScheduledEnd, ritualCompletedAt: ScheduledStart, sessionEndedAt: sessionEndedAt, actualElapsedMinutes: actualElapsedMinutes);
 
-        window.Should().Be((ScheduledStart, sessionEndedAt));
+        // 120 - 1:01 = 118.9833 raw minutes, floored to 118.
+        window.Should().Be((ScheduledStart, ScheduledStart.AddMinutes(118)));
     }
 
     [Fact]
-    public void CreditedWindow_CrossMidnightScheduledBlock_WithinGracePeriod_StartsAtCompletedAt()
+    public void CreditedWindow_CrossMidnightScheduledBlock_WithinGracePeriod_StartsAtScheduledStart()
     {
         var overnightStart = new DateTime(2026, 1, 1, 22, 0, 0, DateTimeKind.Utc);
         var overnightEnd = new DateTime(2026, 1, 2, 1, 0, 0, DateTimeKind.Utc); // 22:00-01:00, 3h
@@ -410,6 +430,6 @@ public class FocusBlockOutcomeClassifierTests
         var window = _classifier.CreditedWindow(
             overnightStart, overnightEnd, ritualCompletedAt: ritualAt, sessionEndedAt: null, actualElapsedMinutes: 178);
 
-        window.Should().Be((ritualAt, overnightEnd));
+        window.Should().Be((overnightStart, ritualAt.AddMinutes(178)));
     }
 }
