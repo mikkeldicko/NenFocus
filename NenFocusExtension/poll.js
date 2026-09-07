@@ -6,27 +6,23 @@
 
     const domain = location.hostname.replace(/^www\./, '');
 
-    const checkOnce = async () => {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 500);
+    const checkOnce = () => {
+        // Relayed through background.js rather than fetched here directly - a content
+        // script's fetch to localhost is attributed to this page's own origin, which
+        // Chromium denies under Local Network Access regardless of server response
+        // headers. The background script's fetch is unaffected, so it does the actual
+        // check/report and messages the result back.
+        chrome.runtime.sendMessage({ type: "nenFocusCheck", domain }, (response) => {
+            // chrome.runtime.lastError fires if the service worker was mid-restart with
+            // no listener yet, or the extension context was invalidated (e.g. reloaded).
+            // Either way, just skip this tick - the next one retries.
+            if (chrome.runtime.lastError) return;
 
-        try {
-            const response = await fetch(`http://localhost:5005/check?domain=${domain}`, {
-                signal: controller.signal
-            });
-            clearTimeout(timeoutId);
-            const data = await response.json();
-
-            if (data.blocked) {
+            if (response?.blocked) {
                 clearInterval(intervalId);
-                fetch(`http://localhost:5005/report?domain=${domain}`).catch(() => { });
                 location.replace(chrome.runtime.getURL("blocked.html"));
             }
-        } catch (error) {
-            // If the C# app is closed, this will trigger.
-            // We do nothing and let the page stay as-is.
-            clearTimeout(timeoutId);
-        }
+        });
     };
 
     const intervalId = setInterval(checkOnce, 2000);
