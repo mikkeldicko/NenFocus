@@ -1,7 +1,9 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
+using NenFocus.Application.Queries.GetNenContractRecap;
 using NenFocus.Application.UseCases.NenContracts.SweepNenContractLifecycle;
 
 namespace NenFocus.Infrastructure.Services;
@@ -18,6 +20,7 @@ namespace NenFocus.Infrastructure.Services;
 public sealed class NenContractHeartbeatService : BackgroundService
 {
     private readonly IServiceScopeFactory _scopeFactory;
+    private readonly ISessionStateService _sessionState;
     private readonly ILogger<NenContractHeartbeatService> _logger;
 
     // Coarser than ScheduledEnforcementService's 5-second interval by design, not
@@ -27,9 +30,11 @@ public sealed class NenContractHeartbeatService : BackgroundService
 
     public NenContractHeartbeatService(
         IServiceScopeFactory scopeFactory,
+        ISessionStateService sessionState,
         ILogger<NenContractHeartbeatService> logger)
     {
         _scopeFactory = scopeFactory;
+        _sessionState = sessionState;
         _logger = logger;
     }
 
@@ -43,7 +48,26 @@ public sealed class NenContractHeartbeatService : BackgroundService
                 var sweepHandler = scope.ServiceProvider
                     .GetRequiredService<ICommandHandler<SweepNenContractLifecycleCommand, SweepNenContractLifecycleResult>>();
 
-                await sweepHandler.HandleAsync(new SweepNenContractLifecycleCommand(), stoppingToken);
+                var sweepResult = await sweepHandler.HandleAsync(new SweepNenContractLifecycleCommand(), stoppingToken);
+
+                if (sweepResult.CompletedContractIds.Count > 0)
+                {
+                    // Nobody was watching this live — the same "background process produced
+                    // a fact nobody asked for yet" shape as SweepMissedFocusBlocksCommand's
+                    // missed sessions, surfaced via the same kind of event on
+                    // ISessionStateService (PostContractsReady mirrors PostSessionsReady).
+                    var recapHandler = scope.ServiceProvider
+                        .GetRequiredService<IQueryHandler<GetNenContractRecapQuery, NenContractRecapDto?>>();
+
+                    var recaps = new List<NenContractRecapDto>();
+                    foreach (var contractId in sweepResult.CompletedContractIds)
+                    {
+                        var recap = await recapHandler.HandleAsync(new GetNenContractRecapQuery(contractId), stoppingToken);
+                        if (recap is not null) recaps.Add(recap);
+                    }
+
+                    _sessionState.NotifyPostContractsReady(recaps);
+                }
             }
             catch (Exception ex)
             {

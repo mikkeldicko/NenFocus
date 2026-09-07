@@ -1,5 +1,7 @@
 using FluentAssertions;
+using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
+using NenFocus.Application.Queries.GetNenContractRecap;
 using NenFocus.Application.UseCases.NenContracts.Break;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
@@ -18,14 +20,18 @@ public class BreakNenContractCommandHandlerTests
     private readonly IPlannedBlockRepository _blocks = Substitute.For<IPlannedBlockRepository>();
     private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
     private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
+    private readonly IQueryHandler<GetNenContractRecapQuery, NenContractRecapDto?> _recap =
+        Substitute.For<IQueryHandler<GetNenContractRecapQuery, NenContractRecapDto?>>();
 
     public BreakNenContractCommandHandlerTests()
     {
         _clock.UtcNow.Returns(Now);
         _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns((Session?)null);
+        _recap.HandleAsync(Arg.Any<GetNenContractRecapQuery>(), Arg.Any<CancellationToken>())
+            .Returns(new NenContractRecapDto());
     }
 
-    private BreakNenContractCommandHandler CreateHandler() => new(_contracts, _blocks, _sessions, _clock);
+    private BreakNenContractCommandHandler CreateHandler() => new(_contracts, _blocks, _sessions, _clock, _recap);
 
     private static Session CreatePlannedSession(Guid originatingBlockId)
     {
@@ -156,6 +162,22 @@ public class BreakNenContractCommandHandlerTests
         await CreateHandler().HandleAsync(new BreakNenContractCommand { ContractId = contract.Id }, CancellationToken.None);
 
         session.Status.Should().Be(SessionStatus.Active);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ValidContract_ReturnsRecapForImmediatePostContractOverlay()
+    {
+        var contract = ActiveCancellableContract();
+        _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
+        _blocks.GetForContractAsync(contract.Id, Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyList<PlannedBlock>)[]);
+        var recap = new NenContractRecapDto { ContractId = contract.Id };
+        _recap.HandleAsync(Arg.Any<GetNenContractRecapQuery>(), Arg.Any<CancellationToken>()).Returns(recap);
+
+        var result = await CreateHandler().HandleAsync(
+            new BreakNenContractCommand { ContractId = contract.Id }, CancellationToken.None);
+
+        result.Recap.Should().Be(recap);
     }
 
     [Fact]

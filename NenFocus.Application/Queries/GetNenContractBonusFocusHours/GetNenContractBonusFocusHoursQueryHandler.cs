@@ -48,10 +48,15 @@ public sealed class GetNenContractBonusFocusHoursQueryHandler
         var rangeEnd = contract.EndDate.AddDays(1).ToDateTime(TimeOnly.MinValue);
         var blocksInRange = await _blocks.GetForRangeAsync(rangeStart, rangeEnd, ct);
 
+        // StartsAt/EndsAt, not a date-only truncation of Start — a Work-Hours contract's
+        // true boundary isn't midnight, so a block placed after Work Hours close on the
+        // last day (or before they open on the first) must not still count as Bonus just
+        // because it shares the calendar day. b.Start is UTC; StartsAt/EndsAt are local
+        // wall-clock instants, so the comparison must happen in local time.
         var bonusBlocks = blocksInRange
             .OfType<FocusBlock>()
             .Where(b => b.ContractId is null)
-            .Where(b => DateOnly.FromDateTime(b.Start) >= contract.StartDate && DateOnly.FromDateTime(b.Start) <= contract.EndDate)
+            .Where(b => _clock.ToLocal(b.Start) >= contract.StartsAt && _clock.ToLocal(b.Start) <= contract.EndsAt)
             .ToList();
 
         var creditedWindows = new List<(DateTime Start, DateTime End)>();

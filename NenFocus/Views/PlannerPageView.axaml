@@ -142,6 +142,23 @@
 			<Setter Property="Foreground" Value="#C03A2B"/>
 		</Style>
 
+		<!-- A contract row's info area, clickable to jump the week view to its first day —
+             transparent/borderless so it reads as part of the card, not a distinct button. -->
+		<Style Selector="Button.contractRowLink">
+			<Setter Property="Background" Value="Transparent"/>
+			<Setter Property="BorderThickness" Value="0"/>
+			<Setter Property="Padding" Value="0"/>
+			<Setter Property="HorizontalAlignment" Value="Stretch"/>
+			<Setter Property="HorizontalContentAlignment" Value="Left"/>
+			<Setter Property="Cursor" Value="Hand"/>
+		</Style>
+		<Style Selector="Button.contractRowLink /template/ ContentPresenter">
+			<Setter Property="Background" Value="Transparent"/>
+		</Style>
+		<Style Selector="Button.contractRowLink:pointerover /template/ ContentPresenter">
+			<Setter Property="Background" Value="#00000008"/>
+		</Style>
+
 		<Style Selector="Button.danger">
 			<Setter Property="Background" Value="Transparent"/>
 			<Setter Property="Foreground" Value="#C03A2B"/>
@@ -291,14 +308,21 @@
                                    IsVisible="{Binding CoverDeficitErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                                    FontSize="12" Foreground="#C03A2B" TextWrapping="Wrap"/>
 					</StackPanel>
-					<Button Name="CoverDeficitButton" Grid.Column="1"
-                            Classes="coverDeficitBtn"
-                            Content="Cover Deficit"
-                            ToolTip.Tip="Create a tile to cover an outstanding deficit"
-                            Command="{Binding ToggleCoverDeficitPopoverCommand}"
-                            IsVisible="{Binding HasCoverableDeficit}"
-                            VerticalAlignment="Center"
-                            Margin="8,0,0,0"/>
+					<StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" Margin="8,0,0,0">
+						<Button Classes="coverDeficitBtn"
+                                Content="Complete Contract"
+                                ToolTip.Tip="Complete this contract now — every committed hour is delivered"
+                                Command="{Binding CompleteSelectedContractCommand}"
+                                IsVisible="{Binding CanCompleteSelectedContract}"
+                                VerticalAlignment="Center"/>
+						<Button Name="CoverDeficitButton"
+                                Classes="coverDeficitBtn"
+                                Content="Cover Deficit"
+                                ToolTip.Tip="Create a tile to cover an outstanding deficit"
+                                Command="{Binding ToggleCoverDeficitPopoverCommand}"
+                                IsVisible="{Binding HasCoverableDeficit}"
+                                VerticalAlignment="Center"/>
+					</StackPanel>
 					<Button Grid.Column="2"
                             Classes="navButton"
                             Content="⇄"
@@ -939,28 +963,41 @@
 						<TextBlock Text="ACTIVE" FontSize="10" FontWeight="Medium" LetterSpacing="1" Foreground="#AAAABC"/>
 						<Border Background="#F0F0F8" CornerRadius="8" Padding="12,10">
 							<Grid ColumnDefinitions="*,Auto">
-								<StackPanel Grid.Column="0" Spacing="4">
-									<TextBlock Text="{Binding PopoverActiveContract.Name}" FontSize="14" FontWeight="SemiBold" Foreground="#1A1A2E"/>
-									<StackPanel Orientation="Horizontal" Spacing="4">
-										<TextBlock Text="{Binding PopoverActiveContract.StartDate, StringFormat='{}{0:MMM d}'}" FontSize="12" Foreground="#888899"/>
-										<TextBlock Text="–" FontSize="12" Foreground="#888899"/>
-										<TextBlock Text="{Binding PopoverActiveContract.EndDate, StringFormat='{}{0:MMM d, yyyy}'}" FontSize="12" Foreground="#888899"/>
-									</StackPanel>
-									<StackPanel Orientation="Horizontal" Spacing="6">
-										<Border Background="#B8922A" CornerRadius="4" Padding="6,2">
-											<TextBlock Text="Active" FontSize="10" FontWeight="Medium" Foreground="White"/>
-										</Border>
-										<TextBlock Text="{Binding PopoverActiveContract.StrictnessRule, Converter={x:Static conv:StrictnessRuleToLabelConverter.Instance}}"
+								<Button Grid.Column="0" Classes="contractRowLink"
+                                        ToolTip.Tip="Go to this contract's first week"
+                                        Command="{Binding GoToContractStartCommand}"
+                                        CommandParameter="{Binding PopoverActiveContract.StartDate}">
+									<StackPanel Spacing="4">
+										<TextBlock Text="{Binding PopoverActiveContract.Name}" FontSize="14" FontWeight="SemiBold" Foreground="#1A1A2E"/>
+										<StackPanel Orientation="Horizontal" Spacing="4">
+											<TextBlock Text="{Binding PopoverActiveContract.StartDate, StringFormat='{}{0:MMM d}'}" FontSize="12" Foreground="#888899"/>
+											<TextBlock Text="–" FontSize="12" Foreground="#888899"/>
+											<TextBlock Text="{Binding PopoverActiveContract.EndDate, StringFormat='{}{0:MMM d, yyyy}'}" FontSize="12" Foreground="#888899"/>
+										</StackPanel>
+										<StackPanel Orientation="Horizontal" Spacing="6">
+											<Border Background="#B8922A" CornerRadius="4" Padding="6,2">
+												<TextBlock Text="Active" FontSize="10" FontWeight="Medium" Foreground="White"/>
+											</Border>
+											<TextBlock Text="{Binding PopoverActiveContract.StrictnessRule, Converter={x:Static conv:StrictnessRuleToLabelConverter.Instance}}"
                                                    FontSize="12" Foreground="#888899"/>
-									</StackPanel>
-									<TextBlock Text="{Binding CancelContractErrorMessage}"
+										</StackPanel>
+										<TextBlock Text="{Binding CancelContractErrorMessage}"
                                                IsVisible="{Binding CancelContractErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                                                FontSize="11" Foreground="#C03A2B" TextWrapping="Wrap"/>
+										<TextBlock Text="{Binding CompleteContractErrorMessage}"
+                                               IsVisible="{Binding CompleteContractErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                               FontSize="11" Foreground="#C03A2B" TextWrapping="Wrap"/>
+									</StackPanel>
+								</Button>
+								<StackPanel Grid.Column="1" Spacing="6" VerticalAlignment="Top">
+									<Button Classes="bannerCancelBtn" Content="Complete"
+                                            ToolTip.Tip="Complete this contract now — every committed hour is delivered"
+                                            Command="{Binding CompleteContractCommand}"
+                                            IsVisible="{Binding CanCompleteActiveContract}"/>
+									<Button Classes="bannerCancelBtn" Content="Cancel"
+                                            ToolTip.Tip="Cancel this contract"
+                                            Command="{Binding RequestCancelContractCommand}"/>
 								</StackPanel>
-								<Button Grid.Column="1" Classes="bannerCancelBtn" Content="Cancel"
-                                        ToolTip.Tip="Cancel this contract"
-                                        Command="{Binding RequestCancelContractCommand}"
-                                        VerticalAlignment="Top"/>
 							</Grid>
 						</Border>
 					</StackPanel>
@@ -977,16 +1014,21 @@
 								<DataTemplate DataType="dto:NenContractSummaryDto">
 									<Border Background="#F8F8FB" CornerRadius="8" Padding="12,10">
 										<Grid ColumnDefinitions="*,Auto,Auto">
-											<StackPanel Grid.Column="0" Spacing="4">
-												<TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold" Foreground="#1A1A2E"/>
-												<StackPanel Orientation="Horizontal" Spacing="4">
-													<TextBlock Text="{Binding StartDate, StringFormat='{}{0:MMM d}'}" FontSize="11" Foreground="#888899"/>
-													<TextBlock Text="–" FontSize="11" Foreground="#888899"/>
-													<TextBlock Text="{Binding EndDate, StringFormat='{}{0:MMM d, yyyy}'}" FontSize="11" Foreground="#888899"/>
-												</StackPanel>
-												<TextBlock Text="{Binding StrictnessRule, Converter={x:Static conv:StrictnessRuleToLabelConverter.Instance}}"
+											<Button Grid.Column="0" Classes="contractRowLink"
+                                                    ToolTip.Tip="Go to this contract's first week"
+                                                    Command="{Binding $parent[UserControl].((vm:PlannerPageViewModel)DataContext).GoToContractStartCommand}"
+                                                    CommandParameter="{Binding StartDate}">
+												<StackPanel Spacing="4">
+													<TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold" Foreground="#1A1A2E"/>
+													<StackPanel Orientation="Horizontal" Spacing="4">
+														<TextBlock Text="{Binding StartDate, StringFormat='{}{0:MMM d}'}" FontSize="11" Foreground="#888899"/>
+														<TextBlock Text="–" FontSize="11" Foreground="#888899"/>
+														<TextBlock Text="{Binding EndDate, StringFormat='{}{0:MMM d, yyyy}'}" FontSize="11" Foreground="#888899"/>
+													</StackPanel>
+													<TextBlock Text="{Binding StrictnessRule, Converter={x:Static conv:StrictnessRuleToLabelConverter.Instance}}"
                                                            FontSize="11" Foreground="#AAAABC"/>
-											</StackPanel>
+												</StackPanel>
+											</Button>
 											<Button Grid.Column="1" Classes="bannerCancelBtn" Content="Edit"
                                                     Foreground="#1A1A2E"
                                                     Command="{Binding $parent[UserControl].((vm:PlannerPageViewModel)DataContext).RequestEditContractCommand}"

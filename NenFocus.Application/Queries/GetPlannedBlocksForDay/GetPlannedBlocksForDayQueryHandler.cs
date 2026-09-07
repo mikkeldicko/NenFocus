@@ -76,9 +76,12 @@ public sealed class GetPlannedBlocksForDayQueryHandler
 
             // Bonus is only meaningful for an unlinked block — a committed or redeemed block
             // (ContractId set) already has its one true contract. Contract date ranges never
-            // overlap, so at most one contract can ever cover a given Start date.
+            // overlap, so at most one contract can ever cover a given Start date. StartsAt/
+            // EndsAt, not a date-only truncation — a Work-Hours contract's true boundary
+            // isn't midnight. b.Start is UTC; StartsAt/EndsAt are local wall-clock instants.
+            var localStart = _clock.ToLocal(b.Start);
             var bonusContract = b.ContractId is null
-                ? allContracts.FirstOrDefault(c => DateOnly.FromDateTime(b.Start) >= c.StartDate && DateOnly.FromDateTime(b.Start) <= c.EndDate)
+                ? allContracts.FirstOrDefault(c => localStart >= c.StartsAt && localStart <= c.EndsAt)
                 : null;
 
             // Redemption and Bonus are mutually exclusive by construction (Redemption always

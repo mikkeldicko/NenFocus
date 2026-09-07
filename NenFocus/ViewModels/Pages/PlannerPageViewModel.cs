@@ -15,6 +15,7 @@ using NenFocus.Application.Queries.GetNenContractsForDateRange;
 using NenFocus.Application.Queries.GetAllBlockPresets;
 using NenFocus.Application.Queries.GetAllContractPresets;
 using NenFocus.Application.Queries.GetContractWorkHoursForDate;
+using NenFocus.Application.Queries.GetNenContractCompletionReadiness;
 using NenFocus.Application.Queries.GetNenContractForEdit;
 using NenFocus.Application.Queries.GetPlannedBlocksForDay;
 using NenFocus.Application.Queries.GetInEffectNenContracts;
@@ -22,6 +23,7 @@ using NenFocus.Application.Queries.GetSessionSnapshotForBlock;
 using NenFocus.Application.Queries.GetSuggestedRedemptionPlacements;
 using NenFocus.Application.UseCases.ContractPresets.CreateContractPreset;
 using NenFocus.Application.UseCases.NenContracts.Break;
+using NenFocus.Application.UseCases.NenContracts.CompleteNenContract;
 using NenFocus.Application.UseCases.NenContracts.Delete;
 using NenFocus.Application.UseCases.NenContracts.Edit;
 using NenFocus.Application.UseCases.NenContracts.Seal;
@@ -312,6 +314,22 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     [ObservableProperty] private string _confirmCancelContractMessage = string.Empty;
     [ObservableProperty] private string? _cancelContractErrorMessage;
 
+    // Refreshed alongside PopoverActiveContract in RefreshContractsPopoverAsync — binds the
+    // popover's "Complete" button's visibility directly to GetNenContractCompletionReadinessQuery,
+    // the same query CompleteNenContractValidator delegates to, so the button and the command's
+    // own gate can never drift apart.
+    [ObservableProperty] private bool _canCompleteActiveContract;
+    [ObservableProperty] private string? _completeContractErrorMessage;
+
+    // Mirrors CanCompleteActiveContract but scoped to SelectedContract (the banner's own
+    // contract) rather than the globally-Active one — see RefreshCanCompleteSelectedContractAsync.
+    [ObservableProperty] private bool _canCompleteSelectedContract;
+
+    /// <summary>Raised when Complete or Break (Cancel) succeeds, carrying the recap for the
+    /// Post-Contract overlay — ShellViewModel subscribes to show it immediately, mirroring
+    /// MainPageViewModel's EndSession-to-ShowPostSession precedent.</summary>
+    public event Action<NenContractRecapDto>? PostContractReady;
+
     // Every in-effect contract touching the currently viewed week, default-first (the same
     // order GetNenContractsForDateRangeQuery returns) — SelectedContract is always one of
     // these. Refreshed alongside SelectedContract in RefreshSelectedContractAsync; the
@@ -458,6 +476,37 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         SelectedContract = _contractsThisWeek.Count > 0 ? _contractsThisWeek[_selectedContractIndex] : null;
         RebuildMergedDayFloorByDate();
         await RefreshCoverDeficitOptionsAsync();
+        await RefreshCanCompleteSelectedContractAsync();
+    }
+
+    // Drives the banner's own "Complete" button (next to Cover Deficit) — a second surface
+    // for the same GetNenContractCompletionReadinessQuery the Nen Contract popover's button
+    // already binds to, scoped to whichever contract the banner is currently naming rather
+    // than the globally-Active one, since the two can differ (e.g. viewing a Scheduled
+    // contract's week while a different one is Active elsewhere).
+    private async Task RefreshCanCompleteSelectedContractAsync()
+    {
+        CanCompleteSelectedContract = SelectedContract is { Status: NenContractStatus.Active } c &&
+            (await _queryDispatcher.QueryAsync(new GetNenContractCompletionReadinessQuery(c.Id))).IsReady;
+    }
+
+    [RelayCommand]
+    private async Task CompleteSelectedContractAsync()
+    {
+        if (SelectedContract is null) return;
+        CompleteContractErrorMessage = null;
+
+        var result = await _commandDispatcher.DispatchAsync(new CompleteNenContractCommand { ContractId = SelectedContract.Id });
+        if (!result.Success)
+        {
+            CompleteContractErrorMessage = result.ErrorMessage;
+            return;
+        }
+
+        PostContractReady?.Invoke(result.Recap!);
+        await RefreshContractsPopoverAsync();
+        await RefreshContractsPreservingSelectionAsync();
+        await LoadWeekAsync();
     }
 
     // Every in-effect contract touching the week contributes its own DayStatuses — contract
@@ -498,6 +547,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         _selectedContractIndex = (_selectedContractIndex + 1) % _contractsThisWeek.Count;
         SelectedContract = _contractsThisWeek[_selectedContractIndex];
         await RefreshCoverDeficitOptionsAsync();
+        await RefreshCanCompleteSelectedContractAsync();
     }
 
     private async Task RefreshCoverDeficitOptionsAsync()
@@ -602,6 +652,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         }
 
         IsNenContractPopoverVisible = false;
+        PostContractReady?.Invoke(result.Recap!);
         await RefreshContractsPopoverAsync();
         await RefreshContractsPreservingSelectionAsync();
         await LoadWeekAsync();
@@ -2347,6 +2398,16 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private void CloseNenContractPopover() => IsNenContractPopoverVisible = false;
 
+    // Jumps the week view to whichever week contains the given contract's first day —
+    // bound to the info area of both the Active row and each Upcoming row in the Nen
+    // Contract popover, so clicking a contract takes you straight to where it starts.
+    [RelayCommand]
+    private async Task GoToContractStartAsync(DateOnly startDate)
+    {
+        IsNenContractPopoverVisible = false;
+        await NavigateWeekAsync(StartOfWeek(startDate.ToDateTime(TimeOnly.MinValue)));
+    }
+
     private async Task RefreshContractsPopoverAsync()
     {
         var contracts = await _queryDispatcher.QueryAsync(new GetInEffectNenContractsQuery());
@@ -2357,6 +2418,29 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
             ScheduledContracts.Add(contract);
 
         OnPropertyChanged(nameof(HasNoContracts));
+
+        CanCompleteActiveContract = PopoverActiveContract is not null &&
+            (await _queryDispatcher.QueryAsync(new GetNenContractCompletionReadinessQuery(PopoverActiveContract.Id))).IsReady;
+    }
+
+    [RelayCommand]
+    private async Task CompleteContractAsync()
+    {
+        if (PopoverActiveContract is null) return;
+        CompleteContractErrorMessage = null;
+
+        var result = await _commandDispatcher.DispatchAsync(new CompleteNenContractCommand { ContractId = PopoverActiveContract.Id });
+        if (!result.Success)
+        {
+            CompleteContractErrorMessage = result.ErrorMessage;
+            return;
+        }
+
+        IsNenContractPopoverVisible = false;
+        PostContractReady?.Invoke(result.Recap!);
+        await RefreshContractsPopoverAsync();
+        await RefreshContractsPreservingSelectionAsync();
+        await LoadWeekAsync();
     }
 
     [RelayCommand]

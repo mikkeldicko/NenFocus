@@ -42,22 +42,21 @@ public static class HostExtensions
 
 #if DEBUG
     /// <summary>
-    /// Debug-only test fixtures for exercising the redemption-placement-policy feature end
-    /// to end — never compiled into a Release build. Runs once per fresh database (skipped
-    /// whenever any NenContract already exists), and every date is computed relative to real
-    /// "today" at seed time rather than baked into the migration, so wiping the DB and
-    /// relaunching always produces a genuinely testable deficit with no manual setup.
+    /// Debug-only test fixtures for exercising Gap L (contract completion grading,
+    /// Post-Contract recap, Work-Hours-aware boundary) end to end — never compiled into a
+    /// Release build. Runs once per fresh database (skipped whenever any NenContract
+    /// already exists); every date is computed relative to real "today" at seed time.
     ///
-    /// Each contract is backed by a real, saved ContractPreset (ContractPresetId set, visible
-    /// on the Presets page) — matching actual user experience, since Advanced contracts can
-    /// only ever be sealed from a saved preset (Gap 27), never freeform rules. Contract date
-    /// ranges are sequential, never overlapping — NenContract ranges are a system invariant
-    /// relied on elsewhere (see ARCHITECT_GOVERNANCE.md, Open Gap G's Bonus Block resolution)
-    /// and only one contract can ever be "the" active one the Planner banner/Cover Deficit
-    /// button operate against at a time. Contract 1 is active immediately; reaching the rest
-    /// means jumping the debug clock forward (Ctrl+Shift+T) into their windows — each one's
-    /// own first-day block only becomes a real deficit once the clock has advanced at least
-    /// one day past it.
+    /// Replaces the previous redemption-placement-policy fixture set entirely (2026-09-07,
+    /// at the architect's request) — that feature already shipped; this seed exists to
+    /// exercise whatever is currently being built, not to remain a permanent regression
+    /// fixture for every past feature.
+    ///
+    /// Contract date ranges stay sequential/non-overlapping — a system invariant relied on
+    /// elsewhere (see ARCHITECT_GOVERNANCE.md, Open Gap G's Bonus Block resolution) — so
+    /// only one "currently active" scenario is reachable without jumping the debug clock
+    /// (Ctrl+Shift+T) forward into the next one's window, mirroring the previous fixture
+    /// set's own testing workflow.
     /// </summary>
     private static void SeedDebugTestContracts(NenFocusDbContext context, ILogger logger)
     {
@@ -70,97 +69,214 @@ public static class HostExtensions
             var focusPresetId = new Guid("a0000001-0000-0000-0000-000000000002");
             var today = DateTime.UtcNow.Date;
 
-            ContractPreset SeedPreset(string name, StrictnessRule strictness, RedemptionPlacementPolicy policy, DailyFloor? dailyFloor = null)
+            // A completed FocusBlock + its matching completed Session — RitualCompletedAt
+            // pinned to the block's own Start and Session.EndedAt pinned to its own End, so
+            // IFocusBlockOutcomeClassifier reads it as cleanly CompletedOnTime with the full
+            // scheduled duration credited. contractId null makes it a Bonus block instead of
+            // a committed one.
+            void SeedCompletedFocusBlock(Guid? contractId, DateTime start, double hours)
             {
-                var preset = ContractPreset.Create(Guid.NewGuid(), name, strictness, dailyFloor, workHours: null,
-                    allowCancellation: true, redemptionPlacementPolicy: policy);
-                context.ContractPresets.Add(preset);
-                return preset;
+                var end = start.AddHours(hours);
+                var block = FocusBlock.Create(Guid.NewGuid(), focusPresetId, start, end, contractId: contractId);
+                block.MarkRitualCompleted(start);
+                context.PlannedBlocks.Add(block);
+
+                var session = Session.Create(Guid.NewGuid(), new SessionGoal("Focused work"),
+                    new SessionDuration(end - start), focusPresetId, SessionOrigin.Planned, originatingBlockId: block.Id);
+                session.Start(start, scheduledEnd: end);
+                session.Complete(end);
+                context.Sessions.Add(session);
             }
 
-            void SeedContract(ContractPreset preset, DateOnly startDate, DateOnly endDate,
-                IReadOnlyDictionary<DateOnly, double> plannedFocusHoursByDay, ContractFloor? contractFloor = null)
+            // Never touched at all — no RitualCompletedAt, no Session. Classify resolves this
+            // as Missed once "now" is past scheduledEnd, which it already is for every date
+            // this is used with below (all safely in the past).
+            void SeedMissedFocusBlock(Guid contractId, DateTime start, double hours)
+                => context.PlannedBlocks.Add(FocusBlock.Create(Guid.NewGuid(), focusPresetId, start, start.AddHours(hours), contractId: contractId));
+
+            // Ritual completed on time, but the session was ended before the block's own
+            // scheduled End — CreditedWindow credits only what was actually delivered.
+            void SeedEndedEarlyFocusBlock(Guid contractId, DateTime start, double scheduledHours, double actualHoursBeforeEndingEarly)
             {
-                // Mirrors exactly how a real Advanced contract's DailyFloorPolicy gets built
-                // from a picked preset (SealNenContractCommandHandler): a preset with a real
-                // DailyFloor becomes a fixed policy with no rest days; one with none (Period
-                // Budget's own no-per-day-floor mode, or these mostly-None test presets)
-                // stays DailyFloorPolicy.None.
-                var dailyFloorPolicy = preset.DailyFloor is { } floor
-                    ? DailyFloorPolicy.Fixed(floor, restDays: [])
-                    : DailyFloorPolicy.None;
+                var end = start.AddHours(scheduledHours);
+                var block = FocusBlock.Create(Guid.NewGuid(), focusPresetId, start, end, contractId: contractId);
+                block.MarkRitualCompleted(start);
+                context.PlannedBlocks.Add(block);
 
-                var contractId = Guid.NewGuid();
-                var contract = NenContract.Seal(
-                    id: contractId,
-                    name: preset.Name,
-                    goal: new NenContractGoal("Exercise the redemption placement policy fix"),
-                    startDate: startDate,
-                    endDate: endDate,
-                    strictnessRule: preset.StrictnessRule,
-                    dailyFloorPolicy: dailyFloorPolicy,
-                    changeWindow: null,
-                    allowCancellation: preset.AllowCancellation,
-                    plannedFocusHoursByDay: plannedFocusHoursByDay,
-                    sealedAt: today,
-                    contractPresetId: preset.Id,
-                    redemptionPlacementPolicy: preset.RedemptionPlacementPolicy,
-                    contractFloor: contractFloor);
-
-                context.NenContracts.Add(contract);
-
-                foreach (var (date, hours) in plannedFocusHoursByDay)
-                {
-                    var blockStart = date.ToDateTime(new TimeOnly(9, 0));
-                    context.PlannedBlocks.Add(FocusBlock.Create(
-                        Guid.NewGuid(), focusPresetId, blockStart, blockStart.AddHours(hours), contractId: contractId));
-                }
+                var actualEnd = start.AddHours(actualHoursBeforeEndingEarly);
+                var session = Session.Create(Guid.NewGuid(), new SessionGoal("Focused work"),
+                    new SessionDuration(end - start), focusPresetId, SessionOrigin.Planned, originatingBlockId: block.Id);
+                session.Start(start, scheduledEnd: end);
+                session.Complete(actualEnd);
+                context.Sessions.Add(session);
             }
 
-            // Contract 1 — active from first launch, no clock jump needed. Directly
-            // reproduces the originally-reported bug: a block missed yesterday must still
-            // be coverable today.
-            SeedContract(
-                SeedPreset("Current Day Only", StrictnessRule.DailyFlexibility, RedemptionPlacementPolicy.CurrentDayOnly),
-                DateOnly.FromDateTime(today.AddDays(-3)), DateOnly.FromDateTime(today.AddDays(7)),
-                new Dictionary<DateOnly, double> { [DateOnly.FromDateTime(today.AddDays(-1))] = 1.0 });
+            // Deliberately left uncompleted — no RitualCompletedAt, no Session. The user
+            // completes this live via the Ritual once its window arrives (may need a debug
+            // clock jump to reach it), exercising the real end-to-end flow rather than
+            // pre-faked history for a day that hasn't happened yet.
+            void SeedPendingFocusBlock(Guid contractId, DateTime start, double hours)
+                => context.PlannedBlocks.Add(FocusBlock.Create(Guid.NewGuid(), focusPresetId, start, start.AddHours(hours), contractId: contractId));
 
-            // Contract 2 — starts 8 days out. Jump the debug clock to at least +9 days to
-            // make its own Day-1 block count as "missed."
-            SeedContract(
-                SeedPreset("Anywhere In Contract", StrictnessRule.DailyFlexibility, RedemptionPlacementPolicy.AnywhereInContract),
-                DateOnly.FromDateTime(today.AddDays(8)), DateOnly.FromDateTime(today.AddDays(18)),
-                new Dictionary<DateOnly, double> { [DateOnly.FromDateTime(today.AddDays(8))] = 1.0 });
+            // Reused across every "trivial plan" contract below (3, 5, 6) — same preset,
+            // different contracts, exactly what a real reusable ContractPreset is for. Each
+            // contract still gets its own distinct Name (a NenContract's Name is independent
+            // of its preset's) — sharing "Focus Commitment" as the contract Name itself,
+            // not just the preset, was confusing to tell apart in the Planner banner/popover.
+            var trivialPreset = ContractPreset.Create(Guid.NewGuid(), "Focus Commitment", StrictnessRule.DailyFlexibility,
+                dailyFloor: null, workHours: null, allowCancellation: true);
+            context.ContractPresets.Add(trivialPreset);
 
-            // Contract 3 — starts 19 days out. Jump to at least +20 days. Period strictness
-            // is what makes the "move a redemption block to another day" test meaningful.
-            SeedContract(
-                SeedPreset("Period + Move", StrictnessRule.PeriodTimeBudget, RedemptionPlacementPolicy.CurrentDayOnly),
-                DateOnly.FromDateTime(today.AddDays(19)), DateOnly.FromDateTime(today.AddDays(29)),
-                new Dictionary<DateOnly, double> { [DateOnly.FromDateTime(today.AddDays(19))] = 1.0 },
-                contractFloor: new ContractFloor(5));
+            // Contract 1 — "In Progress", active from first launch, no clock jump needed.
+            // Two real 2h days already completed (today-3, today-2); two more (tomorrow,
+            // day after) are planned but deliberately left uncompleted — "Complete" stays
+            // hidden (RemainingHours > 0) until you actually complete those two live via the
+            // Ritual once each day's window arrives (jump the debug clock forward to reach
+            // them without waiting for real time to pass). Once all four are done, the
+            // recap has a real day-strip, a real streak, and real CompletedOnTime blocks —
+            // genuinely earned, not pre-faked.
+            var inProgressStart = DateOnly.FromDateTime(today.AddDays(-3));
+            var inProgressPlan = new Dictionary<DateOnly, double>
+            {
+                [DateOnly.FromDateTime(today.AddDays(-3))] = 2,
+                [DateOnly.FromDateTime(today.AddDays(-2))] = 2,
+                [DateOnly.FromDateTime(today.AddDays(1))] = 2,
+                [DateOnly.FromDateTime(today.AddDays(2))] = 2
+            };
+            var inProgressContract = NenContract.Seal(
+                id: Guid.NewGuid(), name: "In Progress", goal: new NenContractGoal("Exercise the Post-Contract recap feature"),
+                startDate: inProgressStart, endDate: DateOnly.FromDateTime(today.AddDays(3)), strictnessRule: trivialPreset.StrictnessRule,
+                dailyFloorPolicy: DailyFloorPolicy.PerDay(inProgressPlan), changeWindow: null,
+                allowCancellation: trivialPreset.AllowCancellation, plannedFocusHoursByDay: inProgressPlan,
+                sealedAt: today, contractPresetId: trivialPreset.Id);
+            context.NenContracts.Add(inProgressContract);
+            SeedCompletedFocusBlock(inProgressContract.Id, today.AddDays(-3).AddHours(9), 2);
+            SeedCompletedFocusBlock(inProgressContract.Id, today.AddDays(-2).AddHours(9), 2);
+            SeedPendingFocusBlock(inProgressContract.Id, today.AddDays(1).AddHours(9), 2);
+            SeedPendingFocusBlock(inProgressContract.Id, today.AddDays(2).AddHours(9), 2);
 
-            // Contract 4 — starts 30 days out. Jump to at least +31 days. Confirms a
-            // redemption block gets no special exemption from Lockdown's immovability.
-            SeedContract(
-                SeedPreset("Lockdown", StrictnessRule.Locked, RedemptionPlacementPolicy.AnywhereInContract),
-                DateOnly.FromDateTime(today.AddDays(30)), DateOnly.FromDateTime(today.AddDays(40)),
-                new Dictionary<DateOnly, double> { [DateOnly.FromDateTime(today.AddDays(30))] = 1.0 });
+            // Contract 2 — starts 35 days out. Jump the debug clock to at least +35 days.
+            // A real 4h/day floor, backed by real (uncompleted) blocks matching it exactly
+            // — GetNenContractsForDateRangeQueryHandler's plannedForDay sums *actual*
+            // scheduled blocks, not this Seal-time plannedFocusHoursByDay map, so without a
+            // real block behind each day the calendar would show 0h/no tile at all despite
+            // CommittedFocusHours correctly reporting a real total (a real bug this exact
+            // gap surfaced in an earlier version of this seed — DayFloorPreviewViewModel.
+            // ShowSimplifiedFuture assumes a future day's real scheduled hours can never
+            // fall below its floor, which Seal's own validation guarantees for a normal
+            // real contract but not for a plannedFocusHoursByDay number seeded with no
+            // block to back it). "Complete" stays hidden (RemainingHours > 0) until these
+            // are completed live via the Ritual once each day's window arrives.
+            var hoursStart = DateOnly.FromDateTime(today.AddDays(35));
+            var hoursEnd = DateOnly.FromDateTime(today.AddDays(41));
+            var hoursPlan = new Dictionary<DateOnly, double>();
+            for (var d = hoursStart; d <= hoursEnd; d = d.AddDays(1)) hoursPlan[d] = 4;
+            var hoursPreset = ContractPreset.Create(Guid.NewGuid(), "Hours Remaining", StrictnessRule.DailyFlexibility,
+                dailyFloor: new DailyFloor(4), workHours: null, allowCancellation: true);
+            context.ContractPresets.Add(hoursPreset);
+            var hoursContract = NenContract.Seal(
+                id: Guid.NewGuid(), name: hoursPreset.Name, goal: new NenContractGoal("Exercise the Post-Contract recap feature"),
+                startDate: hoursStart, endDate: hoursEnd, strictnessRule: hoursPreset.StrictnessRule,
+                dailyFloorPolicy: DailyFloorPolicy.Fixed(new DailyFloor(4), restDays: []), changeWindow: null,
+                allowCancellation: true, plannedFocusHoursByDay: hoursPlan, sealedAt: today, contractPresetId: hoursPreset.Id);
+            context.NenContracts.Add(hoursContract);
+            foreach (var (date, hours) in hoursPlan)
+                SeedPendingFocusBlock(hoursContract.Id, date.ToDateTime(new TimeOnly(9, 0)), hours);
 
-            // Contract 5 — starts 41 days out, only 3 days long. Jump to at least +41 days.
-            // A REAL fixed 1h/day floor (unlike 1-4, which all use DailyFloorPolicy.None) —
-            // every day is pre-planned with exactly 1h so Seal's own floor check passes.
-            // Resize/extend one day's block past 1h and complete it to confirm the floor
-            // badge stays pinned at "Xh / 1h" (surplus shown) instead of becoming "Xh / Xh."
-            var floorContractStart = DateOnly.FromDateTime(today.AddDays(41));
-            var floorContractEnd = DateOnly.FromDateTime(today.AddDays(43));
-            var floorContractPlan = new Dictionary<DateOnly, double>();
-            for (var date = floorContractStart; date <= floorContractEnd; date = date.AddDays(1))
-                floorContractPlan[date] = 1.0;
-            SeedContract(
-                SeedPreset("Daily Floor Surplus", StrictnessRule.DailyFlexibility,
-                    RedemptionPlacementPolicy.AnywhereInContract, dailyFloor: new DailyFloor(1)),
-                floorContractStart, floorContractEnd, floorContractPlan);
+            // Contract 3 — starts 46 days out. Jump to at least +46 days. Nothing committed
+            // (CommittedFocusHours == 0, hours check trivially passes) and one still-open
+            // linked block sits in the window — isolates the PendingBlockCount gate cleanly,
+            // with nothing pre-completed (it hasn't happened yet relative to real "now",
+            // so there's nothing honest to mark complete ahead of time). Its recap is never
+            // seen anyway while the button stays hidden.
+            var pendingStart = DateOnly.FromDateTime(today.AddDays(46));
+            var pendingContract = NenContract.Seal(
+                id: Guid.NewGuid(), name: "Pending Block Test", goal: new NenContractGoal("Exercise the Post-Contract recap feature"),
+                startDate: pendingStart, endDate: DateOnly.FromDateTime(today.AddDays(52)), strictnessRule: trivialPreset.StrictnessRule,
+                dailyFloorPolicy: DailyFloorPolicy.None, changeWindow: null, allowCancellation: trivialPreset.AllowCancellation,
+                plannedFocusHoursByDay: new Dictionary<DateOnly, double>(), sealedAt: today, contractPresetId: trivialPreset.Id);
+            context.NenContracts.Add(pendingContract);
+            var pendingBlockStart = pendingStart.ToDateTime(new TimeOnly(9, 0));
+            context.PlannedBlocks.Add(FocusBlock.Create(
+                Guid.NewGuid(), focusPresetId, pendingBlockStart, pendingBlockStart.AddHours(1), contractId: pendingContract.Id));
+
+            // Contract 4 — starts 57 days out. Jump to at least +57 days. Work Hours set
+            // (9-17); nothing committed (CommittedFocusHours == 0), so it's immediately
+            // ready to complete once reached — exercises StartsAt/EndsAt at Seal/Complete
+            // time without pretending anything already happened before real "now" got there.
+            var workHours = new WorkHours(new TimeOnly(9, 0), new TimeOnly(17, 0));
+            var workHoursPreset = ContractPreset.Create(Guid.NewGuid(), "Work Hours Boundary", StrictnessRule.DailyFlexibility,
+                dailyFloor: null, workHours: workHours, allowCancellation: true);
+            context.ContractPresets.Add(workHoursPreset);
+            var workHoursStart = DateOnly.FromDateTime(today.AddDays(57));
+            context.NenContracts.Add(NenContract.Seal(
+                id: Guid.NewGuid(), name: workHoursPreset.Name, goal: new NenContractGoal("Exercise the Post-Contract recap feature"),
+                startDate: workHoursStart, endDate: DateOnly.FromDateTime(today.AddDays(64)), strictnessRule: workHoursPreset.StrictnessRule,
+                dailyFloorPolicy: DailyFloorPolicy.None, changeWindow: null, allowCancellation: true,
+                plannedFocusHoursByDay: new Dictionary<DateOnly, double>(), sealedAt: today,
+                workHoursPolicy: new WorkHoursPolicy(workHours), contractPresetId: workHoursPreset.Id));
+
+            // Contract 5 — "Completed Last Month," already Completed, never acknowledged.
+            // A real mix of outcomes, not just CompletedOnTime: 2 real completed days, 1
+            // Missed (never touched), 1 EndedEarly (ritual done on time, session cut short
+            // at 1h of a scheduled 2h) — 5h delivered out of 8h committed, so this also
+            // exercises the "Partially Completed" grade band, not just 100%+. Dates are
+            // safely in the past and irrelevant to its terminal status (forced Complete()
+            // directly). Tests the startup catch-up sweep: launching the app should show
+            // this Post-Contract overlay automatically, no clicking required.
+            var completedStart = DateOnly.FromDateTime(today.AddDays(-60));
+            var completedPlan = new Dictionary<DateOnly, double>
+            {
+                [completedStart] = 2,
+                [completedStart.AddDays(1)] = 2,
+                [completedStart.AddDays(2)] = 2,
+                [completedStart.AddDays(3)] = 2
+            };
+            var completedContract = NenContract.Seal(
+                id: Guid.NewGuid(), name: "Completed Last Month", goal: new NenContractGoal("Exercise the Post-Contract recap feature"),
+                startDate: completedStart, endDate: DateOnly.FromDateTime(today.AddDays(-53)), strictnessRule: trivialPreset.StrictnessRule,
+                dailyFloorPolicy: DailyFloorPolicy.PerDay(completedPlan), changeWindow: null,
+                allowCancellation: trivialPreset.AllowCancellation, plannedFocusHoursByDay: completedPlan,
+                sealedAt: today, contractPresetId: trivialPreset.Id);
+            context.NenContracts.Add(completedContract);
+            SeedCompletedFocusBlock(completedContract.Id, completedStart.ToDateTime(new TimeOnly(9, 0)), 2);
+            SeedCompletedFocusBlock(completedContract.Id, completedStart.AddDays(1).ToDateTime(new TimeOnly(9, 0)), 2);
+            SeedMissedFocusBlock(completedContract.Id, completedStart.AddDays(2).ToDateTime(new TimeOnly(9, 0)), 2);
+            SeedEndedEarlyFocusBlock(completedContract.Id, completedStart.AddDays(3).ToDateTime(new TimeOnly(9, 0)), scheduledHours: 2, actualHoursBeforeEndingEarly: 1);
+            completedContract.Complete(completedStart.ToDateTime(TimeOnly.MinValue).AddDays(4));
+
+            // Contract 6 — "Broken Contract Test," already Broken, never acknowledged. Two
+            // real completed days and one Missed day before the break point, plus a fourth
+            // block scheduled after it that gets MarkCancelled the same way
+            // BreakNenContractCommandHandler would — giving the recap's Cancelled *and*
+            // Missed counts real content in the same scenario, and a concrete illustration
+            // of why EndDate shrinks to the break date while OriginalEndDate stays what was
+            // actually sealed. Same startup-catchup path as Contract 5, but exercises the
+            // "CONTRACT BROKEN" header/reflection prompt.
+            var brokenStart = DateOnly.FromDateTime(today.AddDays(-75));
+            var brokenPlan = new Dictionary<DateOnly, double>
+            {
+                [brokenStart] = 2,
+                [brokenStart.AddDays(1)] = 2,
+                [brokenStart.AddDays(2)] = 2
+            };
+            var brokenContract = NenContract.Seal(
+                id: Guid.NewGuid(), name: "Broken Contract Test", goal: new NenContractGoal("Exercise the Post-Contract recap feature"),
+                startDate: brokenStart, endDate: DateOnly.FromDateTime(today.AddDays(-68)), strictnessRule: trivialPreset.StrictnessRule,
+                dailyFloorPolicy: DailyFloorPolicy.PerDay(brokenPlan), changeWindow: null,
+                allowCancellation: trivialPreset.AllowCancellation, plannedFocusHoursByDay: brokenPlan,
+                sealedAt: today, contractPresetId: trivialPreset.Id);
+            context.NenContracts.Add(brokenContract);
+            SeedCompletedFocusBlock(brokenContract.Id, brokenStart.ToDateTime(new TimeOnly(9, 0)), 2);
+            SeedMissedFocusBlock(brokenContract.Id, brokenStart.AddDays(1).ToDateTime(new TimeOnly(9, 0)), 2);
+            SeedCompletedFocusBlock(brokenContract.Id, brokenStart.AddDays(2).ToDateTime(new TimeOnly(9, 0)), 2);
+            var cancelledBlockStart = brokenStart.AddDays(4).ToDateTime(new TimeOnly(9, 0));
+            var cancelledBlock = FocusBlock.Create(Guid.NewGuid(), focusPresetId,
+                cancelledBlockStart, cancelledBlockStart.AddHours(2), contractId: brokenContract.Id);
+            context.PlannedBlocks.Add(cancelledBlock);
+            var brokenAt = brokenStart.ToDateTime(TimeOnly.MinValue).AddDays(3).AddHours(12); // between day 3's completion and day 5's cancelled block
+            brokenContract.Break(brokenAt);
+            cancelledBlock.MarkCancelled(brokenAt);
 
             context.SaveChanges();
         }

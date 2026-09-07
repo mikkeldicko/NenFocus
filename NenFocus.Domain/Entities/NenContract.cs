@@ -20,6 +20,15 @@ public class NenContract : AggregateRoot
     public NenContractGoal Goal { get; private set; } = null!;
     public DateOnly StartDate { get; private set; }
     public DateOnly EndDate { get; private set; }
+
+    /// <summary>
+    /// EndDate exactly as sealed, frozen forever regardless of what Break later does to
+    /// EndDate itself — preserves "how big was the original commitment" for history/recap
+    /// purposes even after a broken contract's EndDate shrinks to its real end. Mirrors
+    /// CommittedFocusHours' "frozen at Seal" idiom, applied to the calendar range instead
+    /// of the hours total.
+    /// </summary>
+    public DateOnly OriginalEndDate { get; private set; }
     public StrictnessRule StrictnessRule { get; private set; }
     public DailyFloorPolicy DailyFloorPolicy { get; private set; } = null!;
     public ChangeWindow? ChangeWindow { get; private set; }
@@ -124,6 +133,7 @@ public class NenContract : AggregateRoot
             Goal = goal,
             StartDate = startDate,
             EndDate = endDate,
+            OriginalEndDate = endDate,
             StrictnessRule = strictnessRule,
             DailyFloorPolicy = dailyFloorPolicy,
             ChangeWindow = changeWindow,
@@ -171,6 +181,29 @@ public class NenContract : AggregateRoot
     /// </summary>
     public bool IsDueForCompletion(DateOnly asOf)
         => Status == NenContractStatus.Active && asOf > EndDate;
+
+    /// <summary>
+    /// The true instant this contract's commitment begins — StartDate at midnight unless
+    /// a Work Hours window covers that day, in which case it's that window's own start.
+    /// Deliberately does not delay Activate()/IsDueForActivation (still fires at midnight
+    /// on StartDate, unchanged) — this only affects Bonus-block classification, not the
+    /// Scheduled-to-Active transition. See ARCHITECT_GOVERNANCE.md Open Gap L.
+    /// </summary>
+    public DateTime StartsAt =>
+        WorkHoursPolicy?.For(StartDate) is { } hours
+            ? StartDate.ToDateTime(hours.Start)
+            : StartDate.ToDateTime(TimeOnly.MinValue);
+
+    /// <summary>
+    /// The true instant this contract's commitment ends — EndDate at the end of the day
+    /// unless a Work Hours window covers that day, in which case it's that window's own
+    /// end. Governs both passive completion timing (IsDueForCompletion) and Bonus-block
+    /// classification. See ARCHITECT_GOVERNANCE.md Open Gap L.
+    /// </summary>
+    public DateTime EndsAt =>
+        WorkHoursPolicy?.For(EndDate) is { } hours
+            ? EndDate.ToDateTime(hours.End)
+            : EndDate.ToDateTime(TimeOnly.MaxValue);
 
     public void Activate(DateTime activatedAt)
     {
@@ -221,6 +254,17 @@ public class NenContract : AggregateRoot
         if (!IsInEffect)
             throw new InvalidOperationException("Only a contract that is still in effect (Scheduled or Active) can be broken.");
 
+        // EndDate shrinks to reflect what actually happened — the days after this point were
+        // never going to happen, so they shouldn't still "reserve" the calendar (blocking a
+        // new contract from starting there) or keep attributing later bonus work to a
+        // contract that's already over. OriginalEndDate (set once at Seal, above) keeps the
+        // originally-planned range for history/recap purposes regardless. Clamped to never
+        // go below StartDate — breaking a Scheduled contract before it ever started must not
+        // produce EndDate < StartDate, which would violate Seal's own invariant.
+        var brokenDate = DateOnly.FromDateTime(brokenAt);
+        if (brokenDate < EndDate) EndDate = brokenDate;
+        if (EndDate < StartDate) EndDate = StartDate;
+
         Status = NenContractStatus.Broken;
         Raise(new NenContractBrokenEvent(Id, brokenAt));
     }
@@ -236,6 +280,17 @@ public class NenContract : AggregateRoot
         var floor = DailyFloorPolicy.For(date);
         return floor is null || floor.IsSatisfiedBy(completedFocusHours);
     }
+
+    /// <summary>
+    /// completedFocusHours as a percentage of the day's resolved floor, uncapped (133%
+    /// displays as 133%, never clamped to 100%) — null on a rest day (no resolved floor)
+    /// or a floorless contract, mirroring IsDayMet's own delegation to DailyFloorPolicy.
+    /// Purely additive display concern, computed at query time — IsDayMet stays the sole
+    /// authoritative pass/fail for Redemption deficit logic and lifecycle transitions.
+    /// See ARCHITECT_GOVERNANCE.md Open Gap C, C1.
+    /// </summary>
+    public double? PercentOfFloorMet(DateOnly date, double completedFocusHours)
+        => DailyFloorPolicy.For(date)?.PercentComplete(completedFocusHours);
 
     /// <summary>
     /// True when this day resolves to no obligation at all — same resolution IsDayMet

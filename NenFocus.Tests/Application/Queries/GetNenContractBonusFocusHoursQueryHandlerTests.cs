@@ -32,7 +32,7 @@ public class GetNenContractBonusFocusHoursQueryHandlerTests
 
     private GetNenContractBonusFocusHoursQueryHandler CreateHandler() => new(_contracts, _blocks, _sessions, _classifier, _calculator, _clock);
 
-    private static NenContract ActiveContract() => NenContract.Seal(
+    private static NenContract ActiveContract(WorkHoursPolicy? workHoursPolicy = null) => NenContract.Seal(
         id: ContractId,
         name: "Focused Week",
         goal: new NenContractGoal("Ship it"),
@@ -43,7 +43,8 @@ public class GetNenContractBonusFocusHoursQueryHandlerTests
         changeWindow: null,
         allowCancellation: false,
         plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-        sealedAt: StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
+        sealedAt: StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc),
+        workHoursPolicy: workHoursPolicy);
 
     [Fact]
     public async Task HandleAsync_ContractNotFound_ReturnsEmpty()
@@ -99,6 +100,40 @@ public class GetNenContractBonusFocusHoursQueryHandlerTests
         _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(ActiveContract());
         var outsideDay = EndDate.AddDays(5).ToDateTime(new TimeOnly(9, 0), DateTimeKind.Utc);
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), outsideDay, outsideDay.AddHours(1));
+        _blocks.GetForRangeAsync(Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyList<PlannedBlock>)[block]);
+
+        var result = await CreateHandler().HandleAsync(new GetNenContractBonusFocusHoursQuery(ContractId), CancellationToken.None);
+
+        result.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task HandleAsync_UnlinkedBlockAfterWorkHoursCloseOnLastDay_Excluded()
+    {
+        // Same calendar day as EndDate, but after Work Hours close — under the old
+        // date-only truncation this counted as Bonus; EndsAt correctly excludes it.
+        var policy = new WorkHoursPolicy(new WorkHours(new TimeOnly(9, 0), new TimeOnly(17, 0)));
+        _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(ActiveContract(policy));
+        var afterClose = EndDate.ToDateTime(new TimeOnly(18, 0), DateTimeKind.Utc);
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), afterClose, afterClose.AddHours(1));
+        _blocks.GetForRangeAsync(Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyList<PlannedBlock>)[block]);
+
+        var result = await CreateHandler().HandleAsync(new GetNenContractBonusFocusHoursQuery(ContractId), CancellationToken.None);
+
+        result.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task HandleAsync_UnlinkedBlockBeforeWorkHoursOpenOnFirstDay_Excluded()
+    {
+        // Same calendar day as StartDate, but before Work Hours open — StartsAt correctly
+        // excludes it, unlike the old date-only truncation.
+        var policy = new WorkHoursPolicy(new WorkHours(new TimeOnly(9, 0), new TimeOnly(17, 0)));
+        _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(ActiveContract(policy));
+        var beforeOpen = StartDate.ToDateTime(new TimeOnly(7, 0), DateTimeKind.Utc);
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), beforeOpen, beforeOpen.AddHours(1));
         _blocks.GetForRangeAsync(Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[block]);
 

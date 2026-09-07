@@ -32,6 +32,7 @@ public class GetNenContractRecapQueryHandlerTests
     public GetNenContractRecapQueryHandlerTests()
     {
         _clock.UtcNow.Returns(Now);
+        _clock.ToLocal(Arg.Any<DateTime>()).Returns(ci => ci.Arg<DateTime>());
         _sessions.GetByOriginatingBlockIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((Session?)null);
         _blocks.GetForRangeAsync(Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[]);
@@ -51,6 +52,101 @@ public class GetNenContractRecapQueryHandlerTests
             dailyFloorPolicy: DailyFloorPolicy.None, changeWindow: null, allowCancellation: true,
             plannedFocusHoursByDay: new Dictionary<DateOnly, double> { [StartDate] = committedHours },
             sealedAt: StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
+
+    // StartDate..EndDate is a 7-day range (Jan 1-7). A fixed 4h/day floor everywhere by
+    // default; individual tests override specific days via dailyFloorPolicy.
+    private static NenContract FloorContract(DailyFloorPolicy? dailyFloorPolicy = null) => NenContract.Seal(
+        id: ContractId, name: "Focused Week", goal: new NenContractGoal("Ship it"),
+        startDate: StartDate, endDate: EndDate, strictnessRule: StrictnessRule.Locked,
+        dailyFloorPolicy: dailyFloorPolicy ?? new DailyFloorPolicy(new DailyFloor(4)),
+        changeWindow: null, allowCancellation: true,
+        plannedFocusHoursByDay: new Dictionary<DateOnly, double>
+        {
+            [StartDate] = 4, [StartDate.AddDays(1)] = 4, [StartDate.AddDays(2)] = 4, [StartDate.AddDays(3)] = 4,
+            [StartDate.AddDays(4)] = 4, [StartDate.AddDays(5)] = 4, [EndDate] = 4
+        },
+        sealedAt: StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
+
+    private void StubCompletedByDay(Dictionary<DateOnly, double> hoursByDay) =>
+        _completedHours.HandleAsync(Arg.Any<GetNenContractCompletedFocusHoursQuery>(), Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyDictionary<DateOnly, double>)hoursByDay);
+
+    [Fact]
+    public async Task HandleAsync_DailyBreakdown_OneEntryPerDayWithCorrectPercentage()
+    {
+        _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(FloorContract());
+        StubCompletedByDay(new Dictionary<DateOnly, double> { [StartDate] = 2, [StartDate.AddDays(1)] = 4 });
+
+        var result = await CreateHandler().HandleAsync(new GetNenContractRecapQuery(ContractId), CancellationToken.None);
+
+        result!.DailyBreakdown.Should().HaveCount(7); // Jan 1 through Jan 7 inclusive
+        result.DailyBreakdown.First(d => d.Date == StartDate).Percentage.Should().Be(0.5);
+        result.DailyBreakdown.First(d => d.Date == StartDate.AddDays(1)).Percentage.Should().Be(1.0);
+        result.DailyBreakdown.First(d => d.Date == StartDate.AddDays(2)).Percentage.Should().Be(0.0); // no hours logged
+    }
+
+    [Fact]
+    public async Task HandleAsync_DailyBreakdown_RestDayHasNullPercentageAndIsFlagged()
+    {
+        var policy = new DailyFloorPolicy(new DailyFloor(4), new Dictionary<DateOnly, DailyFloor?>
+        {
+            [StartDate.AddDays(3)] = null
+        });
+        _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(FloorContract(policy));
+
+        var result = await CreateHandler().HandleAsync(new GetNenContractRecapQuery(ContractId), CancellationToken.None);
+
+        var restDay = result!.DailyBreakdown.First(d => d.Date == StartDate.AddDays(3));
+        restDay.IsRestDay.Should().BeTrue();
+        restDay.Percentage.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task HandleAsync_BestStreakDays_ConsecutiveMetDaysCounted()
+    {
+        _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(FloorContract());
+        // Met: Jan1, Jan2, Jan3 -> streak of 3. Jan4 not met breaks it. Jan5, Jan6 met -> streak of 2.
+        StubCompletedByDay(new Dictionary<DateOnly, double>
+        {
+            [StartDate] = 4, [StartDate.AddDays(1)] = 4, [StartDate.AddDays(2)] = 4,
+            [StartDate.AddDays(3)] = 0,
+            [StartDate.AddDays(4)] = 4, [StartDate.AddDays(5)] = 4,
+            [EndDate] = 0
+        });
+
+        var result = await CreateHandler().HandleAsync(new GetNenContractRecapQuery(ContractId), CancellationToken.None);
+
+        result!.BestStreakDays.Should().Be(3);
+    }
+
+    [Fact]
+    public async Task HandleAsync_BestStreakDays_RestDayInTheMiddleDoesNotBreakStreak()
+    {
+        var policy = new DailyFloorPolicy(new DailyFloor(4), new Dictionary<DateOnly, DailyFloor?>
+        {
+            [StartDate.AddDays(1)] = null // rest day, sandwiched between two met days
+        });
+        _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(FloorContract(policy));
+        StubCompletedByDay(new Dictionary<DateOnly, double>
+        {
+            [StartDate] = 4, [StartDate.AddDays(2)] = 4
+        });
+
+        var result = await CreateHandler().HandleAsync(new GetNenContractRecapQuery(ContractId), CancellationToken.None);
+
+        result!.BestStreakDays.Should().Be(2); // StartDate + StartDate.AddDays(2), rest day skipped
+    }
+
+    [Fact]
+    public async Task HandleAsync_BestStreakDays_NoMetDays_IsZero()
+    {
+        _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(FloorContract());
+        StubCompletedByDay(new Dictionary<DateOnly, double>());
+
+        var result = await CreateHandler().HandleAsync(new GetNenContractRecapQuery(ContractId), CancellationToken.None);
+
+        result!.BestStreakDays.Should().Be(0);
+    }
 
     [Fact]
     public async Task HandleAsync_ContractNotFound_ReturnsNull()

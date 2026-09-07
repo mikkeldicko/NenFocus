@@ -73,7 +73,7 @@
                     Background="#EDEDF2"
                     BorderBrush="#DDDDE8"
                     BorderThickness="0,0,1,0"
-                    IsVisible="{Binding !IsPostSessionActive}">
+                    IsVisible="{Binding IsMainContentVisible}">
 				<DockPanel LastChildFill="False">
 					<StackPanel DockPanel.Dock="Top" Margin="22,32,22,48">
 						<TextBlock Text="NEN" FontSize="22" FontWeight="Black"
@@ -105,16 +105,21 @@
 				</DockPanel>
 			</Border>
 
-			<!-- Normal page content (hidden during post-session) -->
+			<!-- Normal page content (hidden during post-session/post-contract) -->
 			<TransitioningContentControl Grid.Column="1"
                                          Content="{Binding CurrentPage}"
                                          PageTransition="{x:Null}"
-                                         IsVisible="{Binding !IsPostSessionActive}"/>
+                                         IsVisible="{Binding IsMainContentVisible}"/>
 
 			<!-- Post-session overlay (takes full width when active) -->
 			<ContentControl Grid.Column="0" Grid.ColumnSpan="2"
                             Content="{Binding PostSessionViewModel}"
                             IsVisible="{Binding IsPostSessionActive}"/>
+
+			<!-- Post-contract overlay (takes full width when active) -->
+			<ContentControl Grid.Column="0" Grid.ColumnSpan="2"
+                            Content="{Binding PostContractViewModel}"
+                            IsVisible="{Binding IsPostContractActive}"/>
 		</Grid>
 
 		<!-- Ritual full-screen overlay -->

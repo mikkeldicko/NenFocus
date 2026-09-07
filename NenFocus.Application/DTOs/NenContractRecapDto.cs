@@ -54,5 +54,30 @@ public sealed record NenContractRecapDto
     /// <summary>Bonus blocks (ContractId null) whose Start falls within the contract's window.</summary>
     public int BonusBlockCount { get; init; }
 
+    /// <summary>One entry per day in [StartDate, EndDate] — the day-strip for the recap
+    /// screen (Open Gap C, C1). Rest days carry a null Percentage; render as "Rest," never
+    /// "100%."</summary>
+    public IReadOnlyList<NenContractDailyRecapEntryDto> DailyBreakdown { get; init; } = [];
+
+    /// <summary>Longest run of consecutive Day-Met days within this contract's own date
+    /// range — rest days are skipped (neither extend nor break a streak), never spans
+    /// across a different contract. Zero for a contract with no Day-Met days at all
+    /// (Open Gap C, C2).</summary>
+    public int BestStreakDays { get; init; }
+
     public string? Reflection { get; init; }
+}
+
+/// <summary>One day's entry in NenContractRecapDto.DailyBreakdown.</summary>
+public sealed record NenContractDailyRecapEntryDto
+{
+    public DateOnly Date { get; init; }
+
+    /// <summary>True when this day resolves to no floor obligation at all — Percentage is
+    /// always null on a rest day.</summary>
+    public bool IsRestDay { get; init; }
+
+    /// <summary>Completed hours as a percentage of this day's floor, uncapped (133% stays
+    /// 133%). Null exactly when IsRestDay is true.</summary>
+    public double? Percentage { get; init; }
 }

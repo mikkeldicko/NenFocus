@@ -185,6 +185,9 @@ namespace NenFocus.Infrastructure.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("TEXT");
 
+                    b.Property<DateOnly>("OriginalEndDate")
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime?>("PostContractAcknowledgedAt")
                         .HasColumnType("TEXT");
 

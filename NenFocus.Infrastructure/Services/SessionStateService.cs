@@ -23,6 +23,7 @@ public sealed class SessionStateService : ISessionStateService
     public event EventHandler<RitualRequirementChange>? RitualRequirementChanged;
     public event EventHandler<IReadOnlyList<PostSessionDto>>? PostSessionsReady;
     public event EventHandler? PostSessionAcknowledged;
+    public event EventHandler<IReadOnlyList<NenContractRecapDto>>? PostContractsReady;
 
     // Takes IServiceScopeFactory, not the scoped repositories directly — this service is
     // a Singleton (it must outlive any single operation to hold in-memory session state
@@ -110,6 +111,12 @@ public sealed class SessionStateService : ISessionStateService
     public void NotifyPostSessionAcknowledged()
     {
         PostSessionAcknowledged?.Invoke(this, EventArgs.Empty);
+    }
+
+    public void NotifyPostContractsReady(IReadOnlyList<NenContractRecapDto> recaps)
+    {
+        if (recaps.Count == 0) return;
+        PostContractsReady?.Invoke(this, recaps);
     }
 
     public void Clear()

@@ -239,6 +239,31 @@ public class SessionStateServiceTests
     }
 
     [Fact]
+    public void NotifyPostContractsReady_NonEmptyList_RaisesEvent()
+    {
+        var service = CreateService();
+        IReadOnlyList<NenContractRecapDto>? raisedWith = null;
+        service.PostContractsReady += (_, recaps) => raisedWith = recaps;
+        var recap = new NenContractRecapDto { ContractId = Guid.NewGuid() };
+
+        service.NotifyPostContractsReady([recap]);
+
+        raisedWith.Should().ContainSingle().Which.Should().Be(recap);
+    }
+
+    [Fact]
+    public void NotifyPostContractsReady_EmptyList_DoesNotRaiseEvent()
+    {
+        var service = CreateService();
+        var raised = false;
+        service.PostContractsReady += (_, _) => raised = true;
+
+        service.NotifyPostContractsReady([]);
+
+        raised.Should().BeFalse();
+    }
+
+    [Fact]
     public void NotifyPostSessionAcknowledged_RaisesEvent()
     {
         var service = CreateService();

@@ -102,8 +102,37 @@ public sealed class GetNenContractRecapQueryHandler : IQueryHandler<GetNenContra
         var blocksInRange = await _blocks.GetForRangeAsync(rangeStart, rangeEnd, ct);
         var bonusBlockCount = blocksInRange.Count(b =>
             b.ContractId is null &&
-            DateOnly.FromDateTime(b.Start) >= contract.StartDate &&
-            DateOnly.FromDateTime(b.Start) <= contract.EndDate);
+            _clock.ToLocal(b.Start) >= contract.StartsAt &&
+            _clock.ToLocal(b.Start) <= contract.EndsAt);
+
+        var dailyBreakdown = new List<NenContractDailyRecapEntryDto>();
+        var bestStreakDays = 0;
+        var currentStreakDays = 0;
+        for (var date = contract.StartDate; date <= contract.EndDate; date = date.AddDays(1))
+        {
+            var completedThatDay = completedHoursByDay.GetValueOrDefault(date);
+            var isRestDay = contract.IsRestDay(date);
+
+            dailyBreakdown.Add(new NenContractDailyRecapEntryDto
+            {
+                Date = date,
+                IsRestDay = isRestDay,
+                Percentage = contract.PercentOfFloorMet(date, completedThatDay)
+            });
+
+            // Rest days are skipped entirely — they neither extend nor break a streak.
+            if (isRestDay) continue;
+
+            if (contract.IsDayMet(date, completedThatDay))
+            {
+                currentStreakDays++;
+                bestStreakDays = Math.Max(bestStreakDays, currentStreakDays);
+            }
+            else
+            {
+                currentStreakDays = 0;
+            }
+        }
 
         double? completionPercentage = contract.CommittedFocusHours > 0
             ? totalCompletedHours / contract.CommittedFocusHours
@@ -139,6 +168,8 @@ public sealed class GetNenContractRecapQueryHandler : IQueryHandler<GetNenContra
             MissedBlocks = missed,
             CancelledBlocks = cancelled,
             BonusBlockCount = bonusBlockCount,
+            DailyBreakdown = dailyBreakdown,
+            BestStreakDays = bestStreakDays,
             Reflection = contract.Reflection
         };
     }

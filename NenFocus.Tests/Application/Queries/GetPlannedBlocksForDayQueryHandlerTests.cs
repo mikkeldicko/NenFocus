@@ -24,6 +24,7 @@ public class GetPlannedBlocksForDayQueryHandlerTests
     public GetPlannedBlocksForDayQueryHandlerTests()
     {
         _clock.UtcNow.Returns(new DateTime(2026, 1, 2, 10, 30, 0, DateTimeKind.Utc)); // mid-window by default
+        _clock.ToLocal(Arg.Any<DateTime>()).Returns(ci => ci.Arg<DateTime>());
         _contracts.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((NenContract?)null);
         _contracts.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<NenContract>)[]);
     }

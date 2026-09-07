@@ -11,6 +11,7 @@ using NenFocus.Application.Queries.GetNenContractForEdit;
 using NenFocus.Application.Queries.GetPlannedBlocksForDay;
 using NenFocus.Application.Queries.GetSessionSnapshotForBlock;
 using NenFocus.Application.Queries.GetSuggestedRedemptionPlacements;
+using NenFocus.Application.Queries.GetUnacknowledgedPostContracts;
 using NenFocus.Application.Queries.GetUnacknowledgedPostSessions;
 using NenFocus.Application.UseCases.BlockPresets.CreateBlockPreset;
 using NenFocus.Application.UseCases.BlockPresets.DeleteBlockPreset;
@@ -65,16 +66,27 @@ public partial class ShellViewModel : ViewModelBase
     private abstract record PendingOverlay;
     private sealed record PendingPostSession(PostSessionDto PostSession) : PendingOverlay;
     private sealed record PendingRitual(Guid FocusBlockId) : PendingOverlay;
+    private sealed record PendingPostContract(NenContractRecapDto Recap) : PendingOverlay;
 
     [ObservableProperty] private ViewModelBase _currentPage = null!;
     [ObservableProperty] private bool _isRitualActive;
     [ObservableProperty] private RitualShellViewModel? _ritualViewModel;
     [ObservableProperty] private bool _isPostSessionActive;
     [ObservableProperty] private PostSessionViewModel? _postSessionViewModel;
+    [ObservableProperty] private bool _isPostContractActive;
+    [ObservableProperty] private PostContractViewModel? _postContractViewModel;
     [ObservableProperty] private bool _isTriageActive;
     [ObservableProperty] private MissedSessionsTriageViewModel? _triageViewModel;
     [ObservableProperty] private bool _isContractWizardActive;
     [ObservableProperty] private ContractWizardViewModel? _contractWizardViewModel;
+
+    /// <summary>Drives the sidebar/page-content IsVisible bindings — hidden behind either
+    /// full-width overlay, same as IsPostSessionActive alone used to gate before Post-Contract
+    /// existed.</summary>
+    public bool IsMainContentVisible => !IsPostSessionActive && !IsPostContractActive;
+
+    partial void OnIsPostSessionActiveChanged(bool value) => OnPropertyChanged(nameof(IsMainContentVisible));
+    partial void OnIsPostContractActiveChanged(bool value) => OnPropertyChanged(nameof(IsMainContentVisible));
 
     public DebugClockViewModel DebugClockViewModel { get; }
 
@@ -101,6 +113,8 @@ public partial class ShellViewModel : ViewModelBase
             Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => OnRitualRequirementChanged(change));
         _sessionState.PostSessionsReady += (s, postSessions) =>
             Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => OnPostSessionsReady(postSessions));
+        _sessionState.PostContractsReady += (s, recaps) =>
+            Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => OnPostContractsReady(recaps));
 
         void Select(NavItemViewModel selected)
         {
@@ -117,6 +131,7 @@ public partial class ShellViewModel : ViewModelBase
         var plannerViewModel = new PlannerPageViewModel(_queryDispatcher, _commandDispatcher, _plannerClock, _sessionState);
         plannerViewModel.ContractWizardOpened += OnContractWizardOpened;
         plannerViewModel.ContractWizardClosed += OnContractWizardClosed;
+        plannerViewModel.PostContractReady += OnPostContractReadyLive;
         NavItems.Add(new NavItemViewModel("Planner", "◫", plannerViewModel, Select));
         NavItems.Add(new NavItemViewModel("Insights", "◈", new InsightsPageViewModel(), Select));
         NavItems.Add(new NavItemViewModel("Settings", "◎", new SettingsPageViewModel(), Select));
@@ -155,6 +170,13 @@ public partial class ShellViewModel : ViewModelBase
         var unacknowledged = await _queryDispatcher.QueryAsync(new GetUnacknowledgedPostSessionsQuery());
         foreach (var postSession in unacknowledged)
             _pendingOverlays.Enqueue(new PendingPostSession(postSession));
+
+        // Enqueued behind post-sessions above — same "resolve what already happened before
+        // what's happening now" ordering, applied one level further (a contract's own recap
+        // is even less time-sensitive than a session's).
+        var unacknowledgedContracts = await _queryDispatcher.QueryAsync(new GetUnacknowledgedPostContractsQuery());
+        foreach (var recap in unacknowledgedContracts)
+            _pendingOverlays.Enqueue(new PendingPostContract(recap));
 
         if (_sessionState.IsRitualRequired
             && _sessionState.ActiveSession is null
@@ -249,7 +271,7 @@ public partial class ShellViewModel : ViewModelBase
     {
         if (IsRitualActive) return;
 
-        if (IsPostSessionActive || IsTriageActive || IsContractWizardActive)
+        if (IsPostSessionActive || IsPostContractActive || IsTriageActive || IsContractWizardActive)
         {
             if (focusBlockId.HasValue)
                 _pendingOverlays.Enqueue(new PendingRitual(focusBlockId.Value));
@@ -328,7 +350,7 @@ public partial class ShellViewModel : ViewModelBase
 
     private void TryDrainQueue()
     {
-        if (IsRitualActive || IsPostSessionActive || IsTriageActive || IsContractWizardActive) return;
+        if (IsRitualActive || IsPostSessionActive || IsPostContractActive || IsTriageActive || IsContractWizardActive) return;
 
         if (_pendingOverlays.Count == 0)
         {
@@ -360,6 +382,9 @@ public partial class ShellViewModel : ViewModelBase
                 break;
             case PendingRitual ritual:
                 _ = HandlePendingRitual(ritual.FocusBlockId);
+                break;
+            case PendingPostContract postContract:
+                ShowPostContract(postContract.Recap);
                 break;
         }
     }
@@ -476,6 +501,35 @@ public partial class ShellViewModel : ViewModelBase
         IsPostSessionActive = false;
         PostSessionViewModel = null;
         _sessionState.NotifyPostSessionAcknowledged();
+        TryDrainQueue();
+    }
+
+    // Mirrors OnPostSessionsReady exactly — a background process (the Nen Contract
+    // heartbeat's passive completion sweep) produced one or more recaps nobody was
+    // watching for live.
+    private void OnPostContractsReady(IReadOnlyList<NenContractRecapDto> recaps)
+    {
+        foreach (var recap in recaps)
+            _pendingOverlays.Enqueue(new PendingPostContract(recap));
+        TryDrainQueue();
+    }
+
+    // A direct synchronous UI action (Complete or Break, both dispatched from the Planner)
+    // — the Planner page can only be on screen if nothing app-wide (Ritual/PostSession/
+    // Triage/ContractWizard) is already covering it, so showing this immediately is safe
+    // by the same reasoning MainPageViewModel's direct ShowPostSession call already relies on.
+    private void OnPostContractReadyLive(NenContractRecapDto recap) => ShowPostContract(recap);
+
+    private void ShowPostContract(NenContractRecapDto recap)
+    {
+        PostContractViewModel = new PostContractViewModel(recap, _commandDispatcher, ExitPostContract);
+        IsPostContractActive = true;
+    }
+
+    private void ExitPostContract()
+    {
+        IsPostContractActive = false;
+        PostContractViewModel = null;
         TryDrainQueue();
     }
 }
