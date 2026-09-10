@@ -2,6 +2,7 @@ using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.GetNenContractCompletedFocusHours;
 using NenFocus.Domain.Enums;
+using NenFocus.Domain.Services;
 
 namespace NenFocus.Application.Queries.GetNenContractCompletionReadiness;
 
@@ -12,17 +13,20 @@ public sealed class GetNenContractCompletionReadinessQueryHandler
     private readonly IPlannedBlockRepository _blocks;
     private readonly IQueryHandler<GetNenContractCompletedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> _completedHours;
     private readonly ISystemClock _clock;
+    private readonly IFocusBlockOutcomeClassifier _outcomeClassifier;
 
     public GetNenContractCompletionReadinessQueryHandler(
         INenContractRepository contracts,
         IPlannedBlockRepository blocks,
         IQueryHandler<GetNenContractCompletedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> completedHours,
-        ISystemClock clock)
+        ISystemClock clock,
+        IFocusBlockOutcomeClassifier outcomeClassifier)
     {
         _contracts = contracts;
         _blocks = blocks;
         _completedHours = completedHours;
         _clock = clock;
+        _outcomeClassifier = outcomeClassifier;
     }
 
     private static readonly NenContractCompletionReadinessDto NotReady = new()
@@ -51,9 +55,12 @@ public sealed class GetNenContractCompletionReadinessQueryHandler
 
         // StartsAt/EndsAt, not a date-only truncation, for the unlinked-Bonus half — a
         // Work-Hours contract's true boundary isn't midnight (see NenContract.EndsAt).
+        // IsResolved (not raw HasEnded) so a FocusBlock whose session ended early doesn't
+        // keep blocking readiness until its original scheduled End arrives — see
+        // PlannedBlockResolutionExtensions.
         var pendingBlockCount = blocksInRange.Count(b =>
             !b.CancelledAt.HasValue &&
-            !b.HasEnded(now) &&
+            !b.IsResolved(_outcomeClassifier, now) &&
             (b.ContractId == contract.Id ||
                 (b.ContractId is null &&
                  _clock.ToLocal(b.Start) >= contract.StartsAt &&

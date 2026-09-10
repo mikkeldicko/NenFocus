@@ -13,7 +13,7 @@ public sealed class PolicyEngine : IPolicyEngine
         IEnumerable<Session> sessions,
         IEnumerable<PlannedBlock> blocks)
     {
-        var activePresets = presets.ToList();
+        var allPresets = presets.ToList();
         var activeSessions = sessions.ToList();
         // IsActive(at) is the authoritative boundary check, independent of whatever window
         // the caller's own block query used to fetch candidates. ComputeActivePolicySliceQueryHandler's
@@ -22,6 +22,19 @@ public sealed class PolicyEngine : IPolicyEngine
         // whose window has already closed relative to `at` can never become ActiveFocusBlockId,
         // even if the caller's looser query still returned it.
         var activeBlocks = blocks.Where(b => !b.CancelledAt.HasValue && b.IsActive(at)).ToList();
+
+        // `presets` is the same kind of over-fetched superset as `blocks` — the caller
+        // resolves it from the coarse block/session query, not from activeBlocks/activeSessions
+        // above. Narrowing it here (rather than trusting it as-is) mirrors the same
+        // "coarse fetch, precise narrow" discipline PlannedBlockRepository.GetOverlappingAsync
+        // already applies via EffectiveEnd. Without this, a FocusBlock whose session ended
+        // early correctly drops out of activeBlocks but its preset's blocked sites/apps kept
+        // being reapplied every heartbeat tick anyway, for as long as `at` was still inside
+        // the block's *original* Start/End window.
+        var activePresetIds = activeBlocks.Select(b => b.BlockPresetId)
+            .Concat(activeSessions.Select(s => s.BlockPresetId))
+            .ToHashSet();
+        var activePresets = allPresets.Where(p => activePresetIds.Contains(p.Id)).ToList();
 
         if (activePresets.Count == 0 && activeSessions.Count == 0 && activeBlocks.Count == 0)
             return new ActivePolicySlice { SliceStart = at, SliceEnd = at.AddMinutes(1) };

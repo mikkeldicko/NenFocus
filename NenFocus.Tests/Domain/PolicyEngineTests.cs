@@ -26,6 +26,7 @@ public class PolicyEngineTests
     }
 
     private static Session CreateActiveSession(
+        Guid? blockPresetId = null,
         IReadOnlyList<string>? temporaryBlockedApps = null,
         IReadOnlyList<string>? temporaryBlockedSites = null)
     {
@@ -33,13 +34,20 @@ public class PolicyEngineTests
             Guid.NewGuid(),
             new SessionGoal("Focus"),
             new SessionDuration(TimeSpan.FromMinutes(30)),
-            Guid.NewGuid(),
+            blockPresetId ?? Guid.NewGuid(),
             SessionOrigin.Spontaneous,
             temporaryBlockedApps: temporaryBlockedApps,
             temporaryBlockedSites: temporaryBlockedSites);
         session.Start(At);
         return session;
     }
+
+    // A preset only contributes to BlockedApps/BlockedSites/AllowedSites when a currently
+    // active block or session actually references it (see PolicyEngine.ComputeSlice) — so
+    // any test asserting on those needs a block/session wired to the preset's Id, not just
+    // the preset passed in on its own.
+    private static FocusBlock CreateActiveBlock(Guid blockPresetId)
+        => FocusBlock.Create(Guid.NewGuid(), blockPresetId, At, At.AddHours(1));
 
     [Fact]
     public void ComputeSlice_NoPresetsAndNoSessions_ReturnsMinimalEmptySlice()
@@ -78,9 +86,11 @@ public class PolicyEngineTests
     {
         var presetA = CreatePreset(WebsiteFilterType.Blocklist, apps: ["chrome.exe"]);
         var presetB = CreatePreset(WebsiteFilterType.Blocklist, apps: ["Spotify"]);
+        var blockA = CreateActiveBlock(presetA.Id);
+        var blockB = CreateActiveBlock(presetB.Id);
         var session = CreateActiveSession(temporaryBlockedApps: ["notepad.exe"]);
 
-        var slice = _engine.ComputeSlice(At, [presetA, presetB], [session], []);
+        var slice = _engine.ComputeSlice(At, [presetA, presetB], [session], [blockA, blockB]);
 
         slice.BlockedApps.Should().BeEquivalentTo(["chrome", "spotify", "notepad"]);
     }
@@ -90,8 +100,10 @@ public class PolicyEngineTests
     {
         var presetA = CreatePreset(WebsiteFilterType.Blocklist, apps: ["Chrome"]);
         var presetB = CreatePreset(WebsiteFilterType.Blocklist, apps: ["chrome.exe"]);
+        var blockA = CreateActiveBlock(presetA.Id);
+        var blockB = CreateActiveBlock(presetB.Id);
 
-        var slice = _engine.ComputeSlice(At, [presetA, presetB], [], []);
+        var slice = _engine.ComputeSlice(At, [presetA, presetB], [], [blockA, blockB]);
 
         slice.BlockedApps.Should().ContainSingle().Which.Should().Be("chrome");
     }
@@ -101,8 +113,10 @@ public class PolicyEngineTests
     {
         var presetA = CreatePreset(WebsiteFilterType.Blocklist, sites: ["facebook.com"]);
         var presetB = CreatePreset(WebsiteFilterType.Blocklist, sites: ["youtube.com"]);
+        var blockA = CreateActiveBlock(presetA.Id);
+        var blockB = CreateActiveBlock(presetB.Id);
 
-        var slice = _engine.ComputeSlice(At, [presetA, presetB], [], []);
+        var slice = _engine.ComputeSlice(At, [presetA, presetB], [], [blockA, blockB]);
 
         slice.WebsiteFilterTypeMode.Should().Be(WebsiteFilterType.Blocklist);
         slice.BlockedSites.Should().BeEquivalentTo(["facebook.com", "youtube.com"]);
@@ -113,9 +127,10 @@ public class PolicyEngineTests
     public void ComputeSlice_BlocklistMode_IncludesTemporaryBlockedSites()
     {
         var preset = CreatePreset(WebsiteFilterType.Blocklist, sites: ["facebook.com"]);
+        var block = CreateActiveBlock(preset.Id);
         var session = CreateActiveSession(temporaryBlockedSites: ["reddit.com"]);
 
-        var slice = _engine.ComputeSlice(At, [preset], [session], []);
+        var slice = _engine.ComputeSlice(At, [preset], [session], [block]);
 
         slice.BlockedSites.Should().BeEquivalentTo(["facebook.com", "reddit.com"]);
     }
@@ -124,8 +139,9 @@ public class PolicyEngineTests
     public void ComputeSlice_AnyAllowlistPreset_SwitchesEffectivePolicyToAllowlist()
     {
         var preset = CreatePreset(WebsiteFilterType.Allowlist, sites: ["work.com"]);
+        var block = CreateActiveBlock(preset.Id);
 
-        var slice = _engine.ComputeSlice(At, [preset], [], []);
+        var slice = _engine.ComputeSlice(At, [preset], [], [block]);
 
         slice.WebsiteFilterTypeMode.Should().Be(WebsiteFilterType.Allowlist);
         slice.AllowedSites.Should().BeEquivalentTo(["work.com"]);
@@ -136,8 +152,10 @@ public class PolicyEngineTests
     {
         var presetA = CreatePreset(WebsiteFilterType.Allowlist, sites: ["a.com", "b.com"]);
         var presetB = CreatePreset(WebsiteFilterType.Allowlist, sites: ["b.com", "c.com"]);
+        var blockA = CreateActiveBlock(presetA.Id);
+        var blockB = CreateActiveBlock(presetB.Id);
 
-        var slice = _engine.ComputeSlice(At, [presetA, presetB], [], []);
+        var slice = _engine.ComputeSlice(At, [presetA, presetB], [], [blockA, blockB]);
 
         slice.AllowedSites.Should().BeEquivalentTo(["b.com"]);
     }
@@ -147,8 +165,10 @@ public class PolicyEngineTests
     {
         var allowPreset = CreatePreset(WebsiteFilterType.Allowlist, sites: ["a.com", "b.com"]);
         var blockPreset = CreatePreset(WebsiteFilterType.Blocklist, sites: ["b.com"]);
+        var allowBlock = CreateActiveBlock(allowPreset.Id);
+        var blockBlock = CreateActiveBlock(blockPreset.Id);
 
-        var slice = _engine.ComputeSlice(At, [allowPreset, blockPreset], [], []);
+        var slice = _engine.ComputeSlice(At, [allowPreset, blockPreset], [], [allowBlock, blockBlock]);
 
         slice.AllowedSites.Should().BeEquivalentTo(["a.com"]);
         slice.BlockedSites.Should().BeEquivalentTo(["b.com"]);
@@ -158,7 +178,7 @@ public class PolicyEngineTests
     public void ComputeSlice_AllowlistMode_TemporaryBlockedSiteOverridesAllowlistMembership()
     {
         var allowPreset = CreatePreset(WebsiteFilterType.Allowlist, sites: ["a.com", "temp.com"]);
-        var session = CreateActiveSession(temporaryBlockedSites: ["temp.com"]);
+        var session = CreateActiveSession(blockPresetId: allowPreset.Id, temporaryBlockedSites: ["temp.com"]);
 
         var slice = _engine.ComputeSlice(At, [allowPreset], [session], []);
 
@@ -352,6 +372,30 @@ public class PolicyEngineTests
     }
 
     [Fact]
+    public void ComputeSlice_FocusBlockSessionEndedEarly_PresetIsNoLongerActive()
+    {
+        // Reproduces a live bug: a FocusBlock's session ending early correctly dropped it
+        // from activeBlocks (via EffectiveEnd), but its preset kept getting pulled from the
+        // caller's over-fetched `presets` list regardless, so BlockedSites/BlockedApps kept
+        // reapplying every heartbeat tick for as long as `at` was still inside the block's
+        // *original* Start/End window — enforcement never actually stopped. Once the block
+        // has dropped out of activeBlocks entirely, FocusSessionCompleted plays no role here
+        // (it only fires for a block still found in activeBlocks) — the slice is simply
+        // empty, same as if there were no block at all.
+        var preset = CreatePreset(WebsiteFilterType.Blocklist, sites: ["facebook.com"]);
+        var endedEarlyBlock = FocusBlock.Create(Guid.NewGuid(), preset.Id, At.AddHours(-1), At.AddHours(1));
+        endedEarlyBlock.MarkRitualCompleted(At.AddHours(-1));
+        endedEarlyBlock.MarkSessionEnded(At.AddMinutes(-2)); // ended early, well before its raw End
+
+        var slice = _engine.ComputeSlice(At, [preset], [], [endedEarlyBlock]);
+
+        slice.BlockedSites.Should().BeEmpty();
+        slice.BlockedApps.Should().BeEmpty();
+        slice.ActiveFocusBlockId.Should().BeNull();
+        slice.IsEmpty.Should().BeTrue();
+    }
+
+    [Fact]
     public void ComputeSlice_ActiveSessionPresent_SetsActiveSessionId()
     {
         var preset = CreatePreset(WebsiteFilterType.Blocklist);
@@ -366,8 +410,9 @@ public class PolicyEngineTests
     public void ComputeSlice_BlocklistWithNoBlockedAppsOrSites_IsEmpty()
     {
         var preset = CreatePreset(WebsiteFilterType.Blocklist);
+        var block = CreateActiveBlock(preset.Id);
 
-        var slice = _engine.ComputeSlice(At, [preset], [], []);
+        var slice = _engine.ComputeSlice(At, [preset], [], [block]);
 
         slice.IsEmpty.Should().BeTrue();
     }
@@ -376,8 +421,9 @@ public class PolicyEngineTests
     public void ComputeSlice_AllowlistMode_IsNeverEmpty()
     {
         var preset = CreatePreset(WebsiteFilterType.Allowlist);
+        var block = CreateActiveBlock(preset.Id);
 
-        var slice = _engine.ComputeSlice(At, [preset], [], []);
+        var slice = _engine.ComputeSlice(At, [preset], [], [block]);
 
         slice.IsEmpty.Should().BeFalse();
     }

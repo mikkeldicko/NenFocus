@@ -4,6 +4,7 @@ using NenFocus.Application.Queries.GetNenContractCompletedFocusHours;
 using NenFocus.Application.Queries.GetNenContractCompletionReadiness;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
+using NenFocus.Domain.Services;
 using NenFocus.Domain.ValueObjects;
 using NSubstitute;
 
@@ -21,6 +22,7 @@ public class GetNenContractCompletionReadinessQueryHandlerTests
     private readonly IQueryHandler<GetNenContractCompletedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> _completedHours =
         Substitute.For<IQueryHandler<GetNenContractCompletedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>>>();
     private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
+    private readonly IFocusBlockOutcomeClassifier _outcomeClassifier = Substitute.For<IFocusBlockOutcomeClassifier>();
 
     public GetNenContractCompletionReadinessQueryHandlerTests()
     {
@@ -30,7 +32,8 @@ public class GetNenContractCompletionReadinessQueryHandlerTests
             .Returns((IReadOnlyList<PlannedBlock>)[]);
     }
 
-    private GetNenContractCompletionReadinessQueryHandler CreateHandler() => new(_contracts, _blocks, _completedHours, _clock);
+    private GetNenContractCompletionReadinessQueryHandler CreateHandler() =>
+        new(_contracts, _blocks, _completedHours, _clock, _outcomeClassifier);
 
     private static NenContract ActiveContract(double committedHours = 4) => NenContract.Seal(
         id: ContractId, name: "Focused Week", goal: new NenContractGoal("Ship it"),
@@ -141,10 +144,32 @@ public class GetNenContractCompletionReadinessQueryHandlerTests
         var ended = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Now.AddHours(-3), Now.AddHours(-2), contractId: ContractId);
         _blocks.GetForRangeAsync(Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[ended]);
+        // Never ritual-completed and its scheduled End has already passed — resolved as Missed.
+        _outcomeClassifier.Classify(ended.Start, ended.End, null, null, Now).Returns(FocusBlockOutcome.Missed);
 
         var result = await CreateHandler().HandleAsync(new GetNenContractCompletionReadinessQuery(ContractId));
 
         result.IsReady.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task HandleAsync_LinkedBlockEndedSessionEarly_DoesNotCountAsPending()
+    {
+        // A FocusBlock whose session ended early (raw End still in the future) must not
+        // keep the contract "not ready" just because its original scheduled End hasn't
+        // arrived — it already has a resolved outcome (EndedEarly).
+        _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(ActiveContract(committedHours: 4));
+        StubCompleted(4);
+        var endedEarly = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Now.AddMinutes(-30), Now.AddHours(1), contractId: ContractId);
+        _blocks.GetForRangeAsync(Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyList<PlannedBlock>)[endedEarly]);
+        _outcomeClassifier.Classify(endedEarly.Start, endedEarly.End, endedEarly.RitualCompletedAt, endedEarly.SessionEndedAt, Now)
+            .Returns(FocusBlockOutcome.EndedEarly);
+
+        var result = await CreateHandler().HandleAsync(new GetNenContractCompletionReadinessQuery(ContractId));
+
+        result.IsReady.Should().BeTrue();
+        result.PendingBlockCount.Should().Be(0);
     }
 
     [Fact]

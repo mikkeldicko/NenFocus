@@ -2,6 +2,7 @@ using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.GetNenContractRecap;
 using NenFocus.Domain.Entities;
+using NenFocus.Domain.Services;
 
 namespace NenFocus.Application.UseCases.NenContracts.Break;
 
@@ -12,19 +13,22 @@ public sealed class BreakNenContractCommandHandler : ICommandHandler<BreakNenCon
     private readonly ISessionRepository _sessions;
     private readonly ISystemClock _clock;
     private readonly IQueryHandler<GetNenContractRecapQuery, NenContractRecapDto?> _recap;
+    private readonly IFocusBlockOutcomeClassifier _outcomeClassifier;
 
     public BreakNenContractCommandHandler(
         INenContractRepository contracts,
         IPlannedBlockRepository blocks,
         ISessionRepository sessions,
         ISystemClock clock,
-        IQueryHandler<GetNenContractRecapQuery, NenContractRecapDto?> recap)
+        IQueryHandler<GetNenContractRecapQuery, NenContractRecapDto?> recap,
+        IFocusBlockOutcomeClassifier outcomeClassifier)
     {
         _contracts = contracts;
         _blocks = blocks;
         _sessions = sessions;
         _clock = clock;
         _recap = recap;
+        _outcomeClassifier = outcomeClassifier;
     }
 
     public async Task<BreakNenContractResult> HandleAsync(BreakNenContractCommand command, CancellationToken ct = default)
@@ -40,7 +44,11 @@ public sealed class BreakNenContractCommandHandler : ICommandHandler<BreakNenCon
         var linkedBlocks = await _blocks.GetForContractAsync(command.ContractId, ct);
         var cancelledFocusBlockIds = new HashSet<Guid>();
 
-        foreach (var block in linkedBlocks.Where(b => !b.HasEnded(now)))
+        // IsResolved (not raw HasEnded) so a FocusBlock whose session already ended early
+        // keeps its real outcome (EndedEarly/CompletedOnTime/StartedLate) instead of being
+        // retroactively relabeled Cancelled just because its raw scheduled End hadn't
+        // arrived yet — see PlannedBlockResolutionExtensions.
+        foreach (var block in linkedBlocks.Where(b => !b.IsResolved(_outcomeClassifier, now)))
         {
             block.MarkCancelled(now);
             await _blocks.SaveAsync(block, ct);
