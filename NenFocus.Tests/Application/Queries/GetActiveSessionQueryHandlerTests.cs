@@ -45,7 +45,7 @@ public class GetActiveSessionQueryHandlerTests
         result.Goal.Should().Be("Deep work");
         result.DurationMinutes.Should().Be(45);
         result.Status.Should().Be(SessionStatus.Active);
-        result.BreakSettings.Should().BeNull();
+        result.BreakTimer.Should().BeNull();
     }
 
     [Fact]
@@ -64,19 +64,21 @@ public class GetActiveSessionQueryHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_WithBreakSettings_MapsToBreakSettingsDto()
+    public async Task HandleAsync_WithBreakTimer_MapsToBreakTimerDto()
     {
         var session = Session.Create(
             Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(30)),
-            Guid.NewGuid(), SessionOrigin.Spontaneous, breakSettings: new BreakSettings(25, 5));
+            Guid.NewGuid(), SessionOrigin.Spontaneous, breakTimer: new BreakTimer(25, 5, 4, 15));
         session.Start(DateTime.UtcNow);
         _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns(session);
         _presets.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((BlockPreset?)null);
 
         var result = await CreateHandler().HandleAsync(new GetActiveSessionQuery());
 
-        result!.BreakSettings.Should().NotBeNull();
-        result.BreakSettings!.IntervalMinutes.Should().Be(25);
-        result.BreakSettings.BreakDurationMinutes.Should().Be(5);
+        result!.BreakTimer.Should().NotBeNull();
+        result.BreakTimer!.WorkMinutes.Should().Be(25);
+        result.BreakTimer.ShortBreakMinutes.Should().Be(5);
+        result.BreakTimer.CyclesBeforeLongBreak.Should().Be(4);
+        result.BreakTimer.LongBreakMinutes.Should().Be(15);
     }
 }

@@ -5,14 +5,17 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
+using NenFocus.Application.Queries.GetAvailableBreakTimerPresets;
 using NenFocus.Application.Queries.GetFocusBlockRitualContext;
 using NenFocus.Application.UseCases.Sessions.StartSession;
+using System.Linq;
 
 namespace NenFocus.ViewModels.Ritual;
 
 public partial class HatsuPageViewModel : ViewModelBase
 {
     private readonly ICommandDispatcher _commandDispatcher;
+    private readonly IQueryDispatcher _queryDispatcher;
     private readonly ISystemClock _clock;
     private readonly Func<HatsuData> _getData;
     private readonly Action _onSessionStarted;
@@ -48,26 +51,34 @@ public partial class HatsuPageViewModel : ViewModelBase
         : SelectedHours * 60 + SelectedMinutes;
     public bool ShowZeroError => !IsPlannedMode && TotalMinutes == 0;
 
+    /// <summary>
+    /// Only presets whose phase timeline for the current duration actually produces
+    /// a real break are offered — see GetAvailableBreakTimerPresetsQuery. Recomputed
+    /// whenever the duration changes (Spontaneous mode's Hours/Minutes wheel); a
+    /// Planned session's duration never changes mid-Hatsu, so one initial load
+    /// suffices there.
+    /// </summary>
     [ObservableProperty]
-    private bool _breakEnabled;
+    [NotifyPropertyChangedFor(nameof(BreakTimerPresetChips))]
+    private IReadOnlyList<BreakTimerPresetDto> _availableBreakTimerPresets = [];
 
+    /// <summary>Null means "No timer" — the session runs with no breaks at all.
+    /// Manual break-taking is retired app-wide; this is the only break configuration
+    /// left, replacing the old free-form interval/length picker entirely.</summary>
     [ObservableProperty]
-    private string _selectedInterval = "25";
+    [NotifyPropertyChangedFor(nameof(BreakTimerPresetChips))]
+    private BreakTimerPresetDto? _selectedBreakTimerPreset;
 
-    [ObservableProperty]
-    private string _selectedBreakLength = "5";
-
-    [ObservableProperty]
-    private bool _isCustomInterval;
-
-    [ObservableProperty]
-    private bool _isCustomBreakLength;
-
-    [ObservableProperty]
-    private string _customIntervalInput = string.Empty;
-
-    [ObservableProperty]
-    private string _customBreakLengthInput = string.Empty;
+    /// <summary>
+    /// AvailableBreakTimerPresets paired with whether each one is currently selected —
+    /// exists purely so the View can bind a chip's "active" style directly off its own
+    /// DataContext (IsSelected) instead of comparing two different DataContexts across
+    /// an ItemsControl boundary in XAML.
+    /// </summary>
+    public IReadOnlyList<BreakTimerPresetChip> BreakTimerPresetChips =>
+        AvailableBreakTimerPresets
+            .Select(p => new BreakTimerPresetChip(p, p.Id == SelectedBreakTimerPreset?.Id))
+            .ToList();
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanStart))]
@@ -80,11 +91,9 @@ public partial class HatsuPageViewModel : ViewModelBase
         ? PlannedSchedule!.End > _clock.UtcNow && !IsStarting
         : TotalMinutes > 0 && TotalMinutes <= 480 && !IsStarting;
 
-    public static string[] IntervalOptions { get; } = ["25", "45", "60", "Other"];
-    public static string[] BreakLengthOptions { get; } = ["5", "10", "15", "Other"];
-
     public HatsuPageViewModel(
         ICommandDispatcher commandDispatcher,
+        IQueryDispatcher queryDispatcher,
         ISystemClock clock,
         Func<HatsuData> getData,
         Action onSessionStarted,
@@ -92,11 +101,43 @@ public partial class HatsuPageViewModel : ViewModelBase
         FocusBlockSchedule? plannedSchedule = null)
     {
         _commandDispatcher = commandDispatcher;
+        _queryDispatcher = queryDispatcher;
         _clock = clock;
         _getData = getData;
         _onSessionStarted = onSessionStarted;
         _onBack = onBack;
         PlannedSchedule = plannedSchedule;
+
+        _ = RefreshAvailableBreakTimerPresetsAsync();
+    }
+
+    /// <summary>
+    /// Recomputes which presets are offered for the duration currently in play — a
+    /// preset that no longer fits after a duration change is deselected rather than
+    /// left silently selected but hidden.
+    /// </summary>
+    private async Task RefreshAvailableBreakTimerPresetsAsync()
+    {
+        if (TotalMinutes <= 0)
+        {
+            AvailableBreakTimerPresets = [];
+            SelectedBreakTimerPreset = null;
+            return;
+        }
+
+        var available = await _queryDispatcher.QueryAsync(
+            new GetAvailableBreakTimerPresetsQuery(TimeSpan.FromMinutes(TotalMinutes)));
+
+        AvailableBreakTimerPresets = available;
+
+        if (SelectedBreakTimerPreset is { } current && available.All(p => p.Id != current.Id))
+            SelectedBreakTimerPreset = null;
+    }
+
+    [RelayCommand]
+    private void SelectBreakTimerPreset(BreakTimerPresetDto? preset)
+    {
+        SelectedBreakTimerPreset = preset;
     }
 
     [RelayCommand]
@@ -107,6 +148,7 @@ public partial class HatsuPageViewModel : ViewModelBase
         OnPropertyChanged(nameof(TotalMinutes));
         OnPropertyChanged(nameof(CanStart));
         OnPropertyChanged(nameof(ShowZeroError));
+        _ = RefreshAvailableBreakTimerPresetsAsync();
     }
 
     [RelayCommand]
@@ -117,20 +159,7 @@ public partial class HatsuPageViewModel : ViewModelBase
         OnPropertyChanged(nameof(TotalMinutes));
         OnPropertyChanged(nameof(CanStart));
         OnPropertyChanged(nameof(ShowZeroError));
-    }
-
-    [RelayCommand]
-    private void SelectInterval(string option)
-    {
-        SelectedInterval = option;
-        IsCustomInterval = option == "Other";
-    }
-
-    [RelayCommand]
-    private void SelectBreakLength(string option)
-    {
-        SelectedBreakLength = option;
-        IsCustomBreakLength = option == "Other";
+        _ = RefreshAvailableBreakTimerPresetsAsync();
     }
 
     [RelayCommand(CanExecute = nameof(CanStart))]
@@ -140,30 +169,13 @@ public partial class HatsuPageViewModel : ViewModelBase
 
         if (TotalMinutes == 0) return;
 
-        BreakSettingsDto? breakSettings = null;
-        if (BreakEnabled)
-        {
-            var interval = IsCustomInterval
-                ? (int.TryParse(CustomIntervalInput, out var ci) ? ci : 25)
-                : int.Parse(SelectedInterval);
-            var breakLen = IsCustomBreakLength
-                ? (int.TryParse(CustomBreakLengthInput, out var cl) ? cl : 5)
-                : int.Parse(SelectedBreakLength);
-
-            breakSettings = new BreakSettingsDto
-            {
-                IntervalMinutes = interval,
-                BreakDurationMinutes = breakLen
-            };
-        }
-
         var data = _getData();
         var command = new StartSessionCommand
         {
             Goal = data.Goal,
             PresetId = data.PresetId,
             DurationMinutes = TotalMinutes,
-            BreakSettings = breakSettings,
+            BreakTimerPresetId = SelectedBreakTimerPreset?.Id,
             OriginatingBlockId = data.OriginatingBlockId,
             AdditionalBlockedSites = data.AdditionalBlockedSites,
             AdditionalBlockedApps = data.AdditionalBlockedApps
@@ -199,4 +211,9 @@ public sealed record HatsuData
     public Guid? OriginatingBlockId { get; init; }
     public IReadOnlyList<string> AdditionalBlockedSites { get; init; } = [];
     public IReadOnlyList<string> AdditionalBlockedApps { get; init; } = [];
+}
+
+public sealed record BreakTimerPresetChip(BreakTimerPresetDto Preset, bool IsSelected)
+{
+    public string Name => Preset.Name;
 }

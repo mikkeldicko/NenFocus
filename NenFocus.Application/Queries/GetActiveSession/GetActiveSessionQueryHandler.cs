@@ -39,10 +39,15 @@ public sealed class GetActiveSessionQueryHandler
             StartedAt = session.StartedAt ?? _clock.UtcNow,
             EndAt = session.EndAt ?? _clock.UtcNow,
             EndedAt = session.EndedAt,
-            BreakSettings = session.BreakSettings is null ? null : new BreakSettingsDto
+            BreaksTaken = session.BreaksTaken,
+            BreakStartedAt = session.BreakStartedAt,
+            CurrentBreakKind = session.CurrentBreakKind,
+            BreakTimer = session.BreakTimer is null ? null : new BreakTimerDto
             {
-                IntervalMinutes = session.BreakSettings.IntervalMinutes,
-                BreakDurationMinutes = session.BreakSettings.BreakLengthMinutes
+                WorkMinutes = session.BreakTimer.WorkMinutes,
+                ShortBreakMinutes = session.BreakTimer.ShortBreakMinutes,
+                CyclesBeforeLongBreak = session.BreakTimer.CyclesBeforeLongBreak,
+                LongBreakMinutes = session.BreakTimer.LongBreakMinutes
             }
         };
     }

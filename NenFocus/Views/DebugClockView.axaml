@@ -48,6 +48,17 @@
                     Background="#B8922A" Foreground="#1A1A2E" FontWeight="Medium"
                     CornerRadius="6" Cursor="Hand"/>
 
+            <StackPanel Orientation="Horizontal" Spacing="6">
+                <NumericUpDown Value="{Binding CustomMinutes}"
+                               Minimum="1" Maximum="10080" Increment="1"
+                               FormatString="0"
+                               Width="110"
+                               Background="#2A2A44" Foreground="White" BorderBrush="#3A3A54"/>
+                <Button Content="Jump (min)" Command="{Binding AdvanceCustomMinutesCommand}"
+                        Background="#2A2A44" Foreground="White" CornerRadius="6" Cursor="Hand"
+                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"/>
+            </StackPanel>
+
             <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
                 <Button Content="+1h" Command="{Binding AdvanceOneHourCommand}"
                         Background="#2A2A44" Foreground="White" CornerRadius="6" Cursor="Hand"/>

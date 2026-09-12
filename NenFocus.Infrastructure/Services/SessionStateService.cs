@@ -140,11 +140,14 @@ public sealed class SessionStateService : ISessionStateService
         EndAt = s.EndAt ?? now,
         BreaksTaken = s.BreaksTaken,
         BreakStartedAt = s.BreakStartedAt,
-        BreakSettings = s.BreakSettings is not null
-            ? new BreakSettingsDto
+        CurrentBreakKind = s.CurrentBreakKind,
+        BreakTimer = s.BreakTimer is not null
+            ? new BreakTimerDto
             {
-                IntervalMinutes = s.BreakSettings.IntervalMinutes,
-                BreakDurationMinutes = s.BreakSettings.BreakLengthMinutes
+                WorkMinutes = s.BreakTimer.WorkMinutes,
+                ShortBreakMinutes = s.BreakTimer.ShortBreakMinutes,
+                CyclesBeforeLongBreak = s.BreakTimer.CyclesBeforeLongBreak,
+                LongBreakMinutes = s.BreakTimer.LongBreakMinutes
             }
             : null
     };

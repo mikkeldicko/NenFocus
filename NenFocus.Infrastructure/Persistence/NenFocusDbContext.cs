@@ -16,6 +16,7 @@ public class NenFocusDbContext : DbContext
     public DbSet<BlockedAttempt> BlockedAttempts { get; set; } = null!;
     public DbSet<ContractPreset> ContractPresets { get; set; } = null!;
     public DbSet<NenContract> NenContracts { get; set; } = null!;
+    public DbSet<BreakTimerPreset> BreakTimerPresets { get; set; } = null!;
 
     public NenFocusDbContext(DbContextOptions<NenFocusDbContext> options)
         : base(options) { }
@@ -147,13 +148,20 @@ public class NenFocusDbContext : DbContext
             entity.Property(s => s.BlockPresetId)
                 .IsRequired();
 
-            entity.OwnsOne(s => s.BreakSettings, b =>
+            entity.OwnsOne(s => s.BreakTimer, t =>
             {
-                b.Property(x => x.IntervalMinutes)
-                    .HasColumnName("BreakIntervalMinutes");
-                b.Property(x => x.BreakLengthMinutes)
-                    .HasColumnName("BreakLengthMinutes");
+                t.Property(x => x.WorkMinutes)
+                    .HasColumnName("TimerWorkMinutes");
+                t.Property(x => x.ShortBreakMinutes)
+                    .HasColumnName("TimerShortBreakMinutes");
+                t.Property(x => x.CyclesBeforeLongBreak)
+                    .HasColumnName("TimerCyclesBeforeLongBreak");
+                t.Property(x => x.LongBreakMinutes)
+                    .HasColumnName("TimerLongBreakMinutes");
             });
+
+            entity.Property(s => s.CurrentBreakKind)
+                .HasConversion<string>();
 
             entity.Property(s => s.TemporaryBlockedApps)
                 .HasConversion(
@@ -369,6 +377,64 @@ public class NenFocusDbContext : DbContext
             entity.Property(p => p.RedemptionPlacementPolicy)
                 .HasConversion<string>()
                 .IsRequired();
+
+            entity.Property(p => p.PauseEnforcementDuringBreak)
+                .IsRequired()
+                .HasDefaultValue(true);
+        });
+
+        modelBuilder.Entity<BreakTimerPreset>(entity =>
+        {
+            entity.ToTable("BreakTimerPresets");
+            entity.HasKey(p => p.Id);
+
+            entity.Property(p => p.Id)
+                .ValueGeneratedNever();
+
+            entity.Property(p => p.Name)
+                .IsRequired()
+                .HasMaxLength(60)
+                .UseCollation("NOCASE");
+
+            // No lock/PresetType-style scoping here — a BreakTimerPreset is snapshotted
+            // by value into a Session at Start, so a single global unique name is the
+            // correct scope, same reasoning as ContractPreset's.
+            entity.HasIndex(p => p.Name).IsUnique();
+
+            var classicId = new Guid("b0000002-0000-0000-0000-000000000001");
+            var deepWorkId = new Guid("b0000002-0000-0000-0000-000000000002");
+            var flowId = new Guid("b0000002-0000-0000-0000-000000000003");
+
+            // Classic/Deep Work/Flow are ordinary seeded rows, not a protected special
+            // case — freely editable/deletable by the user like any preset they create
+            // themselves later.
+            entity.HasData(
+                new { Id = classicId, Name = "Classic" },
+                new { Id = deepWorkId, Name = "Deep Work" },
+                new { Id = flowId, Name = "Flow" }
+            );
+
+            entity.OwnsOne(p => p.BreakTimer, c =>
+            {
+                c.Property(x => x.WorkMinutes)
+                    .HasColumnName("WorkMinutes")
+                    .IsRequired();
+                c.Property(x => x.ShortBreakMinutes)
+                    .HasColumnName("ShortBreakMinutes")
+                    .IsRequired();
+                c.Property(x => x.CyclesBeforeLongBreak)
+                    .HasColumnName("CyclesBeforeLongBreak")
+                    .IsRequired();
+                c.Property(x => x.LongBreakMinutes)
+                    .HasColumnName("LongBreakMinutes")
+                    .IsRequired();
+
+                c.HasData(
+                    new { BreakTimerPresetId = classicId, WorkMinutes = 25, ShortBreakMinutes = 5, CyclesBeforeLongBreak = 4, LongBreakMinutes = 15 },
+                    new { BreakTimerPresetId = deepWorkId, WorkMinutes = 50, ShortBreakMinutes = 10, CyclesBeforeLongBreak = 3, LongBreakMinutes = 20 },
+                    new { BreakTimerPresetId = flowId, WorkMinutes = 90, ShortBreakMinutes = 20, CyclesBeforeLongBreak = 2, LongBreakMinutes = 30 }
+                );
+            });
         });
 
         modelBuilder.Entity<NenContract>(entity =>
@@ -412,6 +478,10 @@ public class NenFocusDbContext : DbContext
                 .IsRequired();
 
             entity.Property(c => c.ContractPresetId);
+
+            entity.Property(c => c.PauseEnforcementDuringBreak)
+                .IsRequired()
+                .HasDefaultValue(true);
 
             entity.Property(c => c.DailyFloorPolicy)
                 .HasConversion(

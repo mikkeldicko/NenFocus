@@ -13,6 +13,7 @@ public sealed class StartSessionCommandHandler
     private readonly IPlannedBlockRepository _plannedBlocks;
     private readonly ISessionStateService _sessionState;
     private readonly IBlockPresetRepository _presets;
+    private readonly IBreakTimerPresetRepository _breakTimerPresets;
     private readonly ISystemClock _clock;
 
     public StartSessionCommandHandler(
@@ -20,12 +21,14 @@ public sealed class StartSessionCommandHandler
         IPlannedBlockRepository plannedBlocks,
         ISessionStateService sessionState,
         IBlockPresetRepository presets,
+        IBreakTimerPresetRepository breakTimerPresets,
         ISystemClock clock)
     {
         _sessions = sessions;
         _plannedBlocks = plannedBlocks;
         _sessionState = sessionState;
         _presets = presets;
+        _breakTimerPresets = breakTimerPresets;
         _clock = clock;
     }
 
@@ -72,12 +75,14 @@ public sealed class StartSessionCommandHandler
                 return StartSessionResult.Fail("A session already exists for this focus block.");
         }
 
-        BreakSettings? breakSettings = null;
-        if (command.BreakSettings is not null)
+        BreakTimer? breakTimer = null;
+        if (command.BreakTimerPresetId is { } breakTimerPresetId)
         {
-            breakSettings = new BreakSettings(
-                command.BreakSettings.IntervalMinutes,
-                command.BreakSettings.BreakDurationMinutes);
+            var breakTimerPreset = await _breakTimerPresets.GetByIdAsync(breakTimerPresetId, ct);
+            if (breakTimerPreset is null)
+                return StartSessionResult.Fail("The selected break timer preset was not found.");
+
+            breakTimer = breakTimerPreset.BreakTimer;
         }
 
         var origin = command.OriginatingBlockId.HasValue
@@ -103,7 +108,7 @@ public sealed class StartSessionCommandHandler
             blockPresetId: command.PresetId ?? Guid.Empty,
             origin: origin,
             originatingBlockId: command.OriginatingBlockId,
-            breakSettings: breakSettings,
+            breakTimer: breakTimer,
             temporaryBlockedApps: command.AdditionalBlockedApps.Count > 0 ? command.AdditionalBlockedApps : null,
             temporaryBlockedSites: command.AdditionalBlockedSites.Count > 0 ? command.AdditionalBlockedSites : null);
 
@@ -136,7 +141,13 @@ public sealed class StartSessionCommandHandler
             Status = session.Status,
             Origin = session.Origin,
             OriginatingBlockId = session.OriginatingBlockId,
-            BreakSettings = command.BreakSettings
+            BreakTimer = breakTimer is null ? null : new BreakTimerDto
+            {
+                WorkMinutes = breakTimer.WorkMinutes,
+                ShortBreakMinutes = breakTimer.ShortBreakMinutes,
+                CyclesBeforeLongBreak = breakTimer.CyclesBeforeLongBreak,
+                LongBreakMinutes = breakTimer.LongBreakMinutes
+            }
         });
 
         return StartSessionResult.Ok(session.Id);

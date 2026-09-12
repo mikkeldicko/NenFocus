@@ -22,9 +22,9 @@ public class ResumeFromBreakCommandHandlerTests
     {
         var session = Session.Create(
             Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(30)),
-            Guid.NewGuid(), SessionOrigin.Spontaneous, breakSettings: new BreakSettings(25, 5));
+            Guid.NewGuid(), SessionOrigin.Spontaneous, breakTimer: new BreakTimer(25, 5, 4, 15));
         session.Start(Now.AddMinutes(-10));
-        session.StartBreak(Now.AddMinutes(-2));
+        session.StartBreak(Now.AddMinutes(-2), SessionPhaseKind.ShortBreak);
         return session;
     }
 

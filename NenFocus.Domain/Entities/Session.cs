@@ -16,9 +16,26 @@ public class Session : AggregateRoot
     public DateTime? StartedAt { get; private set; }
     public DateTime? EndAt { get; private set; }
     public DateTime? EndedAt { get; private set; }
-    public BreakSettings? BreakSettings { get; private set; }
+
+    /// <summary>
+    /// The frozen cadence copied by value from a BreakTimerPreset at Start — replaces
+    /// BreakSettings, which only ever modeled a single fixed interval/length pair.
+    /// Null means "No timer": this session runs start-to-finish with no breaks at
+    /// all. Manual break-taking is retired app-wide — a break only ever starts
+    /// automatically, driven by walking IBreakScheduleCalculator's phase timeline
+    /// for this cadence against the session's own Duration.
+    /// </summary>
+    public BreakTimer? BreakTimer { get; private set; }
     public int BreaksTaken { get; private set; }
     public DateTime? BreakStartedAt { get; private set; }
+
+    /// <summary>
+    /// Which kind of break is currently active — set from StartBreak's breakKind
+    /// parameter (itself resolved by the caller via IBreakScheduleCalculator, never
+    /// re-derived here), cleared on ResumeFromBreak. Null whenever Status is not
+    /// OnBreak.
+    /// </summary>
+    public SessionPhaseKind? CurrentBreakKind { get; private set; }
     public string? Reflection { get; private set; }
     public DateTime? PostSessionAcknowledgedAt { get; private set; }
     public IReadOnlyList<string> TemporaryBlockedApps { get; private set; } = [];
@@ -33,7 +50,7 @@ public class Session : AggregateRoot
         Guid blockPresetId,
         SessionOrigin origin,
         Guid? originatingBlockId = null,
-        BreakSettings? breakSettings = null,
+        BreakTimer? breakTimer = null,
         IReadOnlyList<string>? temporaryBlockedApps = null,
         IReadOnlyList<string>? temporaryBlockedSites = null)
     {
@@ -53,7 +70,7 @@ public class Session : AggregateRoot
             BlockPresetId = blockPresetId,
             Origin = origin,
             OriginatingBlockId = originatingBlockId,
-            BreakSettings = breakSettings,
+            BreakTimer = breakTimer,
             Status = SessionStatus.NotStarted,
             TemporaryBlockedApps = temporaryBlockedApps ?? [],
             TemporaryBlockedSites = temporaryBlockedSites ?? []
@@ -72,18 +89,30 @@ public class Session : AggregateRoot
         Raise(new SessionStartedEvent(Id, BlockPresetId, Goal.Value, startedAt));
     }
 
-    public void StartBreak(DateTime breakStartedAt)
+    /// <summary>
+    /// Starts a break. breakKind is supplied by the caller (resolved via
+    /// IBreakScheduleCalculator against this session's BreakTimer and Duration) —
+    /// Session never re-derives which kind of break this is itself; it only records
+    /// the answer. Breaks no longer start manually: the only caller is the
+    /// automatic engine that notices a Work phase has elapsed.
+    /// </summary>
+    public void StartBreak(DateTime breakStartedAt, SessionPhaseKind breakKind)
     {
         if (Status != SessionStatus.Active)
             throw new InvalidOperationException(
                 "Can only take a break during an active session.");
 
-        if (BreakSettings is null)
+        if (BreakTimer is null)
             throw new InvalidOperationException(
-                "Cannot start a break — no break settings configured.");
+                "Cannot start a break — no timer cadence configured.");
+
+        if (breakKind == SessionPhaseKind.Work)
+            throw new ArgumentException(
+                "Break kind must be ShortBreak or LongBreak.", nameof(breakKind));
 
         Status = SessionStatus.OnBreak;
         BreakStartedAt = breakStartedAt;
+        CurrentBreakKind = breakKind;
         BreaksTaken++;
         Raise(new BreakStartedEvent(Id, BreaksTaken, breakStartedAt));
     }
@@ -96,6 +125,7 @@ public class Session : AggregateRoot
 
         Status = SessionStatus.Active;
         BreakStartedAt = null;
+        CurrentBreakKind = null;
     }
 
     public void Complete(DateTime endedAt)

@@ -115,6 +115,42 @@ namespace NenFocus.Infrastructure.Migrations
                     b.ToTable("BlockedAttempts", (string)null);
                 });
 
+            modelBuilder.Entity("NenFocus.Domain.Entities.BreakTimerPreset", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("TEXT")
+                        .UseCollation("NOCASE");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("BreakTimerPresets", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("b0000002-0000-0000-0000-000000000001"),
+                            Name = "Classic"
+                        },
+                        new
+                        {
+                            Id = new Guid("b0000002-0000-0000-0000-000000000002"),
+                            Name = "Deep Work"
+                        },
+                        new
+                        {
+                            Id = new Guid("b0000002-0000-0000-0000-000000000003"),
+                            Name = "Flow"
+                        });
+                });
+
             modelBuilder.Entity("NenFocus.Domain.Entities.ContractPreset", b =>
                 {
                     b.Property<Guid>("Id")
@@ -132,6 +168,11 @@ namespace NenFocus.Infrastructure.Migrations
                         .HasMaxLength(60)
                         .HasColumnType("TEXT")
                         .UseCollation("NOCASE");
+
+                    b.Property<bool>("PauseEnforcementDuringBreak")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(true);
 
                     b.Property<string>("RedemptionPlacementPolicy")
                         .IsRequired()
@@ -187,6 +228,11 @@ namespace NenFocus.Infrastructure.Migrations
 
                     b.Property<DateOnly>("OriginalEndDate")
                         .HasColumnType("TEXT");
+
+                    b.Property<bool>("PauseEnforcementDuringBreak")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(true);
 
                     b.Property<DateTime?>("PostContractAcknowledgedAt")
                         .HasColumnType("TEXT");
@@ -279,6 +325,9 @@ namespace NenFocus.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER")
                         .HasDefaultValue(0);
+
+                    b.Property<string>("CurrentBreakKind")
+                        .HasColumnType("TEXT");
 
                     b.Property<long>("Duration")
                         .HasColumnType("INTEGER")
@@ -493,6 +542,67 @@ namespace NenFocus.Infrastructure.Migrations
                     b.Navigation("Websites");
                 });
 
+            modelBuilder.Entity("NenFocus.Domain.Entities.BreakTimerPreset", b =>
+                {
+                    b.OwnsOne("NenFocus.Domain.ValueObjects.BreakTimer", "BreakTimer", b1 =>
+                        {
+                            b1.Property<Guid>("BreakTimerPresetId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<int>("CyclesBeforeLongBreak")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("CyclesBeforeLongBreak");
+
+                            b1.Property<int>("LongBreakMinutes")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("LongBreakMinutes");
+
+                            b1.Property<int>("ShortBreakMinutes")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("ShortBreakMinutes");
+
+                            b1.Property<int>("WorkMinutes")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("WorkMinutes");
+
+                            b1.HasKey("BreakTimerPresetId");
+
+                            b1.ToTable("BreakTimerPresets");
+
+                            b1.WithOwner()
+                                .HasForeignKey("BreakTimerPresetId");
+
+                            b1.HasData(
+                                new
+                                {
+                                    BreakTimerPresetId = new Guid("b0000002-0000-0000-0000-000000000001"),
+                                    CyclesBeforeLongBreak = 4,
+                                    LongBreakMinutes = 15,
+                                    ShortBreakMinutes = 5,
+                                    WorkMinutes = 25
+                                },
+                                new
+                                {
+                                    BreakTimerPresetId = new Guid("b0000002-0000-0000-0000-000000000002"),
+                                    CyclesBeforeLongBreak = 3,
+                                    LongBreakMinutes = 20,
+                                    ShortBreakMinutes = 10,
+                                    WorkMinutes = 50
+                                },
+                                new
+                                {
+                                    BreakTimerPresetId = new Guid("b0000002-0000-0000-0000-000000000003"),
+                                    CyclesBeforeLongBreak = 2,
+                                    LongBreakMinutes = 30,
+                                    ShortBreakMinutes = 20,
+                                    WorkMinutes = 90
+                                });
+                        });
+
+                    b.Navigation("BreakTimer")
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("NenFocus.Domain.Entities.ContractPreset", b =>
                 {
                     b.OwnsOne("NenFocus.Domain.ValueObjects.WorkHours", "WorkHours", b1 =>
@@ -521,18 +631,26 @@ namespace NenFocus.Infrastructure.Migrations
 
             modelBuilder.Entity("NenFocus.Domain.Entities.Session", b =>
                 {
-                    b.OwnsOne("NenFocus.Domain.ValueObjects.BreakSettings", "BreakSettings", b1 =>
+                    b.OwnsOne("NenFocus.Domain.ValueObjects.BreakTimer", "BreakTimer", b1 =>
                         {
                             b1.Property<Guid>("SessionId")
                                 .HasColumnType("TEXT");
 
-                            b1.Property<int>("BreakLengthMinutes")
+                            b1.Property<int>("CyclesBeforeLongBreak")
                                 .HasColumnType("INTEGER")
-                                .HasColumnName("BreakLengthMinutes");
+                                .HasColumnName("TimerCyclesBeforeLongBreak");
 
-                            b1.Property<int>("IntervalMinutes")
+                            b1.Property<int>("LongBreakMinutes")
                                 .HasColumnType("INTEGER")
-                                .HasColumnName("BreakIntervalMinutes");
+                                .HasColumnName("TimerLongBreakMinutes");
+
+                            b1.Property<int>("ShortBreakMinutes")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("TimerShortBreakMinutes");
+
+                            b1.Property<int>("WorkMinutes")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("TimerWorkMinutes");
 
                             b1.HasKey("SessionId");
 
@@ -542,7 +660,7 @@ namespace NenFocus.Infrastructure.Migrations
                                 .HasForeignKey("SessionId");
                         });
 
-                    b.Navigation("BreakSettings");
+                    b.Navigation("BreakTimer");
                 });
 #pragma warning restore 612, 618
         }

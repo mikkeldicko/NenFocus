@@ -180,84 +180,37 @@
 				<!-- Divider -->
 				<Border Height="1" Background="#E4E4EE" Margin="0,12,0,28"/>
 
-				<!-- Break reminders -->
-				<StackPanel Spacing="20" Margin="0,0,0,40">
-					<Grid ColumnDefinitions="*,Auto">
-						<StackPanel Grid.Column="0" Spacing="4">
-							<TextBlock Text="BREAK REMINDERS"
-                                       FontSize="9"
-                                       FontWeight="Medium"
-                                       Foreground="#AAAABC"
-                                       LetterSpacing="3"/>
-							<TextBlock Text="Encourage movement without lifting the block."
-                                       FontSize="12"
-                                       Foreground="#BBBBCC"
-                                       TextWrapping="Wrap"/>
-						</StackPanel>
-						<ToggleSwitch Grid.Column="1"
-                                      IsChecked="{Binding BreakEnabled}"
-                                      VerticalAlignment="Center"/>
-					</Grid>
-
-					<StackPanel IsVisible="{Binding BreakEnabled}" Spacing="20">
-
-						<!-- Interval chips -->
-						<StackPanel Spacing="8">
-							<TextBlock Text="Remind me every"
-                                       FontSize="12"
-                                       Foreground="#888899"/>
-							<WrapPanel Orientation="Horizontal">
-								<Button Classes="chip"
-                                        Classes.active="{Binding SelectedInterval, Converter={x:Static conv:StringEqualConverter.Instance}, ConverterParameter=25}"
-                                        Command="{Binding SelectIntervalCommand}" CommandParameter="25">25 min</Button>
-								<Button Classes="chip"
-                                        Classes.active="{Binding SelectedInterval, Converter={x:Static conv:StringEqualConverter.Instance}, ConverterParameter=45}"
-                                        Command="{Binding SelectIntervalCommand}" CommandParameter="45">45 min</Button>
-								<Button Classes="chip"
-                                        Classes.active="{Binding SelectedInterval, Converter={x:Static conv:StringEqualConverter.Instance}, ConverterParameter=60}"
-                                        Command="{Binding SelectIntervalCommand}" CommandParameter="60">60 min</Button>
-								<Button Classes="chip"
-                                        Classes.active="{Binding SelectedInterval, Converter={x:Static conv:StringEqualConverter.Instance}, ConverterParameter=Other}"
-                                        Command="{Binding SelectIntervalCommand}" CommandParameter="Other">Other</Button>
-							</WrapPanel>
-							<TextBox IsVisible="{Binding IsCustomInterval}"
-                                     Text="{Binding CustomIntervalInput}"
-                                     Watermark="Minutes"
-                                     FontSize="13" Padding="10,8"
-                                     Background="#FFFFFF" BorderBrush="#DDDDE8"
-                                     BorderThickness="1" CornerRadius="8"
-                                     Width="120" HorizontalAlignment="Left"/>
-						</StackPanel>
-
-						<!-- Break length chips -->
-						<StackPanel Spacing="8">
-							<TextBlock Text="Break duration"
-                                       FontSize="12"
-                                       Foreground="#888899"/>
-							<WrapPanel Orientation="Horizontal">
-								<Button Classes="chip"
-                                        Classes.active="{Binding SelectedBreakLength, Converter={x:Static conv:StringEqualConverter.Instance}, ConverterParameter=5}"
-                                        Command="{Binding SelectBreakLengthCommand}" CommandParameter="5">5 min</Button>
-								<Button Classes="chip"
-                                        Classes.active="{Binding SelectedBreakLength, Converter={x:Static conv:StringEqualConverter.Instance}, ConverterParameter=10}"
-                                        Command="{Binding SelectBreakLengthCommand}" CommandParameter="10">10 min</Button>
-								<Button Classes="chip"
-                                        Classes.active="{Binding SelectedBreakLength, Converter={x:Static conv:StringEqualConverter.Instance}, ConverterParameter=15}"
-                                        Command="{Binding SelectBreakLengthCommand}" CommandParameter="15">15 min</Button>
-								<Button Classes="chip"
-                                        Classes.active="{Binding SelectedBreakLength, Converter={x:Static conv:StringEqualConverter.Instance}, ConverterParameter=Other}"
-                                        Command="{Binding SelectBreakLengthCommand}" CommandParameter="Other">Other</Button>
-							</WrapPanel>
-							<TextBox IsVisible="{Binding IsCustomBreakLength}"
-                                     Text="{Binding CustomBreakLengthInput}"
-                                     Watermark="Minutes"
-                                     FontSize="13" Padding="10,8"
-                                     Background="#FFFFFF" BorderBrush="#DDDDE8"
-                                     BorderThickness="1" CornerRadius="8"
-                                     Width="120" HorizontalAlignment="Left"/>
-						</StackPanel>
-
-					</StackPanel>
+				<!-- Timer preset -->
+				<StackPanel Spacing="8" Margin="0,0,0,40">
+					<TextBlock Text="TIMER PRESET"
+                               FontSize="9"
+                               FontWeight="Medium"
+                               Foreground="#AAAABC"
+                               LetterSpacing="3"/>
+					<TextBlock Text="Automatically alternates focus and break periods for this session."
+                               FontSize="12"
+                               Foreground="#BBBBCC"
+                               TextWrapping="Wrap"/>
+					<WrapPanel Orientation="Horizontal">
+						<Button Classes="chip" Content="No timer"
+                                Classes.active="{Binding SelectedBreakTimerPreset, Converter={x:Static ObjectConverters.IsNull}}"
+                                Command="{Binding SelectBreakTimerPresetCommand}"/>
+						<ItemsControl ItemsSource="{Binding BreakTimerPresetChips}">
+							<ItemsControl.ItemsPanel>
+								<ItemsPanelTemplate>
+									<WrapPanel Orientation="Horizontal"/>
+								</ItemsPanelTemplate>
+							</ItemsControl.ItemsPanel>
+							<ItemsControl.ItemTemplate>
+								<DataTemplate x:CompileBindings="False">
+									<Button Classes="chip" Content="{Binding Name}"
+                                            Classes.active="{Binding IsSelected}"
+                                            Command="{Binding DataContext.SelectBreakTimerPresetCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            CommandParameter="{Binding Preset}"/>
+								</DataTemplate>
+							</ItemsControl.ItemTemplate>
+						</ItemsControl>
+					</WrapPanel>
 				</StackPanel>
 
 				<!-- Error message -->

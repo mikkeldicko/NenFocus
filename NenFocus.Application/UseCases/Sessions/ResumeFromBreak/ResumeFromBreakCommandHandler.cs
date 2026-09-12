@@ -33,7 +33,8 @@ public sealed class ResumeFromBreakCommandHandler : ICommandHandler<ResumeFromBr
             _sessionState.SetActive(current with
             {
                 Status = SessionStatus.Active,
-                BreakStartedAt = null
+                BreakStartedAt = null,
+                CurrentBreakKind = null
             });
         }
 

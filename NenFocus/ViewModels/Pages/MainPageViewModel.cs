@@ -5,10 +5,10 @@ using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.UseCases.Sessions.EndSession;
 using NenFocus.Application.UseCases.Sessions.ResumeFromBreak;
-using NenFocus.Application.UseCases.Sessions.StartBreak;
 using NenFocus.Domain.Enums;
 using NenFocus.ViewModels.Components;
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Threading.Tasks;
 
@@ -27,7 +27,6 @@ public partial class MainPageViewModel : ViewModelBase
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(StartRitualCommand))]
-    [NotifyPropertyChangedFor(nameof(CanTakeBreak))]
     private bool _hasActiveSession;
 
     [ObservableProperty]
@@ -43,7 +42,6 @@ public partial class MainPageViewModel : ViewModelBase
     private string _activePresetName = string.Empty;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanTakeBreak))]
     private bool _isOnBreak;
 
     [ObservableProperty]
@@ -58,11 +56,10 @@ public partial class MainPageViewModel : ViewModelBase
     [ObservableProperty]
     private bool _isRitualBannerVisible;
 
+    /// <summary>Ready-to-bind marker positions for the session progress bar — see
+    /// BreakMarkerDto. Empty when the session has no BreakTimer ("No timer").</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanTakeBreak))]
-    private bool _hasBreakSettings;
-
-    public bool CanTakeBreak => HasActiveSession && !IsOnBreak && HasBreakSettings;
+    private IReadOnlyList<BreakMarkerDto> _breakMarkers = [];
 
     public string Greeting => _clock.LocalNow.Hour switch
     {
@@ -127,6 +124,7 @@ public partial class MainPageViewModel : ViewModelBase
             SessionProgress = _monitor.SessionProgress;
             BreakTimeRemaining = _monitor.BreakTimeRemaining;
             BreakProgress = _monitor.BreakProgress;
+            BreakMarkers = _monitor.BreakMarkers;
         });
     }
 
@@ -145,16 +143,15 @@ public partial class MainPageViewModel : ViewModelBase
         SessionGoal = session.Goal;
         ActivePresetName = session.PresetName;
         HasActiveSession = true;
-        HasBreakSettings = session.BreakSettings is not null;
         BreaksTaken = session.BreaksTaken;
         IsOnBreak = session.Status == SessionStatus.OnBreak;
+        BreakMarkers = _monitor.BreakMarkers;
     }
 
     private void ClearSession()
     {
         HasActiveSession = false;
         IsOnBreak = false;
-        HasBreakSettings = false;
         SessionTimeRemaining = TimeSpan.Zero;
         BreakTimeRemaining = TimeSpan.Zero;
         SessionProgress = 0;
@@ -162,6 +159,7 @@ public partial class MainPageViewModel : ViewModelBase
         BreaksTaken = 0;
         SessionGoal = string.Empty;
         ActivePresetName = string.Empty;
+        BreakMarkers = [];
     }
 
     [RelayCommand]
@@ -181,11 +179,8 @@ public partial class MainPageViewModel : ViewModelBase
 
     private bool CanStartRitual() => !HasActiveSession;
 
-    [RelayCommand]
-    private async Task TakeBreak()
-    {
-        await _commandDispatcher.DispatchAsync(new StartBreakCommand { SessionId = _activeSessionId, UserInitiated = true });
-    }
+    // Manual break-taking is retired — breaks now start automatically, driven by
+    // ActiveSessionMonitor walking the session's own phase timeline.
 
     [RelayCommand]
     private async Task ResumeFromBreak()

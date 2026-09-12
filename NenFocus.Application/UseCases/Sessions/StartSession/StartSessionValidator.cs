@@ -6,7 +6,7 @@ namespace NenFocus.Application.UseCases.Sessions.StartSession;
 
 public sealed class StartSessionValidator : AbstractValidator<StartSessionCommand>
 {
-    public StartSessionValidator(IBlockPresetRepository presets)
+    public StartSessionValidator(IBlockPresetRepository presets, IBreakTimerPresetRepository breakTimerPresets)
     {
         RuleFor(x => x.Goal).NotEmpty().MaximumLength(500);
         RuleFor(x => x.PresetId).NotEmpty().WithMessage("A block preset must be selected.");
@@ -35,10 +35,14 @@ public sealed class StartSessionValidator : AbstractValidator<StartSessionComman
                 .WithMessage("Only focus presets can be used to start a session.");
         });
 
-        When(x => x.BreakSettings != null, () =>
+        // Same defense-in-depth reasoning as PresetId above — Hatsu only ever offers a
+        // preset that both exists and fits the chosen duration, but that's a UI
+        // convenience, not a guarantee for whatever actually reaches this command.
+        When(x => x.BreakTimerPresetId.HasValue, () =>
         {
-            RuleFor(x => x.BreakSettings!.IntervalMinutes).Must(v => v is 25 or 45 or 60);
-            RuleFor(x => x.BreakSettings!.BreakDurationMinutes).Must(v => v is 5 or 10 or 15);
+            RuleFor(x => x.BreakTimerPresetId!.Value)
+                .MustAsync(async (id, ct) => await breakTimerPresets.GetByIdAsync(id, ct) is not null)
+                .WithMessage("The selected break timer preset no longer exists — please pick another.");
         });
     }
 }

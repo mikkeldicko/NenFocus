@@ -427,4 +427,82 @@ public class PolicyEngineTests
 
         slice.IsEmpty.Should().BeFalse();
     }
+
+    private static NenContract CreateContract(bool pauseEnforcementDuringBreak) => NenContract.Seal(
+        id: Guid.NewGuid(),
+        name: "Contract",
+        goal: new NenContractGoal("Goal"),
+        startDate: DateOnly.FromDateTime(At),
+        endDate: DateOnly.FromDateTime(At).AddDays(7),
+        strictnessRule: StrictnessRule.Locked,
+        dailyFloorPolicy: DailyFloorPolicy.None,
+        changeWindow: null,
+        allowCancellation: false,
+        plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
+        sealedAt: At,
+        pauseEnforcementDuringBreak: pauseEnforcementDuringBreak);
+
+    [Fact]
+    public void ComputeSlice_PlannedSessionOnBreak_NoContract_PresetExcludedFromBlockedApps()
+    {
+        // Global Settings default is hardcoded permissive (pausing allowed) until
+        // Settings actually exists — with no contract governing this block, that
+        // default applies and the block's own preset stops enforcing during the break.
+        var preset = CreatePreset(WebsiteFilterType.Blocklist, apps: ["chrome.exe"]);
+        var block = FocusBlock.Create(Guid.NewGuid(), preset.Id, At, At.AddHours(1));
+        var session = Session.Create(
+            Guid.NewGuid(), new SessionGoal("Focus"), new SessionDuration(TimeSpan.FromMinutes(30)),
+            preset.Id, SessionOrigin.Planned, originatingBlockId: block.Id,
+            breakTimer: new BreakTimer(25, 5, 4, 15));
+        session.Start(At);
+        session.StartBreak(At, SessionPhaseKind.ShortBreak);
+
+        var slice = _engine.ComputeSlice(At, [preset], [session], [block]);
+
+        slice.BlockedApps.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ComputeSlice_PlannedSessionOnBreak_ContractForbidsPause_PresetStaysBlocked()
+    {
+        // A sealed contract can only ever narrow the permissive default toward
+        // stricter — PauseEnforcementDuringBreak: false means enforcement never lifts
+        // for this block's breaks, regardless of the (not-yet-real) Settings default.
+        var preset = CreatePreset(WebsiteFilterType.Blocklist, apps: ["chrome.exe"]);
+        var block = FocusBlock.Create(Guid.NewGuid(), preset.Id, At, At.AddHours(1));
+        var contract = CreateContract(pauseEnforcementDuringBreak: false);
+        block.AssignContract(contract.Id);
+        var session = Session.Create(
+            Guid.NewGuid(), new SessionGoal("Focus"), new SessionDuration(TimeSpan.FromMinutes(30)),
+            preset.Id, SessionOrigin.Planned, originatingBlockId: block.Id,
+            breakTimer: new BreakTimer(25, 5, 4, 15));
+        session.Start(At);
+        session.StartBreak(At, SessionPhaseKind.ShortBreak);
+
+        var slice = _engine.ComputeSlice(At, [preset], [session], [block], [contract]);
+
+        slice.BlockedApps.Should().BeEquivalentTo(["chrome"]);
+    }
+
+    [Fact]
+    public void ComputeSlice_SessionOnBreak_UnrelatedBackgroundBlockStaysBlocked()
+    {
+        // Pausing only ever affects the specific block/session whose break is in
+        // progress — an unrelated, merely co-occurring Background Block must never be
+        // swept into the same exclusion.
+        var focusPreset = CreatePreset(WebsiteFilterType.Blocklist, apps: ["chrome.exe"]);
+        var backgroundPreset = CreatePreset(WebsiteFilterType.Blocklist, apps: ["spotify.exe"], type: BlockPresetType.Background);
+        var focusBlock = FocusBlock.Create(Guid.NewGuid(), focusPreset.Id, At, At.AddHours(1));
+        var backgroundBlock = BackgroundBlock.Create(Guid.NewGuid(), backgroundPreset.Id, At, At.AddHours(1));
+        var session = Session.Create(
+            Guid.NewGuid(), new SessionGoal("Focus"), new SessionDuration(TimeSpan.FromMinutes(30)),
+            focusPreset.Id, SessionOrigin.Planned, originatingBlockId: focusBlock.Id,
+            breakTimer: new BreakTimer(25, 5, 4, 15));
+        session.Start(At);
+        session.StartBreak(At, SessionPhaseKind.ShortBreak);
+
+        var slice = _engine.ComputeSlice(At, [focusPreset, backgroundPreset], [session], [focusBlock, backgroundBlock]);
+
+        slice.BlockedApps.Should().BeEquivalentTo(["spotify"]);
+    }
 }

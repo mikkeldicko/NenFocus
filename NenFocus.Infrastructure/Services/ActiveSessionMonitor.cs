@@ -4,7 +4,10 @@ using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.UseCases.Sessions.EndSession;
 using NenFocus.Application.UseCases.Sessions.ResumeFromBreak;
+using NenFocus.Application.UseCases.Sessions.StartBreak;
 using NenFocus.Domain.Enums;
+using NenFocus.Domain.Services;
+using NenFocus.Domain.ValueObjects;
 using System.Timers;
 
 namespace NenFocus.Infrastructure.Services;
@@ -14,30 +17,40 @@ public sealed class ActiveSessionMonitor : IActiveSessionMonitor, IDisposable
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ISystemClock _clock;
+    private readonly IBreakScheduleCalculator _scheduleCalculator;
     private readonly ILogger<ActiveSessionMonitor> _logger;
     private System.Timers.Timer? _timer;
 
     private Guid _sessionId;
+    private DateTime _sessionStart;
     private DateTime _sessionEnd;
     private double _sessionDurationSeconds;
     private DateTime? _breakStartedAt;
     private double _effectiveBreakSeconds;
     private bool _autoEndPending;
 
+    /// <summary>The full phase timeline for this session — empty when BreakTimer is
+    /// null ("No timer"). Computed once per session, walked every tick to notice a
+    /// Work phase has elapsed and drive the automatic transition into a break.</summary>
+    private IReadOnlyList<SessionPhase> _schedule = [];
+    private bool _autoBreakPending;
+
     public TimeSpan SessionTimeRemaining { get; private set; } = TimeSpan.Zero;
     public double SessionProgress { get; private set; }
     public TimeSpan BreakTimeRemaining { get; private set; } = TimeSpan.Zero;
     public double BreakProgress { get; private set; }
+    public IReadOnlyList<BreakMarkerDto> BreakMarkers { get; private set; } = [];
 
     public event EventHandler? Tick;
     public event EventHandler<PostSessionDto>? SessionAutoEnded;
 
     public ActiveSessionMonitor(
         ISessionStateService sessionState, IServiceScopeFactory scopeFactory, ISystemClock clock,
-        ILogger<ActiveSessionMonitor> logger)
+        IBreakScheduleCalculator scheduleCalculator, ILogger<ActiveSessionMonitor> logger)
     {
         _scopeFactory = scopeFactory;
         _clock = clock;
+        _scheduleCalculator = scheduleCalculator;
         _logger = logger;
         sessionState.SessionChanged += OnSessionChanged;
 
@@ -56,19 +69,51 @@ public sealed class ActiveSessionMonitor : IActiveSessionMonitor, IDisposable
     {
         StopTimer();
         _autoEndPending = false;
+        _autoBreakPending = false;
 
-        if (session is null) return;
+        if (session is null)
+        {
+            _schedule = [];
+            BreakMarkers = [];
+            return;
+        }
 
         _sessionId = session.Id;
+        _sessionStart = session.StartedAt;
         _sessionEnd = session.EndAt;
         _sessionDurationSeconds = (session.EndAt - session.StartedAt).TotalSeconds;
+
+        if (session.BreakTimer is { } cadenceDto)
+        {
+            var cadence = new BreakTimer(
+                cadenceDto.WorkMinutes,
+                cadenceDto.ShortBreakMinutes,
+                cadenceDto.CyclesBeforeLongBreak,
+                cadenceDto.LongBreakMinutes);
+            _schedule = _scheduleCalculator.ComputeSchedule(cadence, session.EndAt - session.StartedAt);
+            BreakMarkers = _schedule
+                .Where(p => p.Kind != SessionPhaseKind.Work)
+                .Select(p => new BreakMarkerDto
+                {
+                    ProgressFraction = p.Start.TotalSeconds / _sessionDurationSeconds,
+                    IsLongBreak = p.Kind == SessionPhaseKind.LongBreak
+                })
+                .ToList();
+        }
+        else
+        {
+            _schedule = [];
+            BreakMarkers = [];
+        }
 
         if (session.Status == SessionStatus.OnBreak && session.BreakStartedAt.HasValue)
         {
             _breakStartedAt = session.BreakStartedAt.Value;
             var sessionRemainingAtBreakStart = (_sessionEnd - _breakStartedAt.Value).TotalSeconds;
-            var breakDuration = (session.BreakSettings?.BreakDurationMinutes ?? 5) * 60.0;
-            _effectiveBreakSeconds = Math.Min(breakDuration, Math.Max(0, sessionRemainingAtBreakStart));
+            var breakMinutes = session.CurrentBreakKind == SessionPhaseKind.LongBreak
+                ? session.BreakTimer?.LongBreakMinutes ?? 5
+                : session.BreakTimer?.ShortBreakMinutes ?? 5;
+            _effectiveBreakSeconds = Math.Min(breakMinutes * 60.0, Math.Max(0, sessionRemainingAtBreakStart));
         }
         else
         {
@@ -122,6 +167,21 @@ public sealed class ActiveSessionMonitor : IActiveSessionMonitor, IDisposable
         SessionTimeRemaining = remaining;
         SessionProgress = Math.Clamp(1.0 - (remaining.TotalSeconds / _sessionDurationSeconds), 0.0, 1.0);
 
+        // Walk the precomputed phase timeline to notice a Work phase has elapsed —
+        // manual break-taking is retired, this is now the only path into OnBreak.
+        // Guarded on !_breakStartedAt so a session already on break (rehydrated from
+        // the DB, or one this same check already triggered) is never re-triggered.
+        if (_schedule.Count > 0 && !_breakStartedAt.HasValue && !_autoBreakPending)
+        {
+            var elapsed = _clock.UtcNow - _sessionStart;
+            var currentPhase = _schedule.FirstOrDefault(p => elapsed >= p.Start && elapsed < p.End);
+            if (currentPhase is { Kind: SessionPhaseKind.ShortBreak or SessionPhaseKind.LongBreak })
+            {
+                _autoBreakPending = true;
+                _ = AutoStartBreakAsync(currentPhase.Kind);
+            }
+        }
+
         if (_breakStartedAt.HasValue)
         {
             var breakEnd = _breakStartedAt.Value.AddSeconds(_effectiveBreakSeconds);
@@ -169,6 +229,27 @@ public sealed class ActiveSessionMonitor : IActiveSessionMonitor, IDisposable
             _logger.LogError(ex, "Auto-end failed for session {SessionId}; retrying next tick", _sessionId);
             _autoEndPending = false;
             StartTimer();
+        }
+    }
+
+    // Fire-and-forget, same reasoning as AutoEndAsync above: an unhandled exception
+    // here must not silently strand the session in Active forever with no break ever
+    // firing. On failure, _autoBreakPending resets so the next tick retries — the
+    // schedule is deterministic, so retrying is always safe and idempotent in effect
+    // (StartBreakCommandHandler itself also guards Status == Active).
+    private async Task AutoStartBreakAsync(SessionPhaseKind breakKind)
+    {
+        try
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var handler = scope.ServiceProvider
+                .GetRequiredService<ICommandHandler<StartBreakCommand, StartBreakResult>>();
+            await handler.HandleAsync(new StartBreakCommand { SessionId = _sessionId, BreakKind = breakKind });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Auto-start-break failed for session {SessionId}", _sessionId);
+            _autoBreakPending = false;
         }
     }
 

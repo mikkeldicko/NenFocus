@@ -205,15 +205,21 @@
                                    Margin="0,4,0,0"/>
 					</StackPanel>
 
-					<!-- Progress bar (session, shown when NOT on break) -->
-					<ProgressBar Value="{Binding SessionProgress}"
-                                 Minimum="0"
-                                 Maximum="1"
-                                 Height="3"
-                                 CornerRadius="2"
-                                 Foreground="#B8922A"
-                                 Background="#EEEEF5"
-                                 IsVisible="{Binding !IsOnBreak}"/>
+					<!-- Progress bar (session, shown when NOT on break), with break markers
+                         overlaid — see MainPageView.axaml.cs RenderBreakMarkers. A ColumnDefinitions
+                         collection can't be data-bound directly in Avalonia, so the marker layout is
+                         built in code-behind (a purely visual concern, not business logic) whenever
+                         BreakMarkers changes, rather than via a fragile MultiBinding/ElementName trick. -->
+					<Grid IsVisible="{Binding !IsOnBreak}">
+						<ProgressBar Value="{Binding SessionProgress}"
+                                     Minimum="0"
+                                     Maximum="1"
+                                     Height="3"
+                                     CornerRadius="2"
+                                     Foreground="#B8922A"
+                                     Background="#EEEEF5"/>
+						<Grid x:Name="BreakMarkersGrid" IsHitTestVisible="False"/>
+					</Grid>
 
 					<!-- Session goal -->
 					<TextBlock Text="{Binding SessionGoal}"
@@ -244,14 +250,8 @@
                                 HorizontalAlignment="Center"
                                 Spacing="12">
 
-						<!-- Take a Break (visible when active, not on break, and has break settings) -->
-						<Button Classes="break-action"
-                                Command="{Binding TakeBreakCommand}"
-                                IsVisible="{Binding CanTakeBreak}">
-							<TextBlock Text="Take a Break"
-                                       FontSize="12"
-                                       Foreground="#B8922A"/>
-						</Button>
+						<!-- Manual break-taking is retired — breaks now start automatically,
+                             driven by the session's own Timer Preset cadence. -->
 
 						<!-- Resume Early (visible when on break) -->
 						<Button Classes="break-action"

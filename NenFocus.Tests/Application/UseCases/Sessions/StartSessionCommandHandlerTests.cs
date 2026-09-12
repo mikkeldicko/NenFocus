@@ -4,6 +4,7 @@ using NenFocus.Application.Interfaces;
 using NenFocus.Application.UseCases.Sessions.StartSession;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
+using NenFocus.Domain.ValueObjects;
 using NSubstitute;
 
 namespace NenFocus.Tests.Application.UseCases.Sessions;
@@ -16,6 +17,7 @@ public class StartSessionCommandHandlerTests
     private readonly IPlannedBlockRepository _plannedBlocks = Substitute.For<IPlannedBlockRepository>();
     private readonly ISessionStateService _sessionState = Substitute.For<ISessionStateService>();
     private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
+    private readonly IBreakTimerPresetRepository _breakTimerPresets = Substitute.For<IBreakTimerPresetRepository>();
     private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
 
     public StartSessionCommandHandlerTests()
@@ -26,7 +28,7 @@ public class StartSessionCommandHandlerTests
     }
 
     private StartSessionCommandHandler CreateHandler()
-        => new(_sessions, _plannedBlocks, _sessionState, _presets, _clock);
+        => new(_sessions, _plannedBlocks, _sessionState, _presets, _breakTimerPresets, _clock);
 
     private static StartSessionCommand SpontaneousCommand(Guid? presetId = null) => new()
     {
@@ -111,21 +113,37 @@ public class StartSessionCommandHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_WithBreakSettings_ConvertsToDomainBreakSettings()
+    public async Task HandleAsync_WithBreakTimerPresetId_SnapshotsBreakTimerOntoSession()
     {
-        var command = SpontaneousCommand() with
-        {
-            BreakSettings = new BreakSettingsDto { IntervalMinutes = 25, BreakDurationMinutes = 5 }
-        };
+        var breakTimerPresetId = Guid.NewGuid();
+        _breakTimerPresets.GetByIdAsync(breakTimerPresetId, Arg.Any<CancellationToken>())
+            .Returns(BreakTimerPreset.Create(breakTimerPresetId, "Classic", new BreakTimer(25, 5, 4, 15)));
+        var command = SpontaneousCommand() with { BreakTimerPresetId = breakTimerPresetId };
 
         var result = await CreateHandler().HandleAsync(command, CancellationToken.None);
 
         result.Success.Should().BeTrue();
         await _sessions.Received(1).SaveAsync(
-            Arg.Is<Session>(s => s.BreakSettings != null
-                && s.BreakSettings.IntervalMinutes == 25
-                && s.BreakSettings.BreakLengthMinutes == 5),
+            Arg.Is<Session>(s => s.BreakTimer != null
+                && s.BreakTimer.WorkMinutes == 25
+                && s.BreakTimer.ShortBreakMinutes == 5
+                && s.BreakTimer.CyclesBeforeLongBreak == 4
+                && s.BreakTimer.LongBreakMinutes == 15),
             Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task HandleAsync_BreakTimerPresetNotFound_Fails()
+    {
+        var breakTimerPresetId = Guid.NewGuid();
+        _breakTimerPresets.GetByIdAsync(breakTimerPresetId, Arg.Any<CancellationToken>())
+            .Returns((BreakTimerPreset?)null);
+        var command = SpontaneousCommand() with { BreakTimerPresetId = breakTimerPresetId };
+
+        var result = await CreateHandler().HandleAsync(command, CancellationToken.None);
+
+        result.Success.Should().BeFalse();
+        await _sessions.DidNotReceive().SaveAsync(Arg.Any<Session>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]

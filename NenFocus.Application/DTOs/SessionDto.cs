@@ -15,7 +15,8 @@ public sealed record SessionDto
     public DateTime StartedAt { get; init; }
     public DateTime EndAt { get; init; }
     public DateTime? EndedAt { get; init; }
-    public BreakSettingsDto? BreakSettings { get; init; }
+    public BreakTimerDto? BreakTimer { get; init; }
     public int BreaksTaken { get; init; }
     public DateTime? BreakStartedAt { get; init; }
+    public SessionPhaseKind? CurrentBreakKind { get; init; }
 }

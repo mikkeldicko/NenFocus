@@ -17,6 +17,15 @@ public static class DependencyInjection
         services.AddValidatorsFromAssembly(assembly);
 
         services.AddScoped<IPolicyEngine, PolicyEngine>();
+
+        // Singleton, not Scoped: stateless with no scoped dependencies (same
+        // justification DOMAIN_DICTIONARY.md gives for PolicyEngine, though that one is
+        // actually registered Scoped below — pre-existing doc/code drift, unrelated to
+        // this feature). Must be Singleton here specifically because ActiveSessionMonitor
+        // (Infrastructure, Singleton) takes it as a direct constructor dependency — a
+        // Scoped registration would be a captive dependency, the same class of bug
+        // MODULE_STANDARDS.md's "No Directly-Injected IQueryHandler" rule exists to avoid.
+        services.AddSingleton<IBreakScheduleCalculator, BreakScheduleCalculator>();
         services.AddScoped<IPlannedFocusHoursCalculator, PlannedFocusHoursCalculator>();
         services.AddScoped<IFocusBlockOutcomeClassifier, FocusBlockOutcomeClassifier>();
         services.AddScoped<IContractBlockBatchPreparer, ContractBlockBatchPreparer>();

@@ -19,6 +19,9 @@ This file is the canonical reference for every domain concept in NenFocus. It ex
 | **Spontaneous Session** | A Session created by completing the Ritual manually from the Main Page; no Block entity exists; `Origin = Spontaneous` |
 | **Planned Session** | A Session created via the Ritual triggered by a scheduled Focus Block; `Origin = Planned` |
 | **SessionOrigin** | Enum (`Spontaneous` \| `Planned`) that tags every Session with how it was initiated |
+| **BreakTimerPreset** | A saved, reusable work/break cadence (Classic, Deep Work, Flow ship as ordinary seeded rows, freely editable/deletable) — its own aggregate root, authored on the Settings page (not yet built), snapshotted by value into a Session at Hatsu; no locking of any kind |
+| **BreakTimer** | Value object holding the frozen cadence a Session runs under — `WorkMinutes`, `ShortBreakMinutes`, `CyclesBeforeLongBreak`, `LongBreakMinutes` — copied from a `BreakTimerPreset` at Start; replaces the retired `BreakSettings` |
+| **SessionPhase / SessionPhaseKind** | One entry (`Work` \| `ShortBreak` \| `LongBreak`) in the ordered phase timeline `IBreakScheduleCalculator` computes for a session's whole run, given its `BreakTimer` and total duration — the single source every consumer (automatic work/break transitions, Hatsu's fit-filtering, the Main Page progress bar's break markers) reads, rather than each re-deriving cycle state independently |
 | **Blocked Attempt** | An append-only fact recording a user's attempt to access a blocked app or site during a Session |
 | **Nen Contract** | A sealed, time-bound commitment over a contiguous date range that governs allowed changes to the Focus/Background blocks within it; own aggregate root, does not own `PlannedBlock`s |
 | **Seal** | The act of finalising a Nen Contract; the only way a `NenContract` comes into existence — there is no persisted draft state in the domain |
@@ -77,7 +80,7 @@ NenFocus has five pages accessible via the sidebar:
 - A Session cannot be paused — only placed *on break*.
 - A Session is *missed*, never *failed* or *expired* — "missed" is the only vocabulary for a Planned session whose window closed unfulfilled.
 
-**Break behaviour:** Once a break starts, a break countdown timer replaces the session timer on the Main Page. Enforcement remains active during breaks — blocked sites and apps stay blocked. The break is a reminder only. A future Settings option will allow the user to choose whether enforcement is paused during breaks. **Breaks are currently user-initiated only** (`MainPageViewModel.TakeBreak()`) — the "reminder fires and starts a break automatically" framing this line used to have does not match shipped code; `INotificationService.ScheduleBreakReminderAsync` is fully implemented but never called anywhere. See `ARCHITECT_GOVERNANCE.md` → Open Gap I.
+**Break behaviour:** Once a break starts, a break countdown timer replaces the session timer on the Main Page. **Breaks are now fully automatic, not user-initiated** (closed 2026-09-12, `DESIGN_GAP_HISTORY.md` Gap 61, closing the former Open Gap I) — a session picks a `BreakTimerPreset` at Hatsu, and `ActiveSessionMonitor` walks the resulting phase timeline to start and end breaks on its own; `MainPageViewModel.TakeBreak()` and the "Take a Break" button no longer exist. A session may also pick "No timer," running with no breaks at all. Whether enforcement pauses during a break is no longer a fixed "always stays active" rule — see Enforcement, below, and `PolicyEngine`'s `PauseEnforcementDuringBreak` resolution.
 
 **Ending early:** Currently the user can end a session before the timer runs out. A future "Strict Mode" setting will prevent this.
 
@@ -314,7 +317,7 @@ ActivePolicySlice ComputeSlice(
 | Layer | Artifact | Role |
 |-------|----------|------|
 | Domain | `IPolicyEngine` (`Services/IPolicyEngine.cs`) | Interface; the contract Application code depends on |
-| Domain | `PolicyEngine` (`Services/PolicyEngine.cs`) | Sealed implementation; all merge rules live here. Filters `blocks` through `PlannedBlock.IsActive(at)` before treating any of them as active (fixed 2026-08-20, `DESIGN_GAP_HISTORY.md` Gap 21's third addendum) — the caller's own fetch is allowed to be loose/buffered, but `PolicyEngine` is always the precise final word on "is this block active right now." `IsActive` itself now compares against `EffectiveEnd(at)`, not raw `End` (fixed 2026-08-21, Gap 32) — a block whose session ended early stopped freeing itself from `activeBlocks`, so `activeBlocks.OfType<FocusBlock>().FirstOrDefault()` could still pick a stale, already-resolved block over a genuinely new one scheduled into the freed time, permanently suppressing the new block's Ritual trigger until the stale block's raw window finally closed. **`activePresets` is now derived from `activeBlocks`'/`activeSessions`' own `BlockPresetId`s rather than trusted unfiltered from the caller (fixed 2026-09-10, `DESIGN_GAP_HISTORY.md` Gap 60)** — `activeBlocks` was already correctly narrowed via `IsActive`, but `activePresets` was just `presets.ToList()`, so a block that had genuinely gone inactive (session ended early) still had its preset's `BlockedSites`/`BlockedApps` folded into the computed policy and reapplied every heartbeat tick, for as long as "now" stayed inside the block's *original* `Start`/`End` window. |
+| Domain | `PolicyEngine` (`Services/PolicyEngine.cs`) | Sealed implementation; all merge rules live here. Filters `blocks` through `PlannedBlock.IsActive(at)` before treating any of them as active (fixed 2026-08-20, `DESIGN_GAP_HISTORY.md` Gap 21's third addendum) — the caller's own fetch is allowed to be loose/buffered, but `PolicyEngine` is always the precise final word on "is this block active right now." `IsActive` itself now compares against `EffectiveEnd(at)`, not raw `End` (fixed 2026-08-21, Gap 32) — a block whose session ended early stopped freeing itself from `activeBlocks`, so `activeBlocks.OfType<FocusBlock>().FirstOrDefault()` could still pick a stale, already-resolved block over a genuinely new one scheduled into the freed time, permanently suppressing the new block's Ritual trigger until the stale block's raw window finally closed. **`activePresets` is now derived from `activeBlocks`'/`activeSessions`' own `BlockPresetId`s rather than trusted unfiltered from the caller (fixed 2026-09-10, `DESIGN_GAP_HISTORY.md` Gap 60)** — `activeBlocks` was already correctly narrowed via `IsActive`, but `activePresets` was just `presets.ToList()`, so a block that had genuinely gone inactive (session ended early) still had its preset's `BlockedSites`/`BlockedApps` folded into the computed policy and reapplied every heartbeat tick, for as long as "now" stayed inside the block's *original* `Start`/`End` window. **Also resolves pause-during-break (built 2026-09-12, `DESIGN_GAP_HISTORY.md` Gap 61):** takes an optional `contracts` parameter, used only to look up a Focus Block's `PauseEnforcementDuringBreak` via its `ContractId` when its Session is `OnBreak` — a block with no `ContractId` (including a Bonus block) always falls back to the hardcoded-permissive global default. Only the specific block/session on break loses its own preset's contribution; a co-occurring Background Block is untouched. |
 | Application | `ComputeActivePolicySliceQueryHandler` | Only caller; fetches entities, then delegates to `_policyEngine.ComputeSlice()` |
 | Infrastructure | `DependencyInjection.cs` | Registers `PolicyEngine` as `IPolicyEngine` (singleton — stateless) |
 
@@ -406,6 +409,35 @@ ActivePolicySlice ComputeSlice(
 | Domain | `BackgroundBlock` entity (`Entities/BackgroundBlock.cs`) | Extends `PlannedBlock`; inherits `Id`, `BlockPresetId`, `Start`, `End`, `Title?`; no additional own fields; block preset type derived from C# class (`BackgroundBlock` → `BlockPresetType.Background` in query handler — no stored column) |
 | Application | `ComputeActivePolicySliceQueryHandler` | **Includes** Background Blocks when computing the active policy slice |
 | Infrastructure | `ScheduledEnforcementService` | Picks up the Background Block in its 5s heartbeat and applies enforcement |
+
+---
+
+## Break Timer Preset
+
+**Definition:** A saved, reusable work/break cadence — Classic (25/5, 4 cycles, 15m long break), Deep Work (50/10, 3 cycles, 20m), and Flow (90/20, 2 cycles, 30m) ship as ordinary seeded rows, not a special hardcoded case. A future custom preset is just another row in the same table, freely creatable/editable/deletable like any of them — no protected or built-in status, no locking of any kind. Authored on the Settings page (not yet built), not the Presets page.
+
+**Selected at Hatsu**, for both Spontaneous and Planned sessions alike — the same bucket break reminders already occupied, since a preset only governs the Session's own internal pacing and never affects what's enforced or when. Only presets whose phase timeline (see `SessionPhase`/`IBreakScheduleCalculator` in the Quick Reference table) actually produces a real break for the duration in play are offered; the list re-filters live as a Spontaneous session's duration wheel changes. Picking "No timer" means the session runs start-to-finish with no breaks at all.
+
+**Snapshotted, not referenced:** `Session.BreakTimer` is a frozen copy of the chosen preset's cadence, taken at Start — mirrors `ContractPreset`'s "copied by value, not a live reference" rule exactly. Editing or deleting the source preset later never affects a session already running or already in history.
+
+**Cadence loops for the whole session**, bounded only by its total duration (fixed the moment the session starts, same as today — user-picked for Spontaneous, block-derived for Planned): work → short break → ... → long break → work → short break → ..., repeating. A break is only ever included if it can run to completion *and* leaves real Work time after it — never a break that gets cut short, and never one that ends exactly when the session does with nothing left to work on. See `IBreakScheduleCalculator` in the Quick Reference table for the one calculation this and every other consumer reads.
+
+**Manual break-taking is retired app-wide.** There is no "Take a Break" button anywhere — see the Session section's Break behaviour note above.
+
+**Technical mapping:**
+
+| Layer | Artifact | Role |
+|-------|----------|------|
+| Domain | `BreakTimerPreset` (`Entities/BreakTimerPreset.cs`) | Aggregate root: `Id`, `Name`, `BreakTimer`. `Update` is a wholesale replace, mirroring `ContractPreset.Update`. |
+| Domain | `BreakTimer` (`ValueObjects/BreakTimer.cs`) | Validated value object: `WorkMinutes`, `ShortBreakMinutes`, `CyclesBeforeLongBreak`, `LongBreakMinutes`, all positive. |
+| Domain | `IBreakScheduleCalculator` / `BreakScheduleCalculator` (`Services/`) | Pure Domain service: `ComputeSchedule(BreakTimer, TimeSpan totalDuration) -> IReadOnlyList<SessionPhase>`. The Deep Module every consumer below reads from. |
+| Domain | `Session.BreakTimer (BreakTimer?)`, `Session.CurrentBreakKind (SessionPhaseKind?)` | Snapshot taken at Start; `CurrentBreakKind` set from `StartBreak`'s caller-resolved parameter, never re-derived by `Session` itself. |
+| Application | `IBreakTimerPresetRepository`, `CreateBreakTimerPreset`/`UpdateBreakTimerPreset`/`DeleteBreakTimerPreset` (`UseCases/BreakTimerPresets/`), `GetAllBreakTimerPresetsQuery` | Full CRUD — built, but **no UI yet** (Settings page doesn't exist). |
+| Application | `GetAvailableBreakTimerPresetsQuery` / `Handler` | Given a duration, returns only presets whose computed schedule contains at least one real break. |
+| Application | `StartSessionCommand.BreakTimerPresetId (Guid?)` / `StartSessionCommandHandler` | Loads the preset, snapshots its `BreakTimer` onto the new `Session`. |
+| Infrastructure | `ActiveSessionMonitor` | Walks the phase timeline every tick; auto-calls `StartBreakCommand`/`ResumeFromBreakCommand` at each transition (no user click); exposes `BreakMarkers` for the Main Page progress bar. |
+| UI | `HatsuPageViewModel` (`AvailableBreakTimerPresets`, `BreakTimerPresetChips`, `SelectedBreakTimerPreset`) | Chip-style selector, live-filtered by duration; `BreakTimerPresetChip` pairs each preset with its own `IsSelected` flag so the View never has to compare across an `ItemsControl` boundary. |
+| UI | `MainPageView.axaml.cs` (`RenderBreakMarkers`) | Builds the progress bar's tick marks in code-behind — a `ColumnDefinitions` collection can't be data-bound directly in Avalonia. |
 
 ---
 

@@ -31,10 +31,10 @@ public sealed class StartBreakCommandHandler
         if (session.Status != SessionStatus.Active)
             return StartBreakResult.Fail("Can only start a break from an active session.");
 
-        if (session.BreakSettings is null)
-            return StartBreakResult.Fail("Cannot start a break — no break settings configured.");
+        if (session.BreakTimer is null)
+            return StartBreakResult.Fail("Cannot start a break — no timer cadence configured.");
 
-        session.StartBreak(_clock.UtcNow);
+        session.StartBreak(_clock.UtcNow, command.BreakKind);
 
         await _sessions.SaveAsync(session, ct);
 
@@ -45,7 +45,8 @@ public sealed class StartBreakCommandHandler
             {
                 Status = SessionStatus.OnBreak,
                 BreakStartedAt = session.BreakStartedAt,
-                BreaksTaken = session.BreaksTaken
+                BreaksTaken = session.BreaksTaken,
+                CurrentBreakKind = session.CurrentBreakKind
             });
         }
 

@@ -27,6 +27,16 @@ public sealed class ContractPreset : AggregateRoot
     /// </summary>
     public RedemptionPlacementPolicy RedemptionPlacementPolicy { get; private set; }
 
+    /// <summary>
+    /// Whether a Focus Block committed to a contract sealed from this preset should
+    /// stop enforcing while its Session is OnBreak. Can only ever narrow the global
+    /// Settings default toward stricter (keep blocking), never loosen it — see
+    /// IPolicyEngine.ComputeSlice and NenContract.PauseEnforcementDuringBreak. Not
+    /// yet user-editable: Settings, where this would actually be set, doesn't exist
+    /// yet, so this defaults permissive (true) until it does.
+    /// </summary>
+    public bool PauseEnforcementDuringBreak { get; private set; }
+
     private ContractPreset() { } // EF Core
 
     public static ContractPreset Create(
@@ -36,7 +46,8 @@ public sealed class ContractPreset : AggregateRoot
         DailyFloor? dailyFloor,
         WorkHours? workHours,
         bool allowCancellation,
-        RedemptionPlacementPolicy redemptionPlacementPolicy = RedemptionPlacementPolicy.AnywhereInContract)
+        RedemptionPlacementPolicy redemptionPlacementPolicy = RedemptionPlacementPolicy.AnywhereInContract,
+        bool pauseEnforcementDuringBreak = true)
     {
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Preset name cannot be empty.", nameof(name));
@@ -49,7 +60,8 @@ public sealed class ContractPreset : AggregateRoot
             DailyFloor = dailyFloor,
             WorkHours = workHours,
             AllowCancellation = allowCancellation,
-            RedemptionPlacementPolicy = redemptionPlacementPolicy
+            RedemptionPlacementPolicy = redemptionPlacementPolicy,
+            PauseEnforcementDuringBreak = pauseEnforcementDuringBreak
         };
     }
 
@@ -65,7 +77,8 @@ public sealed class ContractPreset : AggregateRoot
         DailyFloor? dailyFloor,
         WorkHours? workHours,
         bool allowCancellation,
-        RedemptionPlacementPolicy redemptionPlacementPolicy = RedemptionPlacementPolicy.AnywhereInContract)
+        RedemptionPlacementPolicy redemptionPlacementPolicy = RedemptionPlacementPolicy.AnywhereInContract,
+        bool pauseEnforcementDuringBreak = true)
     {
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Preset name cannot be empty.", nameof(name));
@@ -76,5 +89,6 @@ public sealed class ContractPreset : AggregateRoot
         WorkHours = workHours;
         AllowCancellation = allowCancellation;
         RedemptionPlacementPolicy = redemptionPlacementPolicy;
+        PauseEnforcementDuringBreak = pauseEnforcementDuringBreak;
     }
 }

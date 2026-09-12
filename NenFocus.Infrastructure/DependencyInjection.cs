@@ -37,6 +37,7 @@ public static class DependencyInjection
         services.AddScoped<IPlannedBlockRepository, PlannedBlockRepository>();
         services.AddScoped<INenContractRepository, NenContractRepository>();
         services.AddScoped<IContractPresetRepository, ContractPresetRepository>();
+        services.AddScoped<IBreakTimerPresetRepository, BreakTimerPresetRepository>();
 
         services.AddSingleton<INotificationService, WindowsNotificationService>();
 

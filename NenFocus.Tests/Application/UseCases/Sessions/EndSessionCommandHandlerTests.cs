@@ -86,9 +86,9 @@ public class EndSessionCommandHandlerTests
     {
         var onBreakSession = Session.Create(
             Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(30)),
-            Guid.NewGuid(), SessionOrigin.Spontaneous, breakSettings: new BreakSettings(25, 5));
+            Guid.NewGuid(), SessionOrigin.Spontaneous, breakTimer: new BreakTimer(25, 5, 4, 15));
         onBreakSession.Start(Now.AddMinutes(-10));
-        onBreakSession.StartBreak(Now.AddMinutes(-2));
+        onBreakSession.StartBreak(Now.AddMinutes(-2), SessionPhaseKind.ShortBreak);
         _sessions.GetByIdAsync(onBreakSession.Id, Arg.Any<CancellationToken>()).Returns(onBreakSession);
 
         var result = await CreateHandler().HandleAsync(new EndSessionCommand { SessionId = onBreakSession.Id });

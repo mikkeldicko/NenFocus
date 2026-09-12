@@ -4,6 +4,7 @@ using NenFocus.Application.Interfaces;
 using NenFocus.Application.UseCases.Sessions.StartSession;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
+using NenFocus.Domain.ValueObjects;
 using NSubstitute;
 
 namespace NenFocus.Tests.Application.UseCases.Sessions;
@@ -11,8 +12,9 @@ namespace NenFocus.Tests.Application.UseCases.Sessions;
 public class StartSessionValidatorTests
 {
     private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
+    private readonly IBreakTimerPresetRepository _breakTimerPresets = Substitute.For<IBreakTimerPresetRepository>();
 
-    private StartSessionValidator CreateValidator() => new(_presets);
+    private StartSessionValidator CreateValidator() => new(_presets, _breakTimerPresets);
 
     private static StartSessionCommand ValidCommand(Guid presetId) => new()
     {
@@ -141,15 +143,14 @@ public class StartSessionValidatorTests
     }
 
     [Fact]
-    public async Task Validate_InvalidBreakInterval_IsInvalid()
+    public async Task Validate_BreakTimerPresetDoesNotExist_IsInvalid()
     {
         var presetId = Guid.NewGuid();
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
             .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, DateTime.UtcNow));
-        var command = ValidCommand(presetId) with
-        {
-            BreakSettings = new BreakSettingsDto { IntervalMinutes = 20, BreakDurationMinutes = 5 }
-        };
+        // _breakTimerPresets.GetByIdAsync unstubbed already returns null, matching
+        // "doesn't exist" — same defense-in-depth reasoning as the block preset check.
+        var command = ValidCommand(presetId) with { BreakTimerPresetId = Guid.NewGuid() };
 
         var result = await CreateValidator().ValidateAsync(command);
 
@@ -157,18 +158,18 @@ public class StartSessionValidatorTests
     }
 
     [Fact]
-    public async Task Validate_InvalidBreakDuration_IsInvalid()
+    public async Task Validate_BreakTimerPresetExists_IsValid()
     {
         var presetId = Guid.NewGuid();
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
             .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, DateTime.UtcNow));
-        var command = ValidCommand(presetId) with
-        {
-            BreakSettings = new BreakSettingsDto { IntervalMinutes = 25, BreakDurationMinutes = 7 }
-        };
+        var breakTimerPresetId = Guid.NewGuid();
+        _breakTimerPresets.GetByIdAsync(breakTimerPresetId, Arg.Any<CancellationToken>())
+            .Returns(BreakTimerPreset.Create(breakTimerPresetId, "Classic", new BreakTimer(25, 5, 4, 15)));
+        var command = ValidCommand(presetId) with { BreakTimerPresetId = breakTimerPresetId };
 
         var result = await CreateValidator().ValidateAsync(command);
 
-        result.IsValid.Should().BeFalse();
+        result.IsValid.Should().BeTrue();
     }
 }

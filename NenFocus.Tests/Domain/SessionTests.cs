@@ -8,14 +8,14 @@ namespace NenFocus.Tests.Domain;
 
 public class SessionTests
 {
-    private static Session CreateSpontaneousSession(BreakSettings? breakSettings = null)
+    private static Session CreateSpontaneousSession(BreakTimer? breakTimer = null)
         => Session.Create(
             id: Guid.NewGuid(),
             goal: new SessionGoal("Write tests"),
             duration: new SessionDuration(TimeSpan.FromMinutes(30)),
             blockPresetId: Guid.NewGuid(),
             origin: SessionOrigin.Spontaneous,
-            breakSettings: breakSettings);
+            breakTimer: breakTimer);
 
     private static Session CreatePlannedSession(Guid originatingBlockId)
         => Session.Create(
@@ -120,16 +120,17 @@ public class SessionTests
     }
 
     [Fact]
-    public void StartBreak_ActiveWithBreakSettings_MovesToOnBreakAndRaisesEvent()
+    public void StartBreak_ActiveWithBreakTimer_MovesToOnBreakAndRaisesEvent()
     {
-        var session = CreateSpontaneousSession(new BreakSettings(25, 5));
+        var session = CreateSpontaneousSession(new BreakTimer(25, 5, 4, 15));
         session.Start(DateTime.UtcNow);
         var breakStartedAt = DateTime.UtcNow;
 
-        session.StartBreak(breakStartedAt);
+        session.StartBreak(breakStartedAt, SessionPhaseKind.ShortBreak);
 
         session.Status.Should().Be(SessionStatus.OnBreak);
         session.BreakStartedAt.Should().Be(breakStartedAt);
+        session.CurrentBreakKind.Should().Be(SessionPhaseKind.ShortBreak);
         session.BreaksTaken.Should().Be(1);
 
         var raised = session.DomainEvents.OfType<BreakStartedEvent>().Single();
@@ -137,22 +138,33 @@ public class SessionTests
     }
 
     [Fact]
-    public void StartBreak_WithoutBreakSettings_Throws()
+    public void StartBreak_WithoutBreakTimer_Throws()
     {
         var session = CreateSpontaneousSession();
         session.Start(DateTime.UtcNow);
 
-        var act = () => session.StartBreak(DateTime.UtcNow);
+        var act = () => session.StartBreak(DateTime.UtcNow, SessionPhaseKind.ShortBreak);
 
         act.Should().Throw<InvalidOperationException>();
     }
 
     [Fact]
+    public void StartBreak_WithWorkAsBreakKind_Throws()
+    {
+        var session = CreateSpontaneousSession(new BreakTimer(25, 5, 4, 15));
+        session.Start(DateTime.UtcNow);
+
+        var act = () => session.StartBreak(DateTime.UtcNow, SessionPhaseKind.Work);
+
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
     public void StartBreak_WhenNotActive_Throws()
     {
-        var session = CreateSpontaneousSession(new BreakSettings(25, 5));
+        var session = CreateSpontaneousSession(new BreakTimer(25, 5, 4, 15));
 
-        var act = () => session.StartBreak(DateTime.UtcNow);
+        var act = () => session.StartBreak(DateTime.UtcNow, SessionPhaseKind.ShortBreak);
 
         act.Should().Throw<InvalidOperationException>();
     }
@@ -160,12 +172,12 @@ public class SessionTests
     [Fact]
     public void StartBreak_Twice_IncrementsBreaksTaken()
     {
-        var session = CreateSpontaneousSession(new BreakSettings(25, 5));
+        var session = CreateSpontaneousSession(new BreakTimer(25, 5, 4, 15));
         session.Start(DateTime.UtcNow);
 
-        session.StartBreak(DateTime.UtcNow);
+        session.StartBreak(DateTime.UtcNow, SessionPhaseKind.ShortBreak);
         session.ResumeFromBreak();
-        session.StartBreak(DateTime.UtcNow);
+        session.StartBreak(DateTime.UtcNow, SessionPhaseKind.ShortBreak);
 
         session.BreaksTaken.Should().Be(2);
         session.DomainEvents.OfType<BreakStartedEvent>().Select(e => e.BreakNumber)
@@ -175,9 +187,9 @@ public class SessionTests
     [Fact]
     public void ResumeFromBreak_WhenOnBreak_ReturnsToActive()
     {
-        var session = CreateSpontaneousSession(new BreakSettings(25, 5));
+        var session = CreateSpontaneousSession(new BreakTimer(25, 5, 4, 15));
         session.Start(DateTime.UtcNow);
-        session.StartBreak(DateTime.UtcNow);
+        session.StartBreak(DateTime.UtcNow, SessionPhaseKind.ShortBreak);
 
         session.ResumeFromBreak();
 
@@ -213,9 +225,9 @@ public class SessionTests
     [Fact]
     public void Complete_WhileOnBreak_ClearsBreakStartedAt()
     {
-        var session = CreateSpontaneousSession(new BreakSettings(25, 5));
+        var session = CreateSpontaneousSession(new BreakTimer(25, 5, 4, 15));
         session.Start(DateTime.UtcNow);
-        session.StartBreak(DateTime.UtcNow);
+        session.StartBreak(DateTime.UtcNow, SessionPhaseKind.ShortBreak);
 
         session.Complete(DateTime.UtcNow);
 

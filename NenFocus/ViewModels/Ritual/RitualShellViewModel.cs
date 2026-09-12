@@ -160,6 +160,7 @@ public partial class RitualShellViewModel : ViewModelBase
         _currentBackAction = NavigateToRen;
         CurrentStep = new HatsuPageViewModel(
             commandDispatcher: _commandDispatcher,
+            queryDispatcher: _queryDispatcher,
             clock: _clock,
             getData: () => new HatsuData
             {

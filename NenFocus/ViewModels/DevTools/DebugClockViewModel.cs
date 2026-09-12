@@ -23,6 +23,11 @@ public partial class DebugClockViewModel : ViewModelBase
     [ObservableProperty] private DateTime _currentEffectiveTime;
     [ObservableProperty] private DateTimeOffset _selectedDate;
     [ObservableProperty] private TimeSpan _selectedTime;
+    // decimal?, not int — must match NumericUpDown.Value's own type exactly. Binding
+    // straight to a non-nullable int crashed (NullReferenceException unboxing null)
+    // the moment the control's value was ever null, which it legitimately can be
+    // (a momentarily empty field, or before the control's own default first applies).
+    [ObservableProperty] private decimal? _customMinutes = 5;
 
     public DebugClockViewModel(ISystemClock clock, IDebugClockController controller)
     {
@@ -59,6 +64,13 @@ public partial class DebugClockViewModel : ViewModelBase
     {
         var local = SelectedDate.Date + SelectedTime;
         _controller.SetTo(DateTime.SpecifyKind(local, DateTimeKind.Local).ToUniversalTime());
+    }
+
+    [RelayCommand]
+    private void AdvanceCustomMinutes()
+    {
+        if (CustomMinutes is not { } minutes || minutes <= 0) return;
+        _controller.AdvanceBy(TimeSpan.FromMinutes((double)minutes));
     }
 
     [RelayCommand]

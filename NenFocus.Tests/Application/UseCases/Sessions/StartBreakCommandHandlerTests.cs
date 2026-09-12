@@ -21,11 +21,11 @@ public class StartBreakCommandHandlerTests
 
     private StartBreakCommandHandler CreateHandler() => new(_sessions, _sessionState, _clock);
 
-    private static Session CreateActiveSessionWithBreakSettings()
+    private static Session CreateActiveSessionWithBreakTimer()
     {
         var session = Session.Create(
             Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(30)),
-            Guid.NewGuid(), SessionOrigin.Spontaneous, breakSettings: new BreakSettings(25, 5));
+            Guid.NewGuid(), SessionOrigin.Spontaneous, breakTimer: new BreakTimer(25, 5, 4, 15));
         session.Start(Now.AddMinutes(-10));
         return session;
     }
@@ -35,7 +35,7 @@ public class StartBreakCommandHandlerTests
     {
         _sessions.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((Session?)null);
 
-        var result = await CreateHandler().HandleAsync(new StartBreakCommand { SessionId = Guid.NewGuid() });
+        var result = await CreateHandler().HandleAsync(new StartBreakCommand { SessionId = Guid.NewGuid(), BreakKind = SessionPhaseKind.ShortBreak });
 
         result.Success.Should().BeFalse();
     }
@@ -45,10 +45,10 @@ public class StartBreakCommandHandlerTests
     {
         var session = Session.Create(
             Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(30)),
-            Guid.NewGuid(), SessionOrigin.Spontaneous, breakSettings: new BreakSettings(25, 5));
+            Guid.NewGuid(), SessionOrigin.Spontaneous, breakTimer: new BreakTimer(25, 5, 4, 15));
         _sessions.GetByIdAsync(session.Id, Arg.Any<CancellationToken>()).Returns(session);
 
-        var result = await CreateHandler().HandleAsync(new StartBreakCommand { SessionId = session.Id });
+        var result = await CreateHandler().HandleAsync(new StartBreakCommand { SessionId = session.Id, BreakKind = SessionPhaseKind.ShortBreak });
 
         result.Success.Should().BeFalse();
     }
@@ -56,11 +56,11 @@ public class StartBreakCommandHandlerTests
     [Fact]
     public async Task HandleAsync_HappyPath_StartsBreakAndSaves()
     {
-        var session = CreateActiveSessionWithBreakSettings();
+        var session = CreateActiveSessionWithBreakTimer();
         _sessions.GetByIdAsync(session.Id, Arg.Any<CancellationToken>()).Returns(session);
         _sessionState.ActiveSession.Returns(new SessionDto { Id = session.Id, Status = SessionStatus.Active });
 
-        var result = await CreateHandler().HandleAsync(new StartBreakCommand { SessionId = session.Id });
+        var result = await CreateHandler().HandleAsync(new StartBreakCommand { SessionId = session.Id, BreakKind = SessionPhaseKind.ShortBreak });
 
         result.Success.Should().BeTrue();
         session.Status.Should().Be(SessionStatus.OnBreak);
@@ -72,18 +72,18 @@ public class StartBreakCommandHandlerTests
     [Fact]
     public async Task HandleAsync_NoActiveSessionStateCached_SkipsSetActiveButStillSucceeds()
     {
-        var session = CreateActiveSessionWithBreakSettings();
+        var session = CreateActiveSessionWithBreakTimer();
         _sessions.GetByIdAsync(session.Id, Arg.Any<CancellationToken>()).Returns(session);
         _sessionState.ActiveSession.Returns((SessionDto?)null);
 
-        var result = await CreateHandler().HandleAsync(new StartBreakCommand { SessionId = session.Id });
+        var result = await CreateHandler().HandleAsync(new StartBreakCommand { SessionId = session.Id, BreakKind = SessionPhaseKind.ShortBreak });
 
         result.Success.Should().BeTrue();
         _sessionState.DidNotReceive().SetActive(Arg.Any<SessionDto>());
     }
 
     [Fact]
-    public async Task HandleAsync_NoBreakSettingsConfigured_FailsGracefully()
+    public async Task HandleAsync_NoBreakTimerConfigured_FailsGracefully()
     {
         var session = Session.Create(
             Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(30)),
@@ -91,7 +91,7 @@ public class StartBreakCommandHandlerTests
         session.Start(Now.AddMinutes(-5));
         _sessions.GetByIdAsync(session.Id, Arg.Any<CancellationToken>()).Returns(session);
 
-        var result = await CreateHandler().HandleAsync(new StartBreakCommand { SessionId = session.Id });
+        var result = await CreateHandler().HandleAsync(new StartBreakCommand { SessionId = session.Id, BreakKind = SessionPhaseKind.ShortBreak });
 
         result.Success.Should().BeFalse();
         await _sessions.DidNotReceive().SaveAsync(Arg.Any<Session>(), Arg.Any<CancellationToken>());
