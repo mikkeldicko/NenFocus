@@ -116,13 +116,10 @@ Tactical implementation details, current build state, and platform-specific gotc
 
 | Area | Notes |
 |------|-------|
-| Nen Contract — active-contract visibility | CLOSED 2026-08-11, banner query renamed/broadened 2026-09-06 (Gap 55) — `GetNenContractsForDateRangeQuery`, not `GetActiveNenContractQuery` (stale name, corrected 2026-09-10). Still doesn't fully close Gap C2 (in-contract streaks) or C3 (deficit digest notification) — the visibility blocker those two gaps depended on is gone, but neither is built. |
 | Insights page | Not built. `InsightsPageView.axaml` is a static "Coming soon" placeholder backed by a generic stub in `StubPageViewModels.cs` — no query, no handler, no DTO exist yet. Also the intended home for Gap C1 (weighted Day-Met percentage day-strip) — `NenContract.PercentOfFloorMet` is not yet built, only designed. |
-| Universal usage tracking + Usage Ceiling | See `ARCHITECT_GOVERNANCE.md` → Open Gap A. Domain shape settled; not yet built. |
+| Universal usage tracking + Usage Ceiling | See `OPEN_GAPS.md` → Open Gap A. Domain shape settled; not yet built. |
 | Planned Period / Strict Mode | Superseded by Nen Contract — kept only as a historical cross-reference; do not build a second, parallel feature for this. |
-| ~~Daily Flexibility — total-time conservation~~ | **CLOSED 2026-08-19.** Built as floor-protection, not exact conservation — see `DESIGN_GAP_HISTORY.md` Gap 18. |
-| Recurring Blocks | See `ARCHITECT_GOVERNANCE.md` → Open Gap E. Domain shape settled; not yet built. |
-| FocusBlock → Session link | CLOSED in Gap 3. `Session.OriginatingBlockId` and `FocusBlock.RitualCompletedAt` added. |
+| Recurring Blocks | See `OPEN_GAPS.md` → Open Gap E. Domain shape settled; not yet built. |
 | Settings page | Stub only — theme, strict mode toggle, notification filter, sounds, daily adjustment window constraints. |
 | Checklist / Quest persistence | UI present on Main page. No storage wired up. |
 | Daily Ritual Summary | Morning popup with today's scheduled blocks and streak. Not built. |
@@ -183,7 +180,7 @@ Full merge rules and current behavior — see `DOMAIN_DICTIONARY.md`'s "Policy S
 
 - **FocusBlock update**: There is no `FocusBlock.Update()` method — `UpdatePlannedBlockCommand` uses delete + recreate.
 - **Hosts file markers**: must be exactly `# NEN_FOCUS_START` and `# NEN_FOCUS_END` (case-sensitive, underscores). Any deviation causes duplicate entries on next write.
-- **Break reminders**: Implemented as `Task.Delay` fire-and-forget tasks tracked by `CancellationTokenSource` — but `INotificationService.ScheduleBreakReminderAsync` is never called by anything (verified against the full solution 2026-08-12), so this is currently unreachable rather than a live restart-survival risk. See `ARCHITECT_GOVERNANCE.md` → Open Gap I.
+- **Break reminders**: Implemented as `Task.Delay` fire-and-forget tasks tracked by `CancellationTokenSource` — but `INotificationService.ScheduleBreakReminderAsync` is never called by anything (verified against the full solution 2026-08-12), so this is currently unreachable rather than a live restart-survival risk. Superseded by BreakTimerPreset's automatic breaks (Gap 61).
 - **No index on `PlannedBlocks.Start`/`End`**: confirmed 2026-07-15 while sizing the Recurring Blocks materialization horizon (see `ARCHITECT_GOVERNANCE.md` → Open Gap E) — every range query (`GetForDayAsync`, `GetForRangeAsync`, `GetOverlappingAsync`, etc.) is currently a full table scan. Not a problem at current or foreseeable single-user scale; worth adding an index on `(Start, End)` before row counts climb into the tens of thousands, independent of any specific feature.
 
 ### DI & Registration

@@ -3,7 +3,8 @@
 ## Authoritative documents
 These files govern every decision. Read them, do not override them, surface drift instead of silently fixing it.
 
-- @ARCHITECT_GOVERNANCE.md — constitution, Design Gap Protocol, open gaps
+- @ARCHITECT_GOVERNANCE.md — constitution, Design Gap Protocol, one-line open-gap index
+- `OPEN_GAPS.md` — full write-ups of every open gap; not auto-loaded, read on demand before working on or designing near one
 - @DOMAIN_DICTIONARY.md — canonical domain vocabulary, current-state technical mappings, kept lean (2026-09-10 split, see below)
 - `DOMAIN_DICTIONARY_NEN_CONTRACT.md` — Nen Contract deep-dive (Redemption Rules, Strictness Rule mechanics, build history); not auto-loaded, read on demand like `DESIGN_GAP_HISTORY.md`
 - @MODULE_STANDARDS.md — layer rules, Deep Module test, ViewModel Forbidden Zone, naming

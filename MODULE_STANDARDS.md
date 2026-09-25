@@ -211,7 +211,7 @@ These converters are approved. Reuse before creating new ones. **Registration is
 | Interface | `I<Noun><Role>` | `ISessionStateService`, `IActiveSessionMonitor` |
 | DTO | `<Noun>Dto` | `SessionDto`, `PostSessionDto` |
 | Domain event | `<Noun><PastTense>Event` | `SessionStartedEvent`, `SessionEndedEvent` |
-| Value object | Noun only | `SessionGoal`, `BreakSettings` |
+| Value object | Noun only | `SessionGoal`, `BreakTimer` |
 | ViewModel | `<Page>ViewModel` | `MainPageViewModel`, `HatsuPageViewModel` |
 | Converter | `<Input>To<Output>Converter` | `TimeSpanToStringConverter` |
 
