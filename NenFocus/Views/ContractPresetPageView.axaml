@@ -165,6 +165,7 @@
 										<TextBlock Text="{Binding WorkHoursLabel}" FontSize="12" Foreground="#AAAABC"/>
 										<TextBlock Text="{Binding CancellationLabel}" FontSize="12" Foreground="#AAAABC"/>
 										<TextBlock Text="{Binding RedemptionPlacementLabel}" FontSize="12" Foreground="#AAAABC"/>
+										<TextBlock Text="{Binding BreakBlockingLabel}" FontSize="12" Foreground="#AAAABC"/>
 									</StackPanel>
 									<StackPanel Grid.Column="1" Classes="card-actions"
                                                 Orientation="Horizontal" Spacing="2"
@@ -234,6 +235,9 @@
 						</StackPanel>
 
 						<CheckBox Content="Allow cancellation" IsChecked="{Binding AllowCancellation}"/>
+
+						<CheckBox Content="Keep blocking during breaks" IsChecked="{Binding KeepBlockingDuringBreaks}"
+						          ToolTip.Tip="Sessions under this contract keep their sites and apps blocked through their breaks."/>
 
 						<StackPanel Spacing="6">
 							<CheckBox Content="Enforce a fixed daily floor" IsChecked="{Binding IsDailyFloorEnabled}"/>

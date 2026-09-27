@@ -163,16 +163,16 @@ namespace NenFocus.Infrastructure.Migrations
                         .HasColumnType("REAL")
                         .HasColumnName("DailyFloorHours");
 
+                    b.Property<bool>("KeepBlockingDuringBreaks")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false);
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(60)
                         .HasColumnType("TEXT")
                         .UseCollation("NOCASE");
-
-                    b.Property<bool>("PauseEnforcementDuringBreak")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER")
-                        .HasDefaultValue(true);
 
                     b.Property<string>("RedemptionPlacementPolicy")
                         .IsRequired()
@@ -221,6 +221,11 @@ namespace NenFocus.Infrastructure.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("Goal");
 
+                    b.Property<bool>("KeepBlockingDuringBreaks")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false);
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -228,11 +233,6 @@ namespace NenFocus.Infrastructure.Migrations
 
                     b.Property<DateOnly>("OriginalEndDate")
                         .HasColumnType("TEXT");
-
-                    b.Property<bool>("PauseEnforcementDuringBreak")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER")
-                        .HasDefaultValue(true);
 
                     b.Property<DateTime?>("PostContractAcknowledgedAt")
                         .HasColumnType("TEXT");
@@ -336,6 +336,11 @@ namespace NenFocus.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT")
                         .HasColumnName("Goal");
+
+                    b.Property<bool>("KeepBlockingDuringBreaks")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false);
 
                     b.Property<string>("Origin")
                         .IsRequired()

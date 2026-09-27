@@ -32,4 +32,5 @@ public sealed record EditNenContractCommand : ICommand<EditNenContractResult>
     public IReadOnlyList<NenContractBlockSpec> Blocks { get; init; } = [];
     public Guid? ContractPresetId { get; init; }
     public RedemptionPlacementPolicy RedemptionPlacementPolicy { get; init; }
+    public bool KeepBlockingDuringBreaks { get; init; }
 }

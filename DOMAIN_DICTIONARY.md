@@ -84,7 +84,7 @@ NenFocus has five pages accessible via the sidebar:
 - A Session cannot be paused. It is *on break* only while the clock is inside one of its break slots — it is never *put* on break.
 - A Session is *missed*, never *failed* or *expired* — "missed" is the only vocabulary for a Planned session whose window closed unfulfilled.
 
-**Break behaviour:** A session's breaks are decided when it starts and stored as its `BreakSchedule` (Gap 63); during a break slot a break countdown replaces the session timer on the Main Page while the session itself keeps running. There are no break buttons — ending or skipping a break is parked in Open Gap P. "No timer" means an empty schedule. Whether enforcement pauses during a break is resolved by `PolicyEngine` (`Session.IsOnBreakAt(at)` + `PauseEnforcementDuringBreak`).
+**Break behaviour:** A session's breaks are decided when it starts and stored as its `BreakSchedule` (Gap 63); during a break slot a break countdown replaces the session timer on the Main Page while the session itself keeps running. There are no break buttons — ending or skipping a break is parked in Open Gap P. "No timer" means an empty schedule. What a break does to blocking is the session's own answer, `Session.LiftsBlockingAt(at)`: inside a break slot, unless the session keeps blocking during breaks (copied at Start from its contract, Gap 64).
 
 **Ending early:** Currently the user can end a session before the timer runs out. A future "Strict Mode" setting will prevent this.
 
@@ -92,7 +92,7 @@ NenFocus has five pages accessible via the sidebar:
 
 | Layer | Artifact | Role |
 |-------|----------|------|
-| Domain | `Session` entity (`Entities/Session.cs`) | Owns all state transitions via `Start(startedAt, scheduledEnd?, breakSchedule?, breakPresetName?)`, `Complete()`, `Miss()`; carries `Origin (SessionOrigin)` and `OriginatingBlockId (Guid?)`. Break questions: `IsOnBreakAt(at)`, `CurrentBreakAt(at)`, `BreakTransitionsBetween(from, to)`, `BreaksTakenBy(at)` / `BreaksTaken`. `RunLength(startedAt, scheduledEnd?)` is the one definition of how long it will run. `Complete` caps `EndedAt` at `EndAt` and trims the schedule (Gap 63). |
+| Domain | `Session` entity (`Entities/Session.cs`) | Owns all state transitions via `Start(startedAt, scheduledEnd?, breakSchedule?, breakPresetName?, keepBlockingDuringBreaks)`, `Complete()`, `Miss()`; carries `Origin (SessionOrigin)` and `OriginatingBlockId (Guid?)`. Break questions: `IsOnBreakAt(at)`, `LiftsBlockingAt(at)` (in a break slot and not `KeepBlockingDuringBreaks`, Gap 64), `CurrentBreakAt(at)`, `BreakTransitionsBetween(from, to)`, `BreaksTakenBy(at)` / `BreaksTaken`. `RunLength(startedAt, scheduledEnd?)` is the one definition of how long it will run. `Complete` caps `EndedAt` at `EndAt` and trims the schedule (Gap 63). |
 | Domain | `SessionStatus` enum | Valid states: `NotStarted`, `Active`, `Completed`, `Missed` |
 | Domain | `SessionOrigin` enum | Valid values: `Spontaneous`, `Planned`; tags every Session with how it was initiated |
 | Domain | `SessionGoal`, `SessionDuration` value objects, `BreakSchedule`, `BreakPresetName (string?)` | Immutable configuration; the schedule and preset-name snapshot are set at Start (see Break Timer Preset & Break Schedule below) |
@@ -239,7 +239,7 @@ Three related but independent not-yet-built features — universal per-resource 
 
 **Definition:** The active OS-level mechanisms that prevent access to blocked applications and websites during a Session or Planned Block. Enforcement is a *side-effect* of a Session or Block being active — it is not a domain entity.
 
-**Lifecycle:** Kept in sync with `PolicyEngine` by `IEnforcementSynchronizer` — instantly on session start/end (event handlers) and at each break boundary (`BreakTransitionHandler`, Gap 63) — each calls `SyncAsync`, and every 5s by the heartbeat as a backstop and to catch blocks starting/ending on the clock. On break, only the on-break session's own preset is lifted, and only if `PauseEnforcementDuringBreak` allows it; every other active block is untouched (Gap 62).
+**Lifecycle:** Kept in sync with `PolicyEngine` by `IEnforcementSynchronizer` — instantly on session start/end (event handlers) and at each break boundary (`BreakTransitionHandler`, Gap 63) — each calls `SyncAsync`, and every 5s by the heartbeat as a backstop and to catch blocks starting/ending on the clock. On break, only the on-break session's own preset is lifted (with its originating block's), and only if `Session.LiftsBlockingAt(at)` — a session whose contract keeps blocking during breaks stays blocked; every other active block is untouched (Gaps 62, 64).
 
 **Mechanisms (in order of application):**
 1. **Process kill loop** — kills matching process trees every 2 seconds
@@ -304,7 +304,7 @@ Three related but independent not-yet-built features — universal per-resource 
 
 **Definition:** The sole Domain service responsible for computing the `ActivePolicySlice`. It is a stateless, synchronous function: given a point in time, a list of `BlockPreset` aggregates, a list of active `Session` entities, and a list of active `PlannedBlock` entities, it returns the complete enforcement state for that moment.
 
-**Why it is a Domain Service (not an Application service):** Policy merge logic — the rules for unioning blocked apps, resolving allowlist/blocklist precedence, and deciding what a break lifts — is domain logic. It expresses invariants of the domain ("an allowlist preset beats a blocklist preset", "a contract that forbids pausing keeps blocking through a break") that must be consistent wherever policy is computed. Placing this logic in a Domain service makes it unit-testable without a database and reachable by any future consumer (e.g., a Planner "preview" query).
+**Why it is a Domain Service (not an Application service):** Policy merge logic — the rules for unioning blocked apps, resolving allowlist/blocklist precedence, and deciding what a break lifts — is domain logic. It expresses invariants of the domain ("an allowlist preset beats a blocklist preset", "a session whose contract keeps blocking during breaks stays blocked through them") that must be consistent wherever policy is computed. Placing this logic in a Domain service makes it unit-testable without a database and reachable by any future consumer (e.g., a Planner "preview" query).
 
 **Interface contract:**
 ```csharp
@@ -321,7 +321,7 @@ ActivePolicySlice ComputeSlice(
 | Layer | Artifact | Role |
 |-------|----------|------|
 | Domain | `IPolicyEngine` (`Services/IPolicyEngine.cs`) | Interface; the contract Application code depends on |
-| Domain | `PolicyEngine` (`Services/PolicyEngine.cs`) | Sealed implementation; all merge rules live here. Filters `blocks` through `PlannedBlock.IsActive(at)` (`EffectiveEnd`-based) — the caller's fetch may be loose/buffered; `PolicyEngine` is the precise final word on "is this block active right now" (Gap 21). Derives `activePresets` from the active blocks'/sessions' own `BlockPresetId`s rather than trusting the caller's preset list (Gap 60). Resolves pause-during-break (Gap 61): takes an optional `contracts` parameter, used only to look up a Focus Block's `PauseEnforcementDuringBreak` via its `ContractId` when its Session is inside a break slot (`Session.IsOnBreakAt(at)`, Gap 63) — a block with no `ContractId` (including a Bonus block) always falls back to the hardcoded-permissive global default. Only the specific block/session on break loses its own preset's contribution; a co-occurring Background Block is untouched. |
+| Domain | `PolicyEngine` (`Services/PolicyEngine.cs`) | Sealed implementation; all merge rules live here. Filters `blocks` through `PlannedBlock.IsActive(at)` (`EffectiveEnd`-based) — the caller's fetch may be loose/buffered; `PolicyEngine` is the precise final word on "is this block active right now" (Gap 21). Derives `activePresets` from the active blocks'/sessions' own `BlockPresetId`s rather than trusting the caller's preset list (Gap 60). Resolves what a break lifts by asking each session `LiftsBlockingAt(at)` — the session already carries its contract's keep-blocking rule, so `PolicyEngine` takes no contracts (Gap 64). Only the specific session on break and its originating block lose their preset's contribution; a co-occurring Background Block is untouched. |
 | Application | `ComputeActivePolicySliceQueryHandler` | Only caller; fetches entities, then delegates to `_policyEngine.ComputeSlice()` |
 | Application | `DependencyInjection.cs` | Registers `PolicyEngine` as `IPolicyEngine` (`AddScoped`, in `NenFocus.Application`'s `DependencyInjection.cs` — stateless, so singleton would also be safe) |
 
@@ -439,7 +439,7 @@ ActivePolicySlice ComputeSlice(
 | Domain | `Session.BreakSchedule`, `Session.BreakPresetName` | Stored at Start (`Start` rejects a schedule that doesn't `FitsWithin` its `RunLength`); persisted as the `SessionBreaks` table (EF `OwnsMany` on `_breaks`). |
 | Application | `IBreakTimerPresetRepository`, `CreateBreakTimerPreset`/`UpdateBreakTimerPreset`/`DeleteBreakTimerPreset` (`UseCases/BreakTimerPresets/`), `GetAllBreakTimerPresetsQuery` | Full CRUD — built, but **no UI yet** (Settings page doesn't exist). |
 | Application | `GetAvailableBreakTimerPresetsQuery` / `Handler` | Given a duration, returns only presets whose schedule has at least one break. |
-| Application | `StartSessionCommand.BreakTimerPresetId (Guid?)` / `StartSessionCommandHandler` | Loads the preset, builds `ScheduleFor(session.RunLength(now, blockEnd))`, starts the session with it and the preset's name. |
+| Application | `StartSessionCommand.BreakTimerPresetId (Guid?)` / `StartSessionCommandHandler` | Loads the preset, builds `ScheduleFor(session.RunLength(now, blockEnd))`, starts the session with it and the preset's name. Also resolves `KeepBlockingDuringBreaks` once: the contract's rule for a planned block committed to one, `false` otherwise (Spontaneous, Bonus). |
 | Application | `IBreakTransitionHandler` / `BreakTransitionHandler` | See the Session mapping above. |
 | Infrastructure | `ActiveSessionMonitor` | Rebuilds the schedule on every `SessionChanged`; each tick reads `IsOnBreak`/`BreakTimeRemaining`/`BreaksTaken` off it and passes boundaries crossed since its last check (a cursor, its only memory) to `IBreakTransitionHandler`; exposes `BreakMarkers`. |
 | UI | `HatsuPageViewModel` (`AvailableBreakTimerPresets`, `BreakTimerPresetChips`, `SelectedBreakTimerPreset`) | Chip-style selector, live-filtered by duration; `BreakTimerPresetChip` pairs each preset with its own `IsSelected` flag so the View never has to compare across an `ItemsControl` boundary. |

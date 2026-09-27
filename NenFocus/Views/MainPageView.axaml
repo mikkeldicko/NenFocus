@@ -182,6 +182,13 @@
                                    Foreground="#AAAABC"
                                    HorizontalAlignment="Center"
                                    Margin="0,4,0,0"/>
+
+						<!-- Contract rule: this break doesn't lift blocking (Gap 64) -->
+						<TextBlock Text="Blocking stays on during this break (contract rule)"
+                                   IsVisible="{Binding KeepsBlockingDuringBreak}"
+                                   FontSize="12"
+                                   Foreground="#B8922A"
+                                   HorizontalAlignment="Center"/>
 					</StackPanel>
 
 					<!-- Progress bar (session, shown when NOT on break), with break markers

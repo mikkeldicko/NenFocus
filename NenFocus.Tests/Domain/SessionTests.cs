@@ -245,6 +245,39 @@ public class SessionTests
         session.BreaksTakenBy(T0.AddMinutes(40)).Should().Be(1);
     }
 
+    // ── Keep blocking during breaks (Gap 64) ─────────────────────────────────
+
+    [Fact]
+    public void Start_ByDefault_DoesNotKeepBlockingDuringBreaks()
+    {
+        StartedTwoHourSession(OneShortBreak()).KeepBlockingDuringBreaks.Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(10, false, false)] // working — nothing to lift
+    [InlineData(27, false, true)]  // in a break slot — lifts
+    [InlineData(27, true, false)]  // in a break slot, but the contract keeps blocking
+    public void LiftsBlockingAt_OnlyInsideABreakSlotAndOnlyWhenNotKeepingBlocking(
+        int minute, bool keepBlocking, bool lifts)
+    {
+        var session = Session.Create(Guid.NewGuid(), new SessionGoal("Write tests"),
+            new SessionDuration(TimeSpan.FromHours(2)), Guid.NewGuid(), SessionOrigin.Spontaneous);
+        session.Start(T0, breakSchedule: OneShortBreak(), keepBlockingDuringBreaks: keepBlocking);
+
+        session.LiftsBlockingAt(T0.AddMinutes(minute)).Should().Be(lifts);
+        session.IsOnBreakAt(T0.AddMinutes(minute)).Should().Be(minute == 27,
+            "keeping blocking changes what a break does, not whether it is a break");
+    }
+
+    [Fact]
+    public void LiftsBlockingAt_OnceCompleted_False()
+    {
+        var session = StartedTwoHourSession(OneShortBreak());
+        session.Complete(T0.AddMinutes(27));
+
+        session.LiftsBlockingAt(T0.AddMinutes(27)).Should().BeFalse();
+    }
+
     [Fact]
     public void Complete_AfterPlannedEnd_IsCappedAtEndAt()
     {

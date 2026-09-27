@@ -68,7 +68,8 @@ public class ContractPresetTests
         var preset = Create();
         var newWorkHours = new WorkHours(new TimeOnly(9, 0), new TimeOnly(17, 0));
 
-        preset.Update("Renamed", StrictnessRule.PeriodTimeBudget, new DailyFloor(6), newWorkHours, allowCancellation: true);
+        preset.Update("Renamed", StrictnessRule.PeriodTimeBudget, new DailyFloor(6), newWorkHours, allowCancellation: true,
+            RedemptionPlacementPolicy.CurrentDayOnly, keepBlockingDuringBreaks: true);
 
         preset.Name.Should().Be("Renamed");
         preset.StrictnessRule.Should().Be(StrictnessRule.PeriodTimeBudget);
@@ -82,7 +83,7 @@ public class ContractPresetTests
     {
         var preset = Create();
 
-        preset.Update("Renamed", StrictnessRule.PeriodTimeBudget, null, null, false);
+        preset.Update("Renamed", StrictnessRule.PeriodTimeBudget, null, null, false, RedemptionPlacementPolicy.AnywhereInContract, keepBlockingDuringBreaks: false);
 
         preset.DailyFloor.Should().BeNull();
     }
@@ -92,7 +93,7 @@ public class ContractPresetTests
     {
         var preset = Create();
 
-        var act = () => preset.Update("  ", StrictnessRule.Locked, new DailyFloor(4), null, false);
+        var act = () => preset.Update("  ", StrictnessRule.Locked, new DailyFloor(4), null, false, RedemptionPlacementPolicy.AnywhereInContract, keepBlockingDuringBreaks: false);
 
         act.Should().Throw<ArgumentException>();
     }
@@ -102,8 +103,14 @@ public class ContractPresetTests
     {
         var preset = Create();
 
-        preset.Update("  Renamed  ", StrictnessRule.Locked, new DailyFloor(4), null, false);
+        preset.Update("  Renamed  ", StrictnessRule.Locked, new DailyFloor(4), null, false, RedemptionPlacementPolicy.AnywhereInContract, keepBlockingDuringBreaks: false);
 
         preset.Name.Should().Be("Renamed");
+    }
+
+    [Fact]
+    public void Create_ByDefault_DoesNotKeepBlockingDuringBreaks()
+    {
+        Create().KeepBlockingDuringBreaks.Should().BeFalse();
     }
 }

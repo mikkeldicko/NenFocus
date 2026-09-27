@@ -18,6 +18,7 @@ public class StartSessionCommandHandlerTests
     private readonly ISessionStateService _sessionState = Substitute.For<ISessionStateService>();
     private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
     private readonly IBreakTimerPresetRepository _breakTimerPresets = Substitute.For<IBreakTimerPresetRepository>();
+    private readonly INenContractRepository _contracts = Substitute.For<INenContractRepository>();
     private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
 
     public StartSessionCommandHandlerTests()
@@ -28,7 +29,7 @@ public class StartSessionCommandHandlerTests
     }
 
     private StartSessionCommandHandler CreateHandler()
-        => new(_sessions, _plannedBlocks, _sessionState, _presets, _breakTimerPresets, _clock);
+        => new(_sessions, _plannedBlocks, _sessionState, _presets, _breakTimerPresets, _contracts, _clock);
 
     private static StartSessionCommand SpontaneousCommand(Guid? presetId = null) => new()
     {
@@ -346,5 +347,66 @@ public class StartSessionCommandHandlerTests
 
         result.Success.Should().BeFalse();
         await _sessions.DidNotReceive().SaveAsync(Arg.Any<Session>(), Arg.Any<CancellationToken>());
+    }
+
+    // ── Keep blocking during breaks (Gap 64) ─────────────────────────────────
+
+    private static NenContract SealContract(bool keepBlockingDuringBreaks) => NenContract.Seal(
+        id: Guid.NewGuid(),
+        name: "Contract",
+        goal: new NenContractGoal("Goal"),
+        startDate: DateOnly.FromDateTime(Now),
+        endDate: DateOnly.FromDateTime(Now).AddDays(7),
+        strictnessRule: StrictnessRule.Locked,
+        dailyFloorPolicy: DailyFloorPolicy.None,
+        changeWindow: null,
+        allowCancellation: false,
+        plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
+        sealedAt: Now,
+        keepBlockingDuringBreaks: keepBlockingDuringBreaks);
+
+    private StartSessionCommand PlannedCommandFor(FocusBlock block)
+    {
+        _plannedBlocks.GetByIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns(block);
+        return SpontaneousCommand() with { OriginatingBlockId = block.Id };
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task HandleAsync_PlannedBlockInAContract_CopiesTheContractsRuleOntoTheSession(bool keepBlocking)
+    {
+        var contract = SealContract(keepBlocking);
+        _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Now, Now.AddHours(1));
+        block.AssignContract(contract.Id);
+
+        var result = await CreateHandler().HandleAsync(PlannedCommandFor(block), CancellationToken.None);
+
+        result.Success.Should().BeTrue();
+        await _sessions.Received(1).SaveAsync(
+            Arg.Is<Session>(s => s.KeepBlockingDuringBreaks == keepBlocking), Arg.Any<CancellationToken>());
+        _sessionState.Received(1).SetActive(Arg.Is<SessionDto>(d => d.KeepBlockingDuringBreaks == keepBlocking));
+    }
+
+    [Fact]
+    public async Task HandleAsync_BonusBlockWithoutContract_DoesNotKeepBlockingAndNeverLooksUpAContract()
+    {
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Now, Now.AddHours(1));
+
+        await CreateHandler().HandleAsync(PlannedCommandFor(block), CancellationToken.None);
+
+        await _sessions.Received(1).SaveAsync(
+            Arg.Is<Session>(s => !s.KeepBlockingDuringBreaks), Arg.Any<CancellationToken>());
+        await _contracts.DidNotReceiveWithAnyArgs().GetByIdAsync(default);
+    }
+
+    [Fact]
+    public async Task HandleAsync_Spontaneous_DoesNotKeepBlocking()
+    {
+        await CreateHandler().HandleAsync(SpontaneousCommand(), CancellationToken.None);
+
+        await _sessions.Received(1).SaveAsync(
+            Arg.Is<Session>(s => !s.KeepBlockingDuringBreaks), Arg.Any<CancellationToken>());
     }
 }

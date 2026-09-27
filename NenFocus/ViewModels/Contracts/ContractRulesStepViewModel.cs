@@ -66,6 +66,7 @@ public partial class ContractRulesStepViewModel : ViewModelBase
     private readonly TimeOnly? _initialWorkHoursEnd;
     private readonly Guid? _initialContractPresetId;
     private readonly RedemptionPlacementPolicy? _initialRedemptionPlacementPolicy;
+    private readonly bool _initialKeepBlockingDuringBreaks;
 
     public bool IsAdvanced { get; }
     public DateOnly StartDate { get; }
@@ -87,6 +88,7 @@ public partial class ContractRulesStepViewModel : ViewModelBase
         OnPropertyChanged(nameof(SelectedPresetWorkHoursLabel));
         OnPropertyChanged(nameof(SelectedPresetCancellationLabel));
         OnPropertyChanged(nameof(SelectedPresetRedemptionPlacementLabel));
+        OnPropertyChanged(nameof(SelectedPresetBreakBlockingLabel));
     }
 
     // Read-only confirmation text for the picked preset — shares its formatters with
@@ -103,6 +105,11 @@ public partial class ContractRulesStepViewModel : ViewModelBase
         SelectedPreset?.RedemptionPlacementPolicy == RedemptionPlacementPolicy.CurrentDayOnly
             ? "Redemption: current day only"
             : "Redemption: anywhere in the contract";
+
+    public string SelectedPresetBreakBlockingLabel =>
+        (SelectedPreset?.KeepBlockingDuringBreaks ?? false)
+            ? "Blocking stays on during breaks"
+            : "Blocking pauses during breaks";
 
     public ObservableCollection<RestDayChipViewModel> RestDayChips { get; } = new();
     public ObservableCollection<ContractPresetDto> SavedPresets { get; } = new();
@@ -124,7 +131,8 @@ public partial class ContractRulesStepViewModel : ViewModelBase
         TimeOnly? initialWorkHoursEnd = null,
         IReadOnlyCollection<DateOnly>? initialRestDays = null,
         Guid? initialContractPresetId = null,
-        RedemptionPlacementPolicy? initialRedemptionPlacementPolicy = null)
+        RedemptionPlacementPolicy? initialRedemptionPlacementPolicy = null,
+        bool initialKeepBlockingDuringBreaks = false)
     {
         IsAdvanced = isAdvanced;
         StartDate = startDate;
@@ -139,6 +147,7 @@ public partial class ContractRulesStepViewModel : ViewModelBase
         _initialWorkHoursEnd = initialWorkHoursEnd;
         _initialContractPresetId = initialContractPresetId;
         _initialRedemptionPlacementPolicy = initialRedemptionPlacementPolicy;
+        _initialKeepBlockingDuringBreaks = initialKeepBlockingDuringBreaks;
 
         SimpleOptions.Add(new SimpleContractOptionViewModel("Lockdown", "This schedule is law. I will not touch it.", StrictnessRule.Locked, true));
         SimpleOptions.Add(new SimpleContractOptionViewModel("Daily Flex", "I can shuffle blocks around within each day.", StrictnessRule.DailyFlexibility, true));
@@ -249,4 +258,10 @@ public partial class ContractRulesStepViewModel : ViewModelBase
     public RedemptionPlacementPolicy ResolvedRedemptionPlacementPolicy => IsAdvanced
         ? SelectedPreset?.RedemptionPlacementPolicy ?? _initialRedemptionPlacementPolicy ?? RedemptionPlacementPolicy.AnywhereInContract
         : RedemptionPlacementPolicy.AnywhereInContract;
+
+    // Same split (Gap 64): Simple keeps today's behavior (breaks lift blocking); Advanced
+    // takes the picked preset's rule, falling back to the contract being edited.
+    public bool ResolvedKeepBlockingDuringBreaks => IsAdvanced
+        ? SelectedPreset?.KeepBlockingDuringBreaks ?? _initialKeepBlockingDuringBreaks
+        : false;
 }

@@ -113,6 +113,7 @@ Tactical implementation details, current build state, and platform-specific gotc
 - **Multi-contract weeks fixed; Planner banner gains a contract switcher** (2026-09-06) — see `DESIGN_GAP_HISTORY.md` Gap 55.
 - **Enforcement Synchronizer; breaks and session end no longer drop all blocking; Ritual question moved out of the Policy Slice** (2026-09-25) — see `DESIGN_GAP_HISTORY.md` Gap 62.
 - **Time-driven breaks: a session owns its `BreakSchedule`; `OnBreak`, `StartBreak`/`ResumeFromBreak`, the break events and `IBreakScheduleCalculator` removed; session end capped at its planned end** (2026-09-27) — see `DESIGN_GAP_HISTORY.md` Gap 63. Gotcha: `Session`'s breaks are an EF `OwnsMany` on the private `_breaks` field (table `SessionBreaks`); `Session.BreakSchedule`/`BreaksTaken` are computed and explicitly `Ignore`d.
+- **Contract rule "Keep blocking during breaks"** (renamed from `PauseEnforcementDuringBreak`, inverted; set on Contract Presets, copied Seal → Session at Start; `PolicyEngine` no longer takes contracts) (2026-09-27) — see `DESIGN_GAP_HISTORY.md` Gap 64. Gotcha: a `bool` with `HasDefaultValue(false)` must have a DB default of `false` too — EF omits a CLR-default value from INSERTs and lets the column default apply, so renaming the old `DEFAULT 1` column would have silently stored `true`.
 
 ### Not Yet Built
 

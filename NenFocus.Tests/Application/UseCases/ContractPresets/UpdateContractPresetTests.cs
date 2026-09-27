@@ -160,4 +160,20 @@ public class UpdateContractPresetTests
 
         await _presets.Received(1).ExistsWithNameAsync("Renamed", excludeId: presetId, cancellationToken: Arg.Any<CancellationToken>());
     }
+
+    [Fact]
+    public async Task HandleAsync_KeepBlockingDuringBreaks_IsSavedAndSurvivesALaterEdit()
+    {
+        // Regression (Gap 64, trap 1): the handler never passed this rule to Update, which
+        // defaulted it — so editing any preset silently reset it to breaks lifting blocking.
+        var presetId = Guid.NewGuid();
+        var existing = ContractPreset.Create(presetId, "Original", StrictnessRule.Locked, new DailyFloor(4), null, false);
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>()).Returns(existing);
+
+        await CreateHandler().HandleAsync(ValidCommand(presetId) with { KeepBlockingDuringBreaks = true }, CancellationToken.None);
+        existing.KeepBlockingDuringBreaks.Should().BeTrue();
+
+        await CreateHandler().HandleAsync(ValidCommand(presetId) with { Name = "Renamed again", KeepBlockingDuringBreaks = true }, CancellationToken.None);
+        existing.KeepBlockingDuringBreaks.Should().BeTrue();
+    }
 }

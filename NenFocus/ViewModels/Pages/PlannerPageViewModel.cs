@@ -2301,7 +2301,8 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
                     WorkHoursEnd = _draftRules.WorkHoursEnd,
                     Blocks = blocks,
                     ContractPresetId = _draftRules.ContractPresetId,
-                    RedemptionPlacementPolicy = _draftRules.RedemptionPlacementPolicy
+                    RedemptionPlacementPolicy = _draftRules.RedemptionPlacementPolicy,
+                    KeepBlockingDuringBreaks = _draftRules.KeepBlockingDuringBreaks
                 });
                 success = editResult.Success;
                 errorMessage = editResult.ErrorMessage;
@@ -2322,7 +2323,8 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
                     WorkHoursEnd = _draftRules.WorkHoursEnd,
                     Blocks = blocks,
                     ContractPresetId = _draftRules.ContractPresetId,
-                    RedemptionPlacementPolicy = _draftRules.RedemptionPlacementPolicy
+                    RedemptionPlacementPolicy = _draftRules.RedemptionPlacementPolicy,
+                    KeepBlockingDuringBreaks = _draftRules.KeepBlockingDuringBreaks
                 });
                 success = sealResult.Success;
                 errorMessage = sealResult.ErrorMessage;

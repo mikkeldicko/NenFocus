@@ -11,20 +11,17 @@ public sealed class ComputeActivePolicySliceQueryHandler
     private readonly IPlannedBlockRepository _blocks;
     private readonly IBlockPresetRepository _presets;
     private readonly ISessionRepository _sessions;
-    private readonly INenContractRepository _contracts;
     private readonly IPolicyEngine _policyEngine;
 
     public ComputeActivePolicySliceQueryHandler(
         IPlannedBlockRepository blocks,
         IBlockPresetRepository presets,
         ISessionRepository sessions,
-        INenContractRepository contracts,
         IPolicyEngine policyEngine)
     {
         _blocks = blocks;
         _presets = presets;
         _sessions = sessions;
-        _contracts = contracts;
         _policyEngine = policyEngine;
     }
 
@@ -46,22 +43,6 @@ public sealed class ComputeActivePolicySliceQueryHandler
             if (preset != null) presets.Add(preset);
         }
 
-        // Only resolved when a break is actually in progress against a committed
-        // block — this is a rare path, so fetching one contract at a time here (rather
-        // than a bulk query) mirrors the same "resolve only what's referenced" style
-        // already used for presets above.
-        var contractIds = blocks.OfType<FocusBlock>()
-            .Where(b => b.ContractId.HasValue)
-            .Select(b => b.ContractId!.Value)
-            .Distinct();
-
-        var contracts = new List<NenContract>();
-        foreach (var id in contractIds)
-        {
-            var contract = await _contracts.GetByIdAsync(id, ct);
-            if (contract != null) contracts.Add(contract);
-        }
-
-        return _policyEngine.ComputeSlice(query.At, presets, sessions, blocks, contracts);
+        return _policyEngine.ComputeSlice(query.At, presets, sessions, blocks);
     }
 }

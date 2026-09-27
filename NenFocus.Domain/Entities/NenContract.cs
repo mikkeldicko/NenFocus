@@ -38,19 +38,15 @@ public class NenContract : AggregateRoot
     public Guid? ContractPresetId { get; private set; }
 
     /// <summary>
-    /// Whether a Focus Block committed to this contract (PlannedBlock.ContractId
-    /// matches this contract's Id) should stop enforcing while its Session is
-    /// inside a break slot. Copied by value from ContractPresetId's preset at Seal, same as
-    /// every other ContractPreset-sourced field. Resolved live by
-    /// IPolicyEngine.ComputeSlice on every tick, never locked in at Seal — so a
-    /// later global Settings change is picked up immediately rather than leaving
-    /// already-sealed contracts stuck with stale behavior. Can only ever narrow
-    /// the global default toward stricter (keep blocking), never loosen it. A
-    /// Bonus block (ContractId == null, even one whose Start falls inside this
-    /// contract's date range) never reads this — it follows the global default
-    /// alone, since it was never actually committed to the contract.
+    /// Whether sessions of Focus Blocks committed to this contract (PlannedBlock.ContractId
+    /// matches this contract's Id) keep their preset enforced through their breaks
+    /// (Gap 64). Copied by value from ContractPresetId's preset at Seal, same as every
+    /// other ContractPreset-sourced field, and copied again onto each such session at
+    /// Start — a running session never looks it up here. A Bonus block (ContractId ==
+    /// null, even one whose Start falls inside this contract's date range) never
+    /// inherits it, since it was never actually committed to the contract.
     /// </summary>
-    public bool PauseEnforcementDuringBreak { get; private set; }
+    public bool KeepBlockingDuringBreaks { get; private set; }
 
     /// <summary>
     /// Which days a redemption block may originate a new deficit claim on — see
@@ -118,7 +114,7 @@ public class NenContract : AggregateRoot
         Guid? contractPresetId = null,
         ContractFloor? contractFloor = null,
         RedemptionPlacementPolicy redemptionPlacementPolicy = RedemptionPlacementPolicy.AnywhereInContract,
-        bool pauseEnforcementDuringBreak = true)
+        bool keepBlockingDuringBreaks = false)
     {
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Contract name cannot be empty.", nameof(name));
@@ -158,7 +154,7 @@ public class NenContract : AggregateRoot
             ContractPresetId = contractPresetId,
             ContractFloor = contractFloor,
             RedemptionPlacementPolicy = redemptionPlacementPolicy,
-            PauseEnforcementDuringBreak = pauseEnforcementDuringBreak,
+            KeepBlockingDuringBreaks = keepBlockingDuringBreaks,
             CommittedFocusHours = plannedFocusHoursByDay.Values.Sum(),
             Status = DateOnly.FromDateTime(sealedAt) >= startDate
                 ? NenContractStatus.Active

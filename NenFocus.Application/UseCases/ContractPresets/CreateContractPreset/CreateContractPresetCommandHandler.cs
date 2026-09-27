@@ -35,7 +35,8 @@ public sealed class CreateContractPresetCommandHandler
                 command.DailyFloorHours is { } floor ? new DailyFloor(floor) : null,
                 workHours,
                 command.AllowCancellation,
-                command.RedemptionPlacementPolicy);
+                command.RedemptionPlacementPolicy,
+                command.KeepBlockingDuringBreaks);
         }
         catch (ArgumentException ex)
         {

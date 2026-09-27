@@ -24,7 +24,7 @@ public class BreakTransitionHandlerTests
     [Fact]
     public async Task HandleAsync_BreakStarted_SyncsEnforcementThenNotifiesBreakTime()
     {
-        await CreateHandler().HandleAsync([Started()], At);
+        await CreateHandler().HandleAsync([Started()], At, keepBlockingDuringBreaks: false);
 
         Received.InOrder(() =>
         {
@@ -36,15 +36,33 @@ public class BreakTransitionHandlerTests
     [Fact]
     public async Task HandleAsync_LongBreakStarted_SaysSo()
     {
-        await CreateHandler().HandleAsync([Started(SessionPhaseKind.LongBreak)], At);
+        await CreateHandler().HandleAsync([Started(SessionPhaseKind.LongBreak)], At, keepBlockingDuringBreaks: false);
 
         await _notifications.Received(1).NotifyAsync("Long break time", Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
+    public async Task HandleAsync_BreakStarted_KeepBlocking_SaysBlockingStaysOn()
+    {
+        await CreateHandler().HandleAsync([Started()], At, keepBlockingDuringBreaks: true);
+
+        await _notifications.Received(1).NotifyAsync(
+            "Break time", Arg.Is<string>(b => b.Contains("Blocking stays on")), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task HandleAsync_BreakStarted_NotKeepBlocking_DoesNotMentionBlocking()
+    {
+        await CreateHandler().HandleAsync([Started()], At, keepBlockingDuringBreaks: false);
+
+        await _notifications.Received(1).NotifyAsync(
+            "Break time", Arg.Is<string>(b => !b.Contains("Blocking")), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task HandleAsync_BreakEnded_NotifiesBreakOver()
     {
-        await CreateHandler().HandleAsync([Ended()], At);
+        await CreateHandler().HandleAsync([Ended()], At, keepBlockingDuringBreaks: false);
 
         await _synchronizer.Received(1).SyncAsync(At, Arg.Any<CancellationToken>());
         await _notifications.Received(1).NotifyAsync("Break over", "Back to focus.", Arg.Any<CancellationToken>());
@@ -54,7 +72,7 @@ public class BreakTransitionHandlerTests
     public async Task HandleAsync_WholeBreakCrossedAtOnce_SyncsOnceAndOnlyAnnouncesWhereTheSessionIsNow()
     {
         // Laptop slept through the entire break: "Break time" would be stale.
-        await CreateHandler().HandleAsync([Started(), Ended()], At);
+        await CreateHandler().HandleAsync([Started(), Ended()], At, keepBlockingDuringBreaks: false);
 
         await _synchronizer.Received(1).SyncAsync(At, Arg.Any<CancellationToken>());
         await _notifications.Received(1).NotifyAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
@@ -64,7 +82,7 @@ public class BreakTransitionHandlerTests
     [Fact]
     public async Task HandleAsync_NoTransitions_DoesNothing()
     {
-        await CreateHandler().HandleAsync([], At);
+        await CreateHandler().HandleAsync([], At, keepBlockingDuringBreaks: false);
 
         await _synchronizer.DidNotReceiveWithAnyArgs().SyncAsync(default);
         await _notifications.DidNotReceiveWithAnyArgs().NotifyAsync(default!, default!);

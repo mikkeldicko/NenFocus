@@ -36,6 +36,13 @@ public class Session : AggregateRoot
     /// history. Null when the session has no breaks at all.
     /// </summary>
     public string? BreakPresetName { get; private set; }
+
+    /// <summary>
+    /// Whether this session's preset stays enforced through its breaks (Gap 64). Resolved
+    /// once at Start from the contract its planned block is committed to (false otherwise)
+    /// and never looked up again — the contract can't change while its sessions run.
+    /// </summary>
+    public bool KeepBlockingDuringBreaks { get; private set; }
     public string? Reflection { get; private set; }
     public DateTime? PostSessionAcknowledgedAt { get; private set; }
     public IReadOnlyList<string> TemporaryBlockedApps { get; private set; } = [];
@@ -88,7 +95,8 @@ public class Session : AggregateRoot
         DateTime startedAt,
         DateTime? scheduledEnd = null,
         BreakSchedule? breakSchedule = null,
-        string? breakPresetName = null)
+        string? breakPresetName = null,
+        bool keepBlockingDuringBreaks = false)
     {
         if (Status != SessionStatus.NotStarted)
             throw new InvalidOperationException(
@@ -106,12 +114,18 @@ public class Session : AggregateRoot
         // A label only ever describes breaks that exist — a preset that turned out to
         // have no room for a single break leaves the session honestly labelled as none.
         BreakPresetName = schedule.IsEmpty ? null : breakPresetName;
+        KeepBlockingDuringBreaks = keepBlockingDuringBreaks;
         Raise(new SessionStartedEvent(Id, BlockPresetId, Goal.Value, startedAt));
     }
 
     /// <summary>True while <paramref name="at"/> falls inside one of this running
-    /// session's break slots. The question PolicyEngine asks to decide what a break lifts.</summary>
+    /// session's break slots — whether it *is* a break; see LiftsBlockingAt for what it does.</summary>
     public bool IsOnBreakAt(DateTime at) => CurrentBreakAt(at) is not null;
+
+    /// <summary>True when this session's own preset should stop being enforced at
+    /// <paramref name="at"/>: it is inside a break slot and its contract doesn't keep
+    /// blocking through breaks. The one question PolicyEngine and the UI ask (Gap 64).</summary>
+    public bool LiftsBlockingAt(DateTime at) => IsOnBreakAt(at) && !KeepBlockingDuringBreaks;
 
     /// <summary>The break slot covering <paramref name="at"/>, or null while working or
     /// when the session isn't running.</summary>

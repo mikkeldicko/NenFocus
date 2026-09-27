@@ -279,4 +279,20 @@ public class SealNenContractCommandHandlerTests
         saved!.ContractFloorHours.Should().BeNull();
         saved.DailyFloorPolicy.Default!.Hours.Should().Be(0);
     }
+
+    [Fact]
+    public async Task HandleAsync_KeepBlockingDuringBreaks_CopiedOntoSealedContract()
+    {
+        // Regression (Gap 64, trap 2): Seal was never given this rule, so every contract
+        // was sealed with breaks lifting blocking whatever its preset said.
+        _calculator.Calculate(Arg.Any<IEnumerable<(DateTime, DateTime)>>())
+            .Returns(new Dictionary<DateOnly, double>());
+        NenContract? saved = null;
+        await _contracts.AddAsync(Arg.Do<NenContract>(c => saved = c), Arg.Any<CancellationToken>());
+
+        await CreateHandler().HandleAsync(
+            BaseCommand(fixedFloor: 0) with { KeepBlockingDuringBreaks = true }, CancellationToken.None);
+
+        saved!.KeepBlockingDuringBreaks.Should().BeTrue();
+    }
 }

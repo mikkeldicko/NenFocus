@@ -149,7 +149,8 @@ public partial class ContractWizardViewModel : ViewModelBase
             initialWorkHoursEnd: _editingContract?.WorkHoursEnd,
             initialRestDays: _editingContract?.RestDays,
             initialContractPresetId: _editingContract?.ContractPresetId,
-            initialRedemptionPlacementPolicy: _editingContract?.RedemptionPlacementPolicy);
+            initialRedemptionPlacementPolicy: _editingContract?.RedemptionPlacementPolicy,
+            initialKeepBlockingDuringBreaks: _editingContract?.KeepBlockingDuringBreaks ?? false);
         _currentBackAction = NavigateToMode;
         CurrentStep = _rulesVm;
     }
@@ -166,6 +167,7 @@ public partial class ContractWizardViewModel : ViewModelBase
         var workHoursEnd = rules?.ResolvedWorkHoursEnd;
         var contractPresetId = rules?.ResolvedContractPresetId;
         var redemptionPlacementPolicy = rules?.ResolvedRedemptionPlacementPolicy ?? RedemptionPlacementPolicy.AnywhereInContract;
+        var keepBlockingDuringBreaks = rules?.ResolvedKeepBlockingDuringBreaks ?? false;
         var modeLabel = rules?.ResolvedSummaryLabel ?? "Simple";
 
         StepIndex = 3;
@@ -185,6 +187,7 @@ public partial class ContractWizardViewModel : ViewModelBase
                 WorkHoursEnd = workHoursEnd,
                 ContractPresetId = contractPresetId,
                 RedemptionPlacementPolicy = redemptionPlacementPolicy,
+                KeepBlockingDuringBreaks = keepBlockingDuringBreaks,
                 EditingContractId = _editingContract?.Id
             },
             summaryName: _name,

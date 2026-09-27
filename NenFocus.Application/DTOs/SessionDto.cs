@@ -21,6 +21,9 @@ public sealed record SessionDto
     public IReadOnlyList<SessionBreakDto> Breaks { get; init; } = [];
     public string? BreakPresetName { get; init; }
 
+    /// <summary>Whether this session's preset stays blocked through its breaks (Gap 64).</summary>
+    public bool KeepBlockingDuringBreaks { get; init; }
+
     public static IReadOnlyList<SessionBreakDto> MapBreaks(Domain.ValueObjects.BreakSchedule schedule) =>
         schedule.Breaks
             .Select(b => new SessionBreakDto { Kind = b.Kind, Start = b.Start, End = b.End })

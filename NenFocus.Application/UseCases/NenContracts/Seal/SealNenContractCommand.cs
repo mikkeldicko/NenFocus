@@ -64,4 +64,8 @@ public sealed record SealNenContractCommand : ICommand<SealNenContractResult>
     /// same split every other rule field already follows.
     /// </summary>
     public RedemptionPlacementPolicy RedemptionPlacementPolicy { get; init; }
+
+    /// <summary>Copied from the picked ContractPreset (Advanced) or false (Simple), same
+    /// split as RedemptionPlacementPolicy (Gap 64).</summary>
+    public bool KeepBlockingDuringBreaks { get; init; }
 }

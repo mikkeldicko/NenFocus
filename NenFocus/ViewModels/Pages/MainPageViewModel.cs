@@ -44,6 +44,9 @@ public partial class MainPageViewModel : ViewModelBase
     private bool _isOnBreak;
 
     [ObservableProperty]
+    private bool _keepsBlockingDuringBreak;
+
+    [ObservableProperty]
     private TimeSpan _breakTimeRemaining;
 
     [ObservableProperty]
@@ -123,6 +126,8 @@ public partial class MainPageViewModel : ViewModelBase
             SessionProgress = _monitor.SessionProgress;
             BreakTimeRemaining = _monitor.BreakTimeRemaining;
             IsOnBreak = _monitor.IsOnBreak;
+        KeepsBlockingDuringBreak = _monitor.KeepsBlockingDuringBreak;
+            KeepsBlockingDuringBreak = _monitor.KeepsBlockingDuringBreak;
             BreaksTaken = _monitor.BreaksTaken;
             BreakProgress = _monitor.BreakProgress;
             BreakMarkers = _monitor.BreakMarkers;
@@ -153,6 +158,7 @@ public partial class MainPageViewModel : ViewModelBase
     {
         HasActiveSession = false;
         IsOnBreak = false;
+        KeepsBlockingDuringBreak = false;
         SessionTimeRemaining = TimeSpan.Zero;
         BreakTimeRemaining = TimeSpan.Zero;
         SessionProgress = 0;

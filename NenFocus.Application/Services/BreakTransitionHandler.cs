@@ -21,7 +21,8 @@ public sealed class BreakTransitionHandler : IBreakTransitionHandler
         _notifications = notifications;
     }
 
-    public async Task HandleAsync(IReadOnlyList<BreakTransition> transitions, DateTime at, CancellationToken ct = default)
+    public async Task HandleAsync(
+        IReadOnlyList<BreakTransition> transitions, DateTime at, bool keepBlockingDuringBreaks, CancellationToken ct = default)
     {
         if (transitions.Count == 0) return;
 
@@ -33,7 +34,10 @@ public sealed class BreakTransitionHandler : IBreakTransitionHandler
         if (latest.Kind == BreakTransitionKind.Started)
         {
             var label = latest.BreakKind == SessionPhaseKind.LongBreak ? "Long break time" : "Break time";
-            await _notifications.NotifyAsync(label, "Step away and recharge.", ct);
+            var body = keepBlockingDuringBreaks
+                ? "Step away and recharge. Blocking stays on (contract rule)."
+                : "Step away and recharge.";
+            await _notifications.NotifyAsync(label, body, ct);
         }
         else
         {

@@ -98,7 +98,7 @@ Once a gap (or a self-contained half of one) is fully closed, its write-up moves
 - **Contract templates from Insights** — a "start a new contract like this one" shortcut on a *completed* contract's Insights recap, pre-filling the Advanced wizard from that specific past instance rather than a saved Contract Preset. Distinct from Contract Presets because it copies a real past result, not a deliberately-saved template.
 - **Strictness tightening mid-contract** — already tracked as a parked v2 idea in `DOMAIN_DICTIONARY.md` (Strictness Rule section); re-confirmed parked in this session, no new detail added.
 
-### Open Gap D — Spontaneous Redemption Path (fully interrogated 2026-07-08; dropped, not deferred)
+### Open Gap D — Spontaneous Redemption Path (interrogated 2026-07-08 and dropped; reopened 2026-09-27 with a new direction — parked, not re-interrogated)
 
 **The original design:** When a contract is active with an outstanding deficit, the Main Page shows a prompt ("You're 1.5 hours behind on your Study Month contract. Start a redemption session?"). Clicking through pre-locks the Ritual's Ren step to the preset with the largest deficit and shows the deficit amount at Hatsu; the user picks any duration, including a partial redemption. The resulting Session is ordinary `Origin = Spontaneous`, `OriginatingBlockId = null` — no Block entity involved, matching the Ubiquitous Language definition of a Spontaneous Session.
 
@@ -118,6 +118,14 @@ Once a gap (or a self-contained half of one) is fully closed, its write-up moves
 **If ever revisited:** build the narrow, spontaneous-only entity (last rejected-options bullet above), not a shared block hierarchy, not a `Session` field, not the Day-level shortcut. All three were interrogated and found to either leak, over-build, or fail to deliver real redemption semantics.
 
 **Must be closed before:** Nothing — this is a scope decision, not a blocked obligation.
+
+**Reopened 2026-09-27 — "Spontaneous Redemption Block" (architect's new direction; not yet interrogated).** Raised while designing the Gap 64 follow-up that made only contract-linked blocks count toward a floor. The idea: when an active contract has a deficit, the Main Page shows a **"Cover deficit now"** button, alongside the existing Planner "Cover Deficit" path. Clicking it starts the Ritual: Ten and Zetsu as normal; **Ren** has the deficit's preset pre-selected and locked (like a planned Focus Block); **Hatsu** fixes the duration to the deficit's length (e.g. 1h deficit → 1h), with only the break schedule selectable. In the Planner it shows as a tile labelled **Spontaneous Redemption Block**.
+
+- **Architect's definition (ubiquitous language):** it *is* spontaneous — it starts the moment Start is clicked at Hatsu, not at a pre-scheduled time — and it is a redemption block.
+- **Why it doesn't hit the wall the 2026-07-08 design hit:** that design had a Spontaneous session with **no block** to own the redemption link. Here a real redemption Focus Block is created (contract link + `RedemptionEntry`s via the existing `ComputeRedemptionAttributionQuery`), so the existing deficit ledger, redemption rules and "only contract-linked blocks count toward the floor" all apply unchanged.
+- **Invariant to keep:** the block and its session must be created **together, only at Hatsu Start** — abandoning the Ritual must leave no record (product invariant), and a half-made redemption block must never become a new *missed* block with its own deficit.
+- **Open for the interrogation:** (1) vocabulary collision — today `SessionOrigin.Spontaneous` means "no block exists", but this is spontaneous in *timing* while having a block: a third `SessionOrigin` value, or separate "when it started" from "whether a block exists"; (2) which deficit it covers when several are outstanding (largest? oldest? the user picks?); (3) placement rules (`RedemptionPlacementPolicy`, Work Hours, overlap with an upcoming Focus Block) applied at "now"; (4) what if the deficit changes between clicking the button and Hatsu Start.
+- **Depends on:** nothing built yet; compatible with the planned Spontaneous-session Planner tiles (this is a real block, so it gets an ordinary block tile with its own label).
 
 ### Open Gap E — Recurring Blocks (interrogated 2026-07-15; not yet built)
 
@@ -290,6 +298,8 @@ Once a gap (or a self-contained half of one) is fully closed, its write-up moves
 - **Focus-only floor counting** — today a session's whole length, breaks included, counts toward a Nen Contract's Daily Floor (a deliberate choice, kept by Gap 63). An option to count only focus time is straightforward now that breaks are stored data: focus time = run length minus break slots.
 
 **Mechanics any mid-session revision will need:** the revision must republish the session (`ISessionStateService.SetActive`) so `ActiveSessionMonitor` rebuilds its schedule (it already does on every `SessionChanged`), and must call `IEnforcementSynchronizer.SyncAsync` plus notify itself if the boundary it creates is at or before the monitor's last-checked time.
+
+**Refactor to consider with the break budget:** a session now holds two break rules decided at Start — its `BreakSchedule` (Gap 63) and `KeepBlockingDuringBreaks` (Gap 64). A budget would be a third. At that point, grouping them into one `BreakPlan` value object on `Session` becomes worth it; today it would only wrap two things without adding a rule (considered and deferred in Gap 64).
 
 **Must be closed before:** Nothing — parked.
 

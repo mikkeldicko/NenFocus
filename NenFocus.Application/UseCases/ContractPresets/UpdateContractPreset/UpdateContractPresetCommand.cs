@@ -13,4 +13,5 @@ public sealed record UpdateContractPresetCommand : ICommand<UpdateContractPreset
     public TimeOnly? WorkHoursEnd { get; init; }
     public bool AllowCancellation { get; init; }
     public RedemptionPlacementPolicy RedemptionPlacementPolicy { get; init; }
+    public bool KeepBlockingDuringBreaks { get; init; }
 }

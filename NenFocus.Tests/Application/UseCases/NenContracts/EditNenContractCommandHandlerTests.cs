@@ -269,4 +269,19 @@ public class EditNenContractCommandHandlerTests
         saved.DailyFloorPolicy.Default.Should().BeNull();
         saved.DailyFloorPolicy.PerDayExceptions.Should().BeEmpty();
     }
+
+    [Fact]
+    public async Task HandleAsync_KeepBlockingDuringBreaks_CarriedIntoTheReSealedContract()
+    {
+        // Regression (Gap 64, trap 3): editing re-seals the contract, which used to drop this rule.
+        var contract = ScheduledContract(Guid.NewGuid());
+        _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
+
+        var result = await CreateHandler().HandleAsync(
+            BaseCommand(contract.Id) with { KeepBlockingDuringBreaks = true }, CancellationToken.None);
+
+        result.Success.Should().BeTrue();
+        await _contracts.Received(1).AddAsync(
+            Arg.Is<NenContract>(c => c.KeepBlockingDuringBreaks), Arg.Any<CancellationToken>());
+    }
 }

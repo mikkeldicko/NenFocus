@@ -40,7 +40,8 @@ public sealed class GetActiveSessionQueryHandler
             EndAt = session.EndAt ?? _clock.UtcNow,
             EndedAt = session.EndedAt,
             Breaks = SessionDto.MapBreaks(session.BreakSchedule),
-            BreakPresetName = session.BreakPresetName
+            BreakPresetName = session.BreakPresetName,
+            KeepBlockingDuringBreaks = session.KeepBlockingDuringBreaks
         };
     }
 }

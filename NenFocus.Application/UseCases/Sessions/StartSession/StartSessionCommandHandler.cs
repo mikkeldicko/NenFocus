@@ -14,6 +14,7 @@ public sealed class StartSessionCommandHandler
     private readonly ISessionStateService _sessionState;
     private readonly IBlockPresetRepository _presets;
     private readonly IBreakTimerPresetRepository _breakTimerPresets;
+    private readonly INenContractRepository _contracts;
     private readonly ISystemClock _clock;
 
     public StartSessionCommandHandler(
@@ -22,6 +23,7 @@ public sealed class StartSessionCommandHandler
         ISessionStateService sessionState,
         IBlockPresetRepository presets,
         IBreakTimerPresetRepository breakTimerPresets,
+        INenContractRepository contracts,
         ISystemClock clock)
     {
         _sessions = sessions;
@@ -29,6 +31,7 @@ public sealed class StartSessionCommandHandler
         _sessionState = sessionState;
         _presets = presets;
         _breakTimerPresets = breakTimerPresets;
+        _contracts = contracts;
         _clock = clock;
     }
 
@@ -117,7 +120,14 @@ public sealed class StartSessionCommandHandler
             breakPresetName = breakTimerPreset.Name;
         }
 
-        session.Start(now, originatingBlock?.End, breakSchedule, breakPresetName);
+        // Resolved once, here, and copied onto the session (Gap 64): only a planned block
+        // committed to a contract inherits that contract's rule; a Spontaneous session or a
+        // Bonus block (no ContractId) keeps today's default of lifting blocking on breaks. The
+        // one place a future global Settings default would plug in.
+        var keepBlockingDuringBreaks = originatingBlock?.ContractId is { } contractId
+            && (await _contracts.GetByIdAsync(contractId, ct))?.KeepBlockingDuringBreaks == true;
+
+        session.Start(now, originatingBlock?.End, breakSchedule, breakPresetName, keepBlockingDuringBreaks);
 
         if (originatingBlock is not null)
         {
@@ -147,7 +157,8 @@ public sealed class StartSessionCommandHandler
             Origin = session.Origin,
             OriginatingBlockId = session.OriginatingBlockId,
             Breaks = SessionDto.MapBreaks(session.BreakSchedule),
-            BreakPresetName = session.BreakPresetName
+            BreakPresetName = session.BreakPresetName,
+            KeepBlockingDuringBreaks = session.KeepBlockingDuringBreaks
         });
 
         return StartSessionResult.Ok(session.Id);

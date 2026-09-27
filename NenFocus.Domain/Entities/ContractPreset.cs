@@ -28,14 +28,12 @@ public sealed class ContractPreset : AggregateRoot
     public RedemptionPlacementPolicy RedemptionPlacementPolicy { get; private set; }
 
     /// <summary>
-    /// Whether a Focus Block committed to a contract sealed from this preset should
-    /// stop enforcing while its Session is inside a break slot. Can only ever narrow the global
-    /// Settings default toward stricter (keep blocking), never loosen it — see
-    /// IPolicyEngine.ComputeSlice and NenContract.PauseEnforcementDuringBreak. Not
-    /// yet user-editable: Settings, where this would actually be set, doesn't exist
-    /// yet, so this defaults permissive (true) until it does.
+    /// Whether sessions under a contract sealed from this preset keep their block
+    /// preset enforced through their breaks, instead of it lifting (Gap 64). Only
+    /// ever makes breaks stricter; false is today's behavior. Copied to the contract
+    /// at Seal, and from there onto each of its sessions at Start.
     /// </summary>
-    public bool PauseEnforcementDuringBreak { get; private set; }
+    public bool KeepBlockingDuringBreaks { get; private set; }
 
     private ContractPreset() { } // EF Core
 
@@ -47,7 +45,7 @@ public sealed class ContractPreset : AggregateRoot
         WorkHours? workHours,
         bool allowCancellation,
         RedemptionPlacementPolicy redemptionPlacementPolicy = RedemptionPlacementPolicy.AnywhereInContract,
-        bool pauseEnforcementDuringBreak = true)
+        bool keepBlockingDuringBreaks = false)
     {
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Preset name cannot be empty.", nameof(name));
@@ -61,7 +59,7 @@ public sealed class ContractPreset : AggregateRoot
             WorkHours = workHours,
             AllowCancellation = allowCancellation,
             RedemptionPlacementPolicy = redemptionPlacementPolicy,
-            PauseEnforcementDuringBreak = pauseEnforcementDuringBreak
+            KeepBlockingDuringBreaks = keepBlockingDuringBreaks
         };
     }
 
@@ -69,7 +67,8 @@ public sealed class ContractPreset : AggregateRoot
     /// Wholesale replace — every field is supplied together, matching how the Presets
     /// page edit form actually submits. No granular per-field mutators: unlike
     /// BlockPreset, nothing here is a growing collection needing incremental Add/Remove
-    /// invariants.
+    /// invariants. Every rule is a required parameter on purpose: a default here would
+    /// silently reset any rule a caller forgot to pass (Gap 64's trap).
     /// </summary>
     public void Update(
         string name,
@@ -77,8 +76,8 @@ public sealed class ContractPreset : AggregateRoot
         DailyFloor? dailyFloor,
         WorkHours? workHours,
         bool allowCancellation,
-        RedemptionPlacementPolicy redemptionPlacementPolicy = RedemptionPlacementPolicy.AnywhereInContract,
-        bool pauseEnforcementDuringBreak = true)
+        RedemptionPlacementPolicy redemptionPlacementPolicy,
+        bool keepBlockingDuringBreaks)
     {
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Preset name cannot be empty.", nameof(name));
@@ -89,6 +88,6 @@ public sealed class ContractPreset : AggregateRoot
         WorkHours = workHours;
         AllowCancellation = allowCancellation;
         RedemptionPlacementPolicy = redemptionPlacementPolicy;
-        PauseEnforcementDuringBreak = pauseEnforcementDuringBreak;
+        KeepBlockingDuringBreaks = keepBlockingDuringBreaks;
     }
 }

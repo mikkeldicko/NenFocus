@@ -166,6 +166,10 @@ public class NenFocusDbContext : DbContext
             entity.Property(s => s.BreakPresetName)
                 .HasMaxLength(100);
 
+            entity.Property(s => s.KeepBlockingDuringBreaks)
+                .IsRequired()
+                .HasDefaultValue(false);
+
             entity.Property(s => s.TemporaryBlockedApps)
                 .HasConversion(
                     list => JsonSerializer.Serialize(list, (JsonSerializerOptions?)null),
@@ -381,9 +385,9 @@ public class NenFocusDbContext : DbContext
                 .HasConversion<string>()
                 .IsRequired();
 
-            entity.Property(p => p.PauseEnforcementDuringBreak)
+            entity.Property(p => p.KeepBlockingDuringBreaks)
                 .IsRequired()
-                .HasDefaultValue(true);
+                .HasDefaultValue(false);
         });
 
         modelBuilder.Entity<BreakTimerPreset>(entity =>
@@ -482,9 +486,9 @@ public class NenFocusDbContext : DbContext
 
             entity.Property(c => c.ContractPresetId);
 
-            entity.Property(c => c.PauseEnforcementDuringBreak)
+            entity.Property(c => c.KeepBlockingDuringBreaks)
                 .IsRequired()
-                .HasDefaultValue(true);
+                .HasDefaultValue(false);
 
             entity.Property(c => c.DailyFloorPolicy)
                 .HasConversion(

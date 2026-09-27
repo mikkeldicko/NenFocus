@@ -18,6 +18,7 @@ public sealed record NenContractDraftRules
     public required StrictnessRule StrictnessRule { get; init; }
     public required bool AllowCancellation { get; init; }
     public required RedemptionPlacementPolicy RedemptionPlacementPolicy { get; init; }
+    public required bool KeepBlockingDuringBreaks { get; init; }
 
     /// <summary>Set for Advanced contracts; null for Simple (floor derived from drafted blocks).</summary>
     public double? FixedDailyFloorHours { get; init; }

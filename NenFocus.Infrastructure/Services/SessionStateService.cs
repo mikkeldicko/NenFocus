@@ -139,6 +139,7 @@ public sealed class SessionStateService : ISessionStateService
         StartedAt = s.StartedAt ?? now,
         EndAt = s.EndAt ?? now,
         Breaks = SessionDto.MapBreaks(s.BreakSchedule),
-        BreakPresetName = s.BreakPresetName
+        BreakPresetName = s.BreakPresetName,
+        KeepBlockingDuringBreaks = s.KeepBlockingDuringBreaks
     };
 }

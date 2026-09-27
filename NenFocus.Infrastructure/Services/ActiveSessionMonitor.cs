@@ -31,12 +31,14 @@ public sealed class ActiveSessionMonitor : IActiveSessionMonitor, IDisposable
     private DateTime _sessionEnd;
     private double _sessionDurationSeconds;
     private BreakSchedule _schedule = BreakSchedule.None;
+    private bool _keepBlockingDuringBreaks;
     private DateTime _lastCheckedAt;
     private bool _autoEndPending;
 
     public TimeSpan SessionTimeRemaining { get; private set; } = TimeSpan.Zero;
     public double SessionProgress { get; private set; }
     public bool IsOnBreak { get; private set; }
+    public bool KeepsBlockingDuringBreak { get; private set; }
     public TimeSpan BreakTimeRemaining { get; private set; } = TimeSpan.Zero;
     public double BreakProgress { get; private set; }
     public int BreaksTaken { get; private set; }
@@ -78,6 +80,8 @@ public sealed class ActiveSessionMonitor : IActiveSessionMonitor, IDisposable
             {
                 _sessionId = null;
                 _schedule = BreakSchedule.None;
+                _keepBlockingDuringBreaks = false;
+                KeepsBlockingDuringBreak = false;
                 BreakMarkers = [];
                 IsOnBreak = false;
                 BreaksTaken = 0;
@@ -97,6 +101,7 @@ public sealed class ActiveSessionMonitor : IActiveSessionMonitor, IDisposable
             _sessionStart = session.StartedAt;
             _sessionEnd = session.EndAt;
             _sessionDurationSeconds = (session.EndAt - session.StartedAt).TotalSeconds;
+            _keepBlockingDuringBreaks = session.KeepBlockingDuringBreaks;
 
             // Rebuilt on every SessionChanged, not once per session, so any future
             // mid-session revision of the schedule is picked up with no change here.
@@ -153,6 +158,7 @@ public sealed class ActiveSessionMonitor : IActiveSessionMonitor, IDisposable
             SessionTimeRemaining = TimeSpan.Zero;
             SessionProgress = 1.0;
             IsOnBreak = false;
+            KeepsBlockingDuringBreak = false;
             BreakTimeRemaining = TimeSpan.Zero;
             BreakProgress = 0;
             if (!_autoEndPending)
@@ -171,19 +177,21 @@ public sealed class ActiveSessionMonitor : IActiveSessionMonitor, IDisposable
         var transitions = _schedule.TransitionsBetween(_lastCheckedAt - _sessionStart, offset);
         _lastCheckedAt = now;
         if (transitions.Count > 0)
-            _ = HandleBreakTransitionsAsync(transitions, now);
+            _ = HandleBreakTransitionsAsync(transitions, now, _keepBlockingDuringBreaks);
 
         BreaksTaken = _schedule.BreaksStartedBy(offset);
 
         if (_schedule.BreakAt(offset) is { } current)
         {
             IsOnBreak = true;
+            KeepsBlockingDuringBreak = _keepBlockingDuringBreaks;
             BreakTimeRemaining = current.End - offset;
             BreakProgress = Math.Clamp((offset - current.Start) / current.Length, 0.0, 1.0);
         }
         else
         {
             IsOnBreak = false;
+            KeepsBlockingDuringBreak = false;
             BreakTimeRemaining = TimeSpan.Zero;
             BreakProgress = 0;
         }
@@ -192,11 +200,12 @@ public sealed class ActiveSessionMonitor : IActiveSessionMonitor, IDisposable
     // Fire-and-forget. Nothing needs retrying on failure: blocking is already correct on
     // the heartbeat's next SyncAsync, which reads the same schedule; only the notification
     // for this one boundary would be lost, and that is logged.
-    private async Task HandleBreakTransitionsAsync(IReadOnlyList<BreakTransition> transitions, DateTime at)
+    private async Task HandleBreakTransitionsAsync(
+        IReadOnlyList<BreakTransition> transitions, DateTime at, bool keepBlockingDuringBreaks)
     {
         try
         {
-            await _breakTransitions.HandleAsync(transitions, at);
+            await _breakTransitions.HandleAsync(transitions, at, keepBlockingDuringBreaks);
         }
         catch (Exception ex)
         {

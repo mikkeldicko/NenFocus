@@ -317,39 +317,24 @@ public class PolicyEngineTests
         slice.IsEmpty.Should().BeFalse();
     }
 
-    private static NenContract CreateContract(bool pauseEnforcementDuringBreak) => NenContract.Seal(
-        id: Guid.NewGuid(),
-        name: "Contract",
-        goal: new NenContractGoal("Goal"),
-        startDate: DateOnly.FromDateTime(At),
-        endDate: DateOnly.FromDateTime(At).AddDays(7),
-        strictnessRule: StrictnessRule.Locked,
-        dailyFloorPolicy: DailyFloorPolicy.None,
-        changeWindow: null,
-        allowCancellation: false,
-        plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-        sealedAt: At,
-        pauseEnforcementDuringBreak: pauseEnforcementDuringBreak);
-
     // A planned session that started 26 minutes before `At`, with a 25-30 minute break
     // slot — so `At` itself falls inside the break (Gap 63: a break is read off the
     // schedule against the clock, never a status the session is put into).
-    private static Session StartPlannedSessionInsideBreakAt(FocusBlock block, Guid presetId)
+    private static Session StartPlannedSessionInsideBreakAt(FocusBlock block, Guid presetId, bool keepBlockingDuringBreaks = false)
     {
         var session = Session.Create(
             Guid.NewGuid(), new SessionGoal("Focus"), new SessionDuration(TimeSpan.FromHours(1)),
             presetId, SessionOrigin.Planned, originatingBlockId: block.Id);
         session.Start(At.AddMinutes(-26), block.End, new BreakSchedule([
-            new SessionBreak(SessionPhaseKind.ShortBreak, TimeSpan.FromMinutes(25), TimeSpan.FromMinutes(30))]));
+            new SessionBreak(SessionPhaseKind.ShortBreak, TimeSpan.FromMinutes(25), TimeSpan.FromMinutes(30))]),
+            keepBlockingDuringBreaks: keepBlockingDuringBreaks);
         return session;
     }
 
     [Fact]
-    public void ComputeSlice_PlannedSessionInBreakSlot_NoContract_PresetExcludedFromBlockedApps()
+    public void ComputeSlice_PlannedSessionInBreakSlot_PresetExcludedFromBlockedApps()
     {
-        // Global Settings default is hardcoded permissive (pausing allowed) until
-        // Settings actually exists — with no contract governing this block, that
-        // default applies and the block's own preset stops enforcing during the break.
+        // By default a break lifts the session's own preset (and its originating block's).
         var preset = CreatePreset(WebsiteFilterType.Blocklist, apps: ["chrome.exe"]);
         var block = FocusBlock.Create(Guid.NewGuid(), preset.Id, At.AddMinutes(-26), At.AddHours(1));
         var session = StartPlannedSessionInsideBreakAt(block, preset.Id);
@@ -372,18 +357,14 @@ public class PolicyEngineTests
     }
 
     [Fact]
-    public void ComputeSlice_PlannedSessionInBreakSlot_ContractForbidsPause_PresetStaysBlocked()
+    public void ComputeSlice_SessionKeepingBlockingDuringBreaks_PresetStaysBlockedInsideItsBreakSlot()
     {
-        // A sealed contract can only ever narrow the permissive default toward
-        // stricter — PauseEnforcementDuringBreak: false means enforcement never lifts
-        // for this block's breaks, regardless of the (not-yet-real) Settings default.
+        // Gap 64: the session carries its contract's rule — PolicyEngine needs no contract.
         var preset = CreatePreset(WebsiteFilterType.Blocklist, apps: ["chrome.exe"]);
         var block = FocusBlock.Create(Guid.NewGuid(), preset.Id, At.AddMinutes(-26), At.AddHours(1));
-        var contract = CreateContract(pauseEnforcementDuringBreak: false);
-        block.AssignContract(contract.Id);
-        var session = StartPlannedSessionInsideBreakAt(block, preset.Id);
+        var session = StartPlannedSessionInsideBreakAt(block, preset.Id, keepBlockingDuringBreaks: true);
 
-        var slice = _engine.ComputeSlice(At, [preset], [session], [block], [contract]);
+        var slice = _engine.ComputeSlice(At, [preset], [session], [block]);
 
         slice.BlockedApps.Should().BeEquivalentTo(["chrome"]);
     }

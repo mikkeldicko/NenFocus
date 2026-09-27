@@ -11,12 +11,10 @@ public sealed class PolicyEngine : IPolicyEngine
         DateTime at,
         IEnumerable<BlockPreset> presets,
         IEnumerable<Session> sessions,
-        IEnumerable<PlannedBlock> blocks,
-        IEnumerable<NenContract>? contracts = null)
+        IEnumerable<PlannedBlock> blocks)
     {
         var allPresets = presets.ToList();
         var activeSessions = sessions.ToList();
-        var allContracts = contracts?.ToList() ?? [];
         // IsActive(at) is the authoritative boundary check, independent of whatever window
         // the caller's own block query used to fetch candidates. ComputeActivePolicySliceQueryHandler's
         // range query deliberately over-fetches with a buffer around "now" (SQLite datetime
@@ -33,33 +31,19 @@ public sealed class PolicyEngine : IPolicyEngine
         // early correctly drops out of activeBlocks but its preset's blocked sites/apps kept
         // being reapplied every heartbeat tick anyway, for as long as `at` was still inside
         // the block's *original* Start/End window.
-        // Resolve pause-during-break for each session inside a break slot at `at` before folding presets
-        // together — a session/block whose break is currently pausing enforcement has
-        // its own preset contribution excluded entirely, while an unrelated, merely
-        // co-occurring Background Block is never affected (it isn't sourced from
-        // either exclusion set below). The global Settings default doesn't exist yet
-        // and is hardcoded permissive (true); a sealed contract can only ever narrow
-        // that toward stricter (keep blocking), never loosen it further. A Bonus block
-        // (FocusBlock.ContractId == null) always falls back to the hardcoded default,
-        // never a contract's setting — it was never actually committed to one.
+        // A session whose break lifts blocking right now (Session.LiftsBlockingAt — the
+        // session already knows whether its contract keeps blocking through breaks, Gap 64)
+        // has its own preset contribution excluded, together with its originating block's.
+        // An unrelated, merely co-occurring Background Block is never affected (it isn't
+        // sourced from either exclusion set below).
         var pausedBlockIds = new HashSet<Guid>();
         var pausedSessionIds = new HashSet<Guid>();
 
-        foreach (var session in activeSessions.Where(s => s.IsOnBreakAt(at)))
+        foreach (var session in activeSessions.Where(s => s.LiftsBlockingAt(at)))
         {
-            var originatingBlock = session.OriginatingBlockId.HasValue
-                ? activeBlocks.OfType<FocusBlock>().FirstOrDefault(b => b.Id == session.OriginatingBlockId.Value)
-                : null;
-
-            var pauseAllowed = originatingBlock?.ContractId is { } contractId
-                ? allContracts.FirstOrDefault(c => c.Id == contractId)?.PauseEnforcementDuringBreak ?? true
-                : true;
-
-            if (!pauseAllowed) continue;
-
             pausedSessionIds.Add(session.Id);
-            if (originatingBlock is not null)
-                pausedBlockIds.Add(originatingBlock.Id);
+            if (session.OriginatingBlockId is { } originatingBlockId)
+                pausedBlockIds.Add(originatingBlockId);
         }
 
         var activePresetIds = activeBlocks

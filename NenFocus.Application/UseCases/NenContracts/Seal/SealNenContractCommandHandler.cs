@@ -87,7 +87,8 @@ public sealed class SealNenContractCommandHandler : ICommandHandler<SealNenContr
                 workHoursPolicy: workHoursPolicy,
                 contractPresetId: command.ContractPresetId,
                 contractFloor: contractFloor,
-                redemptionPlacementPolicy: command.RedemptionPlacementPolicy);
+                redemptionPlacementPolicy: command.RedemptionPlacementPolicy,
+                keepBlockingDuringBreaks: command.KeepBlockingDuringBreaks);
         }
         catch (ArgumentException ex)
         {

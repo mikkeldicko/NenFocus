@@ -16,7 +16,6 @@ public class ComputeActivePolicySliceQueryHandlerTests
     private readonly IPlannedBlockRepository _blocks = Substitute.For<IPlannedBlockRepository>();
     private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
     private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
-    private readonly INenContractRepository _contracts = Substitute.For<INenContractRepository>();
     private readonly IPolicyEngine _policyEngine = Substitute.For<IPolicyEngine>();
 
     public ComputeActivePolicySliceQueryHandlerTests()
@@ -26,7 +25,7 @@ public class ComputeActivePolicySliceQueryHandlerTests
         _sessions.GetActiveSessionsAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<Session>)[]);
     }
 
-    private ComputeActivePolicySliceQueryHandler CreateHandler() => new(_blocks, _presets, _sessions, _contracts, _policyEngine);
+    private ComputeActivePolicySliceQueryHandler CreateHandler() => new(_blocks, _presets, _sessions, _policyEngine);
 
     [Fact]
     public async Task HandleAsync_FetchesBlocksForOneSecondWindowAroundAt()
@@ -40,7 +39,7 @@ public class ComputeActivePolicySliceQueryHandlerTests
     public async Task HandleAsync_ReturnsWhateverThePolicyEngineComputes()
     {
         var expectedSlice = new ActivePolicySlice { SliceStart = At, BlockedSites = new HashSet<string> { "youtube.com" } };
-        _policyEngine.ComputeSlice(At, Arg.Any<IEnumerable<BlockPreset>>(), Arg.Any<IEnumerable<Session>>(), Arg.Any<IEnumerable<PlannedBlock>>(), Arg.Any<IEnumerable<NenContract>>())
+        _policyEngine.ComputeSlice(At, Arg.Any<IEnumerable<BlockPreset>>(), Arg.Any<IEnumerable<Session>>(), Arg.Any<IEnumerable<PlannedBlock>>())
             .Returns(expectedSlice);
 
         var result = await CreateHandler().HandleAsync(new ComputeActivePolicySliceQuery(At), CancellationToken.None);
@@ -74,8 +73,7 @@ public class ComputeActivePolicySliceQueryHandlerTests
             At,
             Arg.Is<IEnumerable<BlockPreset>>(p => p.Count() == 2 && p.Contains(sharedPreset) && p.Contains(sessionPreset)),
             Arg.Is<IEnumerable<Session>>(s => s.Contains(session)),
-            Arg.Is<IEnumerable<PlannedBlock>>(b => b.Contains(block)),
-            Arg.Any<IEnumerable<NenContract>>());
+            Arg.Is<IEnumerable<PlannedBlock>>(b => b.Contains(block)));
     }
 
     [Fact]
@@ -95,8 +93,7 @@ public class ComputeActivePolicySliceQueryHandlerTests
             At,
             Arg.Any<IEnumerable<BlockPreset>>(),
             Arg.Any<IEnumerable<Session>>(),
-            Arg.Is<IEnumerable<PlannedBlock>>(b => !b.Any()),
-            Arg.Any<IEnumerable<NenContract>>());
+            Arg.Is<IEnumerable<PlannedBlock>>(b => !b.Any()));
     }
 
     [Fact]
@@ -111,7 +108,6 @@ public class ComputeActivePolicySliceQueryHandlerTests
         await CreateHandler().HandleAsync(new ComputeActivePolicySliceQuery(At), CancellationToken.None);
 
         _policyEngine.Received(1).ComputeSlice(
-            At, Arg.Is<IEnumerable<BlockPreset>>(p => !p.Any()), Arg.Any<IEnumerable<Session>>(), Arg.Any<IEnumerable<PlannedBlock>>(),
-            Arg.Any<IEnumerable<NenContract>>());
+            At, Arg.Is<IEnumerable<BlockPreset>>(p => !p.Any()), Arg.Any<IEnumerable<Session>>(), Arg.Any<IEnumerable<PlannedBlock>>());
     }
 }

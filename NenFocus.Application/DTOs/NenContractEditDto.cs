@@ -35,6 +35,7 @@ public sealed record NenContractEditDto
 
     public Guid? ContractPresetId { get; init; }
     public RedemptionPlacementPolicy RedemptionPlacementPolicy { get; init; }
+    public bool KeepBlockingDuringBreaks { get; init; }
 
     public IReadOnlyList<NenContractEditBlockDto> Blocks { get; init; } = [];
 }

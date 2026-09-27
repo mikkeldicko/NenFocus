@@ -11,6 +11,10 @@ public interface IActiveSessionMonitor
     /// session itself stays Active throughout — a break is a stretch of its schedule,
     /// not a state (Gap 63).</summary>
     bool IsOnBreak { get; }
+
+    /// <summary>True during a break whose session keeps its preset blocked through breaks
+    /// (its contract's rule, Gap 64) — so the Main Page can say so.</summary>
+    bool KeepsBlockingDuringBreak { get; }
     TimeSpan BreakTimeRemaining { get; }
     double BreakProgress { get; }
 

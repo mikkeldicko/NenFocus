@@ -152,7 +152,7 @@ Gaps that have been identified but not yet closed. Each is here because deferrin
 - **A — Usage Ceiling & Universal Usage Tracking** — interrogated 2026-07-07; not yet built.
 - **B — Crash Resilience: Session Recovery After Unexpected Shutdown** — direction sketched, not interrogated; deferred.
 - **C — Nen Contract Motivation & Scoring Enhancements** (C1 Day-Met %, C2 streaks, C3 deficit digest) — interrogated 2026-07-07; not yet built.
-- **D — Spontaneous Redemption Path** — interrogated 2026-07-08; dropped, not deferred.
+- **D — Spontaneous Redemption Path** — dropped 2026-07-08; reopened 2026-09-27 as a "Spontaneous Redemption Block" (real redemption block created at Hatsu Start) — parked, not re-interrogated.
 - **E — Recurring Blocks** — interrogated 2026-07-15; not yet built.
 - **G — Nen Contract Recap Data for Insights** — interrogated 2026-08-12, widened 2026-08-30; not yet built.
 - **J — System Clock Tampering: Detect and Nudge, Not Block** — raised 2026-08-20; parked, not interrogated.
