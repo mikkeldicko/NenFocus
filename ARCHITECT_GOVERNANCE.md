@@ -159,6 +159,12 @@ Gaps that have been identified but not yet closed. Each is here because deferrin
 - **K — Enforcement Has No Life Independent of the GUI Process** (Windows Service split) — interrogated 2026-09-07; deliberately not started yet.
 - **O — Cross-Platform Suite: iOS App, Multi-Device Sync, "Hardcore iOS Lockdown"** — raised 2026-09-27; parked until the desktop app is finished, not interrogated.
 - **P — Break Flexibility** (end/skip a break, break budget, extend session, edit at Hatsu, live Hatsu, focus-only floor) — raised 2026-09-27 during Gap 63; parked, not interrogated.
+- **Q — Contract Activation/Completion Uses the UTC Date** — bug found 2026-09-28; fix agreed, open questions listed; next up (to close as Gap 65).
+- **R — Contract Membership: Only Committed and Redemption Blocks Count Toward the Floor** — interrogated 2026-09-28; plan agreed, open questions listed (to close as Gap 66).
+- **S — Drafting Adopts the Calendar; Seal Guards** — interrogated 2026-09-28; plan agreed, depends on R (to close as Gap 67).
+- **T — Spontaneous Sessions as Planner Tiles** — raised 2026-09-28; direction agreed (read-side view of Session), not interrogated.
+- **U — Extending a Contract** — raised 2026-09-28; direction agreed (draft mode for added days only), not interrogated.
+- **V — Always-On Background Presets** — raised 2026-09-28; parked, not interrogated.- **R — Contract Membership: Only Committed and Redemption Blocks Count Toward the Floor** — interrogated 2026-09-28; plan agreed, open questions listed (to close as Gap 66).- **S — Drafting Adopts the Calendar; Seal Guards** — interrogated 2026-09-28; plan agreed, depends on R (to close as Gap 67).- **T — Spontaneous Sessions as Planner Tiles** — raised 2026-09-28; direction agreed (read-side view of Session), not interrogated.- **U — Extending a Contract** — raised 2026-09-28; direction agreed (draft mode for added days only), not interrogated.- **V — Always-On Background Presets** — raised 2026-09-28; parked, not interrogated.
 
 \---
 

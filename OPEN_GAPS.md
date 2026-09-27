@@ -163,6 +163,7 @@ Once a gap (or a self-contained half of one) is fully closed, its write-up moves
 **UI entry point:** a "Repeat" toggle on the existing Planner block-creation form (same tile-based creation flow as Google Calendar) — flipping it on reveals the `RecurrenceRule` picker (Every day / Specific weekdays / Custom, all three pre-filling the one underlying value object). No separate "recurring blocks" screen for v1.
 
 **Must be closed before:** Nothing urgent — deferred until picked up. The domain shape, materialization strategy, editing/deletion scopes, and conflict-handling mechanics are all settled enough to start Slice 1 (domain entities + `RecurrenceRule`) whenever that happens.
+**Interaction added 2026-09-28 (Open Gap S):** because a series materializes real `PlannedBlock` rows, contract drafting adopts its occurrences in the contract's range like any other block (keep/remove, removed ones deleted at Seal). To decide when this gap is interrogated: what happens to the **series** when an adopted occurrence is removed or edited in a draft — most likely the occurrence detaches (compare the existing `SkippedOccurrence` concept).
 
 \---
 
@@ -303,3 +304,95 @@ Once a gap (or a self-contained half of one) is fully closed, its write-up moves
 
 **Must be closed before:** Nothing — parked.
 
+
+\---
+
+### Open Gap Q — Contract Activation/Completion Uses the UTC Date (bug found 2026-09-28; fix agreed, not built — to close as Gap 65)
+
+**The bug:** `NenContractRepository.GetDueForActivationAsync` / `GetDueForCompletionAsync` do `DateOnly.FromDateTime(asOf)` with `asOf = _clock.UtcNow` — the **UTC** date — and compare it to `StartDate`/`EndDate`, which are **local** calendar dates. At UTC+2 a contract turns Active ~2 hours late (at 00:28 local on its start day it still showed "Upcoming" while its block ran — observed 2026-09-28) and completes ~2 hours late. `NenContract.Seal` decides Active-vs-Scheduled the same way (`DateOnly.FromDateTime(sealedAt)`, UTC), so sealing between 00:00 and 02:00 local on the start day wrongly yields Scheduled. The repository also restates the entity's `IsDueForActivation`/`IsDueForCompletion` rules in its own words — a duplicated rule (Application Handler Forbidden Zone).
+
+**Agreed fix:**
+- The entity owns the rule in **local** time: `IsDueForActivation(DateTime localNow)`, `IsDueForCompletion(DateTime localNow)`; `Seal` uses the same comparison with a local `sealedAt`.
+- The repository only fetches Scheduled / Active contracts (a handful); the entity decides — the duplicate disappears.
+- `SweepNenContractLifecycleCommandHandler` passes `_clock.ToLocal(now)`.
+- Regression tests: the 00:00–02:00 local window at UTC+2 for activation, completion and Seal.
+
+**Still to interrogate:**
+1. **Midnight or Work Hours?** `NenContract.StartsAt`'s comment records a deliberate decision (Open Gap L, closed as `DESIGN_GAP_HISTORY.md` Gap 59): activation fires at **midnight** on `StartDate`, not at the Work Hours start. Keep that (fix only UTC → local), or change activation to `StartsAt`? The 2026-09-28 proposal assumed `StartsAt` before this was found.
+2. **Doc/code drift:** `EndsAt`'s comment says it "governs completion timing (IsDueForCompletion)", but completion compares dates. Decide which is intended — completion at end of day, or at `EndsAt` (the Work Hours end).
+3. **Audit other UTC-date uses** before finalising: `NenContract.Break` (`DateOnly.FromDateTime(brokenAt)` with a UTC `now`), `GetSuggestedRedemptionPlacementsQueryHandler` (`DateOnly.FromDateTime(query.AsOf)` — check whether `AsOf` is local or UTC), and anything else comparing a UTC instant against a contract's local dates.
+4. No banner change needed: the Planner re-reads contracts every 3 s (`_floorStatusPollTimer`), so once activation is on time the banner follows.
+
+\---
+
+### Open Gap R — Contract Membership: Only Committed and Redemption Blocks Count Toward the Floor (interrogated 2026-09-28; plan agreed, not built — to close as Gap 66)
+
+**Why:** a contract's completed hours counted Spontaneous sessions whose preset matched the contract's (`GetNenContractCompletedFocusHoursQueryHandler`), including sessions from *before* the contract was sealed — a fresh contract showed 4.7 completed hours with no block done. **Architect's hard rule:** only blocks committed at Seal and redemption blocks count toward the floor; everything else in the contract's period is Bonus (display only).
+
+**Agreed design:**
+- **Membership is a fact recorded at creation**, not derived from dates — it depends on *when* something was created relative to Seal, which can't be reconstructed later. One `ContractId` plus a `ContractRole` value: **`Committed`** (drafted and sealed), **`Redemption`** (created after Seal to cover a deficit), **`Bonus`** (created after Seal inside the period, not a redemption). Rejected: two extra ids ("bonus id" + "floor id") — they'd allow contradictory combinations. Rejected: deciding Bonus by date range (`IsWithinPeriod`) — it can't exclude pre-Seal work.
+- **"Counts toward the floor" = role is `Committed` or `Redemption`** — one named domain rule.
+- Applies to **Focus and Background** blocks. Background blocks never count toward the floor (Focus hours only), but membership keeps the contract's strictness rules consistent across its whole period.
+- **Spontaneous sessions** started while a contract is Active, inside its period, are linked as **Bonus**; their hours show as **Bonus hours** (banner running total, Post-Contract recap). A Planned session belongs wherever its block belongs.
+- **Finished before Seal = outside:** blocks and sessions that ended before Seal stay non-members and count toward nothing (fixes the 4.7 h).
+- **Dragging:** a **Bonus** block's membership follows the period (dragged out → non-member; a block dragged in → Bonus). **Committed and Redemption blocks can never leave their contract's period.** No block may be created or dragged so that it **crosses** a contract's start or end boundary.
+- **Queries:** `GetNenContractCompletedFocusHoursQueryHandler` sums Committed + Redemption only (the Spontaneous part is deleted); `GetNenContractBonusFocusHoursQueryHandler` and the Planner's Bonus badge read the **role**, not the date range, and include Bonus Spontaneous sessions.
+- **Migration:** existing `ContractId` → `Redemption` if the block has redemption entries, else `Committed`; everything else non-member. (The architect's local database was wiped 2026-09-28; the rule still has to be correct as permanent code.)
+- **Tests:** a matching-preset Spontaneous session no longer counts toward completed hours (the 4.7 h regression); Bonus totals by role, including Bonus sessions; pre-Seal work counts toward nothing; drag rules; boundary crossing refused; migration mapping.
+
+**Still to interrogate:**
+1. Naming — `ContractRole` and its three values; and whether `ContractId` should be renamed now that it means "member of", not "committed to".
+2. Where the assignment rule lives — likely one domain rule on `NenContract` ("which role does a block/session created at this local instant get, with or without redemption entries?"), asked by `CreatePlannedBlockCommandHandler`, `UpdatePlannedBlockCommandHandler` (drag), `SplitPlannedBlock` and `StartSessionCommandHandler`.
+3. Session link shape — `Session.ContractId` alone (a Spontaneous session can only ever be Bonus) or `ContractId` + role for symmetry.
+4. **Breaking a contract** — `Break` shrinks `EndDate`. Do Bonus blocks after the new end drop out (consistent with "Bonus follows the period")? Confirm Committed blocks after it are already handled by the existing Break rules.
+5. **Strictness vs Bonus blocks** — do a contract's edit rules (Lockdown, Daily Flex, …) also govern Bonus blocks, or only Committed/Redemption ones?
+6. How the Planner visually distinguishes Committed / Redemption / Bonus tiles (today only Bonus has a badge).
+
+\---
+
+### Open Gap S — Drafting Adopts the Calendar; Seal Guards (interrogated 2026-09-28; plan agreed, not built — to close as Gap 67; depends on Gap R)
+
+**Agreed design:**
+- **Adoption:** entering contract drafting pulls every *not-yet-finished* block (Focus and Background) already in the contract's range into the draft, next to newly drafted blocks. The user keeps or removes each. Kept → **Committed** at Seal. Removed → **deleted at Seal** (shown as "will be deleted at Seal" in the draft; cancelling the draft deletes nothing). Nothing is included or cast aside automatically. This also covers future recurring blocks (Open Gap E), which are real blocks.
+- **Finished blocks** in the range are not offered in the draft (they're history — Gap R).
+- **Boundary rule at Seal:** an existing block that **crosses** the contract's start or end → Seal refused until the user moves, shortens or removes it in the draft (no automatic split for future blocks — the user decides).
+- **Background block running at the Seal moment and kept:** **split at the Seal moment** — the part before Seal stays the original block, outside the contract (history); the rest becomes a new **Committed** block. Enforcement continues seamlessly (same preset, back to back). Builds on the existing `SplitPlannedBlock` use case.
+- **"Focus time in progress" guard** — Seal refused in all three cases: a planned session running; a Spontaneous session running; an active Focus block awaiting its (late) Ritual. Checked when the user clicks **"Make Nen Contract"** (so they know before drafting) **and again at Seal** (drafting takes time; a block may start meanwhile). One named rule shared by both checks.
+- **Editing a Scheduled contract** re-drafts, so adoption, removal and all guards apply again.
+
+**Still to interrogate:**
+1. Draft UI for adopted vs newly drafted tiles, and for the "crosses the boundary" error state.
+2. Should an adopted block that violates the contract's Work Hours be treated like a boundary crossing (must be resolved before Seal)?
+3. The split Background block: tell the user at Seal ("your running X block was split at 11:00")?
+4. Exact wording of the guard messages.
+5. Does a kept adopted block need any validation the draft already applies to newly drafted blocks (preset type, overlap, floor check)?
+
+\---
+
+### Open Gap T — Spontaneous Sessions as Planner Tiles (raised 2026-09-28; direction agreed, not interrogated)
+
+**Want:** a Spontaneous session appears in the Planner as a tile labelled "Spontaneous" from the moment it starts, stays after it ends, can be clicked for details (goal, preset, duration, breaks, blocked attempts, reflection), and shows "ended early" like a planned block.
+
+**Agreed direction:** the tile is a **read-side view of the `Session`**, not a new entity. Rejected: a `SpontaneousBlock` `PlannedBlock` subtype — it would be a second record of the same event, and every rule that acts on Planner blocks (enforcement, Focus overlap, Ritual prompt, missed sweep, outcome classification, planned-hours and floor checks) would need an exception; the domain's line is "the block is the schedule record, the session is the attempt record". The Planner's week query projects Planner blocks **plus** `Origin = Spontaneous` sessions into one tile list (precedent: `GetInsightsCalendarQuery`). A Planned session is never its own tile — it's shown through its block.
+
+**Known, accepted:** a debug-clock-skipped session can leave a "future" completed tile, and nothing prevents planning over it (overlap checks ignore finished sessions) — unreachable in real use without changing the system clock (Open Gap J).
+
+**Still to interrogate:** tile styling and labels; the read-only detail view; how overlapping tiles are drawn; the label for a Bonus Spontaneous tile (Gap R); overlap with `GetInsightsCalendarQuery`.
+
+\---
+
+### Open Gap U — Extending a Contract (raised 2026-09-28; direction agreed, not interrogated)
+
+**Doesn't exist yet** — `NenContract.OriginalEndDate` is only used by `Break`. **Architect's design:** extending (e.g. on Wednesday, a Friday end → Sunday) re-enters **drafting for the added days only**. Everything up to the original end is locked (already committed); the added days work like a fresh draft — adopt existing blocks with keep/remove (Gap S), no block may cross the new end, and the "Focus time in progress" guard applies. Blocks created after the extension inside the added days are Bonus (Gap R).
+
+**Still to interrogate:** the floor for the added days (the preset's fixed floor, or per day from drafted blocks?); whether Strictness or Work Hours can differ for the added days; what the recap shows for an extended contract; which contracts may be extended (Active only? any strictness?).
+
+\---
+
+### Open Gap V — Always-On Background Presets (raised 2026-09-28; parked, not interrogated)
+
+**Want:** a Background preset (e.g. Facebook + Instagram) that is always enforced, inside or outside any contract, without drawing a months-long Planner block.
+
+**Direction (not agreed design):** its own ambient concept — not a `PlannedBlock` (no start or end, so not a calendar entry) and not a contract member. Precedent: `UsageCeiling` (Open Gap A), an ambient policy deliberately independent of presets and contracts. `PolicyEngine` would always include it. Contract membership never has to fold it in — it's active anyway.
+
+**Still to interrogate:** can it be switched off *during* an active contract (a locking question, not membership)? Where it's authored (Presets page? Settings?); whether it appears anywhere on the Planner.
