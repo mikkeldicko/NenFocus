@@ -15,8 +15,14 @@ public sealed record SessionDto
     public DateTime StartedAt { get; init; }
     public DateTime EndAt { get; init; }
     public DateTime? EndedAt { get; init; }
-    public BreakTimerDto? BreakTimer { get; init; }
-    public int BreaksTaken { get; init; }
-    public DateTime? BreakStartedAt { get; init; }
-    public SessionPhaseKind? CurrentBreakKind { get; init; }
+
+    /// <summary>The session's break schedule (offsets from StartedAt) — empty for "No
+    /// timer". Everything live about breaks is read off this against the clock.</summary>
+    public IReadOnlyList<SessionBreakDto> Breaks { get; init; } = [];
+    public string? BreakPresetName { get; init; }
+
+    public static IReadOnlyList<SessionBreakDto> MapBreaks(Domain.ValueObjects.BreakSchedule schedule) =>
+        schedule.Breaks
+            .Select(b => new SessionBreakDto { Kind = b.Kind, Start = b.Start, End = b.End })
+            .ToList();
 }

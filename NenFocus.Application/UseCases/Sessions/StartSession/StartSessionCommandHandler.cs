@@ -75,16 +75,6 @@ public sealed class StartSessionCommandHandler
                 return StartSessionResult.Fail("A session already exists for this focus block.");
         }
 
-        BreakTimer? breakTimer = null;
-        if (command.BreakTimerPresetId is { } breakTimerPresetId)
-        {
-            var breakTimerPreset = await _breakTimerPresets.GetByIdAsync(breakTimerPresetId, ct);
-            if (breakTimerPreset is null)
-                return StartSessionResult.Fail("The selected break timer preset was not found.");
-
-            breakTimer = breakTimerPreset.BreakTimer;
-        }
-
         var origin = command.OriginatingBlockId.HasValue
             ? SessionOrigin.Planned
             : SessionOrigin.Spontaneous;
@@ -108,11 +98,26 @@ public sealed class StartSessionCommandHandler
             blockPresetId: command.PresetId ?? Guid.Empty,
             origin: origin,
             originatingBlockId: command.OriginatingBlockId,
-            breakTimer: breakTimer,
             temporaryBlockedApps: command.AdditionalBlockedApps.Count > 0 ? command.AdditionalBlockedApps : null,
             temporaryBlockedSites: command.AdditionalBlockedSites.Count > 0 ? command.AdditionalBlockedSites : null);
 
-        session.Start(now, originatingBlock?.End);
+        // The preset is only a quick way to produce the schedule — the session stores the
+        // resulting breaks, never the preset or its rhythm (Gap 63). Laid over the run the
+        // session will actually have (a late planned start has less of it), so a preset that
+        // no longer has room for a single break simply yields none.
+        var breakSchedule = BreakSchedule.None;
+        string? breakPresetName = null;
+        if (command.BreakTimerPresetId is { } breakTimerPresetId)
+        {
+            var breakTimerPreset = await _breakTimerPresets.GetByIdAsync(breakTimerPresetId, ct);
+            if (breakTimerPreset is null)
+                return StartSessionResult.Fail("The selected break timer preset was not found.");
+
+            breakSchedule = breakTimerPreset.BreakTimer.ScheduleFor(session.RunLength(now, originatingBlock?.End));
+            breakPresetName = breakTimerPreset.Name;
+        }
+
+        session.Start(now, originatingBlock?.End, breakSchedule, breakPresetName);
 
         if (originatingBlock is not null)
         {
@@ -141,13 +146,8 @@ public sealed class StartSessionCommandHandler
             Status = session.Status,
             Origin = session.Origin,
             OriginatingBlockId = session.OriginatingBlockId,
-            BreakTimer = breakTimer is null ? null : new BreakTimerDto
-            {
-                WorkMinutes = breakTimer.WorkMinutes,
-                ShortBreakMinutes = breakTimer.ShortBreakMinutes,
-                CyclesBeforeLongBreak = breakTimer.CyclesBeforeLongBreak,
-                LongBreakMinutes = breakTimer.LongBreakMinutes
-            }
+            Breaks = SessionDto.MapBreaks(session.BreakSchedule),
+            BreakPresetName = session.BreakPresetName
         });
 
         return StartSessionResult.Ok(session.Id);

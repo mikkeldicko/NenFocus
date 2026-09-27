@@ -29,7 +29,7 @@ public sealed class ContractPreset : AggregateRoot
 
     /// <summary>
     /// Whether a Focus Block committed to a contract sealed from this preset should
-    /// stop enforcing while its Session is OnBreak. Can only ever narrow the global
+    /// stop enforcing while its Session is inside a break slot. Can only ever narrow the global
     /// Settings default toward stricter (keep blocking), never loosen it — see
     /// IPolicyEngine.ComputeSlice and NenContract.PauseEnforcementDuringBreak. Not
     /// yet user-editable: Settings, where this would actually be set, doesn't exist

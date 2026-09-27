@@ -16,8 +16,7 @@ public sealed class SessionRepository : ISessionRepository
     {
         return await _context.Sessions
             .FirstOrDefaultAsync(
-                s => s.Status == SessionStatus.Active ||
-                     s.Status == SessionStatus.OnBreak,
+                s => s.Status == SessionStatus.Active,
                 cancellationToken);
     }
 
@@ -51,8 +50,7 @@ public sealed class SessionRepository : ISessionRepository
     {
         return await _context.Sessions
             .AnyAsync(
-                s => s.Status == SessionStatus.Active ||
-                     s.Status == SessionStatus.OnBreak,
+                s => s.Status == SessionStatus.Active,
                 cancellationToken);
     }
 
@@ -70,7 +68,7 @@ public sealed class SessionRepository : ISessionRepository
     public async Task<IReadOnlyList<Session>> GetActiveSessionsAsync(CancellationToken ct = default)
     {
         return await _context.Sessions
-            .Where(s => s.Status == SessionStatus.Active || s.Status == SessionStatus.OnBreak)
+            .Where(s => s.Status == SessionStatus.Active)
             .ToListAsync(ct);
     }
 

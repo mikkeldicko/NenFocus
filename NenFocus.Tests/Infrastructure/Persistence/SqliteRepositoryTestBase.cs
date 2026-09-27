@@ -27,6 +27,11 @@ public abstract class SqliteRepositoryTestBase : IDisposable
         Context.Database.EnsureCreated();
     }
 
+    /// <summary>A second context on the same database — reads through it hit SQLite, not
+    /// the first context's change tracker, so a save-then-load is a real round trip.</summary>
+    protected NenFocusDbContext CreateFreshContext() =>
+        new(new DbContextOptionsBuilder<NenFocusDbContext>().UseSqlite(_connection).Options);
+
     public void Dispose()
     {
         Context.Dispose();

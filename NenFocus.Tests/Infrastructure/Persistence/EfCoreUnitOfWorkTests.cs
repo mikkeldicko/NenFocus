@@ -64,7 +64,7 @@ public class EfCoreUnitOfWorkTests : SqliteRepositoryTestBase
     public async Task CommitAsync_AggregateWithNoPendingEvents_IsNotPublished()
     {
         // Session.Create() does not raise any domain event by itself (only Start/
-        // StartBreak/Complete do), so a freshly-created, not-yet-started session
+        // Complete do), so a freshly-created, not-yet-started session
         // has zero pending events at commit time.
         var session = Session.Create(
             Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(30)),

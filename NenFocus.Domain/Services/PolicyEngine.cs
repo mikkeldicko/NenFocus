@@ -33,7 +33,7 @@ public sealed class PolicyEngine : IPolicyEngine
         // early correctly drops out of activeBlocks but its preset's blocked sites/apps kept
         // being reapplied every heartbeat tick anyway, for as long as `at` was still inside
         // the block's *original* Start/End window.
-        // Resolve pause-during-break for each OnBreak session before folding presets
+        // Resolve pause-during-break for each session inside a break slot at `at` before folding presets
         // together — a session/block whose break is currently pausing enforcement has
         // its own preset contribution excluded entirely, while an unrelated, merely
         // co-occurring Background Block is never affected (it isn't sourced from
@@ -45,7 +45,7 @@ public sealed class PolicyEngine : IPolicyEngine
         var pausedBlockIds = new HashSet<Guid>();
         var pausedSessionIds = new HashSet<Guid>();
 
-        foreach (var session in activeSessions.Where(s => s.Status == SessionStatus.OnBreak))
+        foreach (var session in activeSessions.Where(s => s.IsOnBreakAt(at)))
         {
             var originatingBlock = session.OriginatingBlockId.HasValue
                 ? activeBlocks.OfType<FocusBlock>().FirstOrDefault(b => b.Id == session.OriginatingBlockId.Value)

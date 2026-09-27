@@ -1,7 +1,5 @@
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
-using NenFocus.Domain.Enums;
-using NenFocus.Domain.Services;
 
 namespace NenFocus.Application.Queries.GetAvailableBreakTimerPresets;
 
@@ -9,14 +7,10 @@ public sealed class GetAvailableBreakTimerPresetsQueryHandler
     : IQueryHandler<GetAvailableBreakTimerPresetsQuery, IReadOnlyList<BreakTimerPresetDto>>
 {
     private readonly IBreakTimerPresetRepository _presets;
-    private readonly IBreakScheduleCalculator _scheduleCalculator;
 
-    public GetAvailableBreakTimerPresetsQueryHandler(
-        IBreakTimerPresetRepository presets,
-        IBreakScheduleCalculator scheduleCalculator)
+    public GetAvailableBreakTimerPresetsQueryHandler(IBreakTimerPresetRepository presets)
     {
         _presets = presets;
-        _scheduleCalculator = scheduleCalculator;
     }
 
     public async Task<IReadOnlyList<BreakTimerPresetDto>> HandleAsync(
@@ -25,9 +19,7 @@ public sealed class GetAvailableBreakTimerPresetsQueryHandler
         var allPresets = await _presets.GetAllAsync(ct);
 
         return allPresets
-            .Where(p => _scheduleCalculator
-                .ComputeSchedule(p.BreakTimer, query.TotalDuration)
-                .Any(phase => phase.Kind != SessionPhaseKind.Work))
+            .Where(p => !p.BreakTimer.ScheduleFor(query.TotalDuration).IsEmpty)
             .Select(BreakTimerPresetDto.FromEntity)
             .ToList();
     }

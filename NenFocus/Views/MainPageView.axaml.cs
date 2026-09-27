@@ -44,7 +44,7 @@ public partial class MainPageView : UserControl
     /// of the bar's actual rendered width — a ColumnDefinitions collection can't be
     /// data-bound directly in Avalonia, so this rebuilds it in code whenever
     /// BreakMarkers changes. Purely visual layout, not business logic — the
-    /// fractions themselves already came from IBreakScheduleCalculator.
+    /// fractions themselves already came from the session's BreakSchedule.
     /// </summary>
     private void RenderBreakMarkers(IReadOnlyList<BreakMarkerDto> markers)
     {

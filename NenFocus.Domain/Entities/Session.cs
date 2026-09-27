@@ -17,25 +17,25 @@ public class Session : AggregateRoot
     public DateTime? EndAt { get; private set; }
     public DateTime? EndedAt { get; private set; }
 
-    /// <summary>
-    /// The frozen cadence copied by value from a BreakTimerPreset at Start — replaces
-    /// BreakSettings, which only ever modeled a single fixed interval/length pair.
-    /// Null means "No timer": this session runs start-to-finish with no breaks at
-    /// all. Manual break-taking is retired app-wide — a break only ever starts
-    /// automatically, driven by walking IBreakScheduleCalculator's phase timeline
-    /// for this cadence against the session's own Duration.
-    /// </summary>
-    public BreakTimer? BreakTimer { get; private set; }
-    public int BreaksTaken { get; private set; }
-    public DateTime? BreakStartedAt { get; private set; }
+    // Persisted as the SessionBreaks child table (EF OwnsMany); exposed as a BreakSchedule.
+    private List<SessionBreak> _breaks = [];
 
     /// <summary>
-    /// Which kind of break is currently active — set from StartBreak's breakKind
-    /// parameter (itself resolved by the caller via IBreakScheduleCalculator, never
-    /// re-derived here), cleared on ResumeFromBreak. Null whenever Status is not
-    /// OnBreak.
+    /// This session's breaks as offsets from StartedAt — the single source of truth for
+    /// "is it a break right now" (Gap 63). A session is one continuous Active run; a
+    /// break is only a stretch of time on this schedule, never a status. Set at Start;
+    /// once a break has started it can never change — only breaks still in the future
+    /// could ever be revised. Trimmed at Complete to what actually happened, so the
+    /// same list is the permanent history record.
     /// </summary>
-    public SessionPhaseKind? CurrentBreakKind { get; private set; }
+    public BreakSchedule BreakSchedule => new(_breaks);
+
+    /// <summary>
+    /// Snapshot of the name of the BreakTimerPreset the schedule came from (e.g.
+    /// "Classic"), copied at Start so renaming or deleting the preset never rewrites
+    /// history. Null when the session has no breaks at all.
+    /// </summary>
+    public string? BreakPresetName { get; private set; }
     public string? Reflection { get; private set; }
     public DateTime? PostSessionAcknowledgedAt { get; private set; }
     public IReadOnlyList<string> TemporaryBlockedApps { get; private set; } = [];
@@ -50,7 +50,6 @@ public class Session : AggregateRoot
         Guid blockPresetId,
         SessionOrigin origin,
         Guid? originatingBlockId = null,
-        BreakTimer? breakTimer = null,
         IReadOnlyList<string>? temporaryBlockedApps = null,
         IReadOnlyList<string>? temporaryBlockedSites = null)
     {
@@ -70,75 +69,89 @@ public class Session : AggregateRoot
             BlockPresetId = blockPresetId,
             Origin = origin,
             OriginatingBlockId = originatingBlockId,
-            BreakTimer = breakTimer,
             Status = SessionStatus.NotStarted,
             TemporaryBlockedApps = temporaryBlockedApps ?? [],
             TemporaryBlockedSites = temporaryBlockedSites ?? []
         };
     }
 
-    public void Start(DateTime startedAt, DateTime? scheduledEnd = null)
+    /// <summary>
+    /// How long this session will run if started at <paramref name="startedAt"/> — until
+    /// <paramref name="scheduledEnd"/> (a Planned session's block end) or for its
+    /// Duration. The one definition Start and a caller building a BreakSchedule share,
+    /// so a schedule is always laid over exactly the run it will be checked against.
+    /// </summary>
+    public TimeSpan RunLength(DateTime startedAt, DateTime? scheduledEnd = null) =>
+        (scheduledEnd ?? startedAt + Duration.Value) - startedAt;
+
+    public void Start(
+        DateTime startedAt,
+        DateTime? scheduledEnd = null,
+        BreakSchedule? breakSchedule = null,
+        string? breakPresetName = null)
     {
         if (Status != SessionStatus.NotStarted)
             throw new InvalidOperationException(
                 "Session has already been started.");
 
+        var schedule = breakSchedule ?? BreakSchedule.None;
+        if (!schedule.FitsWithin(RunLength(startedAt, scheduledEnd)))
+            throw new ArgumentException(
+                "Every break must end before the session does.", nameof(breakSchedule));
+
         Status = SessionStatus.Active;
         StartedAt = startedAt;
         EndAt = scheduledEnd ?? startedAt + Duration.Value;
+        _breaks = schedule.Breaks.ToList();
+        // A label only ever describes breaks that exist — a preset that turned out to
+        // have no room for a single break leaves the session honestly labelled as none.
+        BreakPresetName = schedule.IsEmpty ? null : breakPresetName;
         Raise(new SessionStartedEvent(Id, BlockPresetId, Goal.Value, startedAt));
     }
 
+    /// <summary>True while <paramref name="at"/> falls inside one of this running
+    /// session's break slots. The question PolicyEngine asks to decide what a break lifts.</summary>
+    public bool IsOnBreakAt(DateTime at) => CurrentBreakAt(at) is not null;
+
+    /// <summary>The break slot covering <paramref name="at"/>, or null while working or
+    /// when the session isn't running.</summary>
+    public SessionBreak? CurrentBreakAt(DateTime at) =>
+        Status == SessionStatus.Active && StartedAt is { } startedAt
+            ? BreakSchedule.BreakAt(at - startedAt)
+            : null;
+
+    /// <summary>Every break boundary this session crossed in (from, to] — what the
+    /// clock-watching monitor asks each tick instead of tracking phases itself.</summary>
+    public IReadOnlyList<BreakTransition> BreakTransitionsBetween(DateTime from, DateTime to) =>
+        StartedAt is { } startedAt
+            ? BreakSchedule.TransitionsBetween(from - startedAt, to - startedAt)
+            : [];
+
+    /// <summary>Breaks begun by <paramref name="at"/>.</summary>
+    public int BreaksTakenBy(DateTime at) =>
+        StartedAt is { } startedAt ? BreakSchedule.BreaksStartedBy(at - startedAt) : 0;
+
+    /// <summary>Final break count, once the session has ended; 0 before then.</summary>
+    public int BreaksTaken => EndedAt is { } endedAt ? BreaksTakenBy(endedAt) : 0;
+
     /// <summary>
-    /// Starts a break. breakKind is supplied by the caller (resolved via
-    /// IBreakScheduleCalculator against this session's BreakTimer and Duration) —
-    /// Session never re-derives which kind of break this is itself; it only records
-    /// the answer. Breaks no longer start manually: the only caller is the
-    /// automatic engine that notices a Work phase has elapsed.
+    /// Ends the session. The recorded end is capped at EndAt: a session can never run
+    /// longer than planned, however late its end is noticed (sleep, a restart, a skipped
+    /// clock). The break schedule is trimmed to what actually happened by then.
     /// </summary>
-    public void StartBreak(DateTime breakStartedAt, SessionPhaseKind breakKind)
-    {
-        if (Status != SessionStatus.Active)
-            throw new InvalidOperationException(
-                "Can only take a break during an active session.");
-
-        if (BreakTimer is null)
-            throw new InvalidOperationException(
-                "Cannot start a break — no timer cadence configured.");
-
-        if (breakKind == SessionPhaseKind.Work)
-            throw new ArgumentException(
-                "Break kind must be ShortBreak or LongBreak.", nameof(breakKind));
-
-        Status = SessionStatus.OnBreak;
-        BreakStartedAt = breakStartedAt;
-        CurrentBreakKind = breakKind;
-        BreaksTaken++;
-        Raise(new BreakStartedEvent(Id, BreaksTaken, breakStartedAt));
-    }
-
-    public void ResumeFromBreak(DateTime resumedAt)
-    {
-        if (Status != SessionStatus.OnBreak)
-            throw new InvalidOperationException(
-                "Session is not currently on a break.");
-
-        Status = SessionStatus.Active;
-        BreakStartedAt = null;
-        CurrentBreakKind = null;
-        Raise(new BreakEndedEvent(Id, BreaksTaken, resumedAt));
-    }
-
     public void Complete(DateTime endedAt)
     {
         if (Status == SessionStatus.Completed)
             throw new InvalidOperationException(
                 "Session is already completed.");
 
+        var actualEnd = EndAt is { } plannedEnd && endedAt > plannedEnd ? plannedEnd : endedAt;
+
         Status = SessionStatus.Completed;
-        EndedAt = endedAt;
-        BreakStartedAt = null;
-        Raise(new SessionEndedEvent(Id, endedAt));
+        EndedAt = actualEnd;
+        if (StartedAt is { } startedAt)
+            _breaks = BreakSchedule.TrimTo(actualEnd - startedAt).Breaks.ToList();
+        Raise(new SessionEndedEvent(Id, actualEnd));
     }
 
     public void Miss(DateTime scheduledStart, DateTime scheduledEnd)
@@ -213,11 +226,5 @@ public class Session : AggregateRoot
         if (EndAt is null) return null;
         var remaining = EndAt.Value - asOf;
         return remaining < TimeSpan.Zero ? TimeSpan.Zero : remaining;
-    }
-
-    public void SyncState(int breaksTaken, DateTime? breakStartedAt)
-    {
-        BreaksTaken = breaksTaken;
-        BreakStartedAt = breakStartedAt;
     }
 }

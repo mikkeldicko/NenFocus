@@ -7,7 +7,7 @@ public interface IPolicyEngine
 {
     /// <summary>
     /// contracts is used solely to resolve a Focus Block's PauseEnforcementDuringBreak
-    /// setting when its Session is OnBreak (via PlannedBlock.ContractId) — see
+    /// setting when its Session is inside a break slot at `at` (via PlannedBlock.ContractId) — see
     /// NenContract.PauseEnforcementDuringBreak. A block with no ContractId (an
     /// ordinary block, or a Bonus block whose Start falls inside a contract's date
     /// range without being linked to it) always falls back to the global Settings

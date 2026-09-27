@@ -48,6 +48,46 @@ public class SessionRepositoryTests : SqliteRepositoryTestBase
     }
 
     [Fact]
+    public async Task SaveAsync_BreakScheduleAndLabel_RoundTripThroughTheDatabase()
+    {
+        var session = Session.Create(
+            Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(120)),
+            Guid.NewGuid(), SessionOrigin.Spontaneous);
+        var schedule = new BreakTimer(25, 5, 4, 15).ScheduleFor(TimeSpan.FromMinutes(120));
+        session.Start(new DateTime(2026, 1, 1, 17, 0, 0, DateTimeKind.Utc), breakSchedule: schedule, breakPresetName: "Classic");
+        await CreateRepository().SaveAsync(session);
+        await Context.SaveChangesAsync();
+
+        await using var fresh = CreateFreshContext();
+        var reloaded = await new SessionRepository(fresh).GetByIdAsync(session.Id);
+
+        reloaded!.BreakSchedule.Should().Be(schedule);
+        reloaded.BreakPresetName.Should().Be("Classic");
+    }
+
+    [Fact]
+    public async Task SaveAsync_CompleteTrimsSchedule_StoredBreaksAreReplacedNotAppended()
+    {
+        var startedAt = new DateTime(2026, 1, 1, 17, 0, 0, DateTimeKind.Utc);
+        var session = Session.Create(
+            Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(120)),
+            Guid.NewGuid(), SessionOrigin.Spontaneous);
+        session.Start(startedAt, breakSchedule: new BreakTimer(25, 5, 4, 15).ScheduleFor(TimeSpan.FromMinutes(120)));
+        await CreateRepository().SaveAsync(session);
+        await Context.SaveChangesAsync();
+
+        session.Complete(startedAt.AddMinutes(57)); // mid second break
+        await CreateRepository().SaveAsync(session);
+        await Context.SaveChangesAsync();
+
+        await using var fresh = CreateFreshContext();
+        var reloaded = await new SessionRepository(fresh).GetByIdAsync(session.Id);
+        reloaded!.BreakSchedule.Breaks.Select(b => (b.Start.TotalMinutes, b.End.TotalMinutes))
+            .Should().Equal((25, 30), (55, 57));
+        reloaded.BreaksTaken.Should().Be(2);
+    }
+
+    [Fact]
     public async Task GetActiveAsync_NoActiveSession_ReturnsNull()
     {
         var result = await CreateRepository().GetActiveAsync();

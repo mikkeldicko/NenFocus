@@ -40,7 +40,7 @@ public class NenContract : AggregateRoot
     /// <summary>
     /// Whether a Focus Block committed to this contract (PlannedBlock.ContractId
     /// matches this contract's Id) should stop enforcing while its Session is
-    /// OnBreak. Copied by value from ContractPresetId's preset at Seal, same as
+    /// inside a break slot. Copied by value from ContractPresetId's preset at Seal, same as
     /// every other ContractPreset-sourced field. Resolved live by
     /// IPolicyEngine.ComputeSlice on every tick, never locked in at Seal — so a
     /// later global Settings change is picked up immediately rather than leaving

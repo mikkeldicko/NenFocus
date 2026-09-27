@@ -39,16 +39,8 @@ public sealed class GetActiveSessionQueryHandler
             StartedAt = session.StartedAt ?? _clock.UtcNow,
             EndAt = session.EndAt ?? _clock.UtcNow,
             EndedAt = session.EndedAt,
-            BreaksTaken = session.BreaksTaken,
-            BreakStartedAt = session.BreakStartedAt,
-            CurrentBreakKind = session.CurrentBreakKind,
-            BreakTimer = session.BreakTimer is null ? null : new BreakTimerDto
-            {
-                WorkMinutes = session.BreakTimer.WorkMinutes,
-                ShortBreakMinutes = session.BreakTimer.ShortBreakMinutes,
-                CyclesBeforeLongBreak = session.BreakTimer.CyclesBeforeLongBreak,
-                LongBreakMinutes = session.BreakTimer.LongBreakMinutes
-            }
+            Breaks = SessionDto.MapBreaks(session.BreakSchedule),
+            BreakPresetName = session.BreakPresetName
         };
     }
 }

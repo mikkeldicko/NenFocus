@@ -22,7 +22,7 @@ Before merging any new class or service, ask: *Can a developer understand how to
 **Allowed:**
 - Entities, value objects, domain events, enums, constants
 - Validation in value object constructors
-- State-machine methods on entities (`Start()`, `Complete()`, `StartBreak()`, etc.)
+- State-machine methods on entities (`Start()`, `Complete()`, `Miss()`, etc.)
 
 **Forbidden:**
 - Any reference to infrastructure, persistence, or UI

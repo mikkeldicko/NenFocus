@@ -52,7 +52,7 @@ public partial class HatsuPageViewModel : ViewModelBase
     public bool ShowZeroError => !IsPlannedMode && TotalMinutes == 0;
 
     /// <summary>
-    /// Only presets whose phase timeline for the current duration actually produces
+    /// Only presets whose BreakTimer.ScheduleFor(current duration) actually produces
     /// a real break are offered — see GetAvailableBreakTimerPresetsQuery. Recomputed
     /// whenever the duration changes (Spontaneous mode's Hours/Minutes wheel); a
     /// Planned session's duration never changes mid-Hatsu, so one initial load

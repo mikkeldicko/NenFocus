@@ -274,3 +274,22 @@ Once a gap (or a self-contained half of one) is fully closed, its write-up moves
 
 **Must be closed before:** Nothing — parked until the desktop app is finished. Not interrogated: the architect will run the interrogation personally when the iOS work begins.
 
+\---
+
+### Open Gap P — Break Flexibility (raised 2026-09-27; parked, not interrogated)
+
+**Why it's here:** Gap 63 made a session's breaks a stored `BreakSchedule` (offsets from `StartedAt`) that is the single source of truth, with one rule protecting history: *breaks that have started can never change; only future ones may be added or removed.* Every feature below was named during that interrogation as wanted later. None is designed — each still needs its own Design Gap interrogation — but each was checked to plug into Gap 63's model without reworking it.
+
+**The ideas, and where each plugs in:**
+- **End a break early** — the "Resume Early" button Gap 63 removed (its `ResumeFromBreakCommand` no longer existed). Would be a session method that cuts the in-progress break to end *now*: it records what actually happened, like `Complete`'s trim, so it doesn't break the history rule.
+- **Skip a break** — remove a future slot from the schedule ("I'll keep working"). Same shape as ending early, one step earlier.
+- **Break budget** — e.g. 15 minutes of break for a 2-hour session, taken whenever: "start a break now, 7 minutes" writes a new slot starting now. The budget itself would be a value object chosen at Start alongside the schedule and checked before a slot is added.
+- **Extend the session** — `Session.Extend(newEnd)` moves `EndAt`; existing breaks stay valid because they're offsets from the start. Open question: should a preset add more cadence breaks into the extra time?
+- **Adjust the schedule at Hatsu before starting** — e.g. after a late planned start, "skip my first break". Happens before Start, so it's just another way of producing the `BreakSchedule` the session receives. What a user may change would be limited by Settings, or by the rules of the contract preset the planned block is tied to.
+- **Live Hatsu** — Hatsu updates as time passes: shows the block start and "late", and greys out break presets that no longer fit. ViewModels can't own timers (Forbidden Zone), so it would subscribe to an existing tick service and re-run `GetAvailableBreakTimerPresetsQuery`. Gap 63's "No breaks" fallback (a preset that stopped fitting between Hatsu and Start) stays as the safety net underneath.
+- **Focus-only floor counting** — today a session's whole length, breaks included, counts toward a Nen Contract's Daily Floor (a deliberate choice, kept by Gap 63). An option to count only focus time is straightforward now that breaks are stored data: focus time = run length minus break slots.
+
+**Mechanics any mid-session revision will need:** the revision must republish the session (`ISessionStateService.SetActive`) so `ActiveSessionMonitor` rebuilds its schedule (it already does on every `SessionChanged`), and must call `IEnforcementSynchronizer.SyncAsync` plus notify itself if the boundary it creates is at or before the monitor's last-checked time.
+
+**Must be closed before:** Nothing — parked.
+

@@ -113,22 +113,59 @@ public class StartSessionCommandHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_WithBreakTimerPresetId_SnapshotsBreakTimerOntoSession()
+    public async Task HandleAsync_WithBreakTimerPresetId_StoresTheResultingScheduleAndPresetName()
     {
         var breakTimerPresetId = Guid.NewGuid();
         _breakTimerPresets.GetByIdAsync(breakTimerPresetId, Arg.Any<CancellationToken>())
             .Returns(BreakTimerPreset.Create(breakTimerPresetId, "Classic", new BreakTimer(25, 5, 4, 15)));
-        var command = SpontaneousCommand() with { BreakTimerPresetId = breakTimerPresetId };
+        var command = SpontaneousCommand() with { BreakTimerPresetId = breakTimerPresetId, DurationMinutes = 60 };
+
+        var result = await CreateHandler().HandleAsync(command, CancellationToken.None);
+
+        result.Success.Should().BeTrue();
+        var expected = new BreakTimer(25, 5, 4, 15).ScheduleFor(TimeSpan.FromMinutes(60));
+        await _sessions.Received(1).SaveAsync(
+            Arg.Is<Session>(s => s.BreakSchedule.Equals(expected) && s.BreakPresetName == "Classic"),
+            Arg.Any<CancellationToken>());
+        _sessionState.Received(1).SetActive(Arg.Is<SessionDto>(d => d.Breaks.Count == 1 && d.BreakPresetName == "Classic"));
+    }
+
+    [Fact]
+    public async Task HandleAsync_PresetWithNoRoomForABreak_StartsWithNoBreaksAndNoLabel()
+    {
+        // A preset can stop fitting between Hatsu and Start (the user waited) — the
+        // session still starts, honestly labelled as having no breaks.
+        var breakTimerPresetId = Guid.NewGuid();
+        _breakTimerPresets.GetByIdAsync(breakTimerPresetId, Arg.Any<CancellationToken>())
+            .Returns(BreakTimerPreset.Create(breakTimerPresetId, "Classic", new BreakTimer(25, 5, 4, 15)));
+        var command = SpontaneousCommand() with { BreakTimerPresetId = breakTimerPresetId, DurationMinutes = 29 };
 
         var result = await CreateHandler().HandleAsync(command, CancellationToken.None);
 
         result.Success.Should().BeTrue();
         await _sessions.Received(1).SaveAsync(
-            Arg.Is<Session>(s => s.BreakTimer != null
-                && s.BreakTimer.WorkMinutes == 25
-                && s.BreakTimer.ShortBreakMinutes == 5
-                && s.BreakTimer.CyclesBeforeLongBreak == 4
-                && s.BreakTimer.LongBreakMinutes == 15),
+            Arg.Is<Session>(s => s.BreakSchedule.IsEmpty && s.BreakPresetName == null),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task HandleAsync_PlannedLateStart_BreaksCountFromActualStartNotBlockStart()
+    {
+        // Block 11:50–12:50, Ritual finished at 12:00: the first Classic break is 25
+        // minutes after the session actually started (12:25), not the block (12:15).
+        var blockId = Guid.NewGuid();
+        _plannedBlocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
+            .Returns(FocusBlock.Create(blockId, Guid.NewGuid(), Now.AddMinutes(-10), Now.AddMinutes(50)));
+        var breakTimerPresetId = Guid.NewGuid();
+        _breakTimerPresets.GetByIdAsync(breakTimerPresetId, Arg.Any<CancellationToken>())
+            .Returns(BreakTimerPreset.Create(breakTimerPresetId, "Classic", new BreakTimer(25, 5, 4, 15)));
+        var command = SpontaneousCommand() with { OriginatingBlockId = blockId, BreakTimerPresetId = breakTimerPresetId };
+
+        var result = await CreateHandler().HandleAsync(command, CancellationToken.None);
+
+        result.Success.Should().BeTrue();
+        await _sessions.Received(1).SaveAsync(
+            Arg.Is<Session>(s => s.BreakSchedule.Breaks.Single().Start == TimeSpan.FromMinutes(25)),
             Arg.Any<CancellationToken>());
     }
 

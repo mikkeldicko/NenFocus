@@ -82,18 +82,38 @@ public class EndSessionCommandHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_OnBreak_IsAllowedToEnd()
+    public async Task HandleAsync_DuringABreakSlot_EndsAndRecordsTheBreakCutShort()
     {
-        var onBreakSession = Session.Create(
-            Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(30)),
-            Guid.NewGuid(), SessionOrigin.Spontaneous, breakTimer: new BreakTimer(25, 5, 4, 15));
-        onBreakSession.Start(Now.AddMinutes(-10));
-        onBreakSession.StartBreak(Now.AddMinutes(-2), SessionPhaseKind.ShortBreak);
-        _sessions.GetByIdAsync(onBreakSession.Id, Arg.Any<CancellationToken>()).Returns(onBreakSession);
+        // Started 27 minutes ago with a 25-30 break: ending now falls mid-break.
+        var session = Session.Create(
+            Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(60)),
+            Guid.NewGuid(), SessionOrigin.Spontaneous);
+        session.Start(Now.AddMinutes(-27), breakSchedule: new BreakTimer(25, 5, 4, 15).ScheduleFor(TimeSpan.FromMinutes(60)),
+            breakPresetName: "Classic");
+        _sessions.GetByIdAsync(session.Id, Arg.Any<CancellationToken>()).Returns(session);
 
-        var result = await CreateHandler().HandleAsync(new EndSessionCommand { SessionId = onBreakSession.Id });
+        var result = await CreateHandler().HandleAsync(new EndSessionCommand { SessionId = session.Id });
 
         result.Success.Should().BeTrue();
+        result.PostSession!.BreaksTaken.Should().Be(1);
+        session.BreakSchedule.Breaks.Single().End.Should().Be(TimeSpan.FromMinutes(27));
+    }
+
+    [Fact]
+    public async Task HandleAsync_EndNoticedAfterPlannedEnd_RecordsPlannedEndNotNow()
+    {
+        // Regression (Gap 63): a 30-minute session whose end was only noticed 10 minutes
+        // late (sleep, a restart, a clock jump) used to record 40 minutes.
+        var session = Session.Create(
+            Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(30)),
+            Guid.NewGuid(), SessionOrigin.Spontaneous);
+        session.Start(Now.AddMinutes(-40));
+        _sessions.GetByIdAsync(session.Id, Arg.Any<CancellationToken>()).Returns(session);
+
+        var result = await CreateHandler().HandleAsync(new EndSessionCommand { SessionId = session.Id });
+
+        session.EndedAt.Should().Be(Now.AddMinutes(-10));
+        result.PostSession!.ActualDurationMinutes.Should().Be(30);
     }
 
     [Fact]

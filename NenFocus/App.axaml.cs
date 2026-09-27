@@ -30,19 +30,10 @@ public partial class App : Avalonia.Application
                 {
                     var enforcement = scope.ServiceProvider.GetRequiredService<IEnforcementService>();
                     var sessionState = scope.ServiceProvider.GetRequiredService<ISessionStateService>();
-                    var sessionRepository = scope.ServiceProvider.GetRequiredService<ISessionRepository>();
 
-                    if (sessionState.ActiveSession is { } sessionDto)
-                    {
-                        var session = await sessionRepository.GetByIdAsync(sessionDto.Id);
-                        if (session != null)
-                        {
-                            session.SyncState(sessionDto.BreaksTaken, sessionDto.BreakStartedAt);
-
-                            await sessionRepository.SaveAsync(session);
-                        }
-                    }
-                    else
+                    // A running session needs nothing saved here: its breaks are a stored
+                    // schedule read against the clock, not live state to persist (Gap 63).
+                    if (sessionState.ActiveSession is null)
                     {
                         // Keep enforcement active if a FocusBlock is currently running,
                         // even if the ritual wasn't completed before the app closed.

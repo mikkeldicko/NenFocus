@@ -1,4 +1,5 @@
 using FluentAssertions;
+using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.GetActiveSession;
 using NenFocus.Domain.Entities;
@@ -45,7 +46,7 @@ public class GetActiveSessionQueryHandlerTests
         result.Goal.Should().Be("Deep work");
         result.DurationMinutes.Should().Be(45);
         result.Status.Should().Be(SessionStatus.Active);
-        result.BreakTimer.Should().BeNull();
+        result.Breaks.Should().BeEmpty();
     }
 
     [Fact]
@@ -64,21 +65,22 @@ public class GetActiveSessionQueryHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_WithBreakTimer_MapsToBreakTimerDto()
+    public async Task HandleAsync_WithBreakSchedule_MapsBreaksAndPresetLabel()
     {
         var session = Session.Create(
-            Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(30)),
-            Guid.NewGuid(), SessionOrigin.Spontaneous, breakTimer: new BreakTimer(25, 5, 4, 15));
-        session.Start(DateTime.UtcNow);
+            Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(60)),
+            Guid.NewGuid(), SessionOrigin.Spontaneous);
+        session.Start(DateTime.UtcNow, breakSchedule: new BreakTimer(25, 5, 4, 15).ScheduleFor(TimeSpan.FromMinutes(60)),
+            breakPresetName: "Classic");
         _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns(session);
         _presets.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((BlockPreset?)null);
 
         var result = await CreateHandler().HandleAsync(new GetActiveSessionQuery());
 
-        result!.BreakTimer.Should().NotBeNull();
-        result.BreakTimer!.WorkMinutes.Should().Be(25);
-        result.BreakTimer.ShortBreakMinutes.Should().Be(5);
-        result.BreakTimer.CyclesBeforeLongBreak.Should().Be(4);
-        result.BreakTimer.LongBreakMinutes.Should().Be(15);
+        result!.BreakPresetName.Should().Be("Classic");
+        result.Breaks.Should().ContainSingle().Which.Should().Be(new SessionBreakDto
+        {
+            Kind = SessionPhaseKind.ShortBreak, Start = TimeSpan.FromMinutes(25), End = TimeSpan.FromMinutes(30)
+        });
     }
 }

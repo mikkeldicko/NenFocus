@@ -318,15 +318,8 @@ namespace NenFocus.Infrastructure.Migrations
                     b.Property<Guid>("BlockPresetId")
                         .HasColumnType("TEXT");
 
-                    b.Property<DateTime?>("BreakStartedAt")
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("BreaksTaken")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER")
-                        .HasDefaultValue(0);
-
-                    b.Property<string>("CurrentBreakKind")
+                    b.Property<string>("BreakPresetName")
+                        .HasMaxLength(100)
                         .HasColumnType("TEXT");
 
                     b.Property<long>("Duration")
@@ -631,36 +624,36 @@ namespace NenFocus.Infrastructure.Migrations
 
             modelBuilder.Entity("NenFocus.Domain.Entities.Session", b =>
                 {
-                    b.OwnsOne("NenFocus.Domain.ValueObjects.BreakTimer", "BreakTimer", b1 =>
+                    b.OwnsMany("NenFocus.Domain.ValueObjects.SessionBreak", "_breaks", b1 =>
                         {
+                            b1.Property<int>("Id")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("INTEGER");
+
+                            b1.Property<TimeSpan>("End")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<string>("Kind")
+                                .IsRequired()
+                                .HasColumnType("TEXT");
+
                             b1.Property<Guid>("SessionId")
                                 .HasColumnType("TEXT");
 
-                            b1.Property<int>("CyclesBeforeLongBreak")
-                                .HasColumnType("INTEGER")
-                                .HasColumnName("TimerCyclesBeforeLongBreak");
+                            b1.Property<TimeSpan>("Start")
+                                .HasColumnType("TEXT");
 
-                            b1.Property<int>("LongBreakMinutes")
-                                .HasColumnType("INTEGER")
-                                .HasColumnName("TimerLongBreakMinutes");
+                            b1.HasKey("Id");
 
-                            b1.Property<int>("ShortBreakMinutes")
-                                .HasColumnType("INTEGER")
-                                .HasColumnName("TimerShortBreakMinutes");
+                            b1.HasIndex("SessionId");
 
-                            b1.Property<int>("WorkMinutes")
-                                .HasColumnType("INTEGER")
-                                .HasColumnName("TimerWorkMinutes");
-
-                            b1.HasKey("SessionId");
-
-                            b1.ToTable("Sessions");
+                            b1.ToTable("SessionBreaks", (string)null);
 
                             b1.WithOwner()
                                 .HasForeignKey("SessionId");
                         });
 
-                    b.Navigation("BreakTimer");
+                    b.Navigation("_breaks");
                 });
 #pragma warning restore 612, 618
         }

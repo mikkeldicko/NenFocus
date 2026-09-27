@@ -10,9 +10,9 @@ public sealed record StartSessionCommand : ICommand<StartSessionResult>
 
     /// <summary>
     /// Null means "No timer" — the session runs with no breaks at all. The handler
-    /// loads the BreakTimerPreset and snapshots its BreakTimer onto the Session by
-    /// value; nothing downstream holds a live
-    /// reference back to this id.
+    /// lays the preset's BreakTimer over the session's run to produce the concrete
+    /// BreakSchedule the Session stores (plus a snapshot of the preset's name);
+    /// nothing downstream holds a live reference back to this id (Gap 63).
     /// </summary>
     public Guid? BreakTimerPresetId { get; init; }
     public Guid? OriginatingBlockId { get; init; }

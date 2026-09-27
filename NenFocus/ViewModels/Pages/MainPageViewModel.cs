@@ -4,7 +4,6 @@ using CommunityToolkit.Mvvm.Input;
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.UseCases.Sessions.EndSession;
-using NenFocus.Application.UseCases.Sessions.ResumeFromBreak;
 using NenFocus.Domain.Enums;
 using NenFocus.ViewModels.Components;
 using System;
@@ -57,7 +56,7 @@ public partial class MainPageViewModel : ViewModelBase
     private bool _isRitualBannerVisible;
 
     /// <summary>Ready-to-bind marker positions for the session progress bar — see
-    /// BreakMarkerDto. Empty when the session has no BreakTimer ("No timer").</summary>
+    /// BreakMarkerDto. Empty for "No timer".</summary>
     [ObservableProperty]
     private IReadOnlyList<BreakMarkerDto> _breakMarkers = [];
 
@@ -123,6 +122,8 @@ public partial class MainPageViewModel : ViewModelBase
             SessionTimeRemaining = _monitor.SessionTimeRemaining;
             SessionProgress = _monitor.SessionProgress;
             BreakTimeRemaining = _monitor.BreakTimeRemaining;
+            IsOnBreak = _monitor.IsOnBreak;
+            BreaksTaken = _monitor.BreaksTaken;
             BreakProgress = _monitor.BreakProgress;
             BreakMarkers = _monitor.BreakMarkers;
         });
@@ -143,8 +144,8 @@ public partial class MainPageViewModel : ViewModelBase
         SessionGoal = session.Goal;
         ActivePresetName = session.PresetName;
         HasActiveSession = true;
-        BreaksTaken = session.BreaksTaken;
-        IsOnBreak = session.Status == SessionStatus.OnBreak;
+        BreaksTaken = _monitor.BreaksTaken;
+        IsOnBreak = _monitor.IsOnBreak;
         BreakMarkers = _monitor.BreakMarkers;
     }
 
@@ -178,14 +179,5 @@ public partial class MainPageViewModel : ViewModelBase
     }
 
     private bool CanStartRitual() => !HasActiveSession;
-
-    // Manual break-taking is retired — breaks now start automatically, driven by
-    // ActiveSessionMonitor walking the session's own phase timeline.
-
-    [RelayCommand]
-    private async Task ResumeFromBreak()
-    {
-        await _commandDispatcher.DispatchAsync(new ResumeFromBreakCommand { SessionId = _activeSessionId });
-    }
 }
 

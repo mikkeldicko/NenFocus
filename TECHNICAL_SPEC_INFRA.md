@@ -9,7 +9,7 @@ Tactical implementation details, current build state, and platform-specific gotc
 ### Done
 
 - Full domain model (Session, BlockPreset, FocusBlock, BackgroundBlock, all value objects and events)
-- `Session` entity has `Rating (int?)` and `Reflection (string?)` properties; `ResumeFromBreak()`, `SetReflection(string, int)`, and `Complete()` methods
+- (break methods superseded by Gap 63 — breaks are a stored schedule, not state) `Session` entity has `Rating (int?)` and `Reflection (string?)` properties; `ResumeFromBreak()`, `SetReflection(string, int)`, and `Complete()` methods
 - All Application commands, queries, validators, and event handlers — fully refactored to Vertical Slice Architecture (feature folders)
 - `SystemSafetyConstants.UnkillableProcesses` safety shield prevents blocking critical Windows processes (validated in command validators via normalised process name)
 - EF Core + SQLite persistence (all three repositories); `BlockedAttemptTracker` uses SQLite with a 2-second debounce threshold for accurate attempt counting
@@ -20,7 +20,7 @@ Tactical implementation details, current build state, and platform-specific gotc
 - Registry enforcement: disables DNS-over-HTTPS (DoH) in Chrome, Edge, and Brave via `BuiltInDnsClientEnabled = 0` registry key, preventing browsers from bypassing the hosts file
 - Admin manifest (`requireAdministrator`): required for hosts file writes, registry key edits, and high-privilege process tree termination
 - Windows toast notifications. `INotificationService.ScheduleBreakReminderAsync` (toast-only reminders) is implemented in `WindowsNotificationService` but unused — superseded by BreakTimerPreset's fully automatic breaks (see `DESIGN_GAP_HISTORY.md` Gap 61), which closed the former Open Gap I via a different path than wiring this up. Toast failures are logged via `ILogger` as warnings (VS Output / Event Viewer), never thrown. Gotcha: Windows Do Not Disturb suppresses every toast without any error — check it first when "no notification appears."
-- Session rehydration on startup: `SessionStateService.InitializeAsync()` queries DB for active/on-break sessions and maps domain entities to `SessionDto`; `SessionStateService` injects `IBlockPresetRepository` to resolve the real preset name from its ID
+- Session rehydration on startup: `SessionStateService.InitializeAsync()` queries DB for the active session and maps domain entities to `SessionDto`; `SessionStateService` injects `IBlockPresetRepository` to resolve the real preset name from its ID
 - Session persistence across app restarts (`%AppData%\NenFocus\active_session.json`)
 - Post-session reflection: `SaveReflectionCommand` persists `Rating (1–5)` and `Reflection (string)` to the `Session` entity
 - Distraction logging: app kill attempts tracked via `IBlockedAttemptTracker.RecordBlocked`; website block attempts tracked via `RecordWebBlocked(domain)`; `EndSessionCommandHandler` groups logs by `ResourceName` and `AttemptType`, serialises to a `historyData` JSON field on the session
@@ -28,15 +28,15 @@ Tactical implementation details, current build state, and platform-specific gotc
 - `PolicyEngine` / `IPolicyEngine` (`NenFocus.Domain/Services/`): stateless Domain service that accepts raw `BlockPreset`, `Session`, and `PlannedBlock` collections and computes the `ActivePolicySlice`. All merge logic (app union, allowlist/blocklist precedence, what a break lifts) is encapsulated here. `ComputeActivePolicySliceQueryHandler` is now a pure orchestrator — it fetches, then delegates.
 - **Blocklist mode fixed**: `PolicyEngine` correctly populates `BlockedSites` in Blocklist mode (was always an empty set in the old `ComputeActivePolicySliceQueryHandler`, causing the browser extension to block nothing)
 - Ritual wizard (Ten → Zetsu → Ren → Hatsu) — fully wired end-to-end
-- Main page: active session panel, countdown timer, progress bar (with break markers — see Gap 61 below), "USE NEN" button, end session, resume from break early (breaks themselves start and end automatically now, not manually — see Gap 61)
+- Main page: active session panel, countdown timer, progress bar (with break markers — see Gap 61 below), "USE NEN" button, end session (breaks follow the session's own `BreakSchedule` with no buttons — Gap 63; end-break-early is parked in Open Gap P)
 - Shell navigation structure (sidebar with nav items, page switching)
 - Block Presets page: full CRUD (create, edit, delete, duplicate), tabbed modal (Websites / Apps tabs), file picker for app selection (opens to `C:\Program Files`), click-to-edit preset cards
 - App blocking works correctly — `NormalizeProcessName` strips only `.exe` suffix (not `Path.GetFileNameWithoutExtension`) so dotted names like `kcc_10.0.1` are preserved
 - **Enforcement gap fixed** (superseded by Gap 62 — the handler now just calls `IEnforcementSynchronizer.SyncAsync`): `SessionStartedEventHandler` now injects `IEnforcementService` and `IQueryHandler<ComputeActivePolicySliceQuery, ActivePolicySlice>`; computes the current policy slice (a Domain Value Object) and calls `ApplyPolicyAsync` before sending the session-start notification. Enforcement is event-driven: `StartSessionCommandHandler` publishes `SessionStartedEvent` → `InProcessDomainEventPublisher` → `SessionStartedEventHandler` applies the policy
 - Planner use cases fully refactored to Vertical Slice Architecture: `CreatePlannedBlock/`, `UpdatePlannedBlock/`, `DeletePlannedBlock/` — each with Command, Result, CommandHandler, Validator; `DeletePlannedBlock` returns `DeletePlannedBlockResult` (not `bool`); handlers apply `.ToUniversalTime()` before any DB/overlap logic
-- `IActiveSessionMonitor` / `ActiveSessionMonitor`: singleton countdown engine that owns the `System.Timers.Timer`, subscribes to `ISessionStateService.SessionChanged`, auto-ends sessions and auto-resumes breaks by calling command handlers via `IServiceScopeFactory`
-- `StartBreakCommandHandler` and `ResumeFromBreakCommandHandler` now call `_sessionState.SetActive(current with { ... })` after saving — break UI state propagates correctly
-- `SessionStateService.MapToDto` maps `BreakTimer` domain value object to `BreakTimerDto` (was previously always null on DB restore; `BreakTimer` replaced the retired `BreakSettings`, see Gap 61)
+- (break half superseded by Gap 63 — the monitor now only reads the session's `BreakSchedule`) `IActiveSessionMonitor` / `ActiveSessionMonitor`: singleton countdown engine that owns the `System.Timers.Timer`, subscribes to `ISessionStateService.SessionChanged`, auto-ends sessions and auto-resumes breaks by calling command handlers via `IServiceScopeFactory`
+- (superseded by Gap 63 — both commands deleted) `StartBreakCommandHandler` and `ResumeFromBreakCommandHandler` now call `_sessionState.SetActive(current with { ... })` after saving — break UI state propagates correctly
+- (superseded by Gap 63 — now maps the session's `BreakSchedule`) `SessionStateService.MapToDto` maps `BreakTimer` domain value object to `BreakTimerDto` (was previously always null on DB restore; `BreakTimer` replaced the retired `BreakSettings`, see Gap 61)
 - BreakTimerPreset (Pomodoro-style timer presets: Classic/Deep Work/Flow, cycles + long break, automatic work/break transitions, progress-bar break markers, optional enforcement pause during a break) — see `DESIGN_GAP_HISTORY.md` Gap 61. No Settings-page CRUD UI yet.
 - `Session` entity stores `TemporaryBlockedApps` and `TemporaryBlockedSites` (`IReadOnlyList<string>`, JSON-serialised to TEXT columns via EF Core value converter); `PolicyEngine.ComputeSlice()` unions these into every policy computation so session-level Ren page additions are enforced immediately. Persisted to the DB so Insights can display per-session temporary additions alongside the base preset
 - `StartSessionCommandHandler` now fetches `PresetName` from `IBlockPresetRepository` and includes it in the `SessionDto` passed to `ISessionStateService.SetActive`; preset name is no longer blank on the Main page after session start
@@ -112,6 +112,7 @@ Tactical implementation details, current build state, and platform-specific gotc
 - **Open Gap L fully closed** (2026-09-08) — see `DESIGN_GAP_HISTORY.md` Gap 59.
 - **Multi-contract weeks fixed; Planner banner gains a contract switcher** (2026-09-06) — see `DESIGN_GAP_HISTORY.md` Gap 55.
 - **Enforcement Synchronizer; breaks and session end no longer drop all blocking; Ritual question moved out of the Policy Slice** (2026-09-25) — see `DESIGN_GAP_HISTORY.md` Gap 62.
+- **Time-driven breaks: a session owns its `BreakSchedule`; `OnBreak`, `StartBreak`/`ResumeFromBreak`, the break events and `IBreakScheduleCalculator` removed; session end capped at its planned end** (2026-09-27) — see `DESIGN_GAP_HISTORY.md` Gap 63. Gotcha: `Session`'s breaks are an EF `OwnsMany` on the private `_breaks` field (table `SessionBreaks`); `Session.BreakSchedule`/`BreaksTaken` are computed and explicitly `Ignore`d.
 
 ### Not Yet Built
 

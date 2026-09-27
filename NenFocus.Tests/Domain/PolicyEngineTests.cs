@@ -331,20 +331,28 @@ public class PolicyEngineTests
         sealedAt: At,
         pauseEnforcementDuringBreak: pauseEnforcementDuringBreak);
 
+    // A planned session that started 26 minutes before `At`, with a 25-30 minute break
+    // slot — so `At` itself falls inside the break (Gap 63: a break is read off the
+    // schedule against the clock, never a status the session is put into).
+    private static Session StartPlannedSessionInsideBreakAt(FocusBlock block, Guid presetId)
+    {
+        var session = Session.Create(
+            Guid.NewGuid(), new SessionGoal("Focus"), new SessionDuration(TimeSpan.FromHours(1)),
+            presetId, SessionOrigin.Planned, originatingBlockId: block.Id);
+        session.Start(At.AddMinutes(-26), block.End, new BreakSchedule([
+            new SessionBreak(SessionPhaseKind.ShortBreak, TimeSpan.FromMinutes(25), TimeSpan.FromMinutes(30))]));
+        return session;
+    }
+
     [Fact]
-    public void ComputeSlice_PlannedSessionOnBreak_NoContract_PresetExcludedFromBlockedApps()
+    public void ComputeSlice_PlannedSessionInBreakSlot_NoContract_PresetExcludedFromBlockedApps()
     {
         // Global Settings default is hardcoded permissive (pausing allowed) until
         // Settings actually exists — with no contract governing this block, that
         // default applies and the block's own preset stops enforcing during the break.
         var preset = CreatePreset(WebsiteFilterType.Blocklist, apps: ["chrome.exe"]);
-        var block = FocusBlock.Create(Guid.NewGuid(), preset.Id, At, At.AddHours(1));
-        var session = Session.Create(
-            Guid.NewGuid(), new SessionGoal("Focus"), new SessionDuration(TimeSpan.FromMinutes(30)),
-            preset.Id, SessionOrigin.Planned, originatingBlockId: block.Id,
-            breakTimer: new BreakTimer(25, 5, 4, 15));
-        session.Start(At);
-        session.StartBreak(At, SessionPhaseKind.ShortBreak);
+        var block = FocusBlock.Create(Guid.NewGuid(), preset.Id, At.AddMinutes(-26), At.AddHours(1));
+        var session = StartPlannedSessionInsideBreakAt(block, preset.Id);
 
         var slice = _engine.ComputeSlice(At, [preset], [session], [block]);
 
@@ -352,21 +360,28 @@ public class PolicyEngineTests
     }
 
     [Fact]
-    public void ComputeSlice_PlannedSessionOnBreak_ContractForbidsPause_PresetStaysBlocked()
+    public void ComputeSlice_SameSessionOnceBreakSlotEnds_PresetBlockedAgain_WithNoStateChange()
+    {
+        var preset = CreatePreset(WebsiteFilterType.Blocklist, apps: ["chrome.exe"]);
+        var block = FocusBlock.Create(Guid.NewGuid(), preset.Id, At.AddMinutes(-26), At.AddHours(1));
+        var session = StartPlannedSessionInsideBreakAt(block, preset.Id);
+
+        var slice = _engine.ComputeSlice(At.AddMinutes(5), [preset], [session], [block]);
+
+        slice.BlockedApps.Should().BeEquivalentTo(["chrome"]);
+    }
+
+    [Fact]
+    public void ComputeSlice_PlannedSessionInBreakSlot_ContractForbidsPause_PresetStaysBlocked()
     {
         // A sealed contract can only ever narrow the permissive default toward
         // stricter — PauseEnforcementDuringBreak: false means enforcement never lifts
         // for this block's breaks, regardless of the (not-yet-real) Settings default.
         var preset = CreatePreset(WebsiteFilterType.Blocklist, apps: ["chrome.exe"]);
-        var block = FocusBlock.Create(Guid.NewGuid(), preset.Id, At, At.AddHours(1));
+        var block = FocusBlock.Create(Guid.NewGuid(), preset.Id, At.AddMinutes(-26), At.AddHours(1));
         var contract = CreateContract(pauseEnforcementDuringBreak: false);
         block.AssignContract(contract.Id);
-        var session = Session.Create(
-            Guid.NewGuid(), new SessionGoal("Focus"), new SessionDuration(TimeSpan.FromMinutes(30)),
-            preset.Id, SessionOrigin.Planned, originatingBlockId: block.Id,
-            breakTimer: new BreakTimer(25, 5, 4, 15));
-        session.Start(At);
-        session.StartBreak(At, SessionPhaseKind.ShortBreak);
+        var session = StartPlannedSessionInsideBreakAt(block, preset.Id);
 
         var slice = _engine.ComputeSlice(At, [preset], [session], [block], [contract]);
 
@@ -374,21 +389,16 @@ public class PolicyEngineTests
     }
 
     [Fact]
-    public void ComputeSlice_SessionOnBreak_UnrelatedBackgroundBlockStaysBlocked()
+    public void ComputeSlice_SessionInBreakSlot_UnrelatedBackgroundBlockStaysBlocked()
     {
         // Pausing only ever affects the specific block/session whose break is in
         // progress — an unrelated, merely co-occurring Background Block must never be
         // swept into the same exclusion.
         var focusPreset = CreatePreset(WebsiteFilterType.Blocklist, apps: ["chrome.exe"]);
         var backgroundPreset = CreatePreset(WebsiteFilterType.Blocklist, apps: ["spotify.exe"], type: BlockPresetType.Background);
-        var focusBlock = FocusBlock.Create(Guid.NewGuid(), focusPreset.Id, At, At.AddHours(1));
+        var focusBlock = FocusBlock.Create(Guid.NewGuid(), focusPreset.Id, At.AddMinutes(-26), At.AddHours(1));
         var backgroundBlock = BackgroundBlock.Create(Guid.NewGuid(), backgroundPreset.Id, At, At.AddHours(1));
-        var session = Session.Create(
-            Guid.NewGuid(), new SessionGoal("Focus"), new SessionDuration(TimeSpan.FromMinutes(30)),
-            focusPreset.Id, SessionOrigin.Planned, originatingBlockId: focusBlock.Id,
-            breakTimer: new BreakTimer(25, 5, 4, 15));
-        session.Start(At);
-        session.StartBreak(At, SessionPhaseKind.ShortBreak);
+        var session = StartPlannedSessionInsideBreakAt(focusBlock, focusPreset.Id);
 
         var slice = _engine.ComputeSlice(At, [focusPreset, backgroundPreset], [session], [focusBlock, backgroundBlock]);
 

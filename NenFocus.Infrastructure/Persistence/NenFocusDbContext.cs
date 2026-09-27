@@ -120,10 +120,6 @@ public class NenFocusDbContext : DbContext
             entity.Property(s => s.StartedAt);
             entity.Property(s => s.EndAt);
             entity.Property(s => s.EndedAt);
-            entity.Property(s => s.BreaksTaken)
-                .IsRequired()
-                .HasDefaultValue(0);
-            entity.Property(s => s.BreakStartedAt);
             entity.Property(s => s.Reflection)
                 .HasMaxLength(2000);
 
@@ -148,20 +144,27 @@ public class NenFocusDbContext : DbContext
             entity.Property(s => s.BlockPresetId)
                 .IsRequired();
 
-            entity.OwnsOne(s => s.BreakTimer, t =>
+            // The session's BreakSchedule (Gap 63): one row per break, offsets from
+            // StartedAt. Owned — rows only exist as part of their session, and are
+            // replaced wholesale when Complete trims the schedule.
+            entity.Ignore(s => s.BreakSchedule);
+            entity.Ignore(s => s.BreaksTaken);
+            entity.OwnsMany<SessionBreak>("_breaks", b =>
             {
-                t.Property(x => x.WorkMinutes)
-                    .HasColumnName("TimerWorkMinutes");
-                t.Property(x => x.ShortBreakMinutes)
-                    .HasColumnName("TimerShortBreakMinutes");
-                t.Property(x => x.CyclesBeforeLongBreak)
-                    .HasColumnName("TimerCyclesBeforeLongBreak");
-                t.Property(x => x.LongBreakMinutes)
-                    .HasColumnName("TimerLongBreakMinutes");
+                b.ToTable("SessionBreaks");
+                b.WithOwner().HasForeignKey("SessionId");
+                b.Property<int>("Id");
+                b.HasKey("Id");
+                b.Property(x => x.Kind)
+                    .HasConversion<string>()
+                    .IsRequired();
+                b.Property(x => x.Start).IsRequired();
+                b.Property(x => x.End).IsRequired();
+                b.Ignore(x => x.Length);
             });
 
-            entity.Property(s => s.CurrentBreakKind)
-                .HasConversion<string>();
+            entity.Property(s => s.BreakPresetName)
+                .HasMaxLength(100);
 
             entity.Property(s => s.TemporaryBlockedApps)
                 .HasConversion(

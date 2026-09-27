@@ -58,27 +58,6 @@
 			<Setter Property="Background" Value="#F5F5FA"/>
 		</Style>
 
-		<!-- Break button (gold-tinted) -->
-		<Style Selector="Button.break-action">
-			<Setter Property="Background" Value="Transparent"/>
-			<Setter Property="BorderBrush" Value="#D4C49A"/>
-			<Setter Property="BorderThickness" Value="1"/>
-			<Setter Property="CornerRadius" Value="8"/>
-			<Setter Property="Padding" Value="20,8"/>
-			<Setter Property="Cursor" Value="Hand"/>
-		</Style>
-		<Style Selector="Button.break-action /template/ ContentPresenter">
-			<Setter Property="Background" Value="Transparent"/>
-			<Setter Property="Transitions">
-				<Transitions>
-					<BrushTransition Property="Background" Duration="0:0:0.12"/>
-				</Transitions>
-			</Setter>
-		</Style>
-		<Style Selector="Button.break-action:pointerover /template/ ContentPresenter">
-			<Setter Property="Background" Value="#FDF6E8"/>
-		</Style>
-
 		<!-- Checklist done state -->
 		<Style Selector="TextBlock.done">
 			<Setter Property="TextDecorations" Value="Strikethrough"/>
@@ -250,17 +229,8 @@
                                 HorizontalAlignment="Center"
                                 Spacing="12">
 
-						<!-- Manual break-taking is retired — breaks now start automatically,
-                             driven by the session's own Timer Preset cadence. -->
-
-						<!-- Resume Early (visible when on break) -->
-						<Button Classes="break-action"
-                                Command="{Binding ResumeFromBreakCommand}"
-                                IsVisible="{Binding IsOnBreak}">
-							<TextBlock Text="Resume Early"
-                                       FontSize="12"
-                                       Foreground="#B8922A"/>
-						</Button>
+						<!-- No break buttons: breaks follow the session's own break schedule
+                             (Gap 63). Ending a break early / skipping one is parked in Open Gap P. -->
 
 						<!-- End Session (always visible during active session) -->
 						<Button Classes="session-action"

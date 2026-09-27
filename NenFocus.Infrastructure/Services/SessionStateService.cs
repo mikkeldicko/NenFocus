@@ -138,17 +138,7 @@ public sealed class SessionStateService : ISessionStateService
         Status = s.Status,
         StartedAt = s.StartedAt ?? now,
         EndAt = s.EndAt ?? now,
-        BreaksTaken = s.BreaksTaken,
-        BreakStartedAt = s.BreakStartedAt,
-        CurrentBreakKind = s.CurrentBreakKind,
-        BreakTimer = s.BreakTimer is not null
-            ? new BreakTimerDto
-            {
-                WorkMinutes = s.BreakTimer.WorkMinutes,
-                ShortBreakMinutes = s.BreakTimer.ShortBreakMinutes,
-                CyclesBeforeLongBreak = s.BreakTimer.CyclesBeforeLongBreak,
-                LongBreakMinutes = s.BreakTimer.LongBreakMinutes
-            }
-            : null
+        Breaks = SessionDto.MapBreaks(s.BreakSchedule),
+        BreakPresetName = s.BreakPresetName
     };
 }

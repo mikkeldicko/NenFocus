@@ -8,14 +8,13 @@ namespace NenFocus.Tests.Domain;
 
 public class SessionTests
 {
-    private static Session CreateSpontaneousSession(BreakTimer? breakTimer = null)
+    private static Session CreateSpontaneousSession()
         => Session.Create(
             id: Guid.NewGuid(),
             goal: new SessionGoal("Write tests"),
             duration: new SessionDuration(TimeSpan.FromMinutes(30)),
             blockPresetId: Guid.NewGuid(),
-            origin: SessionOrigin.Spontaneous,
-            breakTimer: breakTimer);
+            origin: SessionOrigin.Spontaneous);
 
     private static Session CreatePlannedSession(Guid originatingBlockId)
         => Session.Create(
@@ -119,136 +118,170 @@ public class SessionTests
         act.Should().Throw<InvalidOperationException>();
     }
 
-    [Fact]
-    public void StartBreak_ActiveWithBreakTimer_MovesToOnBreakAndRaisesEvent()
+    // ── Break schedule (Gap 63) ──────────────────────────────────────────────
+
+    private static readonly DateTime T0 = new(2026, 1, 1, 17, 0, 0, DateTimeKind.Utc);
+
+    private static BreakSchedule OneShortBreak(int startMinute = 25, int endMinute = 30) =>
+        new([new SessionBreak(SessionPhaseKind.ShortBreak,
+            TimeSpan.FromMinutes(startMinute), TimeSpan.FromMinutes(endMinute))]);
+
+    private static Session StartedTwoHourSession(BreakSchedule schedule, string? presetName = "Classic")
     {
-        var session = CreateSpontaneousSession(new BreakTimer(25, 5, 4, 15));
-        session.Start(DateTime.UtcNow);
-        var breakStartedAt = DateTime.UtcNow;
-
-        session.StartBreak(breakStartedAt, SessionPhaseKind.ShortBreak);
-
-        session.Status.Should().Be(SessionStatus.OnBreak);
-        session.BreakStartedAt.Should().Be(breakStartedAt);
-        session.CurrentBreakKind.Should().Be(SessionPhaseKind.ShortBreak);
-        session.BreaksTaken.Should().Be(1);
-
-        var raised = session.DomainEvents.OfType<BreakStartedEvent>().Single();
-        raised.BreakNumber.Should().Be(1);
+        var session = Session.Create(Guid.NewGuid(), new SessionGoal("Write tests"),
+            new SessionDuration(TimeSpan.FromHours(2)), Guid.NewGuid(), SessionOrigin.Spontaneous);
+        session.Start(T0, breakSchedule: schedule, breakPresetName: presetName);
+        return session;
     }
 
     [Fact]
-    public void StartBreak_WithoutBreakTimer_Throws()
+    public void Start_WithoutSchedule_HasNoBreaksAndNoLabel()
     {
         var session = CreateSpontaneousSession();
-        session.Start(DateTime.UtcNow);
 
-        var act = () => session.StartBreak(DateTime.UtcNow, SessionPhaseKind.ShortBreak);
+        session.Start(T0);
 
-        act.Should().Throw<InvalidOperationException>();
+        session.BreakSchedule.Should().Be(BreakSchedule.None);
+        session.BreakPresetName.Should().BeNull();
     }
 
     [Fact]
-    public void StartBreak_WithWorkAsBreakKind_Throws()
+    public void Start_WithSchedule_StoresItAndThePresetLabel()
     {
-        var session = CreateSpontaneousSession(new BreakTimer(25, 5, 4, 15));
-        session.Start(DateTime.UtcNow);
+        var session = StartedTwoHourSession(OneShortBreak());
 
-        var act = () => session.StartBreak(DateTime.UtcNow, SessionPhaseKind.Work);
+        session.BreakSchedule.Should().Be(OneShortBreak());
+        session.BreakPresetName.Should().Be("Classic");
+    }
+
+    [Fact]
+    public void Start_EmptyScheduleWithPresetName_IsLabelledAsNoBreaks()
+    {
+        var session = StartedTwoHourSession(BreakSchedule.None, presetName: "Classic");
+
+        session.BreakPresetName.Should().BeNull();
+    }
+
+    [Fact]
+    public void Start_ScheduleNotFittingTheRun_Throws()
+    {
+        // 30-minute session; a break ending at 30 leaves no work after it.
+        var session = CreateSpontaneousSession();
+
+        var act = () => session.Start(T0, breakSchedule: OneShortBreak(25, 30));
 
         act.Should().Throw<ArgumentException>();
     }
 
     [Fact]
-    public void StartBreak_WhenNotActive_Throws()
+    public void Start_PlannedSession_ChecksScheduleAgainstActualRunNotNominalDuration()
     {
-        var session = CreateSpontaneousSession(new BreakTimer(25, 5, 4, 15));
+        // Planned block is nominally 30 minutes, but the Ritual finished 10 minutes late:
+        // only 20 minutes remain, so a 25-30 break cannot fit.
+        var session = CreatePlannedSession(Guid.NewGuid());
 
-        var act = () => session.StartBreak(DateTime.UtcNow, SessionPhaseKind.ShortBreak);
+        var act = () => session.Start(T0, T0.AddMinutes(20), OneShortBreak(25, 30));
 
-        act.Should().Throw<InvalidOperationException>();
+        act.Should().Throw<ArgumentException>();
     }
 
     [Fact]
-    public void StartBreak_Twice_IncrementsBreaksTaken()
+    public void RunLength_UsesScheduledEndWhenGiven_OtherwiseDuration()
     {
-        var session = CreateSpontaneousSession(new BreakTimer(25, 5, 4, 15));
-        session.Start(DateTime.UtcNow);
+        var session = CreateSpontaneousSession(); // 30 minutes
 
-        session.StartBreak(DateTime.UtcNow, SessionPhaseKind.ShortBreak);
-        session.ResumeFromBreak(DateTime.UtcNow);
-        session.StartBreak(DateTime.UtcNow, SessionPhaseKind.ShortBreak);
+        session.RunLength(T0).Should().Be(TimeSpan.FromMinutes(30));
+        session.RunLength(T0, T0.AddMinutes(12)).Should().Be(TimeSpan.FromMinutes(12));
+    }
 
-        session.BreaksTaken.Should().Be(2);
-        session.DomainEvents.OfType<BreakStartedEvent>().Select(e => e.BreakNumber)
-            .Should().Equal(1, 2);
+    [Theory]
+    [InlineData(24, false)]
+    [InlineData(25, true)]
+    [InlineData(29, true)]
+    [InlineData(30, false)]
+    public void IsOnBreakAt_ReadsTheScheduleAgainstTheClock(int minute, bool onBreak)
+    {
+        var session = StartedTwoHourSession(OneShortBreak());
+
+        session.IsOnBreakAt(T0.AddMinutes(minute)).Should().Be(onBreak);
+        session.Status.Should().Be(SessionStatus.Active, "a break never changes the session's status");
     }
 
     [Fact]
-    public void ResumeFromBreak_WhenOnBreak_ReturnsToActive()
+    public void IsOnBreakAt_OnceCompleted_False()
     {
-        var session = CreateSpontaneousSession(new BreakTimer(25, 5, 4, 15));
-        session.Start(DateTime.UtcNow);
-        session.StartBreak(DateTime.UtcNow, SessionPhaseKind.ShortBreak);
+        var session = StartedTwoHourSession(OneShortBreak());
+        session.Complete(T0.AddMinutes(27));
 
-        session.ResumeFromBreak(DateTime.UtcNow);
-
-        session.Status.Should().Be(SessionStatus.Active);
-        session.BreakStartedAt.Should().BeNull();
+        session.IsOnBreakAt(T0.AddMinutes(27)).Should().BeFalse();
     }
 
     [Fact]
-    public void ResumeFromBreak_WhenOnBreak_RaisesBreakEndedEvent()
+    public void CurrentBreakAt_WakingMidBreak_ReportsTheSameSlotSoRemainingTimeIsCorrect()
     {
-        var session = CreateSpontaneousSession(new BreakTimer(25, 5, 4, 15));
-        session.Start(DateTime.UtcNow);
-        session.StartBreak(DateTime.UtcNow, SessionPhaseKind.ShortBreak);
-        var resumedAt = DateTime.UtcNow.AddMinutes(5);
+        // Laptop closed before 17:25, opened at 17:27 — the break still ends at 17:30.
+        var session = StartedTwoHourSession(OneShortBreak());
 
-        session.ResumeFromBreak(resumedAt);
+        var current = session.CurrentBreakAt(T0.AddMinutes(27));
 
-        var raised = session.DomainEvents.OfType<BreakEndedEvent>().Single();
-        raised.SessionId.Should().Be(session.Id);
-        raised.BreakNumber.Should().Be(1);
-        raised.OccurredAt.Should().Be(resumedAt);
+        current!.End.Should().Be(TimeSpan.FromMinutes(30));
     }
 
     [Fact]
-    public void ResumeFromBreak_WhenNotOnBreak_Throws()
+    public void BreakTransitionsBetween_TranslatesClockTimesToScheduleOffsets()
     {
-        var session = CreateSpontaneousSession();
-        session.Start(DateTime.UtcNow);
+        var session = StartedTwoHourSession(OneShortBreak());
 
-        var act = () => session.ResumeFromBreak(DateTime.UtcNow);
+        session.BreakTransitionsBetween(T0.AddMinutes(24), T0.AddMinutes(26))
+            .Should().ContainSingle().Which.Kind.Should().Be(BreakTransitionKind.Started);
+    }
 
-        act.Should().Throw<InvalidOperationException>();
+    [Fact]
+    public void BreaksTakenBy_CountsBreaksBegunSoFar()
+    {
+        var session = StartedTwoHourSession(OneShortBreak());
+
+        session.BreaksTakenBy(T0.AddMinutes(10)).Should().Be(0);
+        session.BreaksTakenBy(T0.AddMinutes(40)).Should().Be(1);
+    }
+
+    [Fact]
+    public void Complete_AfterPlannedEnd_IsCappedAtEndAt()
+    {
+        // Regression: a session whose end was noticed late recorded 2h31m for a 2h plan.
+        var session = StartedTwoHourSession(BreakSchedule.None);
+
+        session.Complete(T0.AddHours(2).AddMinutes(1));
+
+        session.EndedAt.Should().Be(T0.AddHours(2));
+        session.DomainEvents.OfType<SessionEndedEvent>().Single().EndedAt.Should().Be(T0.AddHours(2));
+    }
+
+    [Fact]
+    public void Complete_MidBreak_TrimsThatBreakToTheActualEnd()
+    {
+        var session = StartedTwoHourSession(new BreakSchedule([
+            new SessionBreak(SessionPhaseKind.ShortBreak, TimeSpan.FromMinutes(25), TimeSpan.FromMinutes(30)),
+            new SessionBreak(SessionPhaseKind.ShortBreak, TimeSpan.FromMinutes(55), TimeSpan.FromMinutes(60))]));
+
+        session.Complete(T0.AddMinutes(27));
+
+        session.BreakSchedule.Should().Be(OneShortBreak(25, 27));
+        session.BreaksTaken.Should().Be(1);
     }
 
     [Fact]
     public void Complete_ActiveSession_CompletesAndRaisesEvent()
     {
-        var session = CreateSpontaneousSession();
-        session.Start(DateTime.UtcNow);
-        var endedAt = DateTime.UtcNow.AddMinutes(30);
+        var session = CreateSpontaneousSession(); // 30 minutes
+        session.Start(T0);
+        var endedAt = T0.AddMinutes(20);
 
         session.Complete(endedAt);
 
         session.Status.Should().Be(SessionStatus.Completed);
         session.EndedAt.Should().Be(endedAt);
         session.DomainEvents.OfType<SessionEndedEvent>().Should().ContainSingle();
-    }
-
-    [Fact]
-    public void Complete_WhileOnBreak_ClearsBreakStartedAt()
-    {
-        var session = CreateSpontaneousSession(new BreakTimer(25, 5, 4, 15));
-        session.Start(DateTime.UtcNow);
-        session.StartBreak(DateTime.UtcNow, SessionPhaseKind.ShortBreak);
-
-        session.Complete(DateTime.UtcNow);
-
-        session.BreakStartedAt.Should().BeNull();
-        session.Status.Should().Be(SessionStatus.Completed);
     }
 
     [Fact]
@@ -508,18 +541,6 @@ public class SessionTests
         var remaining = session.GetRemainingTime(startedAt.AddMinutes(1));
 
         remaining.Should().Be(TimeSpan.FromMinutes(2));
-    }
-
-    [Fact]
-    public void SyncState_OverwritesBreakTrackingFields()
-    {
-        var session = CreateSpontaneousSession();
-        var breakStartedAt = DateTime.UtcNow;
-
-        session.SyncState(breaksTaken: 3, breakStartedAt: breakStartedAt);
-
-        session.BreaksTaken.Should().Be(3);
-        session.BreakStartedAt.Should().Be(breakStartedAt);
     }
 
     [Fact]

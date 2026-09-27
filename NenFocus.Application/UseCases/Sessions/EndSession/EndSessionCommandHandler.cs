@@ -40,8 +40,7 @@ public sealed class EndSessionCommandHandler
         if (session is null)
             return EndSessionResult.Fail($"Session '{command.SessionId}' not found.");
 
-        if (session.Status != SessionStatus.Active
-            && session.Status != SessionStatus.OnBreak)
+        if (session.Status != SessionStatus.Active)
             return EndSessionResult.Fail("Session is not currently active.");
 
         var attempts = await _attemptTracker.GetAttemptsForSessionAsync(session.Id);
@@ -56,8 +55,10 @@ public sealed class EndSessionCommandHandler
             .GroupBy(a => a.ResourceName)
             .ToDictionary(g => g.Key, g => g.Count());
 
-        var endedAt = _clock.UtcNow;
-        session.Complete(endedAt);
+        session.Complete(_clock.UtcNow);
+        // Capped at the planned end by Complete itself (Gap 63). Everything below reads the
+        // recorded end, never "now", so an end noticed late can't leak past the plan.
+        var endedAt = session.EndedAt!.Value;
 
         await _sessions.SaveAsync(session, ct);
 
