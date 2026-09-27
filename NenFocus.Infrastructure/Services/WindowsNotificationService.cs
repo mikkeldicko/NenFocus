@@ -1,4 +1,5 @@
 ﻿using System.Collections.Concurrent;
+using Microsoft.Extensions.Logging;
 using Microsoft.Toolkit.Uwp.Notifications;
 using NenFocus.Application.Interfaces;
 
@@ -7,6 +8,12 @@ namespace NenFocus.Infrastructure.Services;
 public sealed class WindowsNotificationService : INotificationService, IDisposable
 {
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _pendingReminders = new();
+    private readonly ILogger<WindowsNotificationService> _logger;
+
+    public WindowsNotificationService(ILogger<WindowsNotificationService> logger)
+    {
+        _logger = logger;
+    }
 
     public Task NotifyAsync(string title, string body, CancellationToken cancellationToken = default)
     {
@@ -19,7 +26,12 @@ public sealed class WindowsNotificationService : INotificationService, IDisposab
                 .AddText(body)
                 .Show(toast => { toast.ExpirationTime = DateTime.Now.AddDays(1); });
         }
-        catch { /* Toast notifications are best-effort; COM/registration failures must not break callers. */ }
+        catch (Exception ex)
+        {
+            // Toast notifications are best-effort: a COM/registration failure must not break
+            // callers, but it must not vanish silently either.
+            _logger.LogWarning(ex, "Toast notification failed: {Title}", title);
+        }
 
         return Task.CompletedTask;
     }
@@ -86,6 +98,11 @@ public sealed class WindowsNotificationService : INotificationService, IDisposab
         catch (OperationCanceledException)
         {
             // Normal behavior on skip/stop
+        }
+        catch (Exception ex)
+        {
+            // Fire-and-forget task: without this, a toast failure would be an unobserved exception.
+            _logger.LogWarning(ex, "Break reminder toast failed");
         }
         finally
         {

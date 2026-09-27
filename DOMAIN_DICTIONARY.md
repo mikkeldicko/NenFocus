@@ -16,6 +16,8 @@ This file is the canonical reference for every domain concept in NenFocus. It ex
 | **Background Block** | A planned calendar entry that activates enforcement at the designated time without triggering the Ritual |
 | **Policy Slice** | The merged, computed enforcement state at a given instant; represented as `ActivePolicySlice` (Domain Value Object), produced by `PolicyEngine` |
 | **PolicyEngine** | Stateless Domain service (`NenFocus.Domain/Services/`) that computes `ActivePolicySlice` from raw aggregates; sole owner of all merge rules |
+| **Enforcement Synchronizer** | `IEnforcementSynchronizer.SyncAsync(at)` — makes the OS's actual blocking match what `PolicyEngine` says right now; the only thing that turns a Policy Slice into an apply/remove call (Gap 62) |
+| **Awaiting Ritual** | A Focus Block that is active, not cancelled, and whose Ritual isn't done — `FocusBlock.IsAwaitingRitual(at)`; the Ritual is prompted for it only if no session is running (Gap 62) |
 | **Spontaneous Session** | A Session created by completing the Ritual manually from the Main Page; no Block entity exists; `Origin = Spontaneous` |
 | **Planned Session** | A Session created via the Ritual triggered by a scheduled Focus Block; `Origin = Planned` |
 | **SessionOrigin** | Enum (`Spontaneous` \| `Planned`) that tags every Session with how it was initiated |
@@ -88,7 +90,7 @@ NenFocus has five pages accessible via the sidebar:
 
 | Layer | Artifact | Role |
 |-------|----------|------|
-| Domain | `Session` entity (`Entities/Session.cs`) | Owns all state transitions via `Start()`, `StartBreak()`, `ResumeFromBreak()`, `Complete()`, `Miss()`; raises domain events internally; carries `Origin (SessionOrigin)` and `OriginatingBlockId (Guid?)` |
+| Domain | `Session` entity (`Entities/Session.cs`) | Owns all state transitions via `Start()`, `StartBreak()`, `ResumeFromBreak(resumedAt)`, `Complete()`, `Miss()`; raises domain events internally (`BreakStartedEvent`/`BreakEndedEvent` on break start/end); carries `Origin (SessionOrigin)` and `OriginatingBlockId (Guid?)` |
 | Domain | `SessionStatus` enum | Valid states: `NotStarted`, `Active`, `OnBreak`, `Completed`, `Missed` |
 | Domain | `SessionOrigin` enum | Valid values: `Spontaneous`, `Planned`; tags every Session with how it was initiated |
 | Domain | `SessionGoal`, `SessionDuration`, `BreakTimer?` value objects | Immutable configuration attached at creation (`BreakTimer` snapshotted from a `BreakTimerPreset`, see Break Timer Preset below) |
@@ -97,9 +99,10 @@ NenFocus has five pages accessible via the sidebar:
 | Application | `IActiveSessionMonitor` | Singleton countdown engine; owns the timer, exposes `SessionTimeRemaining` / `Progress`, auto-ends via `EndSessionCommandHandler`. Its fire-and-forget auto-end/auto-resume-break calls are wrapped in try/catch + `ILogger` (Gap 31). |
 | Application | `StartSessionCommandHandler` | Creates and starts the session, calls `_sessionState.SetActive()`, dispatches `session.DomainEvents` via `IDomainEventPublisher`. Rejects starting against an originating block via `PlannedBlock.HasEnded(now)`, the one canonical "is this past" definition (Gap 32). |
 | Application | `EndSessionCommandHandler` | Calls `session.Complete()`, saves, dispatches `session.DomainEvents`; enforcement removal and notification are handled by `SessionEndedEventHandler`. If the session ends before its originating `FocusBlock`'s scheduled end, calls `focusBlock.MarkSessionEnded(endedAt)` — a non-destructive stamp; `block.End` is never overwritten (Gap 22). See `FocusBlockOutcome` below for how `SessionEndedAt` feeds classification. |
-| Application | `SessionStartedEventHandler` | Computes policy slice, calls `IEnforcementService.ApplyPolicyAsync`, sends start notification |
-| Application | `SessionEndedEventHandler` | Calls `IEnforcementService.RemoveEnforcementAsync`, cancels reminders, sends end notification |
-| Application | `BreakStartedEventHandler` | Calls `IEnforcementService.RemoveEnforcementAsync` (clears *all* enforcement), sends break notification; the next heartbeat (≤5s) re-applies whatever `PolicyEngine` resolves for the break |
+| Application | `SessionStartedEventHandler` | Calls `IEnforcementSynchronizer.SyncAsync(now)`, sends start notification |
+| Application | `SessionEndedEventHandler` | Clears session state, then `SyncAsync(now)` (never "remove everything" — a still-running Background Block stays enforced), cancels reminders, sends end notification (Gap 62) |
+| Application | `BreakStartedEventHandler` | `SyncAsync(now)` — `PolicyEngine` decides what the break lifts — sends "Break time" notification (Gap 62) |
+| Application | `BreakEndedEventHandler` | `SyncAsync(now)` so blocking returns the instant the break ends, sends "Break over — Back to focus." notification (Gap 62) |
 | UI | `MainPageViewModel` | Observer only — reads from `ISessionStateService` and `IActiveSessionMonitor`, dispatches commands. "Use Nen" button is hidden while a session is active. |
 
 ---
@@ -235,7 +238,7 @@ Three related but independent not-yet-built features — universal per-resource 
 
 **Definition:** The active OS-level mechanisms that prevent access to blocked applications and websites during a Session or Planned Block. Enforcement is a *side-effect* of a Session or Block being active — it is not a domain entity.
 
-**Lifecycle:** Applied when a Session starts or a Planned Block activates → on break, `BreakStartedEventHandler` clears all enforcement and the next heartbeat (≤5s) re-applies `PolicyEngine`'s break-time slice (the on-break session's own preset dropped only if `PauseEnforcementDuringBreak` allows it; every other active block untouched) → removed when session ends or block expires.
+**Lifecycle:** Kept in sync with `PolicyEngine` by `IEnforcementSynchronizer` — instantly on session start/end and break start/end (each event handler calls `SyncAsync`), and every 5s by the heartbeat as a backstop and to catch blocks starting/ending on the clock. On break, only the on-break session's own preset is lifted, and only if `PauseEnforcementDuringBreak` allows it; every other active block is untouched (Gap 62).
 
 **Mechanisms (in order of application):**
 1. **Process kill loop** — kills matching process trees every 2 seconds
@@ -254,11 +257,12 @@ Three related but independent not-yet-built features — universal per-resource 
 
 | Layer | Artifact | Role |
 |-------|----------|------|
-| Application | `IEnforcementService` | Contract for applying and removing enforcement; accepts `ActivePolicySlice` (Domain Value Object) |
+| Application | `IEnforcementService` | Contract for applying and removing enforcement; accepts `ActivePolicySlice` (Domain Value Object). Called only by `EnforcementSynchronizer` (plus `App.axaml.cs`'s shutdown path). |
+| Application | `IEnforcementSynchronizer` / `EnforcementSynchronizer` (`Interfaces/`, `Services/`) | `SyncAsync(DateTime at) -> ActivePolicySlice`: computes the slice via `IQueryDispatcher`, removes enforcement if empty else applies it, as one locked step so a stale slice can never overwrite a fresh one. Singleton. Callers: the heartbeat and the four session/break event handlers (Gap 62). |
 | Domain | `IPolicyEngine` / `PolicyEngine` (`Services/`) | Computes `ActivePolicySlice` from raw domain entities; sole owner of all merge logic |
 | Application | `ComputeActivePolicySliceQueryHandler` | Orchestrates data fetching across three repositories; delegates computation to `IPolicyEngine` |
 | Infrastructure | `WindowsEnforcementService` | Consumes `ActivePolicySlice` directly; owns hosts file, process kill loop, registry writes, local HTTP API (`localhost:5005`) — `/check` (is this domain blocked) and `/report` (records a web blocked attempt when a session is active). |
-| Infrastructure | `ScheduledEnforcementService` | `BackgroundService` heartbeat (5s); calls `ComputeActivePolicySliceQuery`, reads `ActiveBlockPresetType`, calls `IEnforcementService` |
+| Infrastructure | `ScheduledEnforcementService` | `BackgroundService` heartbeat (5s), no rules of its own. Each tick, one `now` for everything: sweeps missed blocks, warns about upcoming ones, calls `SyncAsync(now)`, then `GetFocusBlockAwaitingRitualQuery(now)` → `SetRitualRequired` |
 | Extension | `background.js` | Intercepts browser navigation; queries `/check`; calls `/report` on a real blocked navigation |
 
 ---
@@ -272,7 +276,6 @@ Three related but independent not-yet-built features — universal per-resource 
 - **Websites:** if *any* active preset uses `Allowlist` mode → default-deny, allowed = intersection of all allowlists minus any blocklist entries. Otherwise → block the union of all blocklisted sites. Includes `TemporaryBlockedSites` from the active `Session` entity.
 - **Usage Ceilings *(not yet implemented)*:** In a future slice, `PolicyEngine.ComputeSlice()` will read `DailyUsage` against active `UsageCeiling` entries. Sites and apps whose ceiling has been exhausted for the current period (day or week) will be added to the blocked set — unless a hard-blocking preset already covers them, in which case the hard block wins and no usage accrues. See `ARCHITECT_GOVERNANCE.md` → Open Gap A.
 - An `ActivePolicySlice` is considered "empty" only in `Blocklist` mode with no blocked apps or sites. It is *never* empty in `Allowlist` mode.
-- **`ActiveBlockPresetType`:** set to `BlockPresetType.Focus` if any Focus Block is currently active, `BlockPresetType.Background` if only Background Blocks are active, `null` if enforcement is driven solely by an active Session with no planned block. Ritual always takes precedence over Background when both overlap.
 - **"Active" is re-checked precisely inside `ComputeSlice` itself:** `ComputeActivePolicySliceQueryHandler` over-fetches blocks with a ±1-second buffer around `at` (SQLite datetime-comparison slop), so `PolicyEngine` filters through `PlannedBlock.IsActive(at)` as the final authority (Gap 21, third addendum). `IsActive` is `atTime >= Start && atTime < EffectiveEnd(atTime)`, not raw `End` — a block whose session ended early stops being active when it actually ended (see `MODULE_STANDARDS.md` → Application Handler Forbidden Zone).
 
 **Overlap rules:**
@@ -280,19 +283,19 @@ Three related but independent not-yet-built features — universal per-resource 
 - A Focus Block can overlap with Background Blocks. The net enforcement is the union of all active presets. The Ritual is still triggered.
 - Two Focus Blocks cannot overlap. The Planner prevents scheduling conflicts. A Spontaneous session cannot be started if it would overlap with an upcoming Focus Block.
 
-**Why `ActiveBlockPresetType` matters:** `ScheduledEnforcementService` reads this field each heartbeat cycle. If `ActiveBlockPresetType == Ritual` and no Session is active, it calls `_sessionState.SetRitualRequired(true)` to push the user into the Ritual. If `ActiveBlockPresetType == Background`, enforcement is applied silently with no Ritual prompt. This is the correct application of the Ubiquitous Language principle — the difference between a Focus Block and a Background Block is expressed as a domain enum in the result, not as a boolean flag scattered across callers.
+**The slice answers only "what to block."** Whether a Focus Block should push the user into the Ritual is a separate question with its own home: `FocusBlock.IsAwaitingRitual(at)` + `GetFocusBlockAwaitingRitualQuery` (see Focus Block below). The slice used to carry `ActiveBlockPresetType`/`ActiveFocusBlockId`/`FocusSessionCompleted` for that purpose — removed in Gap 62.
 
-**Source of Truth flow:** `Database → PolicyEngine (Domain) → ActivePolicySlice (VO) → WindowsEnforcementService (OS)`
+**Source of Truth flow:** `Database → PolicyEngine (Domain) → ActivePolicySlice (VO) → EnforcementSynchronizer → WindowsEnforcementService (OS)`
 
 **Technical mapping:**
 
 | Layer | Artifact | Role |
 |-------|----------|------|
-| Domain | `ActivePolicySlice` (`ValueObjects/ActivePolicySlice.cs`) | Immutable Domain Value Object; the canonical enforcement contract. Carries `BlockedApps`, `BlockedSites`, `AllowedSites`, `WebsiteFilterTypeMode`, `ActiveBlockPresetType`, `ActiveSessionId`, `IsEmpty`. |
+| Domain | `ActivePolicySlice` (`ValueObjects/ActivePolicySlice.cs`) | Immutable Domain Value Object; the canonical enforcement contract. Carries `BlockedApps`, `BlockedSites`, `AllowedSites`, `WebsiteFilterTypeMode`, `ActiveSessionId`, `SliceStart`/`SliceEnd`, `IsEmpty` — blocking only, no Ritual fields (Gap 62). |
 | Domain | `IPolicyEngine` / `PolicyEngine` (`Services/`) | Stateless domain service; accepts raw `BlockPreset`, `Session`, and `PlannedBlock` collections and produces `ActivePolicySlice`. Owns all merge rules — no merge logic exists anywhere else. |
 | Application | `ComputeActivePolicySliceQueryHandler` (`Queries/ComputeActivePolicySlice/`) | Pure orchestrator: fetches entities from three repositories, loads `BlockPreset` aggregates, delegates to `IPolicyEngine.ComputeSlice()`. Returns the `ActivePolicySlice` to callers. |
+| Application | `EnforcementSynchronizer` | The only consumer that turns a slice into an apply/remove call |
 | Infrastructure | `WindowsEnforcementService` | Consumes `ActivePolicySlice` directly (no DTO) to drive OS-level mechanisms |
-| Infrastructure | `ScheduledEnforcementService` | Reads `ActiveBlockPresetType` from the `ActivePolicySlice` each heartbeat to decide whether to trigger the Ritual |
 
 ---
 
@@ -300,7 +303,7 @@ Three related but independent not-yet-built features — universal per-resource 
 
 **Definition:** The sole Domain service responsible for computing the `ActivePolicySlice`. It is a stateless, synchronous function: given a point in time, a list of `BlockPreset` aggregates, a list of active `Session` entities, and a list of active `PlannedBlock` entities, it returns the complete enforcement state for that moment.
 
-**Why it is a Domain Service (not an Application service):** Policy merge logic — the rules for unioning blocked apps, resolving allowlist/blocklist precedence, and assigning `ActiveBlockPresetType` — is domain logic. It expresses invariants of the domain ("an allowlist preset beats a blocklist preset", "a Focus Block takes priority over a Background Block") that must be consistent wherever policy is computed. Placing this logic in a Domain service makes it unit-testable without a database and reachable by any future consumer (e.g., a Planner "preview" query).
+**Why it is a Domain Service (not an Application service):** Policy merge logic — the rules for unioning blocked apps, resolving allowlist/blocklist precedence, and deciding what a break lifts — is domain logic. It expresses invariants of the domain ("an allowlist preset beats a blocklist preset", "a contract that forbids pausing keeps blocking through a break") that must be consistent wherever policy is computed. Placing this logic in a Domain service makes it unit-testable without a database and reachable by any future consumer (e.g., a Planner "preview" query).
 
 **Interface contract:**
 ```csharp
@@ -333,7 +336,7 @@ ActivePolicySlice ComputeSlice(
 - `HasEnded(DateTime asOf)` — `End < asOf`; the one canonical "is this past" check.
 - `OverlapsWith(PlannedBlock other)` — returns `true` if the two windows intersect; used by the planner to prevent scheduling conflicts.
 
-**Why it exists:** `IPlannedBlockRepository` returns `IReadOnlyList<PlannedBlock>` so that the enforcement pipeline can work with all scheduled blocks polymorphically without knowing their concrete type. `ComputeActivePolicySliceQueryHandler` then pattern-matches on C# type to derive `ActiveBlockPresetType` — the distinction is made exactly once, in the one place that needs it.
+**Why it exists:** `IPlannedBlockRepository` returns `IReadOnlyList<PlannedBlock>` so that the enforcement pipeline can work with all scheduled blocks polymorphically without knowing their concrete type. Enforcement treats Focus and Background blocks alike; the only place the subtype matters for triggering is the Ritual, where `GetFocusBlockAwaitingRitualQueryHandler` asks only `FocusBlock`s — the distinction is made exactly once, in the one place that needs it.
 
 **Technical mapping:**
 
@@ -341,7 +344,7 @@ ActivePolicySlice ComputeSlice(
 |-------|----------|------|
 | Domain | `PlannedBlock` abstract class (`Entities/PlannedBlock.cs`) | Base for `FocusBlock` and `BackgroundBlock`; exposes `IsActive()` and `OverlapsWith()` |
 | Application | `IPlannedBlockRepository` | Returns `IReadOnlyList<PlannedBlock>`; callers cast to concrete type when subtype behaviour is needed |
-| Application | `ComputeActivePolicySliceQueryHandler` | Pattern-matches on `FocusBlock` / `BackgroundBlock` to set `ActiveBlockPresetType` on the `ActivePolicySlice` value object |
+| Application | `GetFocusBlockAwaitingRitualQueryHandler` | The one place the Focus/Background distinction drives the Ritual: only `FocusBlock`s are asked `IsAwaitingRitual` |
 
 ---
 
@@ -370,8 +373,9 @@ ActivePolicySlice ComputeSlice(
 
 | Layer | Artifact | Role |
 |-------|----------|------|
-| Domain | `FocusBlock` entity (`Entities/FocusBlock.cs`) | Extends `PlannedBlock`; inherits `Id`, `BlockPresetId`, `Start`, `End`, `Title?`; own field: `RitualCompletedAt?`; block preset type derived from C# class (`FocusBlock` → `BlockPresetType.Focus` in query handler — no stored column) |
+| Domain | `FocusBlock` entity (`Entities/FocusBlock.cs`) | Extends `PlannedBlock`; inherits `Id`, `BlockPresetId`, `Start`, `End`, `Title?`; own fields: `RitualCompletedAt?`, `SessionEndedAt?`; block preset type derived from C# class (no stored column). `IsAwaitingRitual(at)` — active, not cancelled, Ritual not done — is the one definition of "should this block prompt the Ritual" (Gap 62) |
 | Application | `IPlannedBlockRepository` | Retrieves blocks for overlap validation and active-state queries |
+| Application | `GetFocusBlockAwaitingRitualQuery` / `Handler` (`Queries/GetFocusBlockAwaitingRitual/`) | Returns the active Focus Block awaiting its Ritual, or `null` — also `null` if any session is running (checked in the database, not in-memory). The heartbeat's only input for `SetRitualRequired` (Gap 62) |
 | Application | `ComputeActivePolicySliceQueryHandler` | Queries blocks covering `DateTime.UtcNow`; merges with active Session |
 | Application | `StartSessionCommandHandler` | Calls `FocusBlock.MarkRitualCompleted(DateTime.UtcNow)` when `OriginatingBlockId` is provided |
 | UI | `PlannerPageViewModel` | Creates, updates, deletes Focus Blocks; drag interactions and form locking implemented |
@@ -562,6 +566,7 @@ ActivePolicySlice ComputeSlice(
 | `IActiveSessionMonitor` | 4 properties + 2 events; hides a background timer, UTC math, break tracking, and command handler invocation |
 | `ISessionStateService` | 3 methods + 2 events; hides DB rehydration, preset name resolution, and broadcast coordination |
 | `IEnforcementService` | 2 methods (`ApplyPolicyAsync`, `RemoveEnforcementAsync`); hides process kill loop, hosts file, DNS flush, registry, HTTP API |
+| `IEnforcementSynchronizer` | 1 method (`SyncAsync(at)`); hides the policy query, the apply-vs-remove choice, and the lock that stops a stale answer overwriting a fresh one |
 
 ---
 

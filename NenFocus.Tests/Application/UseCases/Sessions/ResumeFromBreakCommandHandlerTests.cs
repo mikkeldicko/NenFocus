@@ -4,6 +4,7 @@ using NenFocus.Application.Interfaces;
 using NenFocus.Application.UseCases.Sessions.ResumeFromBreak;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
+using NenFocus.Domain.Events;
 using NenFocus.Domain.ValueObjects;
 using NSubstitute;
 
@@ -15,8 +16,11 @@ public class ResumeFromBreakCommandHandlerTests
 
     private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
     private readonly ISessionStateService _sessionState = Substitute.For<ISessionStateService>();
+    private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
 
-    private ResumeFromBreakCommandHandler CreateHandler() => new(_sessions, _sessionState);
+    public ResumeFromBreakCommandHandlerTests() => _clock.UtcNow.Returns(Now);
+
+    private ResumeFromBreakCommandHandler CreateHandler() => new(_sessions, _sessionState, _clock);
 
     private static Session CreateOnBreakSession()
     {
@@ -79,5 +83,16 @@ public class ResumeFromBreakCommandHandlerTests
 
         result.Success.Should().BeTrue();
         _sessionState.DidNotReceive().SetActive(Arg.Any<SessionDto>());
+    }
+
+    [Fact]
+    public async Task HandleAsync_HappyPath_RaisesBreakEndedAtClockTime()
+    {
+        var session = CreateOnBreakSession();
+        _sessions.GetByIdAsync(session.Id, Arg.Any<CancellationToken>()).Returns(session);
+
+        await CreateHandler().HandleAsync(new ResumeFromBreakCommand { SessionId = session.Id });
+
+        session.DomainEvents.OfType<BreakEndedEvent>().Single().OccurredAt.Should().Be(Now);
     }
 }

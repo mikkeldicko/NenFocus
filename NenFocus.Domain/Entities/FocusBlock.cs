@@ -79,6 +79,15 @@ public sealed class FocusBlock : PlannedBlock
     }
 
     /// <summary>
+    /// True when this block is live at <paramref name="at"/> and its Ritual hasn't been
+    /// completed yet — the one definition of "the user should be pushed into the Ritual
+    /// for this block." Replaces ActivePolicySlice.FocusSessionCompleted, which answered
+    /// the same question indirectly (Gap 62).
+    /// </summary>
+    public bool IsAwaitingRitual(DateTime at)
+        => !CancelledAt.HasValue && RitualCompletedAt is null && IsActive(at);
+
+    /// <summary>
     /// Tail freed once a session ended early; whole window freed once the block is genuinely
     /// Missed (ritual never completed and its scheduled End has already passed) — mirrors
     /// <see cref="Services.IFocusBlockOutcomeClassifier.Classify"/>'s own Missed condition so

@@ -176,7 +176,7 @@ public class SessionTests
         session.Start(DateTime.UtcNow);
 
         session.StartBreak(DateTime.UtcNow, SessionPhaseKind.ShortBreak);
-        session.ResumeFromBreak();
+        session.ResumeFromBreak(DateTime.UtcNow);
         session.StartBreak(DateTime.UtcNow, SessionPhaseKind.ShortBreak);
 
         session.BreaksTaken.Should().Be(2);
@@ -191,10 +191,26 @@ public class SessionTests
         session.Start(DateTime.UtcNow);
         session.StartBreak(DateTime.UtcNow, SessionPhaseKind.ShortBreak);
 
-        session.ResumeFromBreak();
+        session.ResumeFromBreak(DateTime.UtcNow);
 
         session.Status.Should().Be(SessionStatus.Active);
         session.BreakStartedAt.Should().BeNull();
+    }
+
+    [Fact]
+    public void ResumeFromBreak_WhenOnBreak_RaisesBreakEndedEvent()
+    {
+        var session = CreateSpontaneousSession(new BreakTimer(25, 5, 4, 15));
+        session.Start(DateTime.UtcNow);
+        session.StartBreak(DateTime.UtcNow, SessionPhaseKind.ShortBreak);
+        var resumedAt = DateTime.UtcNow.AddMinutes(5);
+
+        session.ResumeFromBreak(resumedAt);
+
+        var raised = session.DomainEvents.OfType<BreakEndedEvent>().Single();
+        raised.SessionId.Should().Be(session.Id);
+        raised.BreakNumber.Should().Be(1);
+        raised.OccurredAt.Should().Be(resumedAt);
     }
 
     [Fact]
@@ -203,7 +219,7 @@ public class SessionTests
         var session = CreateSpontaneousSession();
         session.Start(DateTime.UtcNow);
 
-        var act = () => session.ResumeFromBreak();
+        var act = () => session.ResumeFromBreak(DateTime.UtcNow);
 
         act.Should().Throw<InvalidOperationException>();
     }

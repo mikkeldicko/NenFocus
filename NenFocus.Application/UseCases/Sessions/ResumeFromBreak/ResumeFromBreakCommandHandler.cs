@@ -7,13 +7,16 @@ public sealed class ResumeFromBreakCommandHandler : ICommandHandler<ResumeFromBr
 {
     private readonly ISessionRepository _sessions;
     private readonly ISessionStateService _sessionState;
+    private readonly ISystemClock _clock;
 
     public ResumeFromBreakCommandHandler(
         ISessionRepository sessions,
-        ISessionStateService sessionState)
+        ISessionStateService sessionState,
+        ISystemClock clock)
     {
         _sessions = sessions;
         _sessionState = sessionState;
+        _clock = clock;
     }
 
     public async Task<ResumeFromBreakResult> HandleAsync(ResumeFromBreakCommand command, CancellationToken ct = default)
@@ -24,7 +27,7 @@ public sealed class ResumeFromBreakCommandHandler : ICommandHandler<ResumeFromBr
         if (session.Status != SessionStatus.OnBreak)
             return ResumeFromBreakResult.Fail("Session is not on a break.");
 
-        session.ResumeFromBreak();
+        session.ResumeFromBreak(_clock.UtcNow);
         await _sessions.SaveAsync(session, ct);
 
         var current = _sessionState.ActiveSession;

@@ -58,24 +58,21 @@ public class PolicyEngineTests
         slice.SliceEnd.Should().Be(At.AddMinutes(1));
         slice.BlockedApps.Should().BeEmpty();
         slice.BlockedSites.Should().BeEmpty();
-        slice.ActiveBlockPresetType.Should().BeNull();
         slice.ActiveSessionId.Should().BeNull();
         slice.IsEmpty.Should().BeTrue();
     }
 
     [Fact]
-    public void ComputeSlice_BlockPresentWithNoResolvablePresetOrSession_StillSurfacesActiveBlockPresetType()
+    public void ComputeSlice_BlockPresentWithNoResolvablePresetOrSession_SliceStillCoversTheBlockWindow()
     {
-        // An orphaned block (its preset could not be resolved, e.g. deleted
-        // out from under it) must still be visible via ActiveBlockPresetType so the
-        // Ritual trigger and enforcement window aren't silently dropped — even
-        // though there's no preset data left to populate BlockedApps/Sites.
+        // An orphaned block (its preset could not be resolved, e.g. deleted out from under
+        // it) must not silently drop its enforcement window, even though there's no preset
+        // data left to populate BlockedApps/Sites. (Its Ritual trigger no longer depends on
+        // the slice at all — see GetFocusBlockAwaitingRitualQuery, Gap 62.)
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At, At.AddHours(1));
 
         var slice = _engine.ComputeSlice(At, [], [], [block]);
 
-        slice.ActiveBlockPresetType.Should().Be(BlockPresetType.Focus);
-        slice.ActiveFocusBlockId.Should().Be(block.Id);
         slice.SliceEnd.Should().Be(block.End);
         slice.BlockedApps.Should().BeEmpty();
         slice.BlockedSites.Should().BeEmpty();
@@ -187,42 +184,6 @@ public class PolicyEngineTests
     }
 
     [Fact]
-    public void ComputeSlice_FocusBlockActive_SetsActiveBlockPresetTypeAndFocusBlockId()
-    {
-        var preset = CreatePreset(WebsiteFilterType.Blocklist);
-        var focusBlock = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At, At.AddHours(1));
-
-        var slice = _engine.ComputeSlice(At, [preset], [], [focusBlock]);
-
-        slice.ActiveBlockPresetType.Should().Be(BlockPresetType.Focus);
-        slice.ActiveFocusBlockId.Should().Be(focusBlock.Id);
-    }
-
-    [Fact]
-    public void ComputeSlice_BackgroundBlockActive_SetsActiveBlockPresetTypeButNoFocusBlockId()
-    {
-        var preset = CreatePreset(WebsiteFilterType.Blocklist);
-        var backgroundBlock = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At, At.AddHours(1));
-
-        var slice = _engine.ComputeSlice(At, [preset], [], [backgroundBlock]);
-
-        slice.ActiveBlockPresetType.Should().Be(BlockPresetType.Background);
-        slice.ActiveFocusBlockId.Should().BeNull();
-    }
-
-    [Fact]
-    public void ComputeSlice_FocusAndBackgroundBothActive_FocusTakesPrecedence()
-    {
-        var preset = CreatePreset(WebsiteFilterType.Blocklist);
-        var focusBlock = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At, At.AddHours(1));
-        var backgroundBlock = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At, At.AddHours(1));
-
-        var slice = _engine.ComputeSlice(At, [preset], [], [backgroundBlock, focusBlock]);
-
-        slice.ActiveBlockPresetType.Should().Be(BlockPresetType.Focus);
-    }
-
-    [Fact]
     public void ComputeSlice_NoBlocks_SliceEndIsOneMinuteAfterAt()
     {
         var preset = CreatePreset(WebsiteFilterType.Blocklist);
@@ -242,75 +203,6 @@ public class PolicyEngineTests
         var slice = _engine.ComputeSlice(At, [preset], [], [earlierBlock, laterBlock]);
 
         slice.SliceEnd.Should().Be(At.AddHours(2));
-    }
-
-    [Fact]
-    public void ComputeSlice_FocusBlockRitualCompletedAndNoActiveSessions_FocusSessionCompletedIsTrue()
-    {
-        var preset = CreatePreset(WebsiteFilterType.Blocklist);
-        var focusBlock = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At, At.AddHours(1));
-        focusBlock.MarkRitualCompleted(At);
-
-        var slice = _engine.ComputeSlice(At, [preset], [], [focusBlock]);
-
-        slice.FocusSessionCompleted.Should().BeTrue();
-    }
-
-    [Fact]
-    public void ComputeSlice_FocusBlockRitualCompletedButSessionStillActive_FocusSessionCompletedIsFalse()
-    {
-        var preset = CreatePreset(WebsiteFilterType.Blocklist);
-        var focusBlock = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At, At.AddHours(1));
-        focusBlock.MarkRitualCompleted(At);
-        var session = CreateActiveSession();
-
-        var slice = _engine.ComputeSlice(At, [preset], [session], [focusBlock]);
-
-        slice.FocusSessionCompleted.Should().BeFalse();
-    }
-
-    [Fact]
-    public void ComputeSlice_FocusBlockRitualNotCompleted_FocusSessionCompletedIsFalse()
-    {
-        var preset = CreatePreset(WebsiteFilterType.Blocklist);
-        var focusBlock = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At, At.AddHours(1));
-
-        var slice = _engine.ComputeSlice(At, [preset], [], [focusBlock]);
-
-        slice.FocusSessionCompleted.Should().BeFalse();
-    }
-
-    [Fact]
-    public void ComputeSlice_NewFocusBlockScheduledIntoEarlyEndedBlocksFreedTail_PicksTheNewBlock()
-    {
-        // Reproduces a live bug: a block that ended its session early (freeing the rest of
-        // its raw window for new scheduling, per EffectiveEnd) still counted as "active" per
-        // raw End — so a second Focus block legitimately scheduled into that freed tail
-        // (e.g. a redemption block) never got picked as ActiveFocusBlockId, and its Ritual
-        // never triggered, until the stale block's raw window finally closed.
-        var preset = CreatePreset(WebsiteFilterType.Blocklist);
-        var staleBlock = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.AddHours(-1), At.AddHours(1));
-        staleBlock.MarkRitualCompleted(At.AddHours(-1));
-        staleBlock.MarkSessionEnded(At.AddMinutes(-2)); // ended early, well before its raw End
-        var newBlock = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.AddMinutes(-1), At.AddMinutes(30));
-
-        var slice = _engine.ComputeSlice(At, [preset], [], [staleBlock, newBlock]);
-
-        slice.ActiveFocusBlockId.Should().Be(newBlock.Id);
-        slice.FocusSessionCompleted.Should().BeFalse();
-    }
-
-    [Fact]
-    public void ComputeSlice_CancelledFocusBlock_ExcludedFromActiveBlockPresetType()
-    {
-        var preset = CreatePreset(WebsiteFilterType.Blocklist);
-        var focusBlock = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At, At.AddHours(1));
-        focusBlock.MarkCancelled(At);
-
-        var slice = _engine.ComputeSlice(At, [preset], [], [focusBlock]);
-
-        slice.ActiveBlockPresetType.Should().BeNull();
-        slice.ActiveFocusBlockId.Should().BeNull();
     }
 
     [Fact]
@@ -339,36 +231,18 @@ public class PolicyEngineTests
     }
 
     [Fact]
-    public void ComputeSlice_FocusBlockAlreadyEnded_ExcludedFromActiveFocusBlockId()
+    public void ComputeSlice_FocusBlockAlreadyEnded_ItsPresetIsNotEnforced()
     {
         // ComputeActivePolicySliceQueryHandler's range query uses a ±1s buffer around "now"
         // (SQLite datetime comparison slop), so a block whose End fell in that buffer window
         // could still be handed to ComputeSlice even though it's genuinely past its own
-        // scheduled end. PolicyEngine must be the final, precise authority — a block the
-        // caller's loose query still returned must not become ActiveFocusBlockId (and
-        // trigger the Ritual) once it's actually ended relative to `at`.
-        var preset = CreatePreset(WebsiteFilterType.Blocklist, type: BlockPresetType.Focus);
-        var endedBlock = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.AddHours(-1), At.AddSeconds(-1));
+        // scheduled end. PolicyEngine must be the final, precise authority.
+        var preset = CreatePreset(WebsiteFilterType.Blocklist, sites: ["youtube.com"]);
+        var endedBlock = FocusBlock.Create(Guid.NewGuid(), preset.Id, At.AddHours(-1), At.AddSeconds(-1));
 
         var slice = _engine.ComputeSlice(At, [preset], [], [endedBlock]);
 
-        slice.ActiveFocusBlockId.Should().BeNull();
-        slice.ActiveBlockPresetType.Should().BeNull();
-    }
-
-    [Fact]
-    public void ComputeSlice_CancelledFocusBlockRitualCompleted_FocusSessionCompletedIsFalse()
-    {
-        // A cancelled block is excluded from consideration entirely, so it can no longer
-        // drive FocusSessionCompleted true (there's no "focus block" left to look at).
-        var preset = CreatePreset(WebsiteFilterType.Blocklist);
-        var focusBlock = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At, At.AddHours(1));
-        focusBlock.MarkRitualCompleted(At);
-        focusBlock.MarkCancelled(At);
-
-        var slice = _engine.ComputeSlice(At, [preset], [], [focusBlock]);
-
-        slice.FocusSessionCompleted.Should().BeFalse();
+        slice.IsEmpty.Should().BeTrue();
     }
 
     [Fact]
@@ -379,9 +253,8 @@ public class PolicyEngineTests
         // caller's over-fetched `presets` list regardless, so BlockedSites/BlockedApps kept
         // reapplying every heartbeat tick for as long as `at` was still inside the block's
         // *original* Start/End window — enforcement never actually stopped. Once the block
-        // has dropped out of activeBlocks entirely, FocusSessionCompleted plays no role here
-        // (it only fires for a block still found in activeBlocks) — the slice is simply
-        // empty, same as if there were no block at all.
+        // has dropped out of activeBlocks entirely, the slice is simply empty, same as if
+        // there were no block at all.
         var preset = CreatePreset(WebsiteFilterType.Blocklist, sites: ["facebook.com"]);
         var endedEarlyBlock = FocusBlock.Create(Guid.NewGuid(), preset.Id, At.AddHours(-1), At.AddHours(1));
         endedEarlyBlock.MarkRitualCompleted(At.AddHours(-1));
@@ -391,8 +264,24 @@ public class PolicyEngineTests
 
         slice.BlockedSites.Should().BeEmpty();
         slice.BlockedApps.Should().BeEmpty();
-        slice.ActiveFocusBlockId.Should().BeNull();
         slice.IsEmpty.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ComputeSlice_FocusBlockSessionEndedEarly_CoOccurringBackgroundBlockStaysBlocked()
+    {
+        // Gap 62: FocusBlock.EffectiveEnd alone must drop the finished block's preset, while
+        // a Background Block running alongside keeps enforcing — no special-case flag needed.
+        var focusPreset = CreatePreset(WebsiteFilterType.Blocklist, sites: ["youtube.com"]);
+        var backgroundPreset = CreatePreset(WebsiteFilterType.Blocklist, sites: ["reddit.com"], type: BlockPresetType.Background);
+        var endedEarlyBlock = FocusBlock.Create(Guid.NewGuid(), focusPreset.Id, At.AddHours(-1), At.AddHours(1));
+        endedEarlyBlock.MarkRitualCompleted(At.AddHours(-1));
+        endedEarlyBlock.MarkSessionEnded(At.AddMinutes(-2));
+        var backgroundBlock = BackgroundBlock.Create(Guid.NewGuid(), backgroundPreset.Id, At.AddHours(-1), At.AddHours(1));
+
+        var slice = _engine.ComputeSlice(At, [focusPreset, backgroundPreset], [], [endedEarlyBlock, backgroundBlock]);
+
+        slice.BlockedSites.Should().BeEquivalentTo(["reddit.com"]);
     }
 
     [Fact]

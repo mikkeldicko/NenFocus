@@ -21,7 +21,7 @@ public sealed class PolicyEngine : IPolicyEngine
         // the caller's own block query used to fetch candidates. ComputeActivePolicySliceQueryHandler's
         // range query deliberately over-fetches with a buffer around "now" (SQLite datetime
         // comparison slop) — PolicyEngine is what narrows that down precisely, so a block
-        // whose window has already closed relative to `at` can never become ActiveFocusBlockId,
+        // whose window has already closed relative to `at` can never have its preset enforced,
         // even if the caller's looser query still returned it.
         var activeBlocks = blocks.Where(b => !b.CancelledAt.HasValue && b.IsActive(at)).ToList();
 
@@ -121,19 +121,6 @@ public sealed class PolicyEngine : IPolicyEngine
             blockedSites.UnionWith(tempSites);
         }
 
-        var activePlannedBlock = activeBlocks.OrderByDescending(b => b is FocusBlock).FirstOrDefault();
-        BlockPresetType? activeBlockPresetType = activePlannedBlock switch
-        {
-            FocusBlock => BlockPresetType.Focus,
-            BackgroundBlock => BlockPresetType.Background,
-            _ => null
-        };
-
-        // A Focus Block whose Ritual was completed but whose session has since ended —
-        // the scheduler must not re-apply enforcement or re-trigger the Ritual.
-        var focusBlock = activeBlocks.OfType<FocusBlock>().FirstOrDefault();
-        bool focusSessionCompleted = focusBlock?.RitualCompletedAt != null && !activeSessions.Any();
-
         return new ActivePolicySlice
         {
             ActiveSessionId = activeSessions.FirstOrDefault()?.Id,
@@ -142,10 +129,7 @@ public sealed class PolicyEngine : IPolicyEngine
             WebsiteFilterTypeMode = effectivePolicy,
             AllowedSites = allowedSites,
             BlockedSites = blockedSites,
-            BlockedApps = blockedApps,
-            ActiveBlockPresetType = activeBlockPresetType,
-            ActiveFocusBlockId = focusBlock?.Id,
-            FocusSessionCompleted = focusSessionCompleted
+            BlockedApps = blockedApps
         };
     }
 }

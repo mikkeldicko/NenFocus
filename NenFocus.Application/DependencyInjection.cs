@@ -2,6 +2,7 @@ using System.Reflection;
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
 using NenFocus.Application.Interfaces;
+using NenFocus.Application.Services;
 using NenFocus.Domain.Services;
 
 namespace NenFocus.Application;
@@ -29,6 +30,12 @@ public static class DependencyInjection
         services.AddScoped<IPlannedFocusHoursCalculator, PlannedFocusHoursCalculator>();
         services.AddScoped<IFocusBlockOutcomeClassifier, FocusBlockOutcomeClassifier>();
         services.AddScoped<IContractBlockBatchPreparer, ContractBlockBatchPreparer>();
+
+        // Singleton: its lock must be shared by every caller (the heartbeat and every event
+        // handler) to stop a stale sync overwriting a fresh one. Safe as a singleton because
+        // it reaches the database only through IQueryDispatcher, which opens a fresh scope
+        // per query (Gap 40), and IEnforcementService is itself a singleton.
+        services.AddSingleton<IEnforcementSynchronizer, EnforcementSynchronizer>();
 
         return services;
     }

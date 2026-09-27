@@ -76,13 +76,13 @@ Dependencies only flow inward: UI → Application ← Infrastructure → Domain.
 
 **Key patterns:**
 
-* **CQRS**: `ICommandHandler<TCommand, TResult>` / `IQueryHandler<TQuery, TResult>` — all mutations are commands, all reads are queries. No service classes that do both.
+* **CQRS**: `ICommandHandler<TCommand, TResult>` / `IQueryHandler<TQuery, TResult>` — all mutations are commands, all reads are queries. No service classes that do both. **Exception:** an Application service that only coordinates a Domain decision into an outbound port — it reads the decision internally and acts on it, never serving reads to the UI — is allowed (e.g. `IEnforcementSynchronizer`, Gap 62). The rule forbids services that mix UI-facing reads with writes.
 * **Repository pattern**: interfaces in Application, EF Core implementations in Infrastructure.
 * **Domain events**: raised inside entities/aggregates, published via `IInProcessDomainEventPublisher`, handled by Application-layer event handlers. Commands do not directly call enforcement or notifications — event handlers do.
 * **MVVM**: CommunityToolkit.Mvvm (`ObservableObject`, `RelayCommand`). ViewModels never reference Views.
 * **Value objects**: `record` types with validation in the constructor — `SessionGoal`, `SessionDuration`, `BreakTimer`, `BlockedApp`, `BlockedSite`.
 * **Vertical Slice Architecture**: Every use case lives in its own feature folder (e.g., `UseCases/Sessions/StartSession/`) containing exactly four files: `Command`, `CommandHandler`, `Result`, `Validator`. Validators are auto-registered via `AddValidatorsFromAssembly`.
-* **Enforcement pipeline**: `ScheduledEnforcementService` (heartbeat, 5s interval) → `ComputeActivePolicySliceQueryHandler` (aggregates PlannedBlocks + active Sessions) → `WindowsEnforcementService` (kills processes, rewrites hosts file, exposes local HTTP API).
+* **Enforcement pipeline**: `ScheduledEnforcementService` (heartbeat, 5s interval) and the session/break event handlers → `IEnforcementSynchronizer` (sole caller that turns policy into an apply/remove) → `ComputeActivePolicySliceQueryHandler` / `PolicyEngine` (what should be blocked) → `WindowsEnforcementService` (kills processes, rewrites hosts file, exposes local HTTP API).
 
 \---
 
@@ -157,6 +157,7 @@ Gaps that have been identified but not yet closed. Each is here because deferrin
 - **G — Nen Contract Recap Data for Insights** — interrogated 2026-08-12, widened 2026-08-30; not yet built.
 - **J — System Clock Tampering: Detect and Nudge, Not Block** — raised 2026-08-20; parked, not interrogated.
 - **K — Enforcement Has No Life Independent of the GUI Process** (Windows Service split) — interrogated 2026-09-07; deliberately not started yet.
+- **O — Cross-Platform Suite: iOS App, Multi-Device Sync, "Hardcore iOS Lockdown"** — raised 2026-09-27; parked until the desktop app is finished, not interrogated.
 
 \---
 

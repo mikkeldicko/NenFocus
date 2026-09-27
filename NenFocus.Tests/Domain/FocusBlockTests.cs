@@ -143,4 +143,51 @@ public class FocusBlockTests
 
         block.RawDeficitMinutes(creditedMinutes: 75).Should().Be(0);
     }
+
+    // --- IsAwaitingRitual ---
+
+    [Fact]
+    public void IsAwaitingRitual_ActiveAndRitualNotCompleted_ReturnsTrue()
+    {
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, Start.AddHours(1));
+
+        block.IsAwaitingRitual(Start.AddMinutes(10)).Should().BeTrue();
+    }
+
+    [Fact]
+    public void IsAwaitingRitual_RitualAlreadyCompleted_ReturnsFalse()
+    {
+        // The race this replaces FocusSessionCompleted for: the block is still inside its
+        // window at `at`, its session has just completed, nothing is running — the Ritual
+        // must not be prompted again for a block that already had one.
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, Start.AddHours(1));
+        block.MarkRitualCompleted(Start);
+
+        block.IsAwaitingRitual(Start.AddMinutes(59)).Should().BeFalse();
+    }
+
+    [Fact]
+    public void IsAwaitingRitual_BeforeStart_ReturnsFalse()
+    {
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, Start.AddHours(1));
+
+        block.IsAwaitingRitual(Start.AddSeconds(-1)).Should().BeFalse();
+    }
+
+    [Fact]
+    public void IsAwaitingRitual_AtOrAfterEnd_ReturnsFalse()
+    {
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, Start.AddHours(1));
+
+        block.IsAwaitingRitual(Start.AddHours(1)).Should().BeFalse();
+    }
+
+    [Fact]
+    public void IsAwaitingRitual_Cancelled_ReturnsFalse()
+    {
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, Start.AddHours(1));
+        block.MarkCancelled(Start);
+
+        block.IsAwaitingRitual(Start.AddMinutes(10)).Should().BeFalse();
+    }
 }

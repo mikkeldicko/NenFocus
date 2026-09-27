@@ -2,18 +2,21 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using NenFocus.Application.Interfaces;
-using NenFocus.Application.Queries.ComputeActivePolicySlice;
+using NenFocus.Application.Queries.GetFocusBlockAwaitingRitual;
 using NenFocus.Application.UseCases.Sessions.SweepMissedFocusBlocks;
-using NenFocus.Domain.Enums;
-using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Infrastructure.Services;
 
+/// <summary>
+/// The clock that drives time-based behaviour: every tick it sweeps missed blocks, warns
+/// about upcoming ones, syncs enforcement, and answers whether the Ritual is needed. It
+/// holds no rule of its own — each question is answered by the module that owns it (Gap 62).
+/// </summary>
 public sealed class ScheduledEnforcementService : BackgroundService
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ISessionStateService _sessionState;
-    private readonly IEnforcementService _enforcement;
+    private readonly IEnforcementSynchronizer _synchronizer;
     private readonly INotificationService _notifications;
     private readonly ISystemClock _clock;
     private readonly ILogger<ScheduledEnforcementService> _logger;
@@ -24,14 +27,14 @@ public sealed class ScheduledEnforcementService : BackgroundService
     public ScheduledEnforcementService(
         IServiceScopeFactory scopeFactory,
         ISessionStateService sessionState,
-        IEnforcementService enforcement,
+        IEnforcementSynchronizer synchronizer,
         INotificationService notifications,
         ISystemClock clock,
         ILogger<ScheduledEnforcementService> logger)
     {
         _scopeFactory = scopeFactory;
         _sessionState = sessionState;
-        _enforcement = enforcement;
+        _synchronizer = synchronizer;
         _notifications = notifications;
         _clock = clock;
         _logger = logger;
@@ -44,9 +47,6 @@ public sealed class ScheduledEnforcementService : BackgroundService
             try
             {
                 using var scope = _scopeFactory.CreateScope();
-
-                var computeHandler = scope.ServiceProvider
-                    .GetRequiredService<IQueryHandler<ComputeActivePolicySliceQuery, ActivePolicySlice>>();
 
                 var now = _clock.UtcNow;
 
@@ -61,15 +61,15 @@ public sealed class ScheduledEnforcementService : BackgroundService
                 // anyone live — NotifyPostSessionsReady is what lets ShellViewModel surface it
                 // as a Post-Session popup immediately instead of only at next app restart.
                 //
-                // AsOf = now (the same value passed to ComputeActivePolicySliceQuery below) is
-                // deliberate, not incidental: without it, the sweep would read its own fresh
-                // ISystemClock.UtcNow, which can drift from `now` by however long DI/DB/
+                // AsOf = now (the same value passed to SyncAsync and GetFocusBlockAwaitingRitual
+                // below) is deliberate, not incidental: without it, the sweep would read its own
+                // fresh ISystemClock.UtcNow, which can drift from `now` by however long DI/DB/
                 // debugger overhead takes between the two reads. A block whose End falls in
                 // that gap could then get two different verdicts in the same tick — the sweep
-                // (later clock) marks it Missed while the policy computation (earlier `now`)
-                // still sees it inside its active window and fires SetRitualRequired for the
-                // same block, sending the user into a Ritual for a block that already has a
-                // Missed session. One "now" per tick closes that race entirely.
+                // (later clock) marks it Missed while the Ritual check (earlier `now`) still
+                // sees it inside its active window and fires SetRitualRequired for the same
+                // block, sending the user into a Ritual for a block that already has a Missed
+                // session. One "now" per tick closes that race entirely.
                 var sweepHandler = scope.ServiceProvider
                     .GetRequiredService<ICommandHandler<SweepMissedFocusBlocksCommand, SweepMissedFocusBlocksResult>>();
                 var sweepResult = await sweepHandler.HandleAsync(new SweepMissedFocusBlocksCommand { AsOf = now }, stoppingToken);
@@ -77,36 +77,17 @@ public sealed class ScheduledEnforcementService : BackgroundService
 
                 await CheckForUpcomingBlocksAsync(scope, now, stoppingToken);
 
-                var policy = await computeHandler.HandleAsync(
-                    new ComputeActivePolicySliceQuery(now),
-                    stoppingToken);
+                await _synchronizer.SyncAsync(now, stoppingToken);
 
-                if (policy is not null && !policy.IsEmpty)
-                {
-                    if (policy.FocusSessionCompleted)
-                    {
-                        // The Focus Block is still within its scheduled window but the
-                        // session has already ended — don't re-apply enforcement or
-                        // push the user back into the Ritual.
-                        _sessionState.SetRitualRequired(false);
-                        await _enforcement.RemoveEnforcementAsync(stoppingToken);
-                    }
-                    else
-                    {
-                        await _enforcement.ApplyPolicyAsync(policy, stoppingToken);
+                var ritualHandler = scope.ServiceProvider
+                    .GetRequiredService<IQueryHandler<GetFocusBlockAwaitingRitualQuery, Guid?>>();
+                var awaitingRitualBlockId = await ritualHandler.HandleAsync(
+                    new GetFocusBlockAwaitingRitualQuery(now), stoppingToken);
 
-                        if (policy.ActiveBlockPresetType == BlockPresetType.Focus && _sessionState.ActiveSession == null)
-                            _sessionState.SetRitualRequired(true, policy.ActiveFocusBlockId);
-                        else
-                            _sessionState.SetRitualRequired(false);
-                    }
-                }
+                if (awaitingRitualBlockId is { } blockId)
+                    _sessionState.SetRitualRequired(true, blockId);
                 else
-                {
                     _sessionState.SetRitualRequired(false);
-                    if (_sessionState.ActiveSession == null)
-                        await _enforcement.RemoveEnforcementAsync(stoppingToken);
-                }
             }
             catch (Exception ex)
             {

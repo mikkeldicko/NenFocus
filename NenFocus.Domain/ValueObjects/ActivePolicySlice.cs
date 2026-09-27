@@ -12,13 +12,10 @@ public sealed record ActivePolicySlice
     public IReadOnlySet<string> AllowedSites { get; init; } = new HashSet<string>();
     public IReadOnlySet<string> BlockedSites { get; init; } = new HashSet<string>();
     public IReadOnlySet<string> BlockedApps  { get; init; } = new HashSet<string>();
-    public BlockPresetType? ActiveBlockPresetType { get; init; }
-    public Guid? ActiveFocusBlockId { get; init; }
 
-    // True when a Focus Block is still within its scheduled window but its session has
-    // already ended — prevents enforcement from being re-applied mid-window.
-    public bool FocusSessionCompleted { get; init; }
-
+    // Deliberately only "what should be blocked right now." Whether a Focus Block should
+    // push the user into the Ritual is a separate question with its own home —
+    // FocusBlock.IsAwaitingRitual / GetFocusBlockAwaitingRitualQuery (Gap 62).
     public bool IsEmpty =>
         WebsiteFilterTypeMode == WebsiteFilterType.Blocklist &&
         BlockedSites.Count == 0 &&

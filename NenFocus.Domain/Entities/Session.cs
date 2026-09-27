@@ -117,7 +117,7 @@ public class Session : AggregateRoot
         Raise(new BreakStartedEvent(Id, BreaksTaken, breakStartedAt));
     }
 
-    public void ResumeFromBreak()
+    public void ResumeFromBreak(DateTime resumedAt)
     {
         if (Status != SessionStatus.OnBreak)
             throw new InvalidOperationException(
@@ -126,6 +126,7 @@ public class Session : AggregateRoot
         Status = SessionStatus.Active;
         BreakStartedAt = null;
         CurrentBreakKind = null;
+        Raise(new BreakEndedEvent(Id, BreaksTaken, resumedAt));
     }
 
     public void Complete(DateTime endedAt)

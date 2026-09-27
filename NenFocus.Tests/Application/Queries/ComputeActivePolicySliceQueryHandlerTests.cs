@@ -39,7 +39,7 @@ public class ComputeActivePolicySliceQueryHandlerTests
     [Fact]
     public async Task HandleAsync_ReturnsWhateverThePolicyEngineComputes()
     {
-        var expectedSlice = new ActivePolicySlice { SliceStart = At, ActiveBlockPresetType = BlockPresetType.Focus };
+        var expectedSlice = new ActivePolicySlice { SliceStart = At, BlockedSites = new HashSet<string> { "youtube.com" } };
         _policyEngine.ComputeSlice(At, Arg.Any<IEnumerable<BlockPreset>>(), Arg.Any<IEnumerable<Session>>(), Arg.Any<IEnumerable<PlannedBlock>>(), Arg.Any<IEnumerable<NenContract>>())
             .Returns(expectedSlice);
 
