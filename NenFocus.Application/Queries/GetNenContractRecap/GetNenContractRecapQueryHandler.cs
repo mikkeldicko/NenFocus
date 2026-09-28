@@ -63,7 +63,7 @@ public sealed class GetNenContractRecapQueryHandler : IQueryHandler<GetNenContra
             if (block is not FocusBlock focusBlock) continue;
             totalFocusBlocks++;
 
-            if (focusBlock.RedemptionEntries.Count > 0) redemptionBlocks++;
+            if (focusBlock.IsRedemption) redemptionBlocks++;
 
             // Cancelled is reported as its own category, never run through Classify — same
             // split GetNenContractRecapQuery was originally designed around (Open Gap G).

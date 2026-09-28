@@ -420,3 +420,55 @@ After Gap 65, extending means appending Contract Days generated with `ContractCa
 **Known pieces waiting on it:** Break Timer Preset management — full CRUD backend built in Gap 61, no UI. "Strict Mode" (can't end a session early) — mentioned in `DOMAIN_DICTIONARY.md` → Session, not designed. Parts of Gap 78 (P) Break Flexibility (e.g. a break budget).
 
 **Still to interrogate:** what MVP means here (which settings are in, which wait); whether Strict Mode belongs in this gap or its own; how settings are persisted (a single settings aggregate vs. per-feature rows).
+
+\---
+
+### Gap 88 — One Source for Time Slots and Block Placement (raised 2026-09-28 in the area-1 audit; plan drafted, not interrogated)
+
+**The problem:** three rules about time are each copied into up to four places, including the UI:
+1. **What does a block occupy?** Scheduled time (`Start`–`End`), real time (`Start`–`EffectiveEnd`) or display time (trimmed at both ends) — different callers use different ones.
+2. **May Focus time go here?** No Focus over Focus; Background may overlap anything; a running spontaneous session also occupies time.
+3. **Does it fit the contract's window?** `NenContract.AllowsBlockPlacement` → `ContractDay.Contains` (the real rule).
+
+**Where they live today:**
+
+| # | Where | Rule | Problem |
+|---|---|---|---|
+| 1 | `PlannedBlockRepository.GetOverlappingAsync` (create/move/split/seal) | 1, 2 | Focus-only is a `ritualOnly` flag each caller must pass to the repository |
+| 2 | `CreatePlannedBlockCommandHandler` / `UpdatePlannedBlockCommandHandler` | 2 (running session) | Same overlap formula written twice; split and seal don't check the session at all |
+| 3 | `StartSessionCommandHandler` | 1, 2 | Own inline check |
+| 4 | `GetSuggestedRedemptionPlacementsQueryHandler` (Cover Deficit) | 1, 2 | Scheduled time, cancelled blocks counted as taken, running session ignored — suggestions disagree with create (the freed tail of an early end, cancelled blocks) and can land on a running session |
+| 5 | `PlannedBlock.OverlapsWith` (seal: new blocks vs each other) | 1 | Correct (scheduled time for brand-new blocks); should share the formula |
+| 6 | `PlannerDragMath.WouldCollide` (drag drop, form save) | 1, 2 | UI math on display times, ignores the running session, calls `ToUniversalTime()` directly |
+| 7 | `PlannerPageViewModel.FindSplitOverlap` (Split form warning) | 1, 2 | ViewModel math on display times, counts Background blocks as conflicts |
+| 8 | `NenContract.AllowsBlockPlacement` | 3 | ✅ the real rule |
+| 9 | `PlannerPageViewModel.FindSplitWorkHoursViolation` | 3 | A ViewModel "mirror" of #8 |
+| 10 | `PlannerPageViewModel.ValidateDraftPlacement` (drafting) | 3 + past + date range | Re-implements #8 — no contract exists yet while drafting |
+| 11 | `SplitPlannedBlockValidator:120`, `UpdatePlannedBlockValidator:61` | "has it started?" | Written two ways; no `PlannedBlock.HasStarted` (area-1 finding D) |
+| 12 | `CreditedWindow`, `WindowOn`, `PlannedFocusHoursCalculator`, `DayRangeSplitter`, several queries | — | `(DateTime Start, DateTime End)` tuples: values that travel together |
+
+**Drafted design (by `MODULE_STANDARDS.md` → Where a Rule Lives):**
+- **`TimeSlot`** (value object) — `Overlaps`, `Contains`, `Length`, `SplitByDay` (replacing `DayRangeSplitter`). The overlap formula lives once.
+- **`PlannedBlock.ScheduledSlot` / `ReservedSlot(asOf)`** (entity) — the plan vs what it really occupies (`EffectiveEnd`, so early end, missed and cancelled are included); `ReservedSlot` null when it occupies nothing. Plus **`HasStarted(asOf)`** next to `HasEnded`.
+- **`FocusTimeRules.IsFreeForFocus(slot, blocks, runningSession, asOf)`** (domain service — needs blocks and a session, owned by neither) — the one "may Focus time go here" rule. The repository only fetches; `ritualOnly` goes.
+- **`RedemptionPlacement.Find(now, neededMinutes, dayClose, takenSlots)`** (domain service) — the Cover Deficit search moved out of the handler as-is (quarter-hour snap, shift earlier to fit, never before now, skip conflicts, partial fallback), asking `IsFreeForFocus` for every slot it tries. Redemption-only for now; not generalised until Gap 72/73 need it. Becomes a `DayAvailability` value object only if "the day's taken slots" turns into a concept used in several places.
+- **`CheckBlockPlacementQuery`** (application) — one answer for the UI about a candidate block (free? inside the contract's window? not in the past? why not), built on the same rules the create/move/split validators use, so preview and save can never disagree.
+- **UI** — drag drop, the block form and the Split form ask the query; `WouldCollide`, `FindSplitOverlap`, `FindSplitWorkHoursViolation` deleted (ViewModel Forbidden Zone).
+
+**Phases (each tested and committed separately):** (1) `TimeSlot`, the two slots, `HasStarted`, `FocusTimeRules`; create/move/split/seal/start-session switched over — split and seal now also respect a running session. (2) `RedemptionPlacement`; Cover Deficit fixed. (3) `CheckBlockPlacementQuery`; UI checks switched over. (4) Drafting (#10) — with Gap 68 (S) / Gap 82 (X), where drafting gains a real calendar to ask.
+
+**Not now:** replacing every `(Start, End)` tuple in credit/planned-hours code — only as those files are touched. The Planner tile's "actual worked window" (late start / early end trim, computed inline in `GetPlannedBlocksForDayQueryHandler`) becomes a `FocusBlock` method returning a `TimeSlot` once a second caller needs it (area-1 finding G).
+
+**Still to interrogate:** instant feedback during a drag — a query per drop is fine, but per mouse move? (today `WouldCollide` runs on drop); whether `CheckBlockPlacementQuery` returns one reason or all; whether a running *planned* session needs its own slot or is covered by its block's `ReservedSlot`; whether Background blocks get any placement rules; naming (`FocusTimeRules`, `RedemptionPlacement`); DST edges for `SplitByDay`. Boundary convention at the exact `End` instant: `HasEnded` is `End < asOf`, `Classify`'s Missed is `asOf >= End`, `IsActive` is half-open `[Start, EffectiveEnd)` — three conventions for one moment (harmless, one heartbeat tick; found while adding the `IsUnresolved` parity test) that `TimeSlot` should settle.
+
+\---
+
+### Gap 89 — Architecture Audit, Areas 2–5 (raised 2026-09-28; not started)
+
+**Why it's a gap:** the 2026-09-28 audit for multiple sources of truth, shallow modules and DDD drift finished area 1 (Application code re-deriving block facts — Gaps 85, 86, 87, the area-1 cleanups, and Gap 88). Four areas were identified but not audited yet. Same method as area 1: a written list of findings (file:line, why it matters, suggested fix) first; nothing changed without sign-off.
+
+**Areas, in suggested order:**
+2. **`PlannerPageViewModel`** — 2,501 lines, five times any other ViewModel; the likeliest place for ViewModel Forbidden Zone breaches (math, formatting, direct `ToLocalTime`/`ToUniversalTime`). Some math sits in extracted `Planner*Math` helpers that may be legitimate pixel geometry — needs reading, not grepping. Gap 88 already covers its placement checks.
+3. **Two heartbeats, two clocks** — `ScheduledEnforcementService` and `NenContractHeartbeatService` each read "now" separately every 5 s; since Gap 65 a contract starts at the same moment its first Focus block can. Gap 21 fixed exactly this kind of race for missed blocks ("one now per tick").
+4. **Active session in memory vs the database** — `ISessionStateService` keeps its own copy; the Ritual query deliberately checks the database. Confirm which is the truth for each question.
+5. **Nen Contract queries** (deficits, completed hours, bonus hours, recap) — historically the most bug-prone area (Gaps 22, 24, 29, 33 were all "two calculations of one number"); includes whether credited minutes can read the block's stamps now that `SessionEndedAt` is a faithful copy (Gap 86).

@@ -157,9 +157,9 @@ public sealed class PlannedBlockRepository : IPlannedBlockRepository
         DateTime asOf,
         CancellationToken cancellationToken = default)
     {
-        // Cancelled excluded: a block cancelled by breaking its contract never ran its
-        // Ritual by design, not by oversight — it must never be swept in as Missed once
-        // its original window passes.
+        // SQL mirror of FocusBlock.IsUnresolved (the Domain rule), kept for query speed —
+        // PlannedBlockRepositoryTests checks the two agree. Cancelled excluded: a block
+        // cancelled by breaking its contract never ran its Ritual by design, not by oversight.
         return await _context.PlannedBlocks
             .OfType<FocusBlock>()
             .Where(b => b.End < asOf && b.RitualCompletedAt == null && b.CancelledAt == null)

@@ -384,6 +384,29 @@ public class PlannedBlockRepositoryTests : SqliteRepositoryTestBase
         result.Should().BeEmpty();
     }
 
+    [Theory]
+    [InlineData(false, false, -30)]   // window still open
+    [InlineData(false, false, 0)]     // exactly at End
+    [InlineData(false, false, 1)]     // window closed, never started → unresolved
+    [InlineData(true, false, 1)]      // Ritual completed
+    [InlineData(false, true, 1)]      // cancelled
+    [InlineData(true, true, 1)]
+    public async Task GetUnresolvedFocusBlocksAsync_AgreesWithTheDomainRule(
+        bool ritualCompleted, bool cancelled, int minutesAfterEnd)
+    {
+        // The SQL mirrors FocusBlock.IsUnresolved for speed; this keeps the two in step.
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End);
+        if (ritualCompleted) block.MarkRitualCompleted(Start);
+        if (cancelled) block.MarkCancelled(Start.AddMinutes(-10));
+        await CreateRepository().AddAsync(block);
+        await Context.SaveChangesAsync();
+        var asOf = End.AddMinutes(minutesAfterEnd);
+
+        var result = await CreateRepository().GetUnresolvedFocusBlocksAsync(asOf);
+
+        result.Any(b => b.Id == block.Id).Should().Be(block.IsUnresolved(asOf));
+    }
+
     [Fact]
     public async Task GetUnresolvedFocusBlocksAsync_BackgroundBlock_IsExcluded()
     {

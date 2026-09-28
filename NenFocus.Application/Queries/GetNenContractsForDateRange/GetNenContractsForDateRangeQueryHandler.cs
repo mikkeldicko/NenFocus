@@ -245,7 +245,7 @@ public sealed class GetNenContractsForDateRangeQueryHandler
         var now = _clock.UtcNow;
 
         var groups = focusBlocks
-            .Where(b => b.RedemptionEntries.Count > 0)
+            .Where(b => b.IsRedemption)
             .SelectMany(b => b.RedemptionEntries.Select(e =>
                 (Date: DateOnly.FromDateTime(_clock.ToLocal(b.Start)), e.MissedBlockId, e.MinutesCovered)))
             .GroupBy(x => (x.Date, x.MissedBlockId));

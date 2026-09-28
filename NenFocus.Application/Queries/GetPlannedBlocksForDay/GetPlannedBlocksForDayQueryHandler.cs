@@ -87,7 +87,7 @@ public sealed class GetPlannedBlocksForDayQueryHandler
             // Redemption and Bonus are mutually exclusive by construction (Redemption always
             // has ContractId set; Bonus never does) — Redemption is checked first only because
             // it's the linked case, not because of any real priority conflict between the two.
-            var contractBadge = focusBlock?.RedemptionEntries.Count > 0
+            var contractBadge = focusBlock?.IsRedemption == true
                 ? PlannedBlockContractBadge.Redemption
                 : bonusContract is not null
                     ? PlannedBlockContractBadge.Bonus
@@ -98,7 +98,7 @@ public sealed class GetPlannedBlocksForDayQueryHandler
                 Id = b.Id,
                 PresetId = b.BlockPresetId,
                 PresetName = preset?.Name ?? "Unknown",
-                BlockPresetType = b is FocusBlock ? BlockPresetType.Focus : BlockPresetType.Background,
+                BlockPresetType = b.PresetType,
                 Start = displayStart,
                 End = displayEnd,
                 WebsiteFilterType = preset?.WebsiteFilterType ?? WebsiteFilterType.Blocklist,

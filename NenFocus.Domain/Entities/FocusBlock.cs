@@ -29,6 +29,17 @@ public sealed class FocusBlock : PlannedBlock
 
     public override BlockPresetType PresetType => BlockPresetType.Focus;
 
+    /// <summary>Whether this block redeems other blocks' deficits — it carries redemption entries.</summary>
+    public bool IsRedemption => RedemptionEntries.Count > 0;
+
+    /// <summary>
+    /// Window closed, Ritual never completed, not cancelled — what the missed-block sweep looks
+    /// for. <c>IPlannedBlockRepository.GetUnresolvedFocusBlocksAsync</c> mirrors this in SQL for
+    /// speed; a repository test checks the two agree.
+    /// </summary>
+    public bool IsUnresolved(DateTime asOf)
+        => HasEnded(asOf) && RitualCompletedAt is null && CancelledAt is null;
+
     /// <summary>Once the Ritual is done, a session owns this block's ending and announces it.</summary>
     protected override bool AnnouncesOwnEnd => RitualCompletedAt is null;
 
@@ -186,7 +197,7 @@ public sealed class FocusBlock : PlannedBlock
     /// </summary>
     public bool CanContributeOwnDeficit(FocusBlockOutcome? outcome) =>
         outcome is FocusBlockOutcome.Missed or FocusBlockOutcome.StartedLate or FocusBlockOutcome.EndedEarly
-        && RedemptionEntries.Count == 0;
+        && !IsRedemption;
 
     /// <summary>
     /// How much of this block's own scheduled duration was never delivered — this block's

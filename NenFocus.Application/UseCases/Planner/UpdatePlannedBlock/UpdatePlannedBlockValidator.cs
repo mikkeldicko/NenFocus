@@ -46,7 +46,7 @@ public sealed class UpdatePlannedBlockValidator : AbstractValidator<UpdatePlanne
                 var block   = await _blocks.GetByIdAsync(command.BlockId, ct);
                 var preset = await presets.GetByIdAsync(command.PresetId, ct);
                 if (block is null || preset is null) return true;
-                var required = block is FocusBlock ? BlockPresetType.Focus : BlockPresetType.Background;
+                var required = block.PresetType;
                 return preset.PresetType == required;
             })
             .WithMessage("The selected preset type does not match this block preset type.");
