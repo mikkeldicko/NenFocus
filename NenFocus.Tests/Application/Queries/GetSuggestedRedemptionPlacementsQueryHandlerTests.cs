@@ -19,8 +19,18 @@ public class GetSuggestedRedemptionPlacementsQueryHandlerTests
         Substitute.For<IQueryHandler<GetNenContractDeficitsQuery, IReadOnlyList<FocusBlockDeficitDto>>>();
     private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
     private readonly IPlannedBlockRepository _blocks = Substitute.For<IPlannedBlockRepository>();
+    private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
 
-    private GetSuggestedRedemptionPlacementsQueryHandler CreateHandler() => new(_contracts, _deficits, _presets, _blocks);
+    // Local time = UTC unless a test moves the user to another timezone (UseUtcOffset).
+    public GetSuggestedRedemptionPlacementsQueryHandlerTests() => UseUtcOffset(TimeSpan.Zero);
+
+    private void UseUtcOffset(TimeSpan offset)
+    {
+        _clock.ToLocal(Arg.Any<DateTime>()).Returns(ci => ci.Arg<DateTime>() + offset);
+        _clock.ToUtc(Arg.Any<DateTime>()).Returns(ci => ci.Arg<DateTime>() - offset);
+    }
+
+    private GetSuggestedRedemptionPlacementsQueryHandler CreateHandler() => new(_contracts, _deficits, _presets, _blocks, _clock);
 
     private static NenContract SameDayContract(Guid id, WorkHours? workHours = null) =>
         NenContract.Seal(
@@ -258,6 +268,54 @@ public class GetSuggestedRedemptionPlacementsQueryHandlerTests
         placement.SuggestedStart.Should().Be(Today.ToDateTime(new TimeOnly(16, 50)));
         placement.SuggestedEnd.Should().Be(Today.ToDateTime(new TimeOnly(17, 0)));
         placement.CanFullyCover.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task HandleAsync_UserAheadOfUtc_WorkHoursCloseIsReadInLocalTime()
+    {
+        // UTC+2, 16:00 local (14:00 UTC), Work Hours close 17:00 local: only 1 hour is left,
+        // so a 2-hour deficit can only be partly covered, 16:00–17:00 local. Mixing frames
+        // used to compare 14:00 UTC with the 17:00 local close and suggest 16:00–18:00 local.
+        UseUtcOffset(TimeSpan.FromHours(2));
+        var contractId = Guid.NewGuid();
+        var presetId = Guid.NewGuid();
+        var utcNow = Today.ToDateTime(new TimeOnly(14, 0));
+        var workHours = new WorkHours(new TimeOnly(9, 0), new TimeOnly(17, 0));
+        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>()).Returns(SameDayContract(contractId, workHours));
+        _deficits.HandleAsync(new GetNenContractDeficitsQuery(contractId), Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyList<FocusBlockDeficitDto>)[Deficit(presetId, utcNow.AddHours(-3), remaining: 120)]);
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, utcNow));
+        NoConflicts();
+
+        var result = await CreateHandler().HandleAsync(
+            new GetSuggestedRedemptionPlacementsQuery(contractId, utcNow), CancellationToken.None);
+
+        var placement = result.Should().ContainSingle().Subject;
+        placement.SuggestedStart.Should().Be(Today.ToDateTime(new TimeOnly(14, 0)));   // 16:00 local
+        placement.SuggestedEnd.Should().Be(Today.ToDateTime(new TimeOnly(15, 0)));     // 17:00 local
+        placement.CanFullyCover.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task HandleAsync_JustAfterLocalMidnight_TodayIsTheLocalDay()
+    {
+        // UTC+2, 00:30 local on Today is still 22:30 UTC the day before: "today" must be the
+        // user's day, not the UTC one, when fetching the day's blocks.
+        UseUtcOffset(TimeSpan.FromHours(2));
+        var contractId = Guid.NewGuid();
+        var presetId = Guid.NewGuid();
+        var utcNow = Today.AddDays(-1).ToDateTime(new TimeOnly(22, 30));
+        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>()).Returns(SameDayContract(contractId));
+        _deficits.HandleAsync(new GetNenContractDeficitsQuery(contractId), Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyList<FocusBlockDeficitDto>)[Deficit(presetId, utcNow.AddHours(-3), remaining: 30)]);
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, utcNow));
+        NoConflicts();
+
+        await CreateHandler().HandleAsync(new GetSuggestedRedemptionPlacementsQuery(contractId, utcNow), CancellationToken.None);
+
+        await _blocks.Received(1).GetForDayAsync(Today, Arg.Any<CancellationToken>());
     }
 
     [Fact]

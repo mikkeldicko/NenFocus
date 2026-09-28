@@ -79,4 +79,30 @@ public class SystemClockTests
         Assert.Equal(DateTimeKind.Local, local.Kind);
         Assert.Equal(utc, local.ToUniversalTime());
     }
+
+    [Fact]
+    public void ToUtc_IsTheReverseOfToLocal()
+    {
+        using var clock = new SystemClock();
+        var utc = new DateTime(2026, 1, 5, 12, 0, 0, DateTimeKind.Utc);
+
+        var roundTrip = clock.ToUtc(clock.ToLocal(utc));
+
+        Assert.Equal(DateTimeKind.Utc, roundTrip.Kind);
+        Assert.Equal(utc, roundTrip);
+    }
+
+    [Fact]
+    public void ToUtc_TreatsItsInputAsLocalWhateverItsKind()
+    {
+        // A local time built by date arithmetic can carry Kind.Unspecified or even Kind.Utc;
+        // it is still the user's wall-clock time and must be converted.
+        using var clock = new SystemClock();
+        var local = new DateTime(2026, 1, 5, 12, 0, 0, DateTimeKind.Local);
+
+        var expected = clock.ToUtc(local);
+
+        Assert.Equal(expected, clock.ToUtc(DateTime.SpecifyKind(local, DateTimeKind.Unspecified)));
+        Assert.Equal(expected, clock.ToUtc(DateTime.SpecifyKind(local, DateTimeKind.Utc)));
+    }
 }

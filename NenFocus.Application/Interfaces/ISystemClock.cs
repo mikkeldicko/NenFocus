@@ -12,4 +12,12 @@ public interface ISystemClock
     /// convert at all before deriving a calendar day from a UTC value.
     /// </summary>
     DateTime ToLocal(DateTime utc);
+
+    /// <summary>
+    /// Converts the user's local wall-clock time back to a UTC instant — the reverse of
+    /// <see cref="ToLocal"/>, through the same seam, so a handler that decides in the
+    /// user's frame (Work Hours, "today", quarter-hour slots) hands back a stored-frame
+    /// answer without calling DateTime.ToUniversalTime() itself.
+    /// </summary>
+    DateTime ToUtc(DateTime local);
 }

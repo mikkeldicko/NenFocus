@@ -118,6 +118,7 @@ Tactical implementation details, current build state, and platform-specific gotc
 - **Notifications through one door (Gap 84):** `INotifier` owns all wording; blocks announce starting soon / started / ended; the never-firing "Block Starting Soon" warning fixed; `INotificationService` reduced to `ShowAsync` — see `DESIGN_GAP_HISTORY.md` Gap 84.
 - **Cancellation folded into `PlannedBlock.EffectiveEnd` (Gap 85):** a cancelled block's own `IsActive` says no; the cancelled filters in `PolicyEngine`, `ComputeActivePolicySliceQueryHandler`, `IsAwaitingRitual` and the markers removed — see `DESIGN_GAP_HISTORY.md` Gap 85.
 - **`Classify(FocusBlock, asOf)` the only way to classify (Gap 86):** the block's own stamps are the one source; the five-argument form is private; the recap no longer loads sessions — see `DESIGN_GAP_HISTORY.md` Gap 86.
+- **Cover Deficit suggestions decide in local time (Gap 87):** `GetSuggestedRedemptionPlacementsQueryHandler` no longer mixed UTC "now" with local Work Hours; `ISystemClock.ToUtc` added — see `DESIGN_GAP_HISTORY.md` Gap 87.
 
 ### Not Yet Built
 
@@ -189,6 +190,7 @@ Full merge rules and current behavior — see `DOMAIN_DICTIONARY.md`'s "Policy S
 - **Hosts file markers**: must be exactly `# NEN_FOCUS_START` and `# NEN_FOCUS_END` (case-sensitive, underscores). Any deviation causes duplicate entries on next write.
 - (removed in Gap 84 — the unused `ScheduleBreakReminderAsync` family was deleted) **Break reminders**: breaks are announced by `BreakTransitionHandler` from the session's `BreakSchedule` (Gap 63).
 - **No index on `PlannedBlocks.Start`/`End`**: confirmed 2026-07-15 while sizing the Recurring Blocks materialization horizon (see `ARCHITECT_GOVERNANCE.md` → Open Gap E) — every range query (`GetForDayAsync`, `GetForRangeAsync`, `GetOverlappingAsync`, etc.) is currently a full table scan. Not a problem at current or foreseeable single-user scale; worth adding an index on `(Start, End)` before row counts climb into the tens of thousands, independent of any specific feature.
+- **Two time frames — never compare across them.** Stored times (`PlannedBlock.Start`/`End`, session times, `AsOf` arguments) are UTC; contract days, Work Hours and "today" are the user's local wall clock (Gap 65). A handler that decides in local time converts in once with `ISystemClock.ToLocal` and back once with `ISystemClock.ToUtc`, never `ToLocalTime()`/`ToUniversalTime()` directly (untestable). Gap 87 was a handler comparing UTC "now" with a local Work Hours close.
 
 ### DI & Registration
 
