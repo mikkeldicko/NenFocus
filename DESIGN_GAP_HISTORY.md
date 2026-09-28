@@ -377,7 +377,7 @@ For active design tension, see the **Open Gaps** section in `ARCHITECT_GOVERNANC
 
 ---
 
-## Gap 22 — `EndedEarly` Focus Block Outcome & Deficit-Ledger Correctness *(closed, 2026-08-12)*
+## Gap 22 — Open Gap H Closed: `EndedEarly` Focus Block Outcome & Deficit-Ledger Correctness *(closed, 2026-08-12)*
 
 **The gap, found while verifying a doc-drift claim, not while looking for it:** `TECHNICAL_SPEC_INFRA.md` used to (wrongly) claim sessions can't be ended early. Fixing that led to reading `EndSessionCommandHandler`, which revealed `block.TrimEnd(endedAt)` — when a Planned session ends before its originating block's scheduled end, the block's own `End` field is **permanently overwritten** to match. Tracing what that actually breaks:
 
