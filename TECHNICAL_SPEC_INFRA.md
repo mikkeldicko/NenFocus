@@ -119,6 +119,7 @@ Tactical implementation details, current build state, and platform-specific gotc
 - **Cancellation folded into `PlannedBlock.EffectiveEnd` (Gap 85):** a cancelled block's own `IsActive` says no; the cancelled filters in `PolicyEngine`, `ComputeActivePolicySliceQueryHandler`, `IsAwaitingRitual` and the markers removed — see `DESIGN_GAP_HISTORY.md` Gap 85.
 - **`Classify(FocusBlock, asOf)` the only way to classify (Gap 86):** the block's own stamps are the one source; the five-argument form is private; the recap no longer loads sessions — see `DESIGN_GAP_HISTORY.md` Gap 86.
 - **Cover Deficit suggestions decide in local time (Gap 87):** `GetSuggestedRedemptionPlacementsQueryHandler` no longer mixed UTC "now" with local Work Hours; `ISystemClock.ToUtc` added — see `DESIGN_GAP_HISTORY.md` Gap 87.
+- **Recap Bonus block count is Focus-only (Gap 94):** matches the set Bonus hours come from — see `DESIGN_GAP_HISTORY.md` Gap 94.
 
 ### Not Yet Built
 

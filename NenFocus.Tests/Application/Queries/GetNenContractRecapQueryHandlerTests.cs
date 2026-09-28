@@ -236,6 +236,28 @@ public class GetNenContractRecapQueryHandlerTests
         result!.BonusBlockCount.Should().Be(1);
     }
 
+    [Fact]
+    public async Task HandleAsync_BonusBlockCount_IgnoresBackgroundBlocks()
+    {
+        // Bonus hours only ever come from Focus blocks (GetNenContractBonusFocusHoursQueryHandler),
+        // so the count of Bonus blocks must come from the same set — an unlinked Background
+        // block inside the contract's range earns nothing and is not a Bonus block.
+        var contract = CompletedContract();
+        _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(contract);
+        _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[]);
+
+        var inRangeDay = StartDate.AddDays(2).ToDateTime(new TimeOnly(9, 0), DateTimeKind.Utc);
+        var focusBonus = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), inRangeDay, inRangeDay.AddHours(1));
+        var unlinkedBackground = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(), inRangeDay.AddHours(2), inRangeDay.AddHours(3));
+
+        _blocks.GetForRangeAsync(Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyList<PlannedBlock>)[focusBonus, unlinkedBackground]);
+
+        var result = await CreateHandler().HandleAsync(new GetNenContractRecapQuery(ContractId), CancellationToken.None);
+
+        result!.BonusBlockCount.Should().Be(1);
+    }
+
     [Theory]
     [InlineData(4, 4, "Completed")]
     [InlineData(4, 8, "Completed")] // over-delivered still reads Completed

@@ -96,7 +96,7 @@ public sealed class GetNenContractRecapQueryHandler : IQueryHandler<GetNenContra
         var rangeStart = contract.StartDate.AddDays(-1).ToDateTime(TimeOnly.MinValue);
         var rangeEnd = contract.EndDate.AddDays(1).ToDateTime(TimeOnly.MinValue);
         var blocksInRange = await _blocks.GetForRangeAsync(rangeStart, rangeEnd, ct);
-        var bonusBlockCount = blocksInRange.Count(b =>
+        var bonusBlockCount = blocksInRange.OfType<FocusBlock>().Count(b =>
             b.ContractId is null &&
             contract.Covers(_clock.ToLocal(b.Start)));
 

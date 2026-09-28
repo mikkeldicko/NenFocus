@@ -514,7 +514,7 @@ public interface IBlockPlacementChecker
 2. **`PlannerPageViewModel`** — 2,501 lines, five times any other ViewModel; the likeliest place for ViewModel Forbidden Zone breaches (math, formatting, direct `ToLocalTime`/`ToUniversalTime`). Some math sits in extracted `Planner*Math` helpers that may be legitimate pixel geometry — needs reading, not grepping. Gap 88 already covers its placement checks.
 3. **Two heartbeats, two clocks** — `ScheduledEnforcementService` and `NenContractHeartbeatService` each read "now" separately every 5 s; since Gap 65 a contract starts at the same moment its first Focus block can. Gap 21 fixed exactly this kind of race for missed blocks ("one now per tick").
 4. **Active session in memory vs the database** — `ISessionStateService` keeps its own copy; the Ritual query deliberately checks the database. Confirm which is the truth for each question.
-5. **Nen Contract queries** (deficits, completed hours, bonus hours, recap) — historically the most bug-prone area (Gaps 22, 24, 29, 33 were all "two calculations of one number"); includes whether credited minutes can read the block's stamps now that `SessionEndedAt` is a faithful copy (Gap 86).
+5. **Nen Contract queries** (deficits, completed hours, bonus hours, recap) — historically the most bug-prone area (Gaps 22, 24, 29, 33 were all "two calculations of one number"); includes whether credited minutes can read the block's stamps now that `SessionEndedAt` is a faithful copy (Gap 86). **Investigated 2026-09-29 — findings in Gap 95** (they can: `RitualCompletedAt` equals `Session.StartedAt`).
 
 \---
 
@@ -576,3 +576,22 @@ public interface IBlockPlacementChecker
 **Decided 2026-09-29:** Split is allowed in a Period Study contract — the validator is right, `CanSplitBlock`'s Daily-Flex-only condition is the bug (finding 1).
 
 **Still to interrogate:** whether Delete should respect contract status; where "in effect" belongs; the service/method shape and name (per `MODULE_STANDARDS.md` → Design Review Rules); how it relates to Gap 88's `GetBlockPlacementVerdictQuery` (Update and Split ask both "may it change" and "may it go there").
+
+\---
+
+### Gap 95 — One Source for Focus Hours (raised 2026-09-29 from a one-source investigation; findings recorded, not interrogated; before Gap 67)
+
+**The question:** "how many Focus hours does this count for?" — credited minutes per block, completed and Bonus hours per day, deficits, "was this day met". The *rule* has one home (`FocusBlockOutcomeClassifier.CreditedWindow`); how it is fed, what counts, and what "met" means do not.
+
+**Findings (checked in code 2026-09-29):**
+1. **The same three steps in six handlers** — load the block's session → elapsed → five loose values into `CreditedFocusMinutes`/`CreditedWindow`: `GetNenContractCompletedFocusHours`, `GetNenContractBonusFocusHours`, `GetNenContractDeficits`, `GetNenContractsForDateRange` (`ResolveMissedBlockRawDeficitMinutesAsync`), `EndSessionCommandHandler`, `GetUnacknowledgedPostSessions`; one database lookup per block for the session. The block already holds what is needed: `RitualCompletedAt` is set with the same `now` as `Session.StartedAt` (`StartSessionCommandHandler.cs:130,134`) and `SessionEndedAt` is a faithful copy of `Session.EndedAt` (Gap 86) — so credit can be a `FocusBlock` method returning a `TimeSlot` (e.g. `CreditedSlot(asOf)`), no session lookup. Same smell Gap 86 fixed for `Classify` (callers pass `session?.EndedAt`, not the block's stamp).
+2. **"Which blocks are Bonus for this contract" defined three times** — Bonus hours (unlinked Focus blocks the contract `Covers`), the recap's count (had no Focus filter — fixed as Gap 94), completion readiness's pending count (unlinked blocks of any type — the contract can wait on a Background block that earns nothing; deliberate? not written down). The "a day either side" range pre-fetch is copied three times.
+3. **"Was this day met" has two answers in one query** — `GetNenContractsForDateRangeQueryHandler`'s day badge uses a four-way decision built in the Application layer (period-floor mode / committed floor / **ad-hoc floor** = a floorless day with blocks gets its planned hours as target / rest), while the banner's "days behind" a few lines earlier, and the recap's streak and percentage, use `IsRestDay`/`IsDayMet`, where the same day is rest. The badge can say unmet where the banner and recap say rest. The ad-hoc floor exists only in this read query. **Product question** (may be decided in Gap 67).
+4. **Planned hours per day, two versions** — the same query adds a redemption dedup adjustment before comparing to the floor; `ComputePlannedFocusHoursQuery`, used by the Update/Split floor-protection guards, doesn't. Only differs on days with repeat redemption claims — suspected, not confirmed by a test.
+5. **A missed block's deficit computed twice** — `GetNenContractsForDateRange` recomputes it without the deficits query's "outcome is final only once the session has ended" rule (Redemption Rule 18).
+6. **Service shape** — `FocusBlockOutcomeClassifier` has four jobs (late start, outcome, credited minutes, credited window); `Classify(block, asOf)` is a single-entity question (the "Where a Rule Lives" warning sign), yet `MODULE_STANDARDS.md` names this class as its example domain service. For Gap 92.
+7. **For Gap 67** — completed hours also count spontaneous sessions on the contract's Focus presets; Bonus hours don't. Gap 67 changes exactly this, decided today inside one handler's loop.
+
+**Direction (for interrogation, not decided):** the block answers "how much did I earn" from its own stamps; the contract answers "is this block mine, Bonus, or neither" and "what does this day owe" (including whether an ad-hoc target is real); one per-day read model on top, used by the badge, banner, recap, readiness and the floor guards alike.
+
+**Why before Gap 67 and not folded into it:** Gap 67 changes *what counts*; today that is decided in several places, so it would have to be changed in each. After this gap it is one place. This gap should change no numbers (bug fixes aside, each pinned by a test); Gap 67 deliberately does — kept apart, any number that moves traces to the gap that moved it.

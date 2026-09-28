@@ -1442,3 +1442,15 @@ For active design tension, see the **Open Gaps** section in `ARCHITECT_GOVERNANC
 **Confirmed via `NenFocus.Tests` (1454 passing, up from 1450):** at UTC+2, 16:00 local with a 17:00 close suggests 16:00–17:00 local as partial coverage (failed before the fix); at 00:30 local, "today" is the local day (failed before); `ToUtc` round-trips `ToLocal` and ignores the input's `Kind`. All existing placement tests run unchanged on a zero-offset clock.
 
 **Principle demonstrated:** a value's time frame is part of its meaning. When a handler touches both stored (UTC) and domain (local) times, pick the domain's frame, translate once at the edges, and never let a comparison span the two.
+
+\---
+
+## Gap 94 — The Recap Counted Background Blocks as Bonus Blocks *(closed, 2026-09-29)*
+
+**Found by** the one-source investigation of "how many Focus hours does this count for" (raised as Gap 95). `GetNenContractRecapQueryHandler` counts the contract's Bonus blocks with a comment saying it mirrors `GetNenContractBonusFocusHoursQueryHandler`'s block-sourcing "exactly" — but the hours query takes only unlinked `FocusBlock`s the contract `Covers`, while the count took unlinked blocks of *any* type. An unlinked Background block inside the contract's range was reported as a Bonus block that had earned no Bonus hours.
+
+**Changed:** the count takes `OfType<FocusBlock>()` first — the same set the hours come from. One line.
+
+**Confirmed via `NenFocus.Tests` (1461 passing, up from 1460):** `HandleAsync_BonusBlockCount_IgnoresBackgroundBlocks` — one Focus Bonus block plus one unlinked Background block counts 1 (counted 2 before the fix).
+
+**Principle demonstrated:** a comment that says "mirrors X exactly" is a promise nothing checks. "Which blocks are Bonus for this contract" is still defined in three places (hours, this count, completion readiness) — the real fix is one definition; that is Gap 95.
