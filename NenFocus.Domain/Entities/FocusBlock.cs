@@ -90,20 +90,22 @@ public sealed class FocusBlock : PlannedBlock
     /// the same question indirectly (Gap 62).
     /// </summary>
     public bool IsAwaitingRitual(DateTime at)
-        => !CancelledAt.HasValue && RitualCompletedAt is null && IsActive(at);
+        => RitualCompletedAt is null && IsActive(at);
 
     /// <summary>
     /// Tail freed once a session ended early; whole window freed once the block is genuinely
     /// Missed (ritual never completed and its scheduled End has already passed) — mirrors
     /// <see cref="Services.IFocusBlockOutcomeClassifier.Classify"/>'s own Missed condition so
     /// the two can never disagree about when a block is truly vacated. Still-pending or
-    /// fully-used blocks keep the whole window reserved.
+    /// fully-used blocks keep the whole window reserved. Adds to the base reasons
+    /// (cancellation): whichever reason came first wins.
     /// </summary>
     public override DateTime EffectiveEnd(DateTime asOf)
     {
-        if (SessionEndedAt is { } endedEarly) return endedEarly;
         if (RitualCompletedAt is null && asOf >= End) return Start;
-        return End;
+
+        var end = base.EffectiveEnd(asOf);
+        return SessionEndedAt is { } endedEarly && endedEarly < end ? endedEarly : end;
     }
 
     /// <summary>

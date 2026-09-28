@@ -116,6 +116,7 @@ Tactical implementation details, current build state, and platform-specific gotc
 - **Contract rule "Keep blocking during breaks"** (renamed from `PauseEnforcementDuringBreak`, inverted; set on Contract Presets, copied Seal → Session at Start; `PolicyEngine` no longer takes contracts) (2026-09-27) — see `DESIGN_GAP_HISTORY.md` Gap 64. Gotcha: a `bool` with `HasDefaultValue(false)` must have a DB default of `false` too — EF omits a CLR-default value from INSERTs and lets the column default apply, so renaming the old `DEFAULT 1` column would have silently stored `true`.
 - **Contract days (Gap 65):** a contract is its days (`ContractDay`/`ContractCalendar`, `DailyFloorRule`); activation/completion at exact local moments; `WorkHoursPolicy`/`DailyFloorPolicy` removed — see `DESIGN_GAP_HISTORY.md` Gap 65.
 - **Notifications through one door (Gap 84):** `INotifier` owns all wording; blocks announce starting soon / started / ended; the never-firing "Block Starting Soon" warning fixed; `INotificationService` reduced to `ShowAsync` — see `DESIGN_GAP_HISTORY.md` Gap 84.
+- **Cancellation folded into `PlannedBlock.EffectiveEnd` (Gap 85):** a cancelled block's own `IsActive` says no; the cancelled filters in `PolicyEngine`, `ComputeActivePolicySliceQueryHandler`, `IsAwaitingRitual` and the markers removed — see `DESIGN_GAP_HISTORY.md` Gap 85.
 
 ### Not Yet Built
 

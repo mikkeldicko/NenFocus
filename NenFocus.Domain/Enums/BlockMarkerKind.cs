@@ -1,6 +1,6 @@
 namespace NenFocus.Domain.Enums;
 
-public enum BlockTransitionKind
+public enum BlockMarkerKind
 {
     StartingSoon,
     Started,

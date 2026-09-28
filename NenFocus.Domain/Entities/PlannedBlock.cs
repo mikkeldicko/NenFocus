@@ -56,10 +56,17 @@ public abstract class PlannedBlock : AggregateRoot
     /// the boundary overlap-checks use instead of <see cref="End"/>, so a block that no longer
     /// occupies its full scheduled span (e.g. a Focus session that ended early) frees the rest
     /// for new scheduling without ever mutating <see cref="End"/> itself (which stays the
-    /// historical record used by Daily Floor / deficit scoring). Base case: the whole window
-    /// is still reserved, unconditionally — overridden by <see cref="FocusBlock"/>.
+    /// historical record used by Daily Floor / deficit scoring). Every reason the window
+    /// shrinks lives here, so <see cref="IsActive"/>, overlap checks and markers never check
+    /// those reasons themselves. Base: cancellation — the window ends at the cancel moment, or
+    /// is empty if cancelled before it started. <see cref="FocusBlock"/> adds its own reasons.
     /// </summary>
-    public virtual DateTime EffectiveEnd(DateTime asOf) => End;
+    public virtual DateTime EffectiveEnd(DateTime asOf)
+    {
+        if (CancelledAt is not { } cancelledAt) return End;
+        if (cancelledAt <= Start) return Start;
+        return cancelledAt < End ? cancelledAt : End;
+    }
 
     public TimeSpan GetDuration() => End - Start;
 
@@ -86,33 +93,35 @@ public abstract class PlannedBlock : AggregateRoot
     protected virtual bool AnnouncesOwnEnd => true;
 
     /// <summary>
-    /// The boundaries this block crossed as the clock moved from <paramref name="from"/> to
+    /// The markers on this block's timeline the clock passed moving from <paramref name="from"/> to
     /// <paramref name="to"/>, half-open (from, to] — a caller that passes each tick's end as
-    /// the next tick's start hears about every boundary exactly once. StartingSoon: the
+    /// the next tick's start hears about every marker exactly once. StartingSoon: the
     /// warning moment (<see cref="Start"/> − <see cref="UpcomingWarningLead"/>) was crossed
     /// and the block hasn't started. Started/Ended: <see cref="IsActive"/> flipped — the same
     /// definition PolicyEngine enforces, so the user is told exactly when blocking changes.
     /// Ended only if <see cref="AnnouncesOwnEnd"/>. A clock that moved backwards, or jumped
-    /// over the whole block, crossed nothing worth telling; a cancelled block crosses nothing.
+    /// over the whole block, passed nothing worth telling. A block cancelled before it
+    /// started reserves no time, so passes nothing; one cancelled mid-run ends then.
     /// </summary>
-    public IReadOnlyList<BlockTransition> TransitionsBetween(DateTime from, DateTime to)
+    public IReadOnlyList<BlockMarker> MarkersPassedBetween(DateTime from, DateTime to)
     {
-        if (CancelledAt.HasValue || to <= from) return [];
+        if (to <= from) return [];
 
-        var transitions = new List<BlockTransition>();
+        var markers = new List<BlockMarker>();
 
         var warningMoment = Start - UpcomingWarningLead;
-        if (warningMoment > from && warningMoment <= to && to < Start)
-            transitions.Add(new BlockTransition(BlockTransitionKind.StartingSoon, warningMoment));
+        var stillReservesTime = EffectiveEnd(to) > Start;
+        if (stillReservesTime && warningMoment > from && warningMoment <= to && to < Start)
+            markers.Add(new BlockMarker(BlockMarkerKind.StartingSoon, warningMoment));
 
         var wasActive = IsActive(from);
         var isActive = IsActive(to);
         if (!wasActive && isActive)
-            transitions.Add(new BlockTransition(BlockTransitionKind.Started, Start));
+            markers.Add(new BlockMarker(BlockMarkerKind.Started, Start));
         else if (wasActive && !isActive && AnnouncesOwnEnd)
-            transitions.Add(new BlockTransition(BlockTransitionKind.Ended, EffectiveEnd(from)));
+            markers.Add(new BlockMarker(BlockMarkerKind.Ended, EffectiveEnd(from)));
 
-        return transitions;
+        return markers;
     }
 
     public virtual void Reschedule(DateTime start, DateTime end)

@@ -265,44 +265,44 @@ public class PlannedBlockTests
 
     // Block 10:00–11:00; warning moment = Start − 5 min = 09:55.
 
-    private static IEnumerable<BlockTransitionKind> Kinds(PlannedBlock block, DateTime from, DateTime to)
-        => block.TransitionsBetween(from, to).Select(t => t.Kind);
+    private static IEnumerable<BlockMarkerKind> Kinds(PlannedBlock block, DateTime from, DateTime to)
+        => block.MarkersPassedBetween(from, to).Select(t => t.Kind);
 
     [Fact]
-    public void TransitionsBetween_ClockCrossesWarningMoment_IsStartingSoon()
+    public void MarkersPassedBetween_ClockCrossesWarningMoment_IsStartingSoon()
         => Kinds(CreateFocusBlock(), Start.AddMinutes(-6), Start.AddMinutes(-5))
-            .Should().Equal(BlockTransitionKind.StartingSoon);
+            .Should().Equal(BlockMarkerKind.StartingSoon);
 
     [Fact]
-    public void TransitionsBetween_WarningMomentNotReachedYet_IsNothing()
+    public void MarkersPassedBetween_WarningMomentNotReachedYet_IsNothing()
         => Kinds(CreateFocusBlock(), Start.AddMinutes(-7), Start.AddMinutes(-6)).Should().BeEmpty();
 
     [Fact]
-    public void TransitionsBetween_WarningAlreadyCrossedEarlier_IsNothing()
+    public void MarkersPassedBetween_WarningAlreadyCrossedEarlier_IsNothing()
         => Kinds(CreateFocusBlock(), Start.AddMinutes(-5), Start.AddMinutes(-4)).Should().BeEmpty();
 
     [Fact]
-    public void TransitionsBetween_ClockCrossesStart_IsStarted()
+    public void MarkersPassedBetween_ClockCrossesStart_IsStarted()
         => Kinds(CreateBackgroundBlock(), Start.AddSeconds(-5), Start)
-            .Should().Equal(BlockTransitionKind.Started);
+            .Should().Equal(BlockMarkerKind.Started);
 
     [Fact]
-    public void TransitionsBetween_ClockJumpsFromBeforeWarningPastStart_IsStartedOnly()
+    public void MarkersPassedBetween_ClockJumpsFromBeforeWarningPastStart_IsStartedOnly()
         => Kinds(CreateFocusBlock(), Start.AddMinutes(-6), Start.AddMinutes(1))
-            .Should().Equal(BlockTransitionKind.Started);
+            .Should().Equal(BlockMarkerKind.Started);
 
     [Fact]
-    public void TransitionsBetween_BackgroundBlockCrossesEnd_IsEnded()
+    public void MarkersPassedBetween_BackgroundBlockCrossesEnd_IsEnded()
         => Kinds(CreateBackgroundBlock(), End.AddSeconds(-5), End)
-            .Should().Equal(BlockTransitionKind.Ended);
+            .Should().Equal(BlockMarkerKind.Ended);
 
     [Fact]
-    public void TransitionsBetween_FocusBlockWithoutRitualCrossesEnd_IsEnded()
+    public void MarkersPassedBetween_FocusBlockWithoutRitualCrossesEnd_IsEnded()
         => Kinds(CreateFocusBlock(), End.AddSeconds(-5), End)
-            .Should().Equal(BlockTransitionKind.Ended);
+            .Should().Equal(BlockMarkerKind.Ended);
 
     [Fact]
-    public void TransitionsBetween_FocusBlockWhoseSessionRan_NeverAnnouncesItsOwnEnd()
+    public void MarkersPassedBetween_FocusBlockWhoseSessionRan_NeverAnnouncesItsOwnEnd()
     {
         // Its session owns the ending and announces it (SessionEndedEvent).
         var block = CreateFocusBlock();
@@ -312,7 +312,7 @@ public class PlannedBlockTests
     }
 
     [Fact]
-    public void TransitionsBetween_FocusBlockWhoseSessionEndedEarly_StaysQuietAtEitherEnd()
+    public void MarkersPassedBetween_FocusBlockWhoseSessionEndedEarly_StaysQuietAtEitherEnd()
     {
         var block = CreateFocusBlock();
         block.MarkRitualCompleted(Start);
@@ -323,20 +323,74 @@ public class PlannedBlockTests
     }
 
     [Fact]
-    public void TransitionsBetween_ClockJumpsOverWholeBlock_IsNothing()
+    public void MarkersPassedBetween_ClockJumpsOverWholeBlock_IsNothing()
         => Kinds(CreateBackgroundBlock(), Start.AddMinutes(-1), End.AddMinutes(1)).Should().BeEmpty();
 
     [Fact]
-    public void TransitionsBetween_ClockMovedBackwards_IsNothing()
+    public void MarkersPassedBetween_ClockMovedBackwards_IsNothing()
         => Kinds(CreateBackgroundBlock(), Start.AddMinutes(1), Start.AddMinutes(-6)).Should().BeEmpty();
 
     [Fact]
-    public void TransitionsBetween_CancelledBlock_IsNothing()
+    public void MarkersPassedBetween_CancelledBlock_IsNothing()
     {
         var block = CreateBackgroundBlock();
         block.MarkCancelled(Start.AddHours(-1));
 
         Kinds(block, Start.AddMinutes(-6), Start.AddMinutes(1)).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void MarkersPassedBetween_CancelledMidRun_EndsAtTheCancelMoment()
+    {
+        var block = CreateBackgroundBlock();
+        var cancelledAt = Start.AddMinutes(30);
+        block.MarkCancelled(cancelledAt);
+
+        block.MarkersPassedBetween(cancelledAt.AddSeconds(-5), cancelledAt)
+            .Should().Equal(new BlockMarker(BlockMarkerKind.Ended, cancelledAt));
+    }
+
+    // Cancellation is one of the reasons a block's reserved window shrinks (EffectiveEnd),
+    // so every question built on that window follows without checking CancelledAt itself.
+
+    [Fact]
+    public void IsActive_CancelledBeforeStart_IsNeverActive()
+    {
+        var block = CreateBackgroundBlock();
+        block.MarkCancelled(Start.AddHours(-1));
+
+        block.IsActive(Start).Should().BeFalse();
+        block.IsActive(Start.AddMinutes(30)).Should().BeFalse();
+        block.EffectiveEnd(Start.AddMinutes(30)).Should().Be(Start);
+    }
+
+    [Fact]
+    public void IsActive_CancelledMidRun_ActiveUntilTheCancelMomentOnly()
+    {
+        var block = CreateBackgroundBlock();
+        var cancelledAt = Start.AddMinutes(30);
+        block.MarkCancelled(cancelledAt);
+
+        block.IsActive(Start.AddMinutes(10)).Should().BeTrue();
+        block.IsActive(cancelledAt).Should().BeFalse();
+        block.EffectiveEnd(End).Should().Be(cancelledAt);
+    }
+
+    [Fact]
+    public void EffectiveEnd_FocusBlock_EarliestReasonWins()
+    {
+        var endedFirst = CreateFocusBlock();
+        endedFirst.MarkRitualCompleted(Start);
+        endedFirst.MarkSessionEnded(Start.AddMinutes(20));
+        endedFirst.MarkCancelled(Start.AddMinutes(40));
+
+        var cancelledFirst = CreateFocusBlock();
+        cancelledFirst.MarkRitualCompleted(Start);
+        cancelledFirst.MarkCancelled(Start.AddMinutes(20));
+        cancelledFirst.MarkSessionEnded(Start.AddMinutes(40));
+
+        endedFirst.EffectiveEnd(End).Should().Be(Start.AddMinutes(20));
+        cancelledFirst.EffectiveEnd(End).Should().Be(Start.AddMinutes(20));
     }
 
     [Fact]

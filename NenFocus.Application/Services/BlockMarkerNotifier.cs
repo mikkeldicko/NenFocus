@@ -6,39 +6,39 @@ using NenFocus.Domain.Enums;
 namespace NenFocus.Application.Services;
 
 /// <summary>
-/// Turns each block's own "which of my boundaries did the clock just cross" answer into a
+/// Turns each block's own "which of my markers did the clock just pass" answer into a
 /// notification fact — no rule of its own. The fetch is deliberately loose (anything that
-/// could have crossed); PlannedBlock.TransitionsBetween is the final word, as IsActive is
+/// could have crossed); PlannedBlock.MarkersPassedBetween is the final word, as IsActive is
 /// for PolicyEngine.
 /// </summary>
-public sealed class BlockTransitionHandler : IBlockTransitionHandler
+public sealed class BlockMarkerNotifier : IBlockMarkerNotifier
 {
     private readonly IPlannedBlockRepository _blocks;
     private readonly IBlockPresetRepository _presets;
     private readonly INotifier _notifier;
 
-    public BlockTransitionHandler(IPlannedBlockRepository blocks, IBlockPresetRepository presets, INotifier notifier)
+    public BlockMarkerNotifier(IPlannedBlockRepository blocks, IBlockPresetRepository presets, INotifier notifier)
     {
         _blocks = blocks;
         _presets = presets;
         _notifier = notifier;
     }
 
-    public async Task HandleAsync(DateTime from, DateTime to, CancellationToken ct = default)
+    public async Task NotifyPassedAsync(DateTime from, DateTime to, CancellationToken ct = default)
     {
         if (to <= from) return;
 
         var candidates = await _blocks.GetForRangeAsync(from, to + PlannedBlock.UpcomingWarningLead, ct);
 
         var crossed = candidates
-            .SelectMany(block => block.TransitionsBetween(from, to).Select(t => (Block: block, Transition: t)))
-            .OrderBy(x => x.Transition.At)
+            .SelectMany(block => block.MarkersPassedBetween(from, to).Select(t => (Block: block, Marker: t)))
+            .OrderBy(x => x.Marker.At)
             // Back-to-back blocks: the old one ends before the new one starts.
-            .ThenBy(x => x.Transition.Kind == BlockTransitionKind.Ended ? 0 : 1);
+            .ThenBy(x => x.Marker.Kind == BlockMarkerKind.Ended ? 0 : 1);
 
         var presetNames = new Dictionary<Guid, string>();
 
-        foreach (var (block, transition) in crossed)
+        foreach (var (block, marker) in crossed)
         {
             if (!presetNames.TryGetValue(block.BlockPresetId, out var presetName))
             {
@@ -47,11 +47,11 @@ public sealed class BlockTransitionHandler : IBlockTransitionHandler
             }
 
             var name = block.DisplayName(presetName);
-            NenNotification fact = transition.Kind switch
+            NenNotification fact = marker.Kind switch
             {
-                BlockTransitionKind.StartingSoon => new BlockStartingSoon(
+                BlockMarkerKind.StartingSoon => new BlockStartingSoon(
                     block.PresetType, name, (int)Math.Ceiling((block.Start - to).TotalMinutes)),
-                BlockTransitionKind.Started => new BlockStarted(block.PresetType, name),
+                BlockMarkerKind.Started => new BlockStarted(block.PresetType, name),
                 _ => new BlockEnded(block.PresetType, name)
             };
 

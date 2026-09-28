@@ -20,8 +20,9 @@ public sealed class PolicyEngine : IPolicyEngine
         // range query deliberately over-fetches with a buffer around "now" (SQLite datetime
         // comparison slop) — PolicyEngine is what narrows that down precisely, so a block
         // whose window has already closed relative to `at` can never have its preset enforced,
-        // even if the caller's looser query still returned it.
-        var activeBlocks = blocks.Where(b => !b.CancelledAt.HasValue && b.IsActive(at)).ToList();
+        // even if the caller's looser query still returned it. A cancelled block is never active past
+        // its cancel moment (PlannedBlock.EffectiveEnd), so no separate cancelled check here.
+        var activeBlocks = blocks.Where(b => b.IsActive(at)).ToList();
 
         // `presets` is the same kind of over-fetched superset as `blocks` — the caller
         // resolves it from the coarse block/session query, not from activeBlocks/activeSessions

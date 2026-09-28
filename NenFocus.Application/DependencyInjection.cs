@@ -38,7 +38,7 @@ public static class DependencyInjection
 
         // Scoped: reads IPlannedBlockRepository, so the heartbeat resolves it from its own
         // per-tick scope rather than holding one DbContext for the app's lifetime (Gap 40).
-        services.AddScoped<IBlockTransitionHandler, BlockTransitionHandler>();
+        services.AddScoped<IBlockMarkerNotifier, BlockMarkerNotifier>();
 
         return services;
     }

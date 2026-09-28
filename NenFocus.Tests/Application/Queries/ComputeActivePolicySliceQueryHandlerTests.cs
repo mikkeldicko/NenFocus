@@ -77,23 +77,24 @@ public class ComputeActivePolicySliceQueryHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_CancelledBlock_ExcludedFromPresetsAndFromBlocksPassedToPolicyEngine()
+    public async Task HandleAsync_CancelledBlock_PassedThroughForPolicyEngineToRuleOut()
     {
-        var cancelledPresetId = Guid.NewGuid();
-        var liveBlock = FocusBlock.Create(Guid.NewGuid(), cancelledPresetId, At, At.AddHours(1));
-        liveBlock.MarkCancelled(At);
+        // The handler no longer filters cancelled blocks: a cancelled block's own IsActive
+        // says no (PlannedBlock.EffectiveEnd), and PolicyEngine asks it — see
+        // PolicyEngineTests.ComputeSlice_CancelledBlockHandedIn_BlocksNothing.
+        var cancelledBlock = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At, At.AddHours(1));
+        cancelledBlock.MarkCancelled(At);
 
         _blocks.GetForRangeAsync(Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
-            .Returns((IReadOnlyList<PlannedBlock>)[liveBlock]);
+            .Returns((IReadOnlyList<PlannedBlock>)[cancelledBlock]);
 
         await CreateHandler().HandleAsync(new ComputeActivePolicySliceQuery(At), CancellationToken.None);
 
-        await _presets.DidNotReceive().GetByIdAsync(cancelledPresetId, Arg.Any<CancellationToken>());
         _policyEngine.Received(1).ComputeSlice(
             At,
             Arg.Any<IEnumerable<BlockPreset>>(),
             Arg.Any<IEnumerable<Session>>(),
-            Arg.Is<IEnumerable<PlannedBlock>>(b => !b.Any()));
+            Arg.Is<IEnumerable<PlannedBlock>>(b => b.Single() == cancelledBlock));
     }
 
     [Fact]

@@ -219,6 +219,20 @@ public class PolicyEngineTests
     }
 
     [Fact]
+    public void ComputeSlice_CancelledBlockHandedIn_BlocksNothing()
+    {
+        // Regression guard: no caller has to filter cancelled blocks first — the block's own
+        // IsActive already says no (cancellation shrinks its EffectiveEnd).
+        var preset = CreatePreset(WebsiteFilterType.Blocklist, sites: ["youtube.com"]);
+        var cancelledBlock = CreateActiveBlock(preset.Id);
+        cancelledBlock.MarkCancelled(At.AddMinutes(-1));
+
+        var slice = _engine.ComputeSlice(At, [preset], [], [cancelledBlock]);
+
+        slice.IsEmpty.Should().BeTrue();
+    }
+
+    [Fact]
     public void ComputeSlice_OnlyBlockIsCancelled_SliceEndFallsBackToOneMinute()
     {
         var preset = CreatePreset(WebsiteFilterType.Blocklist);

@@ -27,8 +27,8 @@ public sealed class ComputeActivePolicySliceQueryHandler
 
     public async Task<ActivePolicySlice> HandleAsync(ComputeActivePolicySliceQuery query, CancellationToken ct)
     {
-        var allBlocks = await _blocks.GetForRangeAsync(query.At.AddSeconds(-1), query.At.AddSeconds(1), ct);
-        var blocks = allBlocks.Where(b => !b.CancelledAt.HasValue).ToList();
+        // Loose fetch; PolicyEngine asks each block IsActive, which already rules out cancelled ones.
+        var blocks = await _blocks.GetForRangeAsync(query.At.AddSeconds(-1), query.At.AddSeconds(1), ct);
         var sessions = await _sessions.GetActiveSessionsAsync(ct);
 
         var presetIds = blocks.Select(b => b.BlockPresetId)

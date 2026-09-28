@@ -9,7 +9,7 @@ namespace NenFocus.Infrastructure.Services;
 
 /// <summary>
 /// The clock that drives time-based behaviour: every tick it sweeps missed blocks, syncs
-/// enforcement, reports block boundaries crossed (starting soon, started, ended), and
+/// enforcement, reports block markers passed (starting soon, started, ended), and
 /// answers whether the Ritual is needed. It
 /// holds no rule of its own — each question is answered by the module that owns it (Gap 62).
 /// </summary>
@@ -22,9 +22,9 @@ public sealed class ScheduledEnforcementService : BackgroundService
     private readonly ILogger<ScheduledEnforcementService> _logger;
     private readonly TimeSpan _interval = TimeSpan.FromSeconds(5);
 
-    // The end of the last tick whose block boundaries were reported — the heartbeat's only
+    // The end of the last tick whose block markers were reported — the heartbeat's only
     // memory, like ActiveSessionMonitor's break cursor. Null until the first tick, which
-    // reports nothing: a boundary crossed before the app was watching is not announced late.
+    // reports nothing: a marker passed before the app was watching is not announced late.
     private DateTime? _lastBoundaryCheckAt;
 
     public ScheduledEnforcementService(
@@ -79,8 +79,8 @@ public sealed class ScheduledEnforcementService : BackgroundService
                 await _synchronizer.SyncAsync(now, stoppingToken);
 
                 // After the sync, so "Blocking is on/off" is already true when the user reads it.
-                var blockTransitions = scope.ServiceProvider.GetRequiredService<IBlockTransitionHandler>();
-                await blockTransitions.HandleAsync(_lastBoundaryCheckAt ?? now, now, stoppingToken);
+                var blockMarkers = scope.ServiceProvider.GetRequiredService<IBlockMarkerNotifier>();
+                await blockMarkers.NotifyPassedAsync(_lastBoundaryCheckAt ?? now, now, stoppingToken);
                 _lastBoundaryCheckAt = now;
 
                 var ritualHandler = scope.ServiceProvider
