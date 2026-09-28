@@ -405,3 +405,13 @@ After Gap 65, extending means appending Contract Days generated with `ContractCa
 **Direction:** no new domain concept — after Gap 65 this is editing one `ContractDay`'s window or floor; the two are edited independently. Dragging day 1's start or the last day's end moves `StartsAt`/`EndsAt` automatically, since both are derived.
 
 **Still to interrogate:** dragging a window below that day's floor (stop at the floor? lower the floor?); editing windows or floors after Seal under each strictness rule; whether per-day floors apply to plan-following floors or only fixed ones; the badge UI; how the Seal command carries per-day floors (and Edit keeps them — the days are the truth).
+
+\---
+
+### Gap 83 — Settings Page MVP (raised 2026-09-28; not interrogated)
+
+**Why it's a gap:** the Settings page is one of the five sidebar pages (`DOMAIN_DICTIONARY.md` → App Structure) but has never been built, and other work already assumes it exists.
+
+**Known pieces waiting on it:** Break Timer Preset management — full CRUD backend built in Gap 61, no UI. "Strict Mode" (can't end a session early) — mentioned in `DOMAIN_DICTIONARY.md` → Session, not designed. Parts of Gap 78 (P) Break Flexibility (e.g. a break budget).
+
+**Still to interrogate:** what MVP means here (which settings are in, which wait); whether Strict Mode belongs in this gap or its own; how settings are persisted (a single settings aggregate vs. per-feature rows).

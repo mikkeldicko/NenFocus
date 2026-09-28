@@ -151,28 +151,37 @@ Gaps that have been identified but not yet closed. Each is here because deferrin
 
 **Naming and order are separate (2026-09-28).** A gap gets the next free number the moment it is raised and keeps it forever, open or closed — the number is a name, not a rank. Priority is this list's order alone: position 1 is next up; reprioritising or slotting in an urgent gap means moving lines, never renumbering. Gaps raised before 2026-09-28 carry their old letter in brackets so older references still resolve; no new letters are issued.
 
-**Next up (in order)**
+Grouped into five boxes, worked top to bottom (agreed 2026-09-28). Order within a box is a suggestion; the box order is the rule.
+
+**1. Contracts — now**
 1. **Gap 66 (W) — Contract Wizard: "When" Step and One-Click Date/Time Fields** — interrogated 2026-09-28; plan agreed.
 2. **Gap 67 (R) — Contract Membership: Only Committed and Redemption Blocks Count Toward the Floor** — interrogated 2026-09-28; plan agreed, open questions listed.
 3. **Gap 68 (S) — Drafting Adopts the Calendar; Seal Guards** — interrogated 2026-09-28, revised same day (adopted tiles are theoretical while drafting); plan agreed, depends on Gap 67.
+4. **Gap 82 (X) — Per-Day Hours and Floors in Drafting** (Outlook-style draggable grey hours per day; click a day's badge to change its floor or rest it) — raised 2026-09-28; not interrogated; builds on Gap 68's drafting mode.
+5. **Gap 80 (U) — Extending a Contract** — raised 2026-09-28; direction agreed (draft mode for added days only), not interrogated.
+6. **Gap 72 (D) — Spontaneous Redemption Path** — dropped 2026-07-08; reopened 2026-09-27 as a "Spontaneous Redemption Block" (real redemption block created at Hatsu Start) — not re-interrogated.
+7. **Gap 71 (C) — Nen Contract Motivation & Scoring Enhancements** (C1 Day-Met %, C2 streaks, C3 deficit digest) — interrogated 2026-07-07; not yet built. Leans toward Insights; may move to box 3.
 
-**Not yet ranked**
-- **Gap 69 (A) — Usage Ceiling & Universal Usage Tracking** — interrogated 2026-07-07; not yet built.
-- **Gap 70 (B) — Crash Resilience: Session Recovery After Unexpected Shutdown** — direction sketched, not interrogated; deferred.
-- **Gap 71 (C) — Nen Contract Motivation & Scoring Enhancements** (C1 Day-Met %, C2 streaks, C3 deficit digest) — interrogated 2026-07-07; not yet built.
-- **Gap 72 (D) — Spontaneous Redemption Path** — dropped 2026-07-08; reopened 2026-09-27 as a "Spontaneous Redemption Block" (real redemption block created at Hatsu Start) — parked, not re-interrogated.
-- **Gap 73 (E) — Recurring Blocks** — interrogated 2026-07-15; not yet built.
-- **Gap 74 (G) — Nen Contract Recap Data for Insights** — interrogated 2026-08-12, widened 2026-08-30; not yet built.
-- **Gap 75 (J) — System Clock Tampering: Detect and Nudge, Not Block** — raised 2026-08-20; parked, not interrogated.
-- **Gap 76 (K) — Enforcement Has No Life Independent of the GUI Process** (Windows Service split) — interrogated 2026-09-07; deliberately not started yet.
-- **Gap 77 (O) — Cross-Platform Suite: iOS App, Multi-Device Sync, "Hardcore iOS Lockdown"** — raised 2026-09-27; parked until the desktop app is finished, not interrogated.
-- **Gap 78 (P) — Break Flexibility** (end/skip a break, break budget, extend session, edit at Hatsu, live Hatsu, focus-only floor) — raised 2026-09-27 during Gap 63; parked, not interrogated.
-- **Gap 79 (T) — Spontaneous Sessions as Planner Tiles** — raised 2026-09-28; direction agreed (read-side view of Session), not interrogated.
-- **Gap 80 (U) — Extending a Contract** — raised 2026-09-28; direction agreed (draft mode for added days only), not interrogated.
-- **Gap 81 (V) — Always-On Background Presets** — raised 2026-09-28; parked, not interrogated.
-- **Gap 82 (X) — Per-Day Hours and Floors in Drafting** (Outlook-style draggable grey hours per day; click a day's badge to change its floor or rest it) — raised 2026-09-28; parked, not interrogated.
+**2. Planner & Presets to MVP**
+1. **Gap 73 (E) — Recurring Blocks** — interrogated 2026-07-15; not yet built.
+2. **Gap 79 (T) — Spontaneous Sessions as Planner Tiles** — raised 2026-09-28; direction agreed (read-side view of Session), not interrogated.
+3. **Gap 81 (V) — Always-On Background Presets** — raised 2026-09-28; not interrogated.
+4. **Gap 69 (A) — Usage Ceiling & Universal Usage Tracking** — interrogated 2026-07-07; not yet built. Largest in the box; touches enforcement.
 
-Next free number: **83**.
+**3. Settings to MVP**
+1. **Gap 83 — Settings Page MVP** — raised 2026-09-28; not interrogated.
+2. **Gap 78 (P) — Break Flexibility** (end/skip a break, break budget, extend session, edit at Hatsu, live Hatsu, focus-only floor) — raised 2026-09-27 during Gap 63; not interrogated; parts need Gap 83.
+
+**4. Insights — after boxes 2 and 3 reach MVP**
+1. **Gap 74 (G) — Nen Contract Recap Data for Insights** — interrogated 2026-08-12, widened 2026-08-30; not yet built.
+
+**5. Resilience — last, once features are basically done**
+1. **Gap 70 (B) — Crash Resilience: Session Recovery After Unexpected Shutdown** — direction sketched, not interrogated.
+2. **Gap 75 (J) — System Clock Tampering: Detect and Nudge, Not Block** — raised 2026-08-20; not interrogated.
+3. **Gap 76 (K) — Enforcement Has No Life Independent of the GUI Process** (Windows Service split) — interrogated 2026-09-07; not yet built.
+4. **Gap 77 (O) — Cross-Platform Suite: iOS App, Multi-Device Sync, "Hardcore iOS Lockdown"** — raised 2026-09-27; not interrogated.
+
+Next free number: **84**.
 
 \---
 
