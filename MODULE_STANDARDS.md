@@ -13,6 +13,30 @@ Before merging any new class or service, ask: *Can a developer understand how to
 
 ---
 
+## Where a Rule Lives (added 2026-09-28)
+
+Every rule has exactly one home, chosen by **what data it needs** and **whether it is knowledge or coordination**. Put it in the smallest home that fits.
+
+| Home | When | Examples |
+|------|------|----------|
+| **Entity method** | A question about one thing with an identity, answered from its own data | `PlannedBlock.IsActive`, `PlannedBlock.EffectiveEnd`, `FocusBlock.IsAwaitingRitual`, `Session.LiftsBlockingAt` |
+| **Value object** | Values that belong together and carry their own rules; no identity (equal values are the same thing); usually used in many places | `BreakSchedule`, `WorkHours`, `ContractDay`, `SessionGoal` |
+| **Domain service** (`Domain/Services/`) | A business rule that needs several things at once and belongs to none of them; stateless | `PolicyEngine` (blocks + sessions + presets), `FocusBlockOutcomeClassifier` (grace rule shared by outcome and credit) |
+| **Application service** (`Application/Services/`) | No business rule — takes a Domain answer and acts on it (database, OS, notifications) | `EnforcementSynchronizer`, `Notifier`, `BlockMarkerNotifier` |
+
+**Decide in this order:**
+1. **Rule or coordination?** Only asks the Domain and then acts → application service. Stop.
+2. **One thing's data or several?** Several → probably a domain service, but try step 4 first.
+3. **Identity or just values?** Has an identity and a lifecycle ("*this* block") → entity method. Just values that travel together → value object. Strong signal: the same primitives keep appearing together (`Start` + `End`) and the same formula keeps being written on them.
+4. **Can one of them own it if the others are passed in?** `FocusBlock.CanContributeOwnDeficit(outcome)` — the block owns the rule, the caller supplies the outcome. Only when no single thing is the natural owner does it become a domain service.
+
+**Warning signs:**
+- A domain service answering a question about a single entity → the rule belongs on the entity (anemic domain).
+- A value object wrapping something used once, with no rule attached → it adds a type without removing any duplication.
+- The same expression over raw fields in a second place → the rule has no home yet (see the Application Handler Forbidden Zone below).
+
+---
+
 ## Layer Responsibilities
 
 ### Domain (`NenFocus.Domain`)
