@@ -263,6 +263,98 @@ public class PlannedBlockTests
     public void MinutesUntilStart_ReturnsWholeMinutesToStart()
         => CreateFocusBlock().MinutesUntilStart(Start.AddMinutes(-15)).Should().Be(15);
 
+    // Block 10:00–11:00; warning moment = Start − 5 min = 09:55.
+
+    private static IEnumerable<BlockTransitionKind> Kinds(PlannedBlock block, DateTime from, DateTime to)
+        => block.TransitionsBetween(from, to).Select(t => t.Kind);
+
+    [Fact]
+    public void TransitionsBetween_ClockCrossesWarningMoment_IsStartingSoon()
+        => Kinds(CreateFocusBlock(), Start.AddMinutes(-6), Start.AddMinutes(-5))
+            .Should().Equal(BlockTransitionKind.StartingSoon);
+
+    [Fact]
+    public void TransitionsBetween_WarningMomentNotReachedYet_IsNothing()
+        => Kinds(CreateFocusBlock(), Start.AddMinutes(-7), Start.AddMinutes(-6)).Should().BeEmpty();
+
+    [Fact]
+    public void TransitionsBetween_WarningAlreadyCrossedEarlier_IsNothing()
+        => Kinds(CreateFocusBlock(), Start.AddMinutes(-5), Start.AddMinutes(-4)).Should().BeEmpty();
+
+    [Fact]
+    public void TransitionsBetween_ClockCrossesStart_IsStarted()
+        => Kinds(CreateBackgroundBlock(), Start.AddSeconds(-5), Start)
+            .Should().Equal(BlockTransitionKind.Started);
+
+    [Fact]
+    public void TransitionsBetween_ClockJumpsFromBeforeWarningPastStart_IsStartedOnly()
+        => Kinds(CreateFocusBlock(), Start.AddMinutes(-6), Start.AddMinutes(1))
+            .Should().Equal(BlockTransitionKind.Started);
+
+    [Fact]
+    public void TransitionsBetween_BackgroundBlockCrossesEnd_IsEnded()
+        => Kinds(CreateBackgroundBlock(), End.AddSeconds(-5), End)
+            .Should().Equal(BlockTransitionKind.Ended);
+
+    [Fact]
+    public void TransitionsBetween_FocusBlockWithoutRitualCrossesEnd_IsEnded()
+        => Kinds(CreateFocusBlock(), End.AddSeconds(-5), End)
+            .Should().Equal(BlockTransitionKind.Ended);
+
+    [Fact]
+    public void TransitionsBetween_FocusBlockWhoseSessionRan_NeverAnnouncesItsOwnEnd()
+    {
+        // Its session owns the ending and announces it (SessionEndedEvent).
+        var block = CreateFocusBlock();
+        block.MarkRitualCompleted(Start);
+
+        Kinds(block, End.AddSeconds(-5), End).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void TransitionsBetween_FocusBlockWhoseSessionEndedEarly_StaysQuietAtEitherEnd()
+    {
+        var block = CreateFocusBlock();
+        block.MarkRitualCompleted(Start);
+        block.MarkSessionEnded(Start.AddMinutes(40));
+
+        Kinds(block, Start.AddMinutes(39), Start.AddMinutes(41)).Should().BeEmpty();
+        Kinds(block, End.AddSeconds(-5), End).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void TransitionsBetween_ClockJumpsOverWholeBlock_IsNothing()
+        => Kinds(CreateBackgroundBlock(), Start.AddMinutes(-1), End.AddMinutes(1)).Should().BeEmpty();
+
+    [Fact]
+    public void TransitionsBetween_ClockMovedBackwards_IsNothing()
+        => Kinds(CreateBackgroundBlock(), Start.AddMinutes(1), Start.AddMinutes(-6)).Should().BeEmpty();
+
+    [Fact]
+    public void TransitionsBetween_CancelledBlock_IsNothing()
+    {
+        var block = CreateBackgroundBlock();
+        block.MarkCancelled(Start.AddHours(-1));
+
+        Kinds(block, Start.AddMinutes(-6), Start.AddMinutes(1)).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void DisplayName_NoTitle_IsThePresetName()
+        => CreateFocusBlock().DisplayName("Deep Work").Should().Be("Deep Work");
+
+    [Fact]
+    public void DisplayName_WithTitle_IsTheTitle()
+        => FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End, "Thesis")
+            .DisplayName("Deep Work").Should().Be("Thesis");
+
+    [Fact]
+    public void PresetType_FollowsTheBlockKind()
+    {
+        CreateFocusBlock().PresetType.Should().Be(BlockPresetType.Focus);
+        CreateBackgroundBlock().PresetType.Should().Be(BlockPresetType.Background);
+    }
+
     [Fact]
     public void Reschedule_Valid_UpdatesStartAndEnd()
     {

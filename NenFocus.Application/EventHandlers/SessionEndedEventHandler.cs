@@ -1,4 +1,5 @@
 using NenFocus.Application.Interfaces;
+using NenFocus.Application.Notifications;
 using NenFocus.Domain.Events;
 
 namespace NenFocus.Application.EventHandlers;
@@ -6,19 +7,28 @@ namespace NenFocus.Application.EventHandlers;
 public sealed class SessionEndedEventHandler : IDomainEventHandler<SessionEndedEvent>
 {
     private readonly IEnforcementSynchronizer _synchronizer;
-    private readonly INotificationService _notifications;
+    private readonly INotifier _notifier;
     private readonly ISessionStateService _sessionState;
+    private readonly ISessionRepository _sessions;
+    private readonly IPlannedBlockRepository _blocks;
+    private readonly IBlockPresetRepository _presets;
     private readonly ISystemClock _clock;
 
     public SessionEndedEventHandler(
         IEnforcementSynchronizer synchronizer,
-        INotificationService notifications,
+        INotifier notifier,
         ISessionStateService sessionState,
+        ISessionRepository sessions,
+        IPlannedBlockRepository blocks,
+        IBlockPresetRepository presets,
         ISystemClock clock)
     {
         _synchronizer = synchronizer;
-        _notifications = notifications;
+        _notifier = notifier;
         _sessionState = sessionState;
+        _sessions = sessions;
+        _blocks = blocks;
+        _presets = presets;
         _clock = clock;
     }
 
@@ -35,10 +45,16 @@ public sealed class SessionEndedEventHandler : IDomainEventHandler<SessionEndedE
         // Sync, never "remove everything" — a Background Block still running must stay
         // enforced after the session ends (Gap 62).
         await _synchronizer.SyncAsync(_clock.UtcNow, cancellationToken);
-        await _notifications.CancelAllRemindersAsync(cancellationToken);
-        await _notifications.NotifyAsync(
-            title: "Session complete",
-            body: "Great work. Your focus session has ended.",
-            cancellationToken: cancellationToken);
+
+        // The session owns a planned block's ending: the block never announces it
+        // (FocusBlock.AnnouncesOwnEnd), so this is the one toast for that moment.
+        var session = await _sessions.GetByIdAsync(domainEvent.SessionId, cancellationToken);
+        var block = session?.OriginatingBlockId is { } blockId
+            ? await _blocks.GetByIdAsync(blockId, cancellationToken)
+            : null;
+        var preset = block is null ? null : await _presets.GetByIdAsync(block.BlockPresetId, cancellationToken);
+        var blockName = block?.DisplayName(preset?.Name ?? "");
+
+        await _notifier.NotifyAsync(new SessionCompleted(block is not null, blockName), cancellationToken);
     }
 }

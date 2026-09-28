@@ -33,6 +33,13 @@ public static class DependencyInjection
         // dependencies are singletons too (Gap 63).
         services.AddSingleton<IBreakTransitionHandler, BreakTransitionHandler>();
 
+        // Singleton: pure wording over the (singleton) toaster; the one door to it.
+        services.AddSingleton<INotifier, Notifier>();
+
+        // Scoped: reads IPlannedBlockRepository, so the heartbeat resolves it from its own
+        // per-tick scope rather than holding one DbContext for the app's lifetime (Gap 40).
+        services.AddScoped<IBlockTransitionHandler, BlockTransitionHandler>();
+
         return services;
     }
 

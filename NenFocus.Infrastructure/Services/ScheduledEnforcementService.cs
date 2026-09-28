@@ -8,8 +8,9 @@ using NenFocus.Application.UseCases.Sessions.SweepMissedFocusBlocks;
 namespace NenFocus.Infrastructure.Services;
 
 /// <summary>
-/// The clock that drives time-based behaviour: every tick it sweeps missed blocks, warns
-/// about upcoming ones, syncs enforcement, and answers whether the Ritual is needed. It
+/// The clock that drives time-based behaviour: every tick it sweeps missed blocks, syncs
+/// enforcement, reports block boundaries crossed (starting soon, started, ended), and
+/// answers whether the Ritual is needed. It
 /// holds no rule of its own — each question is answered by the module that owns it (Gap 62).
 /// </summary>
 public sealed class ScheduledEnforcementService : BackgroundService
@@ -17,25 +18,25 @@ public sealed class ScheduledEnforcementService : BackgroundService
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ISessionStateService _sessionState;
     private readonly IEnforcementSynchronizer _synchronizer;
-    private readonly INotificationService _notifications;
     private readonly ISystemClock _clock;
     private readonly ILogger<ScheduledEnforcementService> _logger;
     private readonly TimeSpan _interval = TimeSpan.FromSeconds(5);
 
-    private DateTime? _lastWarningSentAt;
+    // The end of the last tick whose block boundaries were reported — the heartbeat's only
+    // memory, like ActiveSessionMonitor's break cursor. Null until the first tick, which
+    // reports nothing: a boundary crossed before the app was watching is not announced late.
+    private DateTime? _lastBoundaryCheckAt;
 
     public ScheduledEnforcementService(
         IServiceScopeFactory scopeFactory,
         ISessionStateService sessionState,
         IEnforcementSynchronizer synchronizer,
-        INotificationService notifications,
         ISystemClock clock,
         ILogger<ScheduledEnforcementService> logger)
     {
         _scopeFactory = scopeFactory;
         _sessionState = sessionState;
         _synchronizer = synchronizer;
-        _notifications = notifications;
         _clock = clock;
         _logger = logger;
     }
@@ -75,9 +76,12 @@ public sealed class ScheduledEnforcementService : BackgroundService
                 var sweepResult = await sweepHandler.HandleAsync(new SweepMissedFocusBlocksCommand { AsOf = now }, stoppingToken);
                 _sessionState.NotifyPostSessionsReady(sweepResult.MissedSessions);
 
-                await CheckForUpcomingBlocksAsync(scope, now, stoppingToken);
-
                 await _synchronizer.SyncAsync(now, stoppingToken);
+
+                // After the sync, so "Blocking is on/off" is already true when the user reads it.
+                var blockTransitions = scope.ServiceProvider.GetRequiredService<IBlockTransitionHandler>();
+                await blockTransitions.HandleAsync(_lastBoundaryCheckAt ?? now, now, stoppingToken);
+                _lastBoundaryCheckAt = now;
 
                 var ritualHandler = scope.ServiceProvider
                     .GetRequiredService<IQueryHandler<GetFocusBlockAwaitingRitualQuery, Guid?>>();
@@ -95,23 +99,6 @@ public sealed class ScheduledEnforcementService : BackgroundService
             }
 
             await Task.Delay(_interval, stoppingToken);
-        }
-    }
-
-    private async Task CheckForUpcomingBlocksAsync(IServiceScope scope, DateTime now, CancellationToken ct)
-    {
-        var blockRepo = scope.ServiceProvider.GetRequiredService<IPlannedBlockRepository>();
-        var upcoming = await blockRepo.GetForRangeAsync(now, now.AddMinutes(5), ct);
-        var nextBlock = upcoming.OrderBy(b => b.Start).FirstOrDefault();
-
-        if (nextBlock is not null)
-        {
-            var timeLeft = nextBlock.Start - now;
-            if (timeLeft.TotalMinutes <= 5 && timeLeft.TotalMinutes > 0 && _lastWarningSentAt?.AddMinutes(10) < now)
-            {
-                await _notifications.NotifyAsync("Block Starting Soon", $"Your scheduled block starts in {Math.Round(timeLeft.TotalMinutes)} minutes.", ct);
-                _lastWarningSentAt = now;
-            }
         }
     }
 }

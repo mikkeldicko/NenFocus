@@ -23,6 +23,11 @@ public sealed class FocusBlock : PlannedBlock
 
     private FocusBlock() { }
 
+    public override BlockPresetType PresetType => BlockPresetType.Focus;
+
+    /// <summary>Once the Ritual is done, a session owns this block's ending and announces it.</summary>
+    protected override bool AnnouncesOwnEnd => RitualCompletedAt is null;
+
     public static FocusBlock Create(
         Guid id,
         Guid blockPresetId,

@@ -1,4 +1,5 @@
 using NenFocus.Application.Interfaces;
+using NenFocus.Application.Notifications;
 using NenFocus.Domain.Enums;
 using NenFocus.Domain.ValueObjects;
 
@@ -13,12 +14,12 @@ namespace NenFocus.Application.Services;
 public sealed class BreakTransitionHandler : IBreakTransitionHandler
 {
     private readonly IEnforcementSynchronizer _synchronizer;
-    private readonly INotificationService _notifications;
+    private readonly INotifier _notifier;
 
-    public BreakTransitionHandler(IEnforcementSynchronizer synchronizer, INotificationService notifications)
+    public BreakTransitionHandler(IEnforcementSynchronizer synchronizer, INotifier notifier)
     {
         _synchronizer = synchronizer;
-        _notifications = notifications;
+        _notifier = notifier;
     }
 
     public async Task HandleAsync(
@@ -31,17 +32,9 @@ public sealed class BreakTransitionHandler : IBreakTransitionHandler
         // Only the latest boundary describes where the session is now — after sleeping
         // through a whole break, "Break over" is true and "Break time" is stale.
         var latest = transitions[^1];
-        if (latest.Kind == BreakTransitionKind.Started)
-        {
-            var label = latest.BreakKind == SessionPhaseKind.LongBreak ? "Long break time" : "Break time";
-            var body = keepBlockingDuringBreaks
-                ? "Step away and recharge. Blocking stays on (contract rule)."
-                : "Step away and recharge.";
-            await _notifications.NotifyAsync(label, body, ct);
-        }
-        else
-        {
-            await _notifications.NotifyAsync("Break over", "Back to focus.", ct);
-        }
+        NenNotification fact = latest.Kind == BreakTransitionKind.Started
+            ? new BreakStarted(latest.BreakKind == SessionPhaseKind.LongBreak, keepBlockingDuringBreaks)
+            : new BreakEnded();
+        await _notifier.NotifyAsync(fact, ct);
     }
 }

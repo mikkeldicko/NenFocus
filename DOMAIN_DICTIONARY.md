@@ -26,6 +26,7 @@ This file is the canonical reference for every domain concept in NenFocus. It ex
 | **BreakSchedule** | Value object owned by `Session`: its break slots as offsets from `StartedAt` — the single source of truth for "is it a break right now." Set at Start; a break that has started never changes; trimmed at Complete, so the same list is the history record (Gap 63) |
 | **SessionBreak** | One slot in a `BreakSchedule`: `Kind` (`ShortBreak` \| `LongBreak`), `Start`, `End` (offsets) |
 | **BreakTransition** | A break boundary (`Started` \| `Ended`) a running session crossed — reported by `Session.BreakTransitionsBetween(from, to)`, acted on by `IBreakTransitionHandler`; not a domain event, since nothing about the session changes |
+| **BlockTransition** | A planned-block boundary (`StartingSoon` \| `Started` \| `Ended`) the clock crossed — reported by `PlannedBlock.TransitionsBetween(from, to)`, announced by `IBlockTransitionHandler` via `INotifier`; not a domain event (Gap 84) |
 | **Blocked Attempt** | An append-only fact recording a user's attempt to access a blocked app or site during a Session |
 | **Nen Contract** | A sealed, time-bound commitment over a contiguous date range that governs allowed changes to the Focus/Background blocks within it; own aggregate root, does not own `PlannedBlock`s |
 | **Seal** | The act of finalising a Nen Contract; the only way a `NenContract` comes into existence — there is no persisted draft state in the domain |
@@ -102,9 +103,10 @@ NenFocus has five pages accessible via the sidebar:
 | Application | `IActiveSessionMonitor` | Singleton countdown engine; owns the timer, exposes `SessionTimeRemaining` / `Progress`, `IsOnBreak` / `BreakTimeRemaining` / `BreaksTaken` (all read off the schedule each tick), auto-ends via `EndSessionCommandHandler`. Its fire-and-forget calls are wrapped in try/catch + `ILogger` (Gap 31). |
 | Application | `StartSessionCommandHandler` | Creates and starts the session, calls `_sessionState.SetActive()`, dispatches `session.DomainEvents` via `IDomainEventPublisher`. Rejects starting against an originating block via `PlannedBlock.HasEnded(now)`, the one canonical "is this past" definition (Gap 32). |
 | Application | `EndSessionCommandHandler` | Calls `session.Complete()`, saves, dispatches `session.DomainEvents`; enforcement removal and notification are handled by `SessionEndedEventHandler`. If the session ends before its originating `FocusBlock`'s scheduled end, calls `focusBlock.MarkSessionEnded(endedAt)` — a non-destructive stamp; `block.End` is never overwritten (Gap 22). See `FocusBlockOutcome` below for how `SessionEndedAt` feeds classification. |
-| Application | `SessionStartedEventHandler` | Calls `IEnforcementSynchronizer.SyncAsync(now)`, sends start notification |
-| Application | `SessionEndedEventHandler` | Clears session state, then `SyncAsync(now)` (never "remove everything" — a still-running Background Block stays enforced), cancels reminders, sends end notification (Gap 62) |
-| Application | `IBreakTransitionHandler` / `BreakTransitionHandler` (`Services/`) | Given the break boundaries the monitor saw crossed: one `SyncAsync(at)` (`PolicyEngine` decides what the break lifts), then one notification for the latest boundary only ("Break time" / "Long break time" / "Break over") (Gap 63) |
+| Application | `SessionStartedEventHandler` | Calls `IEnforcementSynchronizer.SyncAsync(now)`, reports `SessionStarted` to `INotifier` (a planned session is named after its block, Gap 84) |
+| Application | `SessionEndedEventHandler` | Clears session state, then `SyncAsync(now)` (never "remove everything" — a still-running Background Block stays enforced, Gap 62), reports `SessionCompleted` — the one toast for a planned block's end, since the session owns it (Gap 84) |
+| Application | `IBreakTransitionHandler` / `BreakTransitionHandler` (`Services/`) | Given the break boundaries the monitor saw crossed: one `SyncAsync(at)` (`PolicyEngine` decides what the break lifts), then one `BreakStarted`/`BreakEnded` fact for the latest boundary only (Gap 63) |
+| Application | `INotifier` / `Notifier` (`Services/`), `NenNotification` (`Notifications/`) | The one door to `INotificationService` (a bare toaster): sources report a typed fact, `Notifier` owns every title and body. A test fails if anything else takes the toaster (Gap 84) |
 | UI | `MainPageViewModel` | Observer only — reads from `ISessionStateService` and `IActiveSessionMonitor`, dispatches commands. "Use Nen" button is hidden while a session is active. |
 
 ---
@@ -264,7 +266,7 @@ Three related but independent not-yet-built features — universal per-resource 
 | Domain | `IPolicyEngine` / `PolicyEngine` (`Services/`) | Computes `ActivePolicySlice` from raw domain entities; sole owner of all merge logic |
 | Application | `ComputeActivePolicySliceQueryHandler` | Orchestrates data fetching across three repositories; delegates computation to `IPolicyEngine` |
 | Infrastructure | `WindowsEnforcementService` | Consumes `ActivePolicySlice` directly; owns hosts file, process kill loop, registry writes, local HTTP API (`localhost:5005`) — `/check` (is this domain blocked) and `/report` (records a web blocked attempt when a session is active). |
-| Infrastructure | `ScheduledEnforcementService` | `BackgroundService` heartbeat (5s), no rules of its own. Each tick, one `now` for everything: sweeps missed blocks, warns about upcoming ones, calls `SyncAsync(now)`, then `GetFocusBlockAwaitingRitualQuery(now)` → `SetRitualRequired` |
+| Infrastructure | `ScheduledEnforcementService` | `BackgroundService` heartbeat (5s), no rules of its own. Each tick, one `now` for everything: sweeps missed blocks, calls `SyncAsync(now)`, passes (last tick, now] to `IBlockTransitionHandler` (block boundaries crossed → `INotifier`, Gap 84), then `GetFocusBlockAwaitingRitualQuery(now)` → `SetRitualRequired` |
 | Extension | `background.js` | Intercepts browser navigation; queries `/check`; calls `/report` on a real blocked navigation |
 
 ---
@@ -337,6 +339,7 @@ ActivePolicySlice ComputeSlice(
 - `EffectiveEnd(DateTime asOf)` — `End` by default; `FocusBlock` overrides it so a block whose session ended early stops reserving its window at the real end.
 - `HasEnded(DateTime asOf)` — `End < asOf`; the one canonical "is this past" check.
 - `OverlapsWith(PlannedBlock other)` — returns `true` if the two windows intersect; used by the planner to prevent scheduling conflicts.
+- `TransitionsBetween(from, to)` — the boundaries the clock crossed in (from, to]: `StartingSoon` (`UpcomingWarningLead`, 5 min, before `Start`), `Started`/`Ended` (`IsActive` flipped — the definition enforcement uses). `Ended` only if the block owns its ending: a `FocusBlock` whose Ritual was completed does not — its session announces it (Gap 84).
 
 **Why it exists:** `IPlannedBlockRepository` returns `IReadOnlyList<PlannedBlock>` so that the enforcement pipeline can work with all scheduled blocks polymorphically without knowing their concrete type. Enforcement treats Focus and Background blocks alike; the only place the subtype matters for triggering is the Ritual, where `GetFocusBlockAwaitingRitualQueryHandler` asks only `FocusBlock`s — the distinction is made exactly once, in the one place that needs it.
 
@@ -344,7 +347,7 @@ ActivePolicySlice ComputeSlice(
 
 | Layer | Artifact | Role |
 |-------|----------|------|
-| Domain | `PlannedBlock` abstract class (`Entities/PlannedBlock.cs`) | Base for `FocusBlock` and `BackgroundBlock`; exposes `IsActive()` and `OverlapsWith()` |
+| Domain | `PlannedBlock` abstract class (`Entities/PlannedBlock.cs`) | Base for `FocusBlock` and `BackgroundBlock`; exposes `IsActive()`, `OverlapsWith()`, `TransitionsBetween()`, `PresetType` (read off the subtype) and `DisplayName(presetName)` (title, else preset name — the one definition of a block's name, Gap 84) |
 | Application | `IPlannedBlockRepository` | Returns `IReadOnlyList<PlannedBlock>`; callers cast to concrete type when subtype behaviour is needed |
 | Application | `GetFocusBlockAwaitingRitualQueryHandler` | The one place the Focus/Background distinction drives the Ritual: only `FocusBlock`s are asked `IsAwaitingRitual` |
 
@@ -568,6 +571,7 @@ ActivePolicySlice ComputeSlice(
 | `ISessionStateService` | 3 methods + 2 events; hides DB rehydration, preset name resolution, and broadcast coordination |
 | `IEnforcementService` | 2 methods (`ApplyPolicyAsync`, `RemoveEnforcementAsync`); hides process kill loop, hosts file, DNS flush, registry, HTTP API |
 | `IEnforcementSynchronizer` | 1 method (`SyncAsync(at)`); hides the policy query, the apply-vs-remove choice, and the lock that stops a stale answer overwriting a fresh one |
+| `INotifier` | 1 method (`NotifyAsync(fact)`); hides every notification's wording and the toaster behind it |
 
 ---
 

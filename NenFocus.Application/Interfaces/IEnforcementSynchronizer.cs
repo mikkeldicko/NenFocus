@@ -10,7 +10,7 @@ namespace NenFocus.Application.Interfaces;
 /// </summary>
 public interface IEnforcementSynchronizer
 {
-    /// <returns>The slice that was enforced, so callers (the heartbeat's Ritual trigger)
-    /// can read it without computing a second, possibly different, answer.</returns>
+    /// <returns>The slice that was enforced, so a caller can read what is blocked without
+    /// computing a second, possibly different, answer.</returns>
     Task<ActivePolicySlice> SyncAsync(DateTime at, CancellationToken ct = default);
 }

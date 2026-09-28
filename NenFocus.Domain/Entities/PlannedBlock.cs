@@ -1,3 +1,4 @@
+using NenFocus.Domain.Enums;
 using NenFocus.Domain.Events;
 using NenFocus.Domain.ValueObjects;
 
@@ -63,6 +64,56 @@ public abstract class PlannedBlock : AggregateRoot
     public TimeSpan GetDuration() => End - Start;
 
     public int MinutesUntilStart(DateTime asOf) => (int)(Start - asOf).TotalMinutes;
+
+    /// <summary>How long before <see cref="Start"/> the user is warned that a block is coming.</summary>
+    public static readonly TimeSpan UpcomingWarningLead = TimeSpan.FromMinutes(5);
+
+    /// <summary>
+    /// What this block is called to the user: its own title if it has one, otherwise its
+    /// preset's name — the one definition of a block's name. Notifications use it. The Planner
+    /// tile still shows the preset name directly; identical today since nothing sets a title
+    /// yet — route the tile through this when titles become editable.
+    /// </summary>
+    public string DisplayName(string presetName) => Title is { Length: > 0 } title ? title : presetName;
+
+    /// <summary>Focus or Background — read off the subtype; there is no stored column.</summary>
+    public abstract BlockPresetType PresetType { get; }
+
+    /// <summary>
+    /// Whether this block owns the story of its own ending. A Focus block whose session ran
+    /// doesn't: its end is its session's end, which the session announces itself.
+    /// </summary>
+    protected virtual bool AnnouncesOwnEnd => true;
+
+    /// <summary>
+    /// The boundaries this block crossed as the clock moved from <paramref name="from"/> to
+    /// <paramref name="to"/>, half-open (from, to] — a caller that passes each tick's end as
+    /// the next tick's start hears about every boundary exactly once. StartingSoon: the
+    /// warning moment (<see cref="Start"/> − <see cref="UpcomingWarningLead"/>) was crossed
+    /// and the block hasn't started. Started/Ended: <see cref="IsActive"/> flipped — the same
+    /// definition PolicyEngine enforces, so the user is told exactly when blocking changes.
+    /// Ended only if <see cref="AnnouncesOwnEnd"/>. A clock that moved backwards, or jumped
+    /// over the whole block, crossed nothing worth telling; a cancelled block crosses nothing.
+    /// </summary>
+    public IReadOnlyList<BlockTransition> TransitionsBetween(DateTime from, DateTime to)
+    {
+        if (CancelledAt.HasValue || to <= from) return [];
+
+        var transitions = new List<BlockTransition>();
+
+        var warningMoment = Start - UpcomingWarningLead;
+        if (warningMoment > from && warningMoment <= to && to < Start)
+            transitions.Add(new BlockTransition(BlockTransitionKind.StartingSoon, warningMoment));
+
+        var wasActive = IsActive(from);
+        var isActive = IsActive(to);
+        if (!wasActive && isActive)
+            transitions.Add(new BlockTransition(BlockTransitionKind.Started, Start));
+        else if (wasActive && !isActive && AnnouncesOwnEnd)
+            transitions.Add(new BlockTransition(BlockTransitionKind.Ended, EffectiveEnd(from)));
+
+        return transitions;
+    }
 
     public virtual void Reschedule(DateTime start, DateTime end)
     {

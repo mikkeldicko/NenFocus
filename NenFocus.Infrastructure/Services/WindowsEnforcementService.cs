@@ -35,7 +35,7 @@ public sealed class WindowsEnforcementService : IEnforcementService, IDisposable
     private readonly ConcurrentDictionary<string, bool> _trustedSignatureCache = new();
     private readonly int _currentPid = Environment.ProcessId;
 
-    public WindowsEnforcementService(INotificationService notifications, IBlockedAttemptTracker attemptTracker)
+    public WindowsEnforcementService(IBlockedAttemptTracker attemptTracker)
     {
         _attemptTracker = attemptTracker;
         _processKillTimer = new System.Timers.Timer(ProcessPollIntervalMs);

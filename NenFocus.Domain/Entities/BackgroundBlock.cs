@@ -1,8 +1,12 @@
+using NenFocus.Domain.Enums;
+
 namespace NenFocus.Domain.Entities;
 
 public sealed class BackgroundBlock : PlannedBlock
 {
     private BackgroundBlock() { }
+
+    public override BlockPresetType PresetType => BlockPresetType.Background;
 
     public static BackgroundBlock Create(
         Guid id,

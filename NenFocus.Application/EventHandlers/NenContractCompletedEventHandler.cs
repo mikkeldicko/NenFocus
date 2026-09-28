@@ -1,4 +1,5 @@
 using NenFocus.Application.Interfaces;
+using NenFocus.Application.Notifications;
 using NenFocus.Domain.Events;
 
 namespace NenFocus.Application.EventHandlers;
@@ -6,14 +7,14 @@ namespace NenFocus.Application.EventHandlers;
 public sealed class NenContractCompletedEventHandler : IDomainEventHandler<NenContractCompletedEvent>
 {
     private readonly INenContractRepository _contracts;
-    private readonly INotificationService _notifications;
+    private readonly INotifier _notifier;
 
     public NenContractCompletedEventHandler(
         INenContractRepository contracts,
-        INotificationService notifications)
+        INotifier notifier)
     {
         _contracts = contracts;
-        _notifications = notifications;
+        _notifier = notifier;
     }
 
     public async Task HandleAsync(
@@ -26,9 +27,6 @@ public sealed class NenContractCompletedEventHandler : IDomainEventHandler<NenCo
             return;
         }
 
-        await _notifications.NotifyAsync(
-            title: "Contract complete",
-            body: $"Your contract \"{contract.Name}\" has ended.",
-            cancellationToken: cancellationToken);
+        await _notifier.NotifyAsync(new ContractCompleted(contract.Name), cancellationToken);
     }
 }

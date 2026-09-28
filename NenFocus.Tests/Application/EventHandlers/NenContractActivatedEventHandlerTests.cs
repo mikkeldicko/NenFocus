@@ -1,6 +1,7 @@
 using FluentAssertions;
 using NenFocus.Application.EventHandlers;
 using NenFocus.Application.Interfaces;
+using NenFocus.Application.Notifications;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
 using NenFocus.Domain.Events;
@@ -15,9 +16,9 @@ public class NenContractActivatedEventHandlerTests
     private static readonly DateOnly EndDate = new(2026, 1, 7);
 
     private readonly INenContractRepository _contracts = Substitute.For<INenContractRepository>();
-    private readonly INotificationService _notifications = Substitute.For<INotificationService>();
+    private readonly INotifier _notifier = Substitute.For<INotifier>();
 
-    private NenContractActivatedEventHandler CreateHandler() => new(_contracts, _notifications);
+    private NenContractActivatedEventHandler CreateHandler() => new(_contracts, _notifier);
 
     private static NenContract SealedContract(string name = "Focused Week") => NenContract.Seal(
         id: Guid.NewGuid(),
@@ -39,8 +40,7 @@ public class NenContractActivatedEventHandlerTests
 
         await CreateHandler().HandleAsync(new NenContractActivatedEvent(contract.Id, DateTime.UtcNow));
 
-        await _notifications.Received(1).NotifyAsync(
-            Arg.Any<string>(), Arg.Is<string>(body => body.Contains("Study Month")), Arg.Any<CancellationToken>());
+        await _notifier.Received(1).NotifyAsync(new ContractActivated("Study Month"), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -50,7 +50,6 @@ public class NenContractActivatedEventHandlerTests
 
         await CreateHandler().HandleAsync(new NenContractActivatedEvent(Guid.NewGuid(), DateTime.UtcNow));
 
-        await _notifications.DidNotReceive().NotifyAsync(
-            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+        await _notifier.DidNotReceiveWithAnyArgs().NotifyAsync(default!);
     }
 }
