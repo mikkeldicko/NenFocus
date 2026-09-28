@@ -37,6 +37,35 @@ Every rule has exactly one home, chosen by **what data it needs** and **whether 
 
 ---
 
+## Design Review Rules (added 2026-09-29)
+
+Learned from the Gap 88 interrogation, where every one of these was a real mistake in a proposed design that had to be corrected afterwards. Apply them when designing, and again when checking a plan against this file.
+
+**Choosing the home**
+1. **Walk "Decide in this order" literally; convenience is not a step.** "Build it once and ask it many times" or "it's all about the same topic" does not turn a domain service into a value object or merge two things. *(Proposed a `FocusAvailability` value object for "build once, ask many" when the decision order said domain service.)*
+2. **Things that change for different reasons get different homes.** A rule ("may a block go here") and a strategy that only *asks* that rule ("where should we suggest one") are separate, even when both are "about free time". Test: name a plausible change — does it touch one and not the other? Then they're separate. *(Put the Cover Deficit search into the placement rulebook; a UI change — a ghost tile — would have deleted it and edited the rulebook.)*
+3. **One caller doesn't earn a new service; one rule doesn't earn two.** Don't create a service for a single caller (leave it where it is, recorded), and don't split one rule's answer across several types. *(Proposed a separate redemption-placement service, then two result types where one sufficed.)*
+4. **A query or handler has one job.** If it also decides what the data *becomes* (shortening, rounding, capping), that decision belongs with whichever answer it depends on, not in the query that happens to need it. *(Put redemption capping into the placement query; it belongs with redemption attribution, which already owns the entries it depends on.)*
+
+**Shaping types**
+5. **An enum value or type exists only for a distinction that changes behaviour.** A difference that only changes wording is not a domain distinction — it goes in the message. Check it isn't ambiguous either: can the same situation produce both values? *(Split "Focus block in the way" from "session in the way" for wording; a running planned session and its own block are both in the way, so the choice was arbitrary.)*
+6. **A value object with no methods is fine if it has a constructor rule or is used in several places;** the warning sign is a wrapper used *once* with no rule. Results a service returns are value objects in `ValueObjects/`, not files in `Services/`. *(Moved result types into `Domain/Services/` by copying one odd precedent, then back.)*
+7. **Don't copy a precedent without checking the precedent is itself right.** One existing file doing X is not a convention. *(`ContractBlockBatchPreparation` in `Domain/Services/`.)*
+8. **Names say what a thing is or does in the domain.** A service named like a noun ("`BlockPlacement`") reads as a thing; follow the Naming Conventions row for its kind rather than adding a suffix to one class.
+
+**Verifying before claiming**
+9. **Verify a suspected bug in the code before calling it one.** Read both sides (validator *and* handler, query *and* caller). *(Flagged an Update-contract mismatch that the handler's own code ruled out.)*
+10. **Before claiming "one source", grep every raw use of the fields involved** — Domain, Application, repository SQL, validators, ViewModels, `*Math` helpers. *(Claimed `PlannedBlock` had no raw comparisons left while `FocusBlock.EffectiveEnd`, `Classify` and a Split validator still compared `Start`/`End` directly.)*
+11. **Before removing a parameter, flag or method, list every caller.** *(Planned to remove `ritualOnly` without noticing `CheckFocusBlockBatchOverlapQuery` and Edit contract's `ExcludeContractId` depended on it.)*
+12. **Moving a check earlier in the pipeline (handler → validator → UI preview) must check the same value that gets saved.** If the handler transforms the value first (capping, rounding), the earlier check needs the transformed value too. *(Moving the overlap check into validators would have checked a redemption block's uncapped length.)*
+13. **Rounding up must never cross a bound the user set.** "Round up to whole minutes" inside a *shortening* function can lengthen past the requested end — clamp to it. And rounding needed in two places is a rule: name it once. *(Proposed a bare `Math.Ceiling` in `CapEndToRedemptionCoverage`.)*
+
+**Checking a plan**
+14. **A standards check reads the code, not only the plan.** Each re-check of Gap 88 against the plan text alone passed; each check against the code found something. Surface what the code actually does (including when it contradicts what someone believes — e.g. started blocks *were* editable) and ask, rather than assume either way.
+15. **When a decision changes a signature or name, update every mention in the plan in the same edit.** Stale signatures in a plan get implemented. *(The Gap 88 plan kept an old `Check(candidate, …)` signature and "unchanged" wording after both had been decided otherwise.)*
+
+---
+
 ## Layer Responsibilities
 
 ### Domain (`NenFocus.Domain`)
@@ -185,7 +214,7 @@ ViewModels must never hold or navigate a Domain entity (`Session`, `BlockPreset`
 
 ## Interface-First Rule
 
-Every new service must have its interface defined in `NenFocus.Application/Interfaces/` before any implementation is written. The interface is the design artifact; the implementation is the detail.
+Every new service must have its interface defined before any implementation is written — in `NenFocus.Application/Interfaces/`, or `NenFocus.Domain/Services/` for a Domain service (as `IPolicyEngine`; corrected 2026-09-29, the text had drifted from where every Domain service interface actually lives). The interface is the design artifact; the implementation is the detail.
 
 **Checklist before creating a new interface:**
 - [ ] Can the interface be understood without reading any implementation?
@@ -236,6 +265,7 @@ These converters are approved. Reuse before creating new ones. **Registration is
 | DTO | `<Noun>Dto` | `SessionDto`, `PostSessionDto` |
 | Domain event | `<Noun><PastTense>Event` | `SessionStartedEvent`, `SessionEndedEvent` |
 | Value object | Noun only | `SessionGoal`, `BreakTimer` |
+| Domain service | Agent noun — names the role it plays (`-Engine`, `-Classifier`, `-Calculator`, `-Checker`, …); never `-Service`, which is reserved for Infrastructure and the Application↔UI bridges. Interface `I<Name>` in `Domain/Services/` | `PolicyEngine`, `FocusBlockOutcomeClassifier`, `BlockPlacementChecker` |
 | ViewModel | `<Page>ViewModel` | `MainPageViewModel`, `HatsuPageViewModel` |
 | Converter | `<Input>To<Output>Converter` | `TimeSpanToStringConverter` |
 
