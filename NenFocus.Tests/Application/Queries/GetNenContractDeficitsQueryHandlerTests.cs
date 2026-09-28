@@ -56,7 +56,7 @@ public class GetNenContractDeficitsQueryHandlerTests
     {
         var block = MissedBlock(Now.AddHours(-3), Now.AddHours(-1));
         _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
-        _classifier.Classify(block.Start, block.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Now).Returns(FocusBlockOutcome.CompletedOnTime);
+        _classifier.Classify(block, Now).Returns(FocusBlockOutcome.CompletedOnTime);
 
         var result = await CreateHandler().HandleAsync(new GetNenContractDeficitsQuery(ContractId), CancellationToken.None);
 
@@ -68,7 +68,7 @@ public class GetNenContractDeficitsQueryHandlerTests
     {
         var block = MissedBlock(Now.AddHours(-1), Now.AddHours(1));
         _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
-        _classifier.Classify(block.Start, block.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Now).Returns((FocusBlockOutcome?)null);
+        _classifier.Classify(block, Now).Returns((FocusBlockOutcome?)null);
 
         var result = await CreateHandler().HandleAsync(new GetNenContractDeficitsQuery(ContractId), CancellationToken.None);
 
@@ -84,7 +84,7 @@ public class GetNenContractDeficitsQueryHandlerTests
         // (or a Cover Deficit suggestion) while still in flight.
         var block = MissedBlock(Now.AddMinutes(-10), Now.AddMinutes(50)); // 1-hour block, started 10 min late
         _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
-        _classifier.Classify(block.Start, block.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Now).Returns(FocusBlockOutcome.StartedLate);
+        _classifier.Classify(block, Now).Returns(FocusBlockOutcome.StartedLate);
 
         var session = Session.Create(Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(60)),
             block.BlockPresetId, SessionOrigin.Planned, originatingBlockId: block.Id);
@@ -105,7 +105,7 @@ public class GetNenContractDeficitsQueryHandlerTests
         // screen yet.
         var block = MissedBlock(Now.AddHours(-3), Now.AddHours(-1)); // 2-hour block, 120 min
         _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
-        _classifier.Classify(block.Start, block.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Now).Returns(FocusBlockOutcome.EndedEarly);
+        _classifier.Classify(block, Now).Returns(FocusBlockOutcome.EndedEarly);
 
         var session = Session.Create(Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(120)),
             block.BlockPresetId, SessionOrigin.Planned, originatingBlockId: block.Id);
@@ -124,7 +124,7 @@ public class GetNenContractDeficitsQueryHandlerTests
     {
         var block = MissedBlock(Now.AddHours(-3), Now.AddHours(-1)); // 2-hour block
         _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
-        _classifier.Classify(block.Start, block.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Now).Returns(FocusBlockOutcome.Missed);
+        _classifier.Classify(block, Now).Returns(FocusBlockOutcome.Missed);
         _sessions.GetByOriginatingBlockIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns(EndedMissedSession(block));
 
         var result = await CreateHandler().HandleAsync(new GetNenContractDeficitsQuery(ContractId), CancellationToken.None);
@@ -142,7 +142,7 @@ public class GetNenContractDeficitsQueryHandlerTests
     {
         var block = MissedBlock(Now.AddHours(-3), Now.AddHours(-1)); // 2-hour block, 120 min
         _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
-        _classifier.Classify(block.Start, block.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Now).Returns(FocusBlockOutcome.StartedLate);
+        _classifier.Classify(block, Now).Returns(FocusBlockOutcome.StartedLate);
 
         var session = Session.Create(Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(90)),
             block.BlockPresetId, SessionOrigin.Planned, originatingBlockId: block.Id);
@@ -164,7 +164,7 @@ public class GetNenContractDeficitsQueryHandlerTests
     {
         var block = MissedBlock(Now.AddHours(-3), Now.AddHours(-1)); // 2-hour block, 120 min
         _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
-        _classifier.Classify(block.Start, block.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Now).Returns(FocusBlockOutcome.EndedEarly);
+        _classifier.Classify(block, Now).Returns(FocusBlockOutcome.EndedEarly);
 
         var session = Session.Create(Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(120)),
             block.BlockPresetId, SessionOrigin.Planned, originatingBlockId: block.Id);
@@ -191,7 +191,7 @@ public class GetNenContractDeficitsQueryHandlerTests
         // this reproduces let that raw excess silently zero out a real remaining deficit.
         var block = MissedBlock(Now.AddHours(-3), Now.AddHours(-1)); // 2-hour block, 120 min
         _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
-        _classifier.Classify(block.Start, block.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Now).Returns(FocusBlockOutcome.StartedLate);
+        _classifier.Classify(block, Now).Returns(FocusBlockOutcome.StartedLate);
 
         var ritualCompletedAt = block.Start.AddMinutes(40);
         var session = Session.Create(Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(150)),
@@ -223,8 +223,8 @@ public class GetNenContractDeficitsQueryHandlerTests
 
         _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[missed, redemption]);
-        _classifier.Classify(missed.Start, missed.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Now).Returns(FocusBlockOutcome.Missed);
-        _classifier.Classify(redemption.Start, redemption.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Now).Returns((FocusBlockOutcome?)null);
+        _classifier.Classify(missed, Now).Returns(FocusBlockOutcome.Missed);
+        _classifier.Classify(redemption, Now).Returns((FocusBlockOutcome?)null);
         _sessions.GetByOriginatingBlockIdAsync(missed.Id, Arg.Any<CancellationToken>()).Returns(EndedMissedSession(missed));
 
         var result = await CreateHandler().HandleAsync(new GetNenContractDeficitsQuery(ContractId), CancellationToken.None);
@@ -246,12 +246,12 @@ public class GetNenContractDeficitsQueryHandlerTests
 
         _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[missed, redemption]);
-        _classifier.Classify(missed.Start, missed.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Now).Returns(FocusBlockOutcome.Missed);
+        _classifier.Classify(missed, Now).Returns(FocusBlockOutcome.Missed);
         _sessions.GetByOriginatingBlockIdAsync(missed.Id, Arg.Any<CancellationToken>()).Returns(EndedMissedSession(missed));
         // If the fix regresses, the handler starts calling Classify for the redemption
         // block too — stubbing StartedLate here means a regression shows up as a second,
         // real deficit entry in the result instead of silently passing either way.
-        _classifier.Classify(redemption.Start, redemption.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Now).Returns(FocusBlockOutcome.StartedLate);
+        _classifier.Classify(redemption, Now).Returns(FocusBlockOutcome.StartedLate);
         // Starting a few minutes late doesn't mean it delivered nothing — it still ran its
         // full committed 120 minutes, which is what Rule 13's coverage cap should honor.
         var redemptionSession = Session.Create(Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(120)),
@@ -282,7 +282,7 @@ public class GetNenContractDeficitsQueryHandlerTests
 
         _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[missed, redemption]);
-        _classifier.Classify(missed.Start, missed.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Now).Returns(FocusBlockOutcome.Missed);
+        _classifier.Classify(missed, Now).Returns(FocusBlockOutcome.Missed);
         _sessions.GetByOriginatingBlockIdAsync(missed.Id, Arg.Any<CancellationToken>()).Returns(EndedMissedSession(missed));
 
         var result = await CreateHandler().HandleAsync(
@@ -301,8 +301,8 @@ public class GetNenContractDeficitsQueryHandlerTests
 
         _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[missed, redemption]);
-        _classifier.Classify(missed.Start, missed.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Now).Returns(FocusBlockOutcome.Missed);
-        _classifier.Classify(redemption.Start, redemption.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Now).Returns((FocusBlockOutcome?)null);
+        _classifier.Classify(missed, Now).Returns(FocusBlockOutcome.Missed);
+        _classifier.Classify(redemption, Now).Returns((FocusBlockOutcome?)null);
         _sessions.GetByOriginatingBlockIdAsync(missed.Id, Arg.Any<CancellationToken>()).Returns(EndedMissedSession(missed));
 
         var result = await CreateHandler().HandleAsync(new GetNenContractDeficitsQuery(ContractId), CancellationToken.None);
@@ -323,9 +323,9 @@ public class GetNenContractDeficitsQueryHandlerTests
 
         _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[missed, redemption]);
-        _classifier.Classify(missed.Start, missed.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Now).Returns(FocusBlockOutcome.Missed);
+        _classifier.Classify(missed, Now).Returns(FocusBlockOutcome.Missed);
         _sessions.GetByOriginatingBlockIdAsync(missed.Id, Arg.Any<CancellationToken>()).Returns(EndedMissedSession(missed));
-        _classifier.Classify(redemption.Start, redemption.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Now).Returns(FocusBlockOutcome.Missed);
+        _classifier.Classify(redemption, Now).Returns(FocusBlockOutcome.Missed);
         _sessions.GetByOriginatingBlockIdAsync(redemption.Id, Arg.Any<CancellationToken>()).Returns(EndedMissedSession(redemption));
 
         var result = await CreateHandler().HandleAsync(new GetNenContractDeficitsQuery(ContractId), CancellationToken.None);
@@ -346,9 +346,9 @@ public class GetNenContractDeficitsQueryHandlerTests
 
         _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[missed, redemption]);
-        _classifier.Classify(missed.Start, missed.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Now).Returns(FocusBlockOutcome.Missed);
+        _classifier.Classify(missed, Now).Returns(FocusBlockOutcome.Missed);
         _sessions.GetByOriginatingBlockIdAsync(missed.Id, Arg.Any<CancellationToken>()).Returns(EndedMissedSession(missed));
-        _classifier.Classify(redemption.Start, redemption.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Now).Returns(FocusBlockOutcome.EndedEarly);
+        _classifier.Classify(redemption, Now).Returns(FocusBlockOutcome.EndedEarly);
         var redemptionSession = Session.Create(Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(60)),
             presetId, SessionOrigin.Planned, originatingBlockId: redemption.Id);
         redemptionSession.Start(redemption.Start, redemption.End);
@@ -376,9 +376,9 @@ public class GetNenContractDeficitsQueryHandlerTests
 
         _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[missed, redemption]);
-        _classifier.Classify(missed.Start, missed.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Now).Returns(FocusBlockOutcome.Missed);
+        _classifier.Classify(missed, Now).Returns(FocusBlockOutcome.Missed);
         _sessions.GetByOriginatingBlockIdAsync(missed.Id, Arg.Any<CancellationToken>()).Returns(EndedMissedSession(missed));
-        _classifier.Classify(redemption.Start, redemption.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Now).Returns((FocusBlockOutcome?)null);
+        _classifier.Classify(redemption, Now).Returns((FocusBlockOutcome?)null);
 
         var result = await CreateHandler().HandleAsync(new GetNenContractDeficitsQuery(ContractId), CancellationToken.None);
 
@@ -403,9 +403,9 @@ public class GetNenContractDeficitsQueryHandlerTests
 
         _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[missed, redemption]);
-        _classifier.Classify(missed.Start, missed.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Now).Returns(FocusBlockOutcome.Missed);
+        _classifier.Classify(missed, Now).Returns(FocusBlockOutcome.Missed);
         _sessions.GetByOriginatingBlockIdAsync(missed.Id, Arg.Any<CancellationToken>()).Returns(EndedMissedSession(missed));
-        _classifier.Classify(redemption.Start, redemption.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Now).Returns((FocusBlockOutcome?)null);
+        _classifier.Classify(redemption, Now).Returns((FocusBlockOutcome?)null);
 
         var result = await CreateHandler().HandleAsync(new GetNenContractDeficitsQuery(ContractId), CancellationToken.None);
 
@@ -421,7 +421,7 @@ public class GetNenContractDeficitsQueryHandlerTests
         // are floored at the source, and it must surface, not be silently forgiven.
         var block = MissedBlock(Now.AddHours(-3), Now.AddHours(-1)); // 2-hour block, 120 min
         _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
-        _classifier.Classify(block.Start, block.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Now).Returns(FocusBlockOutcome.EndedEarly);
+        _classifier.Classify(block, Now).Returns(FocusBlockOutcome.EndedEarly);
         var session = Session.Create(Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(120)),
             block.BlockPresetId, SessionOrigin.Planned, originatingBlockId: block.Id);
         session.Start(block.Start);
@@ -439,7 +439,7 @@ public class GetNenContractDeficitsQueryHandlerTests
     {
         var block = MissedBlock(Now.AddHours(-3), Now.AddHours(-1)); // 2-hour block, 120 min
         _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
-        _classifier.Classify(block.Start, block.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Now).Returns(FocusBlockOutcome.EndedEarly);
+        _classifier.Classify(block, Now).Returns(FocusBlockOutcome.EndedEarly);
         var session = Session.Create(Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(120)),
             block.BlockPresetId, SessionOrigin.Planned, originatingBlockId: block.Id);
         session.Start(block.Start);
@@ -460,9 +460,9 @@ public class GetNenContractDeficitsQueryHandlerTests
         var earlier = MissedBlock(Now.AddHours(-5), Now.AddHours(-4));
         _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[later, earlier]);
-        _classifier.Classify(later.Start, later.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Now).Returns(FocusBlockOutcome.Missed);
+        _classifier.Classify(later, Now).Returns(FocusBlockOutcome.Missed);
         _sessions.GetByOriginatingBlockIdAsync(later.Id, Arg.Any<CancellationToken>()).Returns(EndedMissedSession(later));
-        _classifier.Classify(earlier.Start, earlier.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Now).Returns(FocusBlockOutcome.Missed);
+        _classifier.Classify(earlier, Now).Returns(FocusBlockOutcome.Missed);
         _sessions.GetByOriginatingBlockIdAsync(earlier.Id, Arg.Any<CancellationToken>()).Returns(EndedMissedSession(earlier));
 
         var result = await CreateHandler().HandleAsync(new GetNenContractDeficitsQuery(ContractId), CancellationToken.None);

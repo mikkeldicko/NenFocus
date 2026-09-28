@@ -172,8 +172,10 @@ public class EndSessionCommandHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_OriginatingBlockAlreadyEndedNaturally_DoesNotMarkSessionEnded()
+    public async Task HandleAsync_SessionRanToTheBlocksEnd_StillMarksSessionEnded()
     {
+        // The block's copy of "when did my session end" is always recorded, early or on
+        // time — so it means the same as Session.EndedAt (Gap 86).
         var blockId = Guid.NewGuid();
         var session = CreateActiveSession(blockId);
         _sessions.GetByIdAsync(session.Id, Arg.Any<CancellationToken>()).Returns(session);
@@ -182,8 +184,9 @@ public class EndSessionCommandHandlerTests
 
         await CreateHandler().HandleAsync(new EndSessionCommand { SessionId = session.Id });
 
-        block.SessionEndedAt.Should().BeNull();
-        await _plannedBlocks.DidNotReceive().SaveAsync(Arg.Any<PlannedBlock>(), Arg.Any<CancellationToken>());
+        block.SessionEndedAt.Should().Be(session.EndedAt);
+        block.End.Should().Be(Now);
+        await _plannedBlocks.Received(1).SaveAsync(block, Arg.Any<CancellationToken>());
     }
 
     [Fact]

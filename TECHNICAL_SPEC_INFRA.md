@@ -117,6 +117,7 @@ Tactical implementation details, current build state, and platform-specific gotc
 - **Contract days (Gap 65):** a contract is its days (`ContractDay`/`ContractCalendar`, `DailyFloorRule`); activation/completion at exact local moments; `WorkHoursPolicy`/`DailyFloorPolicy` removed — see `DESIGN_GAP_HISTORY.md` Gap 65.
 - **Notifications through one door (Gap 84):** `INotifier` owns all wording; blocks announce starting soon / started / ended; the never-firing "Block Starting Soon" warning fixed; `INotificationService` reduced to `ShowAsync` — see `DESIGN_GAP_HISTORY.md` Gap 84.
 - **Cancellation folded into `PlannedBlock.EffectiveEnd` (Gap 85):** a cancelled block's own `IsActive` says no; the cancelled filters in `PolicyEngine`, `ComputeActivePolicySliceQueryHandler`, `IsAwaitingRitual` and the markers removed — see `DESIGN_GAP_HISTORY.md` Gap 85.
+- **`Classify(FocusBlock, asOf)` the only way to classify (Gap 86):** the block's own stamps are the one source; the five-argument form is private; the recap no longer loads sessions — see `DESIGN_GAP_HISTORY.md` Gap 86.
 
 ### Not Yet Built
 

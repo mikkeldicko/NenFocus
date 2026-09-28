@@ -12,7 +12,6 @@ public sealed class GetNenContractRecapQueryHandler : IQueryHandler<GetNenContra
 {
     private readonly INenContractRepository _contracts;
     private readonly IPlannedBlockRepository _blocks;
-    private readonly ISessionRepository _sessions;
     private readonly IFocusBlockOutcomeClassifier _classifier;
     private readonly IQueryHandler<GetNenContractCompletedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> _completedHours;
     private readonly IQueryHandler<GetNenContractBonusFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> _bonusHours;
@@ -21,7 +20,6 @@ public sealed class GetNenContractRecapQueryHandler : IQueryHandler<GetNenContra
     public GetNenContractRecapQueryHandler(
         INenContractRepository contracts,
         IPlannedBlockRepository blocks,
-        ISessionRepository sessions,
         IFocusBlockOutcomeClassifier classifier,
         IQueryHandler<GetNenContractCompletedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> completedHours,
         IQueryHandler<GetNenContractBonusFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> bonusHours,
@@ -29,7 +27,6 @@ public sealed class GetNenContractRecapQueryHandler : IQueryHandler<GetNenContra
     {
         _contracts = contracts;
         _blocks = blocks;
-        _sessions = sessions;
         _classifier = classifier;
         _completedHours = completedHours;
         _bonusHours = bonusHours;
@@ -76,8 +73,7 @@ public sealed class GetNenContractRecapQueryHandler : IQueryHandler<GetNenContra
                 continue;
             }
 
-            var session = await _sessions.GetByOriginatingBlockIdAsync(focusBlock.Id, ct);
-            var outcome = _classifier.Classify(focusBlock.Start, focusBlock.End, focusBlock.RitualCompletedAt, session?.EndedAt, now);
+            var outcome = _classifier.Classify(focusBlock, now);
 
             switch (outcome)
             {

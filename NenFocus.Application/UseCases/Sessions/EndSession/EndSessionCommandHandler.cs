@@ -69,11 +69,11 @@ public sealed class EndSessionCommandHandler
             if (block is FocusBlock focusBlock)
             {
                 originatingFocusBlock = focusBlock;
-                if (endedAt < focusBlock.End)
-                {
-                    focusBlock.MarkSessionEnded(endedAt);
-                    await _plannedBlocks.SaveAsync(focusBlock, ct);
-                }
+                // Always, early or on time: the block's SessionEndedAt is a faithful copy of
+                // Session.EndedAt, never a filtered one (Gap 86). Every reader compares it to
+                // End itself, so an on-time end changes no answer.
+                focusBlock.MarkSessionEnded(endedAt);
+                await _plannedBlocks.SaveAsync(focusBlock, ct);
             }
         }
 

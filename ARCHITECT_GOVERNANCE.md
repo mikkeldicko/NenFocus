@@ -181,7 +181,7 @@ Grouped into five boxes, worked top to bottom (agreed 2026-09-28). Order within 
 3. **Gap 76 (K) — Enforcement Has No Life Independent of the GUI Process** (Windows Service split) — interrogated 2026-09-07; not yet built.
 4. **Gap 77 (O) — Cross-Platform Suite: iOS App, Multi-Device Sync, "Hardcore iOS Lockdown"** — raised 2026-09-27; not interrogated.
 
-Next free number: **86** (84 and 85 used 2026-09-28 by fixes built directly: notifications, cancellation in `EffectiveEnd`).
+Next free number: **87** (84–86 used 2026-09-28 by fixes built directly: notifications, cancellation in `EffectiveEnd`, one source for `Classify`).
 
 \---
 

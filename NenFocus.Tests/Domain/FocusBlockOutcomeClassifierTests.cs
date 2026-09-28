@@ -1,4 +1,5 @@
 using FluentAssertions;
+using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
 using NenFocus.Domain.Services;
 
@@ -10,6 +11,15 @@ public class FocusBlockOutcomeClassifierTests
     private static readonly DateTime ScheduledEnd = new(2026, 1, 1, 3, 0, 0, DateTimeKind.Utc);
 
     private readonly FocusBlockOutcomeClassifier _classifier = new();
+
+    // Classify only takes a block (Gap 86) — build one carrying exactly these stamps.
+    private FocusBlockOutcome? Classify(DateTime? ritualCompletedAt, DateTime? sessionEndedAt, DateTime asOf)
+    {
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), ScheduledStart, ScheduledEnd);
+        if (ritualCompletedAt is { } ritualAt) block.MarkRitualCompleted(ritualAt);
+        if (sessionEndedAt is { } endedAt) block.MarkSessionEnded(endedAt);
+        return _classifier.Classify(block, asOf);
+    }
 
     [Fact]
     public void IsLateStart_AtGraceBoundary_IsFalse()
@@ -36,14 +46,14 @@ public class FocusBlockOutcomeClassifierTests
     [Fact]
     public void RitualCompletedAtStart_IsCompletedOnTime()
     {
-        _classifier.Classify(ScheduledStart, ScheduledEnd, ritualCompletedAt: ScheduledStart, sessionEndedAt: null, asOf: ScheduledStart)
+        Classify(ritualCompletedAt: ScheduledStart, sessionEndedAt: null, asOf: ScheduledStart)
             .Should().Be(FocusBlockOutcome.CompletedOnTime);
     }
 
     [Fact]
     public void RitualCompletedBeforeStart_IsCompletedOnTime()
     {
-        _classifier.Classify(ScheduledStart, ScheduledEnd, ritualCompletedAt: ScheduledStart.AddMinutes(-10), sessionEndedAt: null, asOf: ScheduledStart)
+        Classify(ritualCompletedAt: ScheduledStart.AddMinutes(-10), sessionEndedAt: null, asOf: ScheduledStart)
             .Should().Be(FocusBlockOutcome.CompletedOnTime);
     }
 
@@ -52,7 +62,7 @@ public class FocusBlockOutcomeClassifierTests
     {
         var ritualAt = ScheduledStart.AddMinutes(3); // within the 5-minute grace period
 
-        _classifier.Classify(ScheduledStart, ScheduledEnd, ritualCompletedAt: ritualAt, sessionEndedAt: null, asOf: ritualAt)
+        Classify(ritualCompletedAt: ritualAt, sessionEndedAt: null, asOf: ritualAt)
             .Should().Be(FocusBlockOutcome.CompletedOnTime);
     }
 
@@ -61,7 +71,7 @@ public class FocusBlockOutcomeClassifierTests
     {
         var ritualAt = ScheduledStart.AddMinutes(FocusBlockOutcomeClassifier.GracePeriodMinutes);
 
-        _classifier.Classify(ScheduledStart, ScheduledEnd, ritualCompletedAt: ritualAt, sessionEndedAt: null, asOf: ritualAt)
+        Classify(ritualCompletedAt: ritualAt, sessionEndedAt: null, asOf: ritualAt)
             .Should().Be(FocusBlockOutcome.CompletedOnTime);
     }
 
@@ -70,7 +80,7 @@ public class FocusBlockOutcomeClassifierTests
     {
         var ritualAt = ScheduledStart.AddMinutes(FocusBlockOutcomeClassifier.GracePeriodMinutes).AddMinutes(1);
 
-        _classifier.Classify(ScheduledStart, ScheduledEnd, ritualCompletedAt: ritualAt, sessionEndedAt: null, asOf: ritualAt)
+        Classify(ritualCompletedAt: ritualAt, sessionEndedAt: null, asOf: ritualAt)
             .Should().Be(FocusBlockOutcome.StartedLate);
     }
 
@@ -79,14 +89,14 @@ public class FocusBlockOutcomeClassifierTests
     {
         var ritualAt = ScheduledStart.AddHours(1); // 2:00, between 1:00 and 3:00
 
-        _classifier.Classify(ScheduledStart, ScheduledEnd, ritualCompletedAt: ritualAt, sessionEndedAt: null, asOf: ritualAt)
+        Classify(ritualCompletedAt: ritualAt, sessionEndedAt: null, asOf: ritualAt)
             .Should().Be(FocusBlockOutcome.StartedLate);
     }
 
     [Fact]
     public void RitualCompletedAtEnd_IsMissed()
     {
-        _classifier.Classify(ScheduledStart, ScheduledEnd, ritualCompletedAt: ScheduledEnd, sessionEndedAt: null, asOf: ScheduledEnd)
+        Classify(ritualCompletedAt: ScheduledEnd, sessionEndedAt: null, asOf: ScheduledEnd)
             .Should().Be(FocusBlockOutcome.Missed);
     }
 
@@ -95,21 +105,21 @@ public class FocusBlockOutcomeClassifierTests
     {
         var ritualAt = ScheduledEnd.AddMinutes(30);
 
-        _classifier.Classify(ScheduledStart, ScheduledEnd, ritualCompletedAt: ritualAt, sessionEndedAt: null, asOf: ritualAt)
+        Classify(ritualCompletedAt: ritualAt, sessionEndedAt: null, asOf: ritualAt)
             .Should().Be(FocusBlockOutcome.Missed);
     }
 
     [Fact]
     public void NoRitual_AsOfAtEnd_IsMissed()
     {
-        _classifier.Classify(ScheduledStart, ScheduledEnd, ritualCompletedAt: null, sessionEndedAt: null, asOf: ScheduledEnd)
+        Classify(ritualCompletedAt: null, sessionEndedAt: null, asOf: ScheduledEnd)
             .Should().Be(FocusBlockOutcome.Missed);
     }
 
     [Fact]
     public void NoRitual_AsOfAfterEnd_IsMissed()
     {
-        _classifier.Classify(ScheduledStart, ScheduledEnd, ritualCompletedAt: null, sessionEndedAt: null, asOf: ScheduledEnd.AddHours(1))
+        Classify(ritualCompletedAt: null, sessionEndedAt: null, asOf: ScheduledEnd.AddHours(1))
             .Should().Be(FocusBlockOutcome.Missed);
     }
 
@@ -118,14 +128,14 @@ public class FocusBlockOutcomeClassifierTests
     {
         var asOf = ScheduledStart.AddHours(1); // 2:00 — window still open until 3:00
 
-        _classifier.Classify(ScheduledStart, ScheduledEnd, ritualCompletedAt: null, sessionEndedAt: null, asOf: asOf)
+        Classify(ritualCompletedAt: null, sessionEndedAt: null, asOf: asOf)
             .Should().BeNull();
     }
 
     [Fact]
     public void NoRitual_JustBeforeEnd_IsNull()
     {
-        _classifier.Classify(ScheduledStart, ScheduledEnd, ritualCompletedAt: null, sessionEndedAt: null, asOf: ScheduledEnd.AddMinutes(-1))
+        Classify(ritualCompletedAt: null, sessionEndedAt: null, asOf: ScheduledEnd.AddMinutes(-1))
             .Should().BeNull();
     }
 
@@ -134,7 +144,7 @@ public class FocusBlockOutcomeClassifierTests
     {
         var asOf = ScheduledStart.AddMinutes(-30); // 12:30 — block hasn't started yet
 
-        _classifier.Classify(ScheduledStart, ScheduledEnd, ritualCompletedAt: null, sessionEndedAt: null, asOf: asOf)
+        Classify(ritualCompletedAt: null, sessionEndedAt: null, asOf: asOf)
             .Should().BeNull();
     }
 
@@ -143,7 +153,7 @@ public class FocusBlockOutcomeClassifierTests
     {
         var sessionEndedAt = ScheduledStart.AddMinutes(45); // quit well before the 3:00 scheduled end
 
-        _classifier.Classify(ScheduledStart, ScheduledEnd, ritualCompletedAt: ScheduledStart, sessionEndedAt: sessionEndedAt, asOf: sessionEndedAt)
+        Classify(ritualCompletedAt: ScheduledStart, sessionEndedAt: sessionEndedAt, asOf: sessionEndedAt)
             .Should().Be(FocusBlockOutcome.EndedEarly);
     }
 
@@ -153,14 +163,14 @@ public class FocusBlockOutcomeClassifierTests
         var ritualAt = ScheduledStart.AddMinutes(20); // started late
         var sessionEndedAt = ritualAt.AddMinutes(15); // then also quit early
 
-        _classifier.Classify(ScheduledStart, ScheduledEnd, ritualCompletedAt: ritualAt, sessionEndedAt: sessionEndedAt, asOf: sessionEndedAt)
+        Classify(ritualCompletedAt: ritualAt, sessionEndedAt: sessionEndedAt, asOf: sessionEndedAt)
             .Should().Be(FocusBlockOutcome.EndedEarly);
     }
 
     [Fact]
     public void SessionEndedExactlyAtScheduledEnd_IsNotEndedEarly()
     {
-        _classifier.Classify(ScheduledStart, ScheduledEnd, ritualCompletedAt: ScheduledStart, sessionEndedAt: ScheduledEnd, asOf: ScheduledEnd)
+        Classify(ritualCompletedAt: ScheduledStart, sessionEndedAt: ScheduledEnd, asOf: ScheduledEnd)
             .Should().Be(FocusBlockOutcome.CompletedOnTime);
     }
 
@@ -170,7 +180,7 @@ public class FocusBlockOutcomeClassifierTests
         // sessionEndedAt is meaningless without a completed ritual — should never surface EndedEarly.
         var asOf = ScheduledStart.AddHours(1);
 
-        _classifier.Classify(ScheduledStart, ScheduledEnd, ritualCompletedAt: null, sessionEndedAt: ScheduledStart.AddMinutes(10), asOf: asOf)
+        Classify(ritualCompletedAt: null, sessionEndedAt: ScheduledStart.AddMinutes(10), asOf: asOf)
             .Should().BeNull();
     }
 

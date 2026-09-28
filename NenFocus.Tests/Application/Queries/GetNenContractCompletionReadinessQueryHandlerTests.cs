@@ -150,7 +150,7 @@ public class GetNenContractCompletionReadinessQueryHandlerTests
         _blocks.GetForRangeAsync(Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[ended]);
         // Never ritual-completed and its scheduled End has already passed — resolved as Missed.
-        _outcomeClassifier.Classify(ended.Start, ended.End, null, null, Now).Returns(FocusBlockOutcome.Missed);
+        _outcomeClassifier.Classify(ended, Now).Returns(FocusBlockOutcome.Missed);
 
         var result = await CreateHandler().HandleAsync(new GetNenContractCompletionReadinessQuery(ContractId));
 
@@ -168,7 +168,7 @@ public class GetNenContractCompletionReadinessQueryHandlerTests
         var endedEarly = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Now.AddMinutes(-30), Now.AddHours(1), contractId: ContractId);
         _blocks.GetForRangeAsync(Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[endedEarly]);
-        _outcomeClassifier.Classify(endedEarly.Start, endedEarly.End, endedEarly.RitualCompletedAt, endedEarly.SessionEndedAt, Now)
+        _outcomeClassifier.Classify(endedEarly, Now)
             .Returns(FocusBlockOutcome.EndedEarly);
 
         var result = await CreateHandler().HandleAsync(new GetNenContractCompletionReadinessQuery(ContractId));

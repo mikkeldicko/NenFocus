@@ -1407,3 +1407,24 @@ For active design tension, see the **Open Gaps** section in `ARCHITECT_GOVERNANC
 **Confirmed via `NenFocus.Tests` (1450 passing, up from 1445):** cancelled before start is never active and reserves nothing; cancelled mid-run is active until the cancel moment only; a Focus block's earliest reason wins (cancelled vs ended early); a cancelled block cancelled mid-run passes an Ended marker at the cancel moment; `PolicyEngine` blocks nothing for a cancelled block handed straight to it (the regression guard); the query handler now passes blocks through for `PolicyEngine` to rule out.
 
 **Principle demonstrated:** when a fact has to be re-checked by every caller, it isn't part of the concept it belongs to yet. Fold it into the one rule those callers already ask, and the copies stop being needed rather than needing to be kept in sync.
+
+---
+
+## Gap 86 — Outcome Classification Has One Source: the Block *(closed, 2026-09-28)*
+
+**The gap, found in the area-1 audit:** `Classify(scheduledStart, scheduledEnd, ritualCompletedAt, sessionEndedAt, asOf)` was called from four places, each spelling the arguments out by hand — and they fed "when did the session end" from two different sources. The Planner tile and `IsResolved` passed the block's `SessionEndedAt` stamp; the deficit ledger and the contract recap loaded the `Session` and passed its `EndedAt`. No live bug: for classification the two agree (only an early end matters, and both are written together in `EndSessionCommandHandler`). But it was one fact read from two places — the Planner tile and the recap could disagree about the same block the day the two copies drift (the Gaps 70/72/78 note) — five loose dates per call can be swapped and still compile, and the recap loaded every session just for that one date.
+
+**Found while fixing:** the two are *not* the same fact in general. `Session.EndedAt` means "ended"; `FocusBlock.SessionEndedAt` means "ended **early**" and stays null when the session ran to the end. That is enough for `Classify`, but not for `CreditedWindow`/`CreditedFocusMinutes`, which must know a session finished on time — so credit keeps reading the session. The stamp's doc comment now says so; the similar names are a trap.
+
+**Options weighed:**
+- *An overload taking the block, keeping the five-argument form public* — rejected: two ways in means callers can still feed the other source.
+- *Move classification onto the block (`focusBlock.OutcomeAt(asOf)`)* — tempting, since every input is the block's own, but the grace-period rule it uses is shared with credited minutes, which needs the session and so can't live on the block. Moving `Classify` alone would split one rule across two homes.
+- **Chosen:** `Classify(FocusBlock block, DateTime asOf)` is the only public form; the five-argument version is private. The classifier stays the single owner of the outcome and credit rules; the block is always the source of its own facts.
+
+**Changed:** all four callers are `classifier.Classify(block, now)`; `GetNenContractRecapQueryHandler` no longer depends on `ISessionRepository`. The deficit ledger still loads the session — for elapsed minutes and whether it has truly ended, which only the session knows.
+
+**Confirmed via `NenFocus.Tests` (1450 passing):** the classifier's own rule tests run unchanged through a helper that builds a real block with the given stamps; handler tests mock `Classify(block, now)`.
+
+**Principle demonstrated:** a fact reachable two ways will eventually be read two ways — close the second door rather than documenting which one to use. And check that two similarly named fields are really the same fact before unifying them: here they were only the same for one of their two consumers.
+
+**Addendum (same day) — the stamp now means "ended", not "ended early".** Asking why the two facts differed traced it to Gap 22: `SessionEndedAt` replaced the destructive `TrimEnd` and inherited its "only if before `End`" condition by accident, not design. Every reader already compares the stamp to `End` itself (`Classify`, `EffectiveEnd`, the Planner tile), so an on-time stamp changes no answer. `EndSessionCommandHandler` now always calls `MarkSessionEnded`, making the block's copy a faithful copy of `Session.EndedAt` — one meaning for one name, and an empty stamp only ever means "no session has ended". **Migration `BackfillFocusBlockSessionEndedAt`** (data only, no schema change) fills the stamp for existing on-time blocks from their completed session; `Down` clears every stamp at or after `End`, restoring the old rule exactly. Verified against a copy of the real database seeded with an on-time, an early and a no-session block (forward and back); the real database currently holds no Focus blocks. The comments warning about "ended early only" were removed. Grouping `RitualCompletedAt`/`SessionEndedAt` into a `SessionRun` value object was considered and parked with the session ↔ block pairing note on Gaps 70/72/78.

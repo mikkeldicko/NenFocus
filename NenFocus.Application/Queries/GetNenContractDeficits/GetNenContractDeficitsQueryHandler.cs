@@ -43,7 +43,7 @@ public sealed class GetNenContractDeficitsQueryHandler
         foreach (var block in focusBlocks)
         {
             var session = await _sessions.GetByOriginatingBlockIdAsync(block.Id, ct);
-            var outcome = _classifier.Classify(block.Start, block.End, block.RitualCompletedAt, session?.EndedAt, now);
+            var outcome = _classifier.Classify(block, now);
             var actualElapsedMinutes = session?.GetElapsedTime(now)?.TotalMinutes ?? 0;
             // Credited, not raw elapsed: a StartedLate session that keeps running past the
             // block's own scheduled end (e.g. a fixed-duration session started late) can

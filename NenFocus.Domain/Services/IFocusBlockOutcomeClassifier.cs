@@ -1,3 +1,4 @@
+using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
 
 namespace NenFocus.Domain.Services;
@@ -14,20 +15,16 @@ public interface IFocusBlockOutcomeClassifier
     bool IsLateStart(DateTime scheduledStart, DateTime momentToCheck);
 
     /// <summary>
-    /// Classifies a Focus block's outcome from its scheduled window, ritual
-    /// completion state, and (if the session ended before scheduledEnd) when the
-    /// session ended. Returns null if no verdict has been reached yet — the
-    /// block is still open (in progress or future) and could still be started
-    /// late right up to its scheduled end. A ritual completed within the grace
-    /// period after scheduledStart still counts as CompletedOnTime, unless the
-    /// session ended early, which takes priority and produces EndedEarly instead.
+    /// Classifies a Focus block's outcome from its own facts: its scheduled window, when its
+    /// Ritual was completed, and when its session ended (<c>FocusBlock.SessionEndedAt</c>). The
+    /// only way to classify — the block is always the source, so no caller can feed a
+    /// different "when did the session end" (Gap 86). Returns null if no verdict has been
+    /// reached yet — the block is still open (in progress or future) and could still be
+    /// started late right up to its scheduled end. A ritual completed within the grace
+    /// period after its start still counts as CompletedOnTime, unless the session ended
+    /// early, which takes priority and produces EndedEarly instead.
     /// </summary>
-    FocusBlockOutcome? Classify(
-        DateTime scheduledStart,
-        DateTime scheduledEnd,
-        DateTime? ritualCompletedAt,
-        DateTime? sessionEndedAt,
-        DateTime asOf);
+    FocusBlockOutcome? Classify(FocusBlock block, DateTime asOf);
 
     /// <summary>
     /// Focus minutes to credit toward a Daily Floor for this block. Within the grace

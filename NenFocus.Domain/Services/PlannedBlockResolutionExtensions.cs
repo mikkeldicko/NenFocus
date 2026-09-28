@@ -18,6 +18,6 @@ public static class PlannedBlockResolutionExtensions
     /// </summary>
     public static bool IsResolved(this PlannedBlock block, IFocusBlockOutcomeClassifier classifier, DateTime asOf)
         => block is FocusBlock fb
-            ? classifier.Classify(fb.Start, fb.End, fb.RitualCompletedAt, fb.SessionEndedAt, asOf) is not null
+            ? classifier.Classify(fb, asOf) is not null
             : block.HasEnded(asOf);
 }

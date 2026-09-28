@@ -1,3 +1,4 @@
+using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
 
 namespace NenFocus.Domain.Services;
@@ -25,7 +26,12 @@ public sealed class FocusBlockOutcomeClassifier : IFocusBlockOutcomeClassifier
     public bool IsLateStart(DateTime scheduledStart, DateTime momentToCheck)
         => momentToCheck > scheduledStart.AddMinutes(GracePeriodMinutes);
 
-    public FocusBlockOutcome? Classify(
+    public FocusBlockOutcome? Classify(FocusBlock block, DateTime asOf)
+        => Classify(block.Start, block.End, block.RitualCompletedAt, block.SessionEndedAt, asOf);
+
+    // Private: callers hand over the block, never loose dates, so "when did the session end"
+    // can only ever come from the block's own stamp (a faithful copy of Session.EndedAt).
+    private FocusBlockOutcome? Classify(
         DateTime scheduledStart,
         DateTime scheduledEnd,
         DateTime? ritualCompletedAt,

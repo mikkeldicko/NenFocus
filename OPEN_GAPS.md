@@ -69,7 +69,7 @@ Once a gap (or a self-contained half of one) is fully closed, its write-up moves
 
 **Must be closed before:** The app is used in a high-stakes environment (e.g., exam blocking, supervised study) where a crash silently removing enforcement would be a product safety failure. For personal use, the current behavior is acceptable.
 
-**First step if recovery restores a planned session (noted 2026-09-28):** a planned session's start/end and its `FocusBlock`'s `RitualCompletedAt`/`SessionEndedAt` stamps are one story written in two places, today kept in step only by line order in `StartSessionCommandHandler`/`EndSessionCommandHandler`. A second writer is the trigger to move each pair into one Domain operation (e.g. a `PlannedSessionLifecycle` domain service) so it can never be half-done — same note on Gaps 72 and 78.
+**First step if recovery restores a planned session (noted 2026-09-28):** a planned session's start/end and its `FocusBlock`'s `RitualCompletedAt`/`SessionEndedAt` stamps are one story written in two places, today kept in step only by line order in `StartSessionCommandHandler`/`EndSessionCommandHandler`. A second writer is the trigger to move each pair into one Domain operation (e.g. a `PlannedSessionLifecycle` domain service) so it can never be half-done — same note on Gaps 72 and 78. Consider doing it together with grouping `RitualCompletedAt`/`SessionEndedAt` into one `SessionRun(StartedAt, EndedAt?)` value object on `FocusBlock` (null = no session, open end = running) — EF can map it onto the existing two columns (idea noted 2026-09-28, Gap 86).
 
 ### Gap 71 (C) — Nen Contract Motivation & Scoring Enhancements (three interrogated, unbuilt)
 
@@ -128,7 +128,7 @@ Once a gap (or a self-contained half of one) is fully closed, its write-up moves
 - **Invariant to keep:** the block and its session must be created **together, only at Hatsu Start** — abandoning the Ritual must leave no record (product invariant), and a half-made redemption block must never become a new *missed* block with its own deficit.
 - **Open for the interrogation:** (1) vocabulary collision — today `SessionOrigin.Spontaneous` means "no block exists", but this is spontaneous in *timing* while having a block: a third `SessionOrigin` value, or separate "when it started" from "whether a block exists"; (2) which deficit it covers when several are outstanding (largest? oldest? the user picks?); (3) placement rules (`RedemptionPlacementPolicy`, Work Hours, overlap with an upcoming Focus Block) applied at "now"; (4) what if the deficit changes between clicking the button and Hatsu Start.
 - **Depends on:** nothing built yet; compatible with the planned Spontaneous-session Planner tiles (this is a real block, so it gets an ordinary block tile with its own label).
-- **First step (noted 2026-09-28):** this is a second writer of the session ↔ `FocusBlock` stamps (`RitualCompletedAt`/`SessionEndedAt`), today paired only by line order in `StartSessionCommandHandler`/`EndSessionCommandHandler`. Move each pair into one Domain operation (e.g. a `PlannedSessionLifecycle` domain service) before adding it, so the two records can never disagree — same note on Gaps 70 and 78.
+- **First step (noted 2026-09-28):** this is a second writer of the session ↔ `FocusBlock` stamps (`RitualCompletedAt`/`SessionEndedAt`), today paired only by line order in `StartSessionCommandHandler`/`EndSessionCommandHandler`. Move each pair into one Domain operation (e.g. a `PlannedSessionLifecycle` domain service) before adding it, so the two records can never disagree — same note on Gaps 70 and 78. Consider doing it together with the `SessionRun` value object idea noted on Gap 70.
 
 ### Gap 73 (E) — Recurring Blocks (interrogated 2026-07-15; not yet built)
 
@@ -305,7 +305,7 @@ Once a gap (or a self-contained half of one) is fully closed, its write-up moves
 
 **Refactor to consider with the break budget:** a session now holds two break rules decided at Start — its `BreakSchedule` (Gap 63) and `KeepBlockingDuringBreaks` (Gap 64). A budget would be a third. At that point, grouping them into one `BreakPlan` value object on `Session` becomes worth it; today it would only wrap two things without adding a rule (considered and deferred in Gap 64).
 
-**First step if "extend session" moves a planned session's end (noted 2026-09-28):** the session and its `FocusBlock` then both need to agree on the new end — a second writer of the session ↔ block stamps, today paired only by line order in `StartSessionCommandHandler`/`EndSessionCommandHandler`. Move each pair into one Domain operation (e.g. a `PlannedSessionLifecycle` domain service) first — same note on Gaps 70 and 72.
+**First step if "extend session" moves a planned session's end (noted 2026-09-28):** the session and its `FocusBlock` then both need to agree on the new end — a second writer of the session ↔ block stamps, today paired only by line order in `StartSessionCommandHandler`/`EndSessionCommandHandler`. Move each pair into one Domain operation (e.g. a `PlannedSessionLifecycle` domain service) first — same note on Gaps 70 and 72. Consider doing it together with the `SessionRun` value object idea noted on Gap 70.
 
 **Must be closed before:** Nothing — parked.
 

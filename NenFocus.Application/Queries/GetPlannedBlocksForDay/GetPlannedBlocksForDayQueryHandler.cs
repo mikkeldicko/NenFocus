@@ -108,7 +108,7 @@ public sealed class GetPlannedBlocksForDayQueryHandler
                 IsUnderInEffectContract = b.ContractId.HasValue && (contractsById.GetValueOrDefault(b.ContractId.Value)?.IsInEffect ?? false),
                 ContractStrictnessRule = b.ContractId.HasValue ? contractsById.GetValueOrDefault(b.ContractId.Value)?.StrictnessRule : null,
                 Outcome = focusBlock is not null
-                    ? _classifier.Classify(b.Start, b.End, focusBlock.RitualCompletedAt, focusBlock.SessionEndedAt, now)
+                    ? _classifier.Classify(focusBlock, now)
                     : null,
                 WasStartedLate = wasStartedLate,
                 ContractBadge = contractBadge,

@@ -103,7 +103,7 @@ public class BreakNenContractCommandHandlerTests
             Now.AddDays(1), Now.AddDays(1).AddHours(1), contractId: contract.Id); // upcoming
 
         // Never ritual-completed and its scheduled End has already passed — resolved as Missed.
-        _outcomeClassifier.Classify(pastBlock.Start, pastBlock.End, null, null, Now).Returns(FocusBlockOutcome.Missed);
+        _outcomeClassifier.Classify(pastBlock, Now).Returns(FocusBlockOutcome.Missed);
 
         _blocks.GetForContractAsync(contract.Id, Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[pastBlock, currentBlock, futureBlock]);
@@ -132,7 +132,7 @@ public class BreakNenContractCommandHandlerTests
             Now.AddMinutes(-30), Now.AddHours(1), contractId: contract.Id);
         endedEarly.MarkRitualCompleted(Now.AddMinutes(-30));
         endedEarly.MarkSessionEnded(Now.AddMinutes(-5));
-        _outcomeClassifier.Classify(endedEarly.Start, endedEarly.End, endedEarly.RitualCompletedAt, endedEarly.SessionEndedAt, Now)
+        _outcomeClassifier.Classify(endedEarly, Now)
             .Returns(FocusBlockOutcome.EndedEarly);
 
         _blocks.GetForContractAsync(contract.Id, Arg.Any<CancellationToken>())

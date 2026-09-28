@@ -18,7 +18,11 @@ public sealed class FocusBlock : PlannedBlock
     /// <summary>Null means the Ritual was never completed for this block.</summary>
     public DateTime? RitualCompletedAt { get; private set; }
 
-    /// <summary>Null unless the session ended before this block's scheduled End.</summary>
+    /// <summary>
+    /// When this block's session ended, early or on time — a faithful copy of the session's
+    /// own EndedAt, written in the same save; null while no session has ended (Gap 86). An
+    /// early end is simply one before End: every reader compares it to End itself.
+    /// </summary>
     public DateTime? SessionEndedAt { get; private set; }
 
     private FocusBlock() { }
