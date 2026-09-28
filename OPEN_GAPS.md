@@ -1,12 +1,12 @@
 # NenFocus — Open Gaps
 
-Full write-ups for every Open Gap: identified, not yet closed, deliberately deferred. Not auto-loaded; read on demand when a task touches one. The one-line index lives in `ARCHITECT_GOVERNANCE.md` → Open Gaps.
+Full write-ups for every Open Gap: identified, not yet closed, deliberately deferred. Not auto-loaded; read on demand when a task touches one. The one-line index, in priority order, lives in `ARCHITECT_GOVERNANCE.md` → Open Gaps. Headings are `Gap <number> (<old letter>)` — the number is permanent from the day a gap is raised; see the naming rule there.
 
 Once a gap (or a self-contained half of one) is fully closed, its write-up moves to `DESIGN_GAP_HISTORY.md`, is removed from here, and its index line is removed from `ARCHITECT_GOVERNANCE.md` — this file should only ever contain gaps with genuine remaining work.
 
 \---
 
-### Open Gap A — Usage Ceiling & Universal Usage Tracking (interrogated 2026-07-07; not yet built)
+### Gap 69 (A) — Usage Ceiling & Universal Usage Tracking (interrogated 2026-07-07; not yet built)
 
 **This entirely supersedes the previous "Time Budget" framing of this gap — not a patch, a rewrite.** `BlockedSite` does **not** gain a `TimeBudget` field. `BlockPreset` (Focus and Background alike) remains pure hard-block only, permanently. The budget concept was pulled off `BlockedSite` entirely and rebuilt as an independent feature, for reasons recorded below.
 
@@ -52,7 +52,7 @@ Once a gap (or a self-contained half of one) is fully closed, its write-up moves
 
 **Must be closed before:** Nothing urgent — deferred until picked up. The domain shape is settled enough to start Slice 1 (entities + interfaces) whenever that happens.
 
-### Open Gap B — Crash Resilience: Session Recovery After Unexpected Shutdown
+### Gap 70 (B) — Crash Resilience: Session Recovery After Unexpected Shutdown
 
 **The gap:** If the app crashes or is force-killed mid-session, the current recovery path relies entirely on `SessionStateService.InitializeAsync()` querying `ISessionRepository.GetActiveAsync()` at startup. This is sufficient for clean restarts (the session was committed to SQLite before the crash), but it does not cover two failure cases:
 
@@ -69,7 +69,7 @@ Once a gap (or a self-contained half of one) is fully closed, its write-up moves
 
 **Must be closed before:** The app is used in a high-stakes environment (e.g., exam blocking, supervised study) where a crash silently removing enforcement would be a product safety failure. For personal use, the current behavior is acceptable.
 
-### Open Gap C — Nen Contract Motivation & Scoring Enhancements (three interrogated, unbuilt)
+### Gap 71 (C) — Nen Contract Motivation & Scoring Enhancements (three interrogated, unbuilt)
 
 **Why deferred:** All three were fully interrogated in a design session (2026-07-07) and each has a settled interface, but none can be built until the Nen Contract Application/Infrastructure/UI layer exists at all — it is still entirely "not yet built" per `DOMAIN_DICTIONARY.md`. Specifically, all three depend on the **completed-hours-per-day summation query** (planned-block + redemption + matching-spontaneous-session hours, summed per calendar day), which is a prerequisite `IsDayMet` already needs for real use regardless of these additions — so this gap adds no new dependency, it just rides on one already owed to the feature. None of the three affect Planner, Presets, or session-start flows on their own merit; Planner is only touched because C2's streak was chosen to surface live on the already-planned active-contract banner. **That completed-hours query used to be buggy — fixed 2026-08-12, see `DESIGN_GAP_HISTORY.md` Gap 22 (closed).** `GetNenContractCompletedFocusHoursQueryHandler` used to silently under-credit any block that was ended early (`EndSessionCommandHandler`'s old `TrimEnd` call corrupted the record it read from). Gap 22 closed this before C1/C2/C3 were ever built on top of it, so none of the three inherit the bug — whenever one of them is picked up, the query it depends on is already trustworthy.
 
@@ -98,7 +98,7 @@ Once a gap (or a self-contained half of one) is fully closed, its write-up moves
 - **Contract templates from Insights** — a "start a new contract like this one" shortcut on a *completed* contract's Insights recap, pre-filling the Advanced wizard from that specific past instance rather than a saved Contract Preset. Distinct from Contract Presets because it copies a real past result, not a deliberately-saved template.
 - **Strictness tightening mid-contract** — already tracked as a parked v2 idea in `DOMAIN_DICTIONARY.md` (Strictness Rule section); re-confirmed parked in this session, no new detail added.
 
-### Open Gap D — Spontaneous Redemption Path (interrogated 2026-07-08 and dropped; reopened 2026-09-27 with a new direction — parked, not re-interrogated)
+### Gap 72 (D) — Spontaneous Redemption Path (interrogated 2026-07-08 and dropped; reopened 2026-09-27 with a new direction — parked, not re-interrogated)
 
 **The original design:** When a contract is active with an outstanding deficit, the Main Page shows a prompt ("You're 1.5 hours behind on your Study Month contract. Start a redemption session?"). Clicking through pre-locks the Ritual's Ren step to the preset with the largest deficit and shows the deficit amount at Hatsu; the user picks any duration, including a partial redemption. The resulting Session is ordinary `Origin = Spontaneous`, `OriginatingBlockId = null` — no Block entity involved, matching the Ubiquitous Language definition of a Spontaneous Session.
 
@@ -127,7 +127,7 @@ Once a gap (or a self-contained half of one) is fully closed, its write-up moves
 - **Open for the interrogation:** (1) vocabulary collision — today `SessionOrigin.Spontaneous` means "no block exists", but this is spontaneous in *timing* while having a block: a third `SessionOrigin` value, or separate "when it started" from "whether a block exists"; (2) which deficit it covers when several are outstanding (largest? oldest? the user picks?); (3) placement rules (`RedemptionPlacementPolicy`, Work Hours, overlap with an upcoming Focus Block) applied at "now"; (4) what if the deficit changes between clicking the button and Hatsu Start.
 - **Depends on:** nothing built yet; compatible with the planned Spontaneous-session Planner tiles (this is a real block, so it gets an ordinary block tile with its own label).
 
-### Open Gap E — Recurring Blocks (interrogated 2026-07-15; not yet built)
+### Gap 73 (E) — Recurring Blocks (interrogated 2026-07-15; not yet built)
 
 **The feature:** A `PlannedBlock` (Focus or Background) that repeats on a schedule — e.g. "9–5 every weekday" — instead of being a single one-off calendar entry. Distinct from Usage Ceiling (a soft ambient cap on access time) and from Nen Contract (a sealed, scored commitment) — this is purely a recurrence mechanism layered onto the existing ordinary block-scheduling flow. Type (Focus vs Background) is decided exactly as it is today: by which `BlockPreset` is picked when the block is created. Recurrence adds no new block type and has no relationship to `NenContract` — it lives entirely on the Planner, the same posture already staked out for this gap before interrogation (see Open Gap A's note distinguishing it from Usage Ceiling).
 
@@ -167,7 +167,7 @@ Once a gap (or a self-contained half of one) is fully closed, its write-up moves
 
 \---
 
-### Open Gap G — Nen Contract Recap Data for Insights (interrogated 2026-08-12; widened 2026-08-30; not yet built)
+### Gap 74 (G) — Nen Contract Recap Data for Insights (interrogated 2026-08-12; widened 2026-08-30; not yet built)
 
 **The feature:** Structural facts about a contract — date range/duration, strictness rule, and which Block Presets were scheduled with how many hours each — readable independently of the Insights page itself being built. Widened 2026-08-12 to also cover **broken contracts**: a count of how many contracts the user has broken, and per-block completion breakdown (completed/late/missed/**cancelled**) for whichever blocks are still linked. Widened again 2026-08-30, alongside Gap 39's build (`DESIGN_GAP_HISTORY.md` — Bonus Blocks & Create-Time Redemption Confirmation, closed), to also surface **Bonus Blocks** belonging to the contract's window.
 
@@ -190,7 +190,7 @@ Once a gap (or a self-contained half of one) is fully closed, its write-up moves
 
 \---
 
-### Open Gap J — System Clock Tampering: Detect and Nudge, Not Block (raised 2026-08-20; parked, not interrogated)
+### Gap 75 (J) — System Clock Tampering: Detect and Nudge, Not Block (raised 2026-08-20; parked, not interrogated)
 
 **The gap:** `ScheduledEnforcementService`'s heartbeat, and every consumer of `ISystemClock.UtcNow`, currently trusts the OS wall clock unconditionally. A user could manually set their system clock backward (before a block's `Start`, dropping enforcement entirely) or forward (skipping through a block's remaining time) to bypass a block they set for themselves. No detection or response exists today.
 
@@ -204,7 +204,7 @@ Once a gap (or a self-contained half of one) is fully closed, its write-up moves
 
 \---
 
-### Open Gap K — Enforcement Has No Life Independent of the GUI Process (surfaced 2026-09-02; interrogated 2026-09-07; not yet built)
+### Gap 76 (K) — Enforcement Has No Life Independent of the GUI Process (surfaced 2026-09-02; interrogated 2026-09-07; not yet built)
 
 **Found while designing the "already-open tab" browser-enforcement fix (see `DESIGN_GAP_HISTORY.md` for that closed gap), not while looking for it.** The question that surfaced this: does killing `NenFocus.exe` (Task Manager / crash) still leave blocking in effect, the way Cold Turkey's separate background service keeps enforcing after its GUI is killed? Verified against the real code, not assumed: **no.**
 
@@ -251,7 +251,7 @@ Once a gap (or a self-contained half of one) is fully closed, its write-up moves
 
 \---
 
-### Open Gap O — Cross-Platform Suite: iOS App, Multi-Device Sync, and Desktop-Driven "Hardcore iOS Lockdown" (raised 2026-09-27; parked, not interrogated)
+### Gap 77 (O) — Cross-Platform Suite: iOS App, Multi-Device Sync, and Desktop-Driven "Hardcore iOS Lockdown" (raised 2026-09-27; parked, not interrogated)
 
 **Why it's here:** captured early so the idea isn't lost, not because it's close. The architect's explicit sequencing: this starts only **after the desktop app is finished**, when the iOS app is begun. **Nothing below is agreed design** — it's a record of an externally-drafted spec the architect brought in (pasted 2026-09-27), kept close to its original wording so the interrogation can start from exactly what was proposed. The architect will run the interrogation personally when the time comes; until then, nothing here should be built on, cited as settled, or used to justify a design choice elsewhere.
 
@@ -285,7 +285,7 @@ Once a gap (or a self-contained half of one) is fully closed, its write-up moves
 
 \---
 
-### Open Gap P — Break Flexibility (raised 2026-09-27; parked, not interrogated)
+### Gap 78 (P) — Break Flexibility (raised 2026-09-27; parked, not interrogated)
 
 **Why it's here:** Gap 63 made a session's breaks a stored `BreakSchedule` (offsets from `StartedAt`) that is the single source of truth, with one rule protecting history: *breaks that have started can never change; only future ones may be added or removed.* Every feature below was named during that interrogation as wanted later. None is designed — each still needs its own Design Gap interrogation — but each was checked to plug into Gap 63's model without reworking it.
 
@@ -306,7 +306,7 @@ Once a gap (or a self-contained half of one) is fully closed, its write-up moves
 
 \---
 
-### Open Gap W — Contract Wizard: "When" Step and One-Click Date/Time Fields (interrogated 2026-09-28; plan agreed, not built — to close as Gap 66; Gap 65 built)
+### Gap 66 (W) — Contract Wizard: "When" Step and One-Click Date/Time Fields (interrogated 2026-09-28; plan agreed, not built; Gap 65 built)
 
 **Agreed design:**
 - **New order:** Basics (name, goal) → Simple / Advanced → Rules → **When** → Review → drafting. Rules come before When so Work Hours can prefill the times.
@@ -319,7 +319,7 @@ Once a gap (or a self-contained half of one) is fully closed, its write-up moves
 
 \---
 
-### Open Gap R — Contract Membership: Only Committed and Redemption Blocks Count Toward the Floor (interrogated 2026-09-28; plan agreed, not built — to close as Gap 67)
+### Gap 67 (R) — Contract Membership: Only Committed and Redemption Blocks Count Toward the Floor (interrogated 2026-09-28; plan agreed, not built)
 
 **Why:** a contract's completed hours counted Spontaneous sessions whose preset matched the contract's (`GetNenContractCompletedFocusHoursQueryHandler`), including sessions from *before* the contract was sealed — a fresh contract showed 4.7 completed hours with no block done. **Architect's hard rule:** only blocks committed at Seal and redemption blocks count toward the floor; everything else in the contract's period is Bonus (display only).
 
@@ -344,7 +344,7 @@ Once a gap (or a self-contained half of one) is fully closed, its write-up moves
 
 \---
 
-### Open Gap S — Drafting Adopts the Calendar; Seal Guards (interrogated 2026-09-28, revised the same day; plan agreed, not built — to close as Gap 68; depends on Gap R)
+### Gap 68 (S) — Drafting Adopts the Calendar; Seal Guards (interrogated 2026-09-28, revised the same day; plan agreed, not built; depends on Gap 67)
 
 **Agreed design:**
 - **Adoption:** entering contract drafting pulls every *not-yet-finished* block (Focus and Background) already in the contract's range into the draft, next to newly drafted blocks. The user keeps or removes each. Kept → **Committed** at Seal. Removed → **deleted at Seal** (shown as "will be deleted at Seal" in the draft; cancelling the draft deletes nothing). Nothing is included or cast aside automatically. This also covers future recurring blocks (Open Gap E), which are real blocks.
@@ -364,7 +364,7 @@ Once a gap (or a self-contained half of one) is fully closed, its write-up moves
 
 \---
 
-### Open Gap T — Spontaneous Sessions as Planner Tiles (raised 2026-09-28; direction agreed, not interrogated)
+### Gap 79 (T) — Spontaneous Sessions as Planner Tiles (raised 2026-09-28; direction agreed, not interrogated)
 
 **Want:** a Spontaneous session appears in the Planner as a tile labelled "Spontaneous" from the moment it starts, stays after it ends, can be clicked for details (goal, preset, duration, breaks, blocked attempts, reflection), and shows "ended early" like a planned block.
 
@@ -376,7 +376,7 @@ Once a gap (or a self-contained half of one) is fully closed, its write-up moves
 
 \---
 
-### Open Gap U — Extending a Contract (raised 2026-09-28; direction agreed, not interrogated)
+### Gap 80 (U) — Extending a Contract (raised 2026-09-28; direction agreed, not interrogated)
 
 **Doesn't exist yet** — `NenContract.OriginalEndDate` is only used by `Break`. **Architect's design:** extending (e.g. on Wednesday, a Friday end → Sunday) re-enters **drafting for the added days only**. Everything up to the original end is locked (already committed); the added days work like a fresh draft — adopt existing blocks with keep/remove (Gap S), no block may cross the new end, and the "Focus time in progress" guard applies. Blocks created after the extension inside the added days are Bonus (Gap R).
 
@@ -386,7 +386,7 @@ After Gap 65, extending means appending Contract Days generated with `ContractCa
 
 \---
 
-### Open Gap V — Always-On Background Presets (raised 2026-09-28; parked, not interrogated)
+### Gap 81 (V) — Always-On Background Presets (raised 2026-09-28; parked, not interrogated)
 
 **Want:** a Background preset (e.g. Facebook + Instagram) that is always enforced, inside or outside any contract, without drawing a months-long Planner block.
 
@@ -396,7 +396,7 @@ After Gap 65, extending means appending Contract Days generated with `ContractCa
 
 \---
 
-### Open Gap X — Per-Day Hours and Floors in Drafting (raised 2026-09-28, widened the same day; parked, not interrogated)
+### Gap 82 (X) — Per-Day Hours and Floors in Drafting (raised 2026-09-28, widened the same day; parked, not interrogated)
 
 **Want:** Outlook-style — outside-Work-Hours time shown greyed out on the drafting calendar; the user drags the grey edges per day to set that day's hours (Monday 9–17, Tuesday 12–20). The preset's Work Hours only prefill.
 
