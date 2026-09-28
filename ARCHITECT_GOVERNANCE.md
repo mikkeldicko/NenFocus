@@ -156,9 +156,10 @@ Grouped into six boxes, worked top to bottom (agreed 2026-09-28; architecture bo
 **1. Architecture — one source of truth, deep modules, DDD (added 2026-09-29).** Not new features: making the existing code scalable before more is built on it. Rules for this work: `MODULE_STANDARDS.md` → Where a Rule Lives and Design Review Rules.
 1. **Gap 88 — One Source for Time Slots and Block Placement** (`TimeSlot`, reserved vs scheduled slot, `BlockPlacementChecker`, started blocks locked, Cover Deficit and UI checks built on it) — raised 2026-09-28 in the area-1 audit; interrogated 2026-09-29, plan saved in `OPEN_GAPS.md`, interface awaiting approval; not being built yet. Before Gap 68 so drafting builds on it.
 2. **Gap 90 — Blocks and Sessions Hold a `TimeSlot`** (stored value object instead of loose `Start`/`End`, so a raw comparison can't be written) — raised 2026-09-29 during Gap 88; direction agreed, not interrogated. Straight after Gap 88.
-3. **Gap 91 — One-Source Sweep: Same Fact, Several Derivations** (whole codebase, beyond Gap 89's four areas) — raised 2026-09-29; not started.
-4. **Gap 92 — Value Object and Service Review** (does every value object carry a rule, is every service in the right layer with the right name) — raised 2026-09-29; not started.
-5. **Gap 89 — Architecture Audit, Areas 2–5** (PlannerPageViewModel, two heartbeats' clocks, in-memory session vs database, Nen Contract queries) — raised 2026-09-28; not started. Moved here from box 3 on 2026-09-29.
+3. **Gap 93 — One Source for Block Change Permissions** ("may this block be changed or deleted": three validators and seven ViewModel properties, several disagreeing — incl. a live bug, the Split button hidden for Period Study contracts) — raised 2026-09-29; findings recorded, not interrogated. After Gap 88, whose phase 0 already removes part of it.
+4. **Gap 91 — One-Source Sweep: Same Fact, Several Derivations** (whole codebase, beyond Gap 89's four areas) — raised 2026-09-29; not started.
+5. **Gap 92 — Value Object and Service Review** (does every value object carry a rule, is every service in the right layer with the right name) — raised 2026-09-29; not started.
+6. **Gap 89 — Architecture Audit, Areas 2–5** (PlannerPageViewModel, two heartbeats' clocks, in-memory session vs database, Nen Contract queries) — raised 2026-09-28; not started. Moved here from box 3 on 2026-09-29.
 
 **2. Contracts — now**
 1. **Gap 66 (W) — Contract Wizard: "When" Step and One-Click Date/Time Fields** — interrogated 2026-09-28; plan agreed.
@@ -188,7 +189,7 @@ Grouped into six boxes, worked top to bottom (agreed 2026-09-28; architecture bo
 3. **Gap 76 (K) — Enforcement Has No Life Independent of the GUI Process** (Windows Service split) — interrogated 2026-09-07; not yet built.
 4. **Gap 77 (O) — Cross-Platform Suite: iOS App, Multi-Device Sync, "Hardcore iOS Lockdown"** — raised 2026-09-27; not interrogated.
 
-Next free number: **93** (84–87 used 2026-09-28 by fixes built directly; 88–89 raised as open gaps the same day; 90–92 raised 2026-09-29).
+Next free number: **94** (84–87 used 2026-09-28 by fixes built directly; 88–89 raised as open gaps the same day; 90–93 raised 2026-09-29).
 
 \---
 
