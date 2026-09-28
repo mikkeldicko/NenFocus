@@ -102,8 +102,7 @@ public sealed class GetNenContractRecapQueryHandler : IQueryHandler<GetNenContra
         var blocksInRange = await _blocks.GetForRangeAsync(rangeStart, rangeEnd, ct);
         var bonusBlockCount = blocksInRange.Count(b =>
             b.ContractId is null &&
-            _clock.ToLocal(b.Start) >= contract.StartsAt &&
-            _clock.ToLocal(b.Start) <= contract.EndsAt);
+            contract.Covers(_clock.ToLocal(b.Start)));
 
         var dailyBreakdown = new List<NenContractDailyRecapEntryDto>();
         var bestStreakDays = 0;

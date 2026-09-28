@@ -22,11 +22,16 @@ public class GetUnacknowledgedPostContractsQueryHandlerTests
     private GetUnacknowledgedPostContractsQueryHandler CreateHandler() => new(_contracts, _recap);
 
     private static NenContract CompletedContract(Guid id) => NenContract.Seal(
-        id: id, name: "Focused Week", goal: new NenContractGoal("Ship it"),
-        startDate: StartDate, endDate: EndDate, strictnessRule: StrictnessRule.Locked,
-        dailyFloorPolicy: DailyFloorPolicy.None, changeWindow: null, allowCancellation: true,
+        id: id,
+        name: "Focused Week",
+        goal: new NenContractGoal("Ship it"),
+        strictnessRule: StrictnessRule.Locked,
+        calendar: TestCalendars.For(StartDate, EndDate, new DailyFloorRule.None()),
+        floorRule: new DailyFloorRule.None(),
+        changeWindow: null,
+        allowCancellation: true,
         plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-        sealedAt: StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
+        localSealedAt: StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
 
     [Fact]
     public async Task HandleAsync_NoUnacknowledgedContracts_ReturnsEmpty()

@@ -22,10 +22,18 @@ public class GetSuggestedRedemptionPlacementsQueryHandlerTests
 
     private GetSuggestedRedemptionPlacementsQueryHandler CreateHandler() => new(_contracts, _deficits, _presets, _blocks);
 
-    private static NenContract SameDayContract(Guid id, WorkHoursPolicy? workHours = null) =>
-        NenContract.Seal(id, "Contract", new NenContractGoal("Goal"), Today.AddDays(-1), Today.AddDays(7),
-            StrictnessRule.Locked, new DailyFloorPolicy(DailyFloor.None), null, false,
-            new Dictionary<DateOnly, double>(), Today.ToDateTime(TimeOnly.MinValue), workHoursPolicy: workHours,
+    private static NenContract SameDayContract(Guid id, WorkHours? workHours = null) =>
+        NenContract.Seal(
+            id: id,
+            name: "Contract",
+            goal: new NenContractGoal("Goal"),
+            strictnessRule: StrictnessRule.Locked,
+            calendar: TestCalendars.For(Today.AddDays(-1), Today.AddDays(7), new DailyFloorRule.Fixed(DailyFloor.None), workHours: workHours),
+            floorRule: new DailyFloorRule.Fixed(DailyFloor.None),
+            changeWindow: null,
+            allowCancellation: false,
+            plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
+            localSealedAt: Today.AddDays(-1).ToDateTime(TimeOnly.MinValue),
             redemptionPlacementPolicy: RedemptionPlacementPolicy.CurrentDayOnly);
 
     private static FocusBlockDeficitDto Deficit(Guid presetId, DateTime scheduledStart, double remaining) =>
@@ -96,9 +104,17 @@ public class GetSuggestedRedemptionPlacementsQueryHandlerTests
     {
         var contractId = Guid.NewGuid();
         var presetId = Guid.NewGuid();
-        var contract = NenContract.Seal(contractId, "Contract", new NenContractGoal("Goal"), Today.AddDays(-1), Today.AddDays(7),
-            StrictnessRule.Locked, new DailyFloorPolicy(DailyFloor.None), null, false,
-            new Dictionary<DateOnly, double>(), Today.ToDateTime(TimeOnly.MinValue),
+        var contract = NenContract.Seal(
+            id: contractId,
+            name: "Contract",
+            goal: new NenContractGoal("Goal"),
+            strictnessRule: StrictnessRule.Locked,
+            calendar: TestCalendars.For(Today.AddDays(-1), Today.AddDays(7), new DailyFloorRule.Fixed(DailyFloor.None)),
+            floorRule: new DailyFloorRule.Fixed(DailyFloor.None),
+            changeWindow: null,
+            allowCancellation: false,
+            plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
+            localSealedAt: Today.AddDays(-1).ToDateTime(TimeOnly.MinValue),
             redemptionPlacementPolicy: RedemptionPlacementPolicy.AnywhereInContract);
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>()).Returns(contract);
         var deficit = Deficit(presetId, Today.AddDays(-1).ToDateTime(new TimeOnly(10, 0)), remaining: 30);
@@ -223,7 +239,7 @@ public class GetSuggestedRedemptionPlacementsQueryHandlerTests
         var contractId = Guid.NewGuid();
         var presetId = Guid.NewGuid();
         var now = Today.ToDateTime(new TimeOnly(16, 47));
-        var workHours = new WorkHoursPolicy(new WorkHours(new TimeOnly(9, 0), new TimeOnly(17, 0)));
+        var workHours = new WorkHours(new TimeOnly(9, 0), new TimeOnly(17, 0));
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>()).Returns(SameDayContract(contractId, workHours));
         var deficit = Deficit(presetId, now, remaining: 10);
         _deficits.HandleAsync(new GetNenContractDeficitsQuery(contractId), Arg.Any<CancellationToken>())
@@ -282,7 +298,7 @@ public class GetSuggestedRedemptionPlacementsQueryHandlerTests
         var contractId = Guid.NewGuid();
         var presetId = Guid.NewGuid();
         var now = Today.ToDateTime(new TimeOnly(18, 0));
-        var workHours = new WorkHoursPolicy(new WorkHours(new TimeOnly(9, 0), new TimeOnly(17, 0)));
+        var workHours = new WorkHours(new TimeOnly(9, 0), new TimeOnly(17, 0));
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>()).Returns(SameDayContract(contractId, workHours));
         var deficit = Deficit(presetId, now, remaining: 30);
         _deficits.HandleAsync(new GetNenContractDeficitsQuery(contractId), Arg.Any<CancellationToken>())

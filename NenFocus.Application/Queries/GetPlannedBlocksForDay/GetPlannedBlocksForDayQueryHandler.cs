@@ -81,7 +81,7 @@ public sealed class GetPlannedBlocksForDayQueryHandler
             // isn't midnight. b.Start is UTC; StartsAt/EndsAt are local wall-clock instants.
             var localStart = _clock.ToLocal(b.Start);
             var bonusContract = b.ContractId is null
-                ? allContracts.FirstOrDefault(c => localStart >= c.StartsAt && localStart <= c.EndsAt)
+                ? allContracts.FirstOrDefault(c => c.Covers(localStart))
                 : null;
 
             // Redemption and Bonus are mutually exclusive by construction (Redemption always

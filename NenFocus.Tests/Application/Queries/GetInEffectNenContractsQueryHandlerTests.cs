@@ -18,24 +18,28 @@ public class GetInEffectNenContractsQueryHandlerTests
     // rather than auto-activating it (Status becomes Active only if sealedAt >= startDate).
     private static NenContract SealedContract(
         string name, DateOnly start, DateOnly end, StrictnessRule rule = StrictnessRule.DailyFlexibility) => NenContract.Seal(
+            id: Guid.NewGuid(),
+            name: name,
+            goal: new NenContractGoal("Goal"),
+            strictnessRule: rule,
+            calendar: TestCalendars.For(start, end, new DailyFloorRule.None()),
+            floorRule: new DailyFloorRule.None(),
+            changeWindow: null,
+            allowCancellation: true,
+            plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
+            localSealedAt: start.AddDays(-1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
+
+    private static NenContract ActiveContract(string name, DateOnly start, DateOnly end) => NenContract.Seal(
         id: Guid.NewGuid(),
         name: name,
         goal: new NenContractGoal("Goal"),
-        startDate: start,
-        endDate: end,
-        strictnessRule: rule,
-        dailyFloorPolicy: DailyFloorPolicy.None,
+        strictnessRule: StrictnessRule.DailyFlexibility,
+        calendar: TestCalendars.For(start, end, new DailyFloorRule.None()),
+        floorRule: new DailyFloorRule.None(),
         changeWindow: null,
         allowCancellation: true,
         plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-        sealedAt: start.AddDays(-1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
-
-    private static NenContract ActiveContract(string name, DateOnly start, DateOnly end) => NenContract.Seal(
-        id: Guid.NewGuid(), name: name, goal: new NenContractGoal("Goal"),
-        startDate: start, endDate: end, strictnessRule: StrictnessRule.DailyFlexibility,
-        dailyFloorPolicy: DailyFloorPolicy.None, changeWindow: null, allowCancellation: true,
-        plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-        sealedAt: start.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)); // sealedAt == start -> auto-activates
+        localSealedAt: start.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)); // sealedAt == start -> auto-activates
 
     [Fact]
     public async Task HandleAsync_NoContracts_ReturnsEmpty()

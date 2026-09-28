@@ -376,6 +376,9 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
     public bool HasSelectedContract => SelectedContract is not null;
 
+    /// <summary>The contract banner steps aside while drafting — the drafting banner is the only one then (editing an Upcoming contract would otherwise show both).</summary>
+    public bool IsContractBannerVisible => HasSelectedContract && !IsDraftingContract;
+
     // True only when a second in-effect contract also touches the currently viewed week —
     // drives the banner's switch-button visibility. A simple two-way toggle by design
     // (cycles for the rare 3+-contracts-in-one-week case); no dedicated picker.
@@ -415,6 +418,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     partial void OnSelectedContractChanged(NenContractRangeViewDto? value)
     {
         OnPropertyChanged(nameof(HasSelectedContract));
+        OnPropertyChanged(nameof(IsContractBannerVisible));
         OnPropertyChanged(nameof(SelectedContractBannerText));
         OnPropertyChanged(nameof(HasNoContracts));
         OnPropertyChanged(nameof(IsSelectedContractUpcoming));
@@ -774,7 +778,11 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
     partial void OnIsFormVisibleChanged(bool value) => OnPropertyChanged(nameof(CanOpenContractWizard));
     partial void OnIsWizardVisibleChanged(bool value) => OnPropertyChanged(nameof(CanOpenContractWizard));
-    partial void OnIsDraftingContractChanged(bool value) => OnPropertyChanged(nameof(CanOpenContractWizard));
+    partial void OnIsDraftingContractChanged(bool value)
+    {
+        OnPropertyChanged(nameof(CanOpenContractWizard));
+        OnPropertyChanged(nameof(IsContractBannerVisible));
+    }
 
     public PlannerPageViewModel(
         IQueryDispatcher queryDispatcher,
@@ -1305,23 +1313,23 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// Uses the SAME WorkHours value object AllowsBlockPlacement resolves internally
-    /// (Domain.ValueObjects.WorkHours.ContainsRange) against the window
-    /// GetContractWorkHoursForDateQuery already resolved once in OpenSplitDialogAsync — not
-    /// re-deriving the rule, just applying it locally to avoid a query per keystroke.
+    /// Uses the SAME ContractDay.Contains rule AllowsBlockPlacement checks internally, against
+    /// the window GetContractWorkHoursForDateQuery already resolved once in
+    /// OpenSplitDialogAsync — not re-deriving the rule, just applying it locally to avoid a
+    /// query per keystroke.
     /// </summary>
     private string? FindSplitWorkHoursViolation(TimeSpan firstStart, TimeSpan firstEnd, TimeSpan secondStart, TimeSpan secondEnd)
     {
         if (_splitWorkHours is not { } wh) return null;
 
-        var workHours = new WorkHours(wh.Start, wh.End);
+        var window = new ContractDay(DateOnly.FromDateTime(wh.Start), wh.Start, wh.End, floor: null);
         var dayDate = FormDate.Date;
-        var windowText = WorkHoursRangeToLabelConverter.FormatKnownWindow12Hour(wh.Start, wh.End);
+        var windowText = WorkHoursRangeToLabelConverter.FormatKnownWindow12Hour(TimeOnly.FromDateTime(wh.Start), TimeOnly.FromDateTime(wh.End));
 
-        if (!workHours.ContainsRange(dayDate.Add(firstStart), dayDate.Add(firstEnd)))
-            return $"First Block falls outside the contract's Work Hours ({windowText}).";
-        if (!workHours.ContainsRange(dayDate.Add(secondStart), dayDate.Add(secondEnd)))
-            return $"Second Block falls outside the contract's Work Hours ({windowText}).";
+        if (!window.Contains(dayDate.Add(firstStart), dayDate.Add(firstEnd)))
+            return $"First Block falls outside the contract's hours ({windowText}).";
+        if (!window.Contains(dayDate.Add(secondStart), dayDate.Add(secondEnd)))
+            return $"Second Block falls outside the contract's hours ({windowText}).";
         return null;
     }
 
@@ -1371,6 +1379,13 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
             foreach (var b in blocks)
             {
+                // Editing a Scheduled contract: its saved blocks are represented by their draft
+                // copies (seeded in BeginDrafting), so they're left out here — otherwise each shows
+                // twice and the saved one, protected by its sealed contract, sits on top of the
+                // editable copy. Nothing changes in the database until Seal; cancel restores them.
+                if (IsDraftingContract && b.ContractId is { } contractId && contractId == _draftRules?.EditingContractId)
+                    continue;
+
                 _blocksInWeek[b.Id] = b;
                 var tile = BuildTile(b, i);
                 if (tile is not null) Tiles.Add(tile);

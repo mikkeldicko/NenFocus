@@ -16,27 +16,31 @@ public class NenContractRepositoryTests : SqliteRepositoryTestBase
     private NenContractRepository CreateRepository() => new(Context);
 
     private static NenContract Seal(
-        DailyFloorPolicy? dailyFloorPolicy = null,
+        DailyFloorRule? floorRule = null,
         IReadOnlyDictionary<DateOnly, double>? plannedFocusHoursByDay = null,
-        WorkHoursPolicy? workHoursPolicy = null,
+        WorkHours? workHours = null,
         DateTime? sealedAt = null,
         Guid? contractPresetId = null,
         bool allowCancellation = false,
-        StrictnessRule strictnessRule = StrictnessRule.Locked)
-        => NenContract.Seal(
+        StrictnessRule strictnessRule = StrictnessRule.Locked,
+        IReadOnlyCollection<DateOnly>? restDays = null,
+        IReadOnlyCollection<DateOnly>? noWorkHoursDays = null)
+    {
+        var rule = floorRule ?? new DailyFloorRule.None();
+        var plan = plannedFocusHoursByDay ?? new Dictionary<DateOnly, double>();
+        return NenContract.Seal(
             id: Guid.NewGuid(),
             name: "Focused January",
             goal: new NenContractGoal("Ship the feature"),
-            startDate: StartDate,
-            endDate: EndDate,
             strictnessRule: strictnessRule,
-            dailyFloorPolicy: dailyFloorPolicy ?? DailyFloorPolicy.None,
+            calendar: TestCalendars.For(StartDate, EndDate, rule, plan, workHours, restDays, noWorkHoursDays),
+            floorRule: rule,
             changeWindow: null,
             allowCancellation: allowCancellation,
-            plannedFocusHoursByDay: plannedFocusHoursByDay ?? new Dictionary<DateOnly, double>(),
-            sealedAt: sealedAt ?? SealedOnStart,
-            workHoursPolicy: workHoursPolicy,
+            plannedFocusHoursByDay: plan,
+            localSealedAt: sealedAt ?? SealedOnStart,
             contractPresetId: contractPresetId);
+    }
 
     private static Dictionary<DateOnly, double> FullyPlanned(double hoursPerDay)
     {
@@ -94,45 +98,42 @@ public class NenContractRepositoryTests : SqliteRepositoryTestBase
     }
 
     [Fact]
-    public async Task AddAsync_DailyFloorPolicyWithDefaultOnly_RoundTrips()
-    {
-        var repo = CreateRepository();
-        var contract = Seal(dailyFloorPolicy: new DailyFloorPolicy(new DailyFloor(4)), plannedFocusHoursByDay: FullyPlanned(4));
-
-        await repo.AddAsync(contract);
-        await Context.SaveChangesAsync();
-
-        var reloaded = await CreateRepository().GetByIdAsync(contract.Id);
-        reloaded!.DailyFloorPolicy.Default!.Hours.Should().Be(4);
-        reloaded.DailyFloorPolicy.For(StartDate)!.Hours.Should().Be(4);
-    }
-
-    [Fact]
-    public async Task AddAsync_DailyFloorPolicyWithPerDayExceptions_RoundTripsIncludingRestDay()
+    public async Task AddAsync_FixedFloorWithRestDay_RoundTripsDaysAndRule()
     {
         var repo = CreateRepository();
         var restDay = StartDate.AddDays(2);
-        var overrideDay = StartDate.AddDays(3);
-        var policy = new DailyFloorPolicy(new DailyFloor(4), new Dictionary<DateOnly, DailyFloor?>
-        {
-            [restDay] = null,
-            [overrideDay] = new DailyFloor(2)
-        });
         var plan = FullyPlanned(4);
-        plan[overrideDay] = 2;
-        var contract = Seal(dailyFloorPolicy: policy, plannedFocusHoursByDay: plan);
+        plan.Remove(restDay);
+        var contract = Seal(floorRule: new DailyFloorRule.Fixed(new DailyFloor(4)), restDays: [restDay], plannedFocusHoursByDay: plan);
 
         await repo.AddAsync(contract);
         await Context.SaveChangesAsync();
 
         var reloaded = await CreateRepository().GetByIdAsync(contract.Id);
-        reloaded!.DailyFloorPolicy.For(restDay).Should().BeNull();
-        reloaded.DailyFloorPolicy.For(overrideDay)!.Hours.Should().Be(2);
-        reloaded.DailyFloorPolicy.For(StartDate)!.Hours.Should().Be(4); // falls back to Default
+        reloaded!.FloorRule.Should().Be(new DailyFloorRule.Fixed(new DailyFloor(4)));
+        reloaded.FloorHoursFor(StartDate).Should().Be(4);
+        reloaded.IsRestDay(restDay).Should().BeTrue();
     }
 
     [Fact]
-    public async Task AddAsync_NoWorkHoursPolicy_ReloadsAsNull()
+    public async Task AddAsync_FollowsPlanFloors_RoundTripPerDay()
+    {
+        var repo = CreateRepository();
+        var plan = new Dictionary<DateOnly, double> { [StartDate] = 2, [StartDate.AddDays(1)] = 3.5 };
+        var contract = Seal(floorRule: new DailyFloorRule.FollowsPlan(), plannedFocusHoursByDay: plan);
+
+        await repo.AddAsync(contract);
+        await Context.SaveChangesAsync();
+
+        var reloaded = await CreateRepository().GetByIdAsync(contract.Id);
+        reloaded!.FloorRule.Should().Be(new DailyFloorRule.FollowsPlan());
+        reloaded.FloorHoursFor(StartDate).Should().Be(2);
+        reloaded.FloorHoursFor(StartDate.AddDays(1)).Should().Be(3.5);
+        reloaded.IsRestDay(StartDate.AddDays(2)).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task AddAsync_NoWorkHours_ReloadsFullDayWindowsAndMidnightEnd()
     {
         var repo = CreateRepository();
         var contract = Seal();
@@ -141,80 +142,43 @@ public class NenContractRepositoryTests : SqliteRepositoryTestBase
         await Context.SaveChangesAsync();
 
         var reloaded = await CreateRepository().GetByIdAsync(contract.Id);
-        reloaded!.WorkHoursPolicy.Should().BeNull();
+        reloaded!.StartsAt.Should().Be(StartDate.ToDateTime(TimeOnly.MinValue));
+        reloaded.EndsAt.Should().Be(EndDate.AddDays(1).ToDateTime(TimeOnly.MinValue)); // 24:00 survives the round trip
     }
 
     [Fact]
-    public async Task AddAsync_WorkHoursPolicyWithPerDayException_RoundTrips()
+    public async Task AddAsync_WorkHoursWithNoWorkHoursDay_RoundTrips()
     {
         var repo = CreateRepository();
-        var exceptionDay = StartDate.AddDays(1);
-        var policy = new WorkHoursPolicy(
-            new WorkHours(new TimeOnly(9, 0), new TimeOnly(17, 0)),
-            new Dictionary<DateOnly, WorkHours?>
-            {
-                [exceptionDay] = new WorkHours(new TimeOnly(11, 0), new TimeOnly(20, 0))
-            });
-        var contract = Seal(workHoursPolicy: policy);
+        var fullDay = StartDate.AddDays(1);
+        var contract = Seal(
+            workHours: new WorkHours(new TimeOnly(9, 0), new TimeOnly(17, 0)),
+            noWorkHoursDays: [fullDay],
+            sealedAt: SealedBeforeStart);
 
         await repo.AddAsync(contract);
         await Context.SaveChangesAsync();
 
         var reloaded = await CreateRepository().GetByIdAsync(contract.Id);
-        reloaded!.WorkHoursPolicy!.For(StartDate)!.Start.Should().Be(new TimeOnly(9, 0));
-        reloaded.WorkHoursPolicy.For(exceptionDay)!.Start.Should().Be(new TimeOnly(11, 0));
+        reloaded!.WindowOn(StartDate).Should().Be((StartDate.ToDateTime(new TimeOnly(9, 0)), StartDate.ToDateTime(new TimeOnly(17, 0))));
+        reloaded.WindowOn(fullDay).Should().Be((fullDay.ToDateTime(TimeOnly.MinValue), fullDay.AddDays(1).ToDateTime(TimeOnly.MinValue)));
     }
 
     [Fact]
-    public async Task GetDueForActivationAsync_ScheduledAndStartDateArrived_ReturnsIt()
+    public async Task SaveAfterBreak_PersistsTheShortenedDays()
     {
         var repo = CreateRepository();
-        var contract = Seal(sealedAt: SealedBeforeStart); // Scheduled
+        var contract = Seal(allowCancellation: true);
         await repo.AddAsync(contract);
         await Context.SaveChangesAsync();
 
-        var result = await CreateRepository().GetDueForActivationAsync(StartDate.ToDateTime(TimeOnly.MinValue));
-
-        result.Should().ContainSingle(c => c.Id == contract.Id);
-    }
-
-    [Fact]
-    public async Task GetDueForActivationAsync_AlreadyActive_ExcludesIt()
-    {
-        var repo = CreateRepository();
-        var contract = Seal(sealedAt: SealedOnStart); // Active
-        await repo.AddAsync(contract);
+        contract.Break(StartDate.AddDays(2).ToDateTime(new TimeOnly(10, 0)));
+        await repo.SaveAsync(contract);
         await Context.SaveChangesAsync();
 
-        var result = await CreateRepository().GetDueForActivationAsync(StartDate.ToDateTime(TimeOnly.MinValue));
-
-        result.Should().BeEmpty();
-    }
-
-    [Fact]
-    public async Task GetDueForCompletionAsync_ActiveAndEndDatePassed_ReturnsIt()
-    {
-        var repo = CreateRepository();
-        var contract = Seal(sealedAt: SealedOnStart); // Active
-        await repo.AddAsync(contract);
-        await Context.SaveChangesAsync();
-
-        var result = await CreateRepository().GetDueForCompletionAsync(EndDate.AddDays(1).ToDateTime(TimeOnly.MinValue));
-
-        result.Should().ContainSingle(c => c.Id == contract.Id);
-    }
-
-    [Fact]
-    public async Task GetDueForCompletionAsync_OnTheEndDateItself_ExcludesIt()
-    {
-        var repo = CreateRepository();
-        var contract = Seal(sealedAt: SealedOnStart);
-        await repo.AddAsync(contract);
-        await Context.SaveChangesAsync();
-
-        var result = await CreateRepository().GetDueForCompletionAsync(EndDate.ToDateTime(TimeOnly.MinValue));
-
-        result.Should().BeEmpty();
+        var reloaded = await CreateRepository().GetByIdAsync(contract.Id);
+        reloaded!.EndDate.Should().Be(StartDate.AddDays(2));
+        reloaded.WindowOn(StartDate.AddDays(3)).Should().BeNull();
     }
 
     [Fact]
@@ -351,10 +315,16 @@ public class NenContractRepositoryTests : SqliteRepositoryTestBase
         var repo = CreateRepository();
         var scheduled = Seal(sealedAt: SealedBeforeStart); // Scheduled
         var active = NenContract.Seal(
-            Guid.NewGuid(), "Later Contract", new NenContractGoal("Goal"),
-            StartDate.AddDays(30), EndDate.AddDays(30),
-            StrictnessRule.Locked, DailyFloorPolicy.None, null, false,
-            new Dictionary<DateOnly, double>(), sealedAt: StartDate.AddDays(30).ToDateTime(TimeOnly.MinValue)); // Active
+            id: Guid.NewGuid(),
+            name: "Later Contract",
+            goal: new NenContractGoal("Goal"),
+            strictnessRule: StrictnessRule.Locked,
+            calendar: TestCalendars.For(StartDate.AddDays(30), EndDate.AddDays(30), new DailyFloorRule.None()),
+            floorRule: new DailyFloorRule.None(),
+            changeWindow: null,
+            allowCancellation: false,
+            plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
+            localSealedAt: StartDate.AddDays(30).ToDateTime(TimeOnly.MinValue)); // Active
         await repo.AddAsync(scheduled);
         await repo.AddAsync(active);
         await Context.SaveChangesAsync();
@@ -421,10 +391,16 @@ public class NenContractRepositoryTests : SqliteRepositoryTestBase
         var repo = CreateRepository();
         var scheduled = Seal(sealedAt: SealedBeforeStart); // Scheduled
         var active = NenContract.Seal(
-            Guid.NewGuid(), "Later Contract", new NenContractGoal("Goal"),
-            StartDate.AddDays(30), EndDate.AddDays(30),
-            StrictnessRule.Locked, DailyFloorPolicy.None, null, false,
-            new Dictionary<DateOnly, double>(), sealedAt: StartDate.AddDays(30).ToDateTime(TimeOnly.MinValue)); // Active
+            id: Guid.NewGuid(),
+            name: "Later Contract",
+            goal: new NenContractGoal("Goal"),
+            strictnessRule: StrictnessRule.Locked,
+            calendar: TestCalendars.For(StartDate.AddDays(30), EndDate.AddDays(30), new DailyFloorRule.None()),
+            floorRule: new DailyFloorRule.None(),
+            changeWindow: null,
+            allowCancellation: false,
+            plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
+            localSealedAt: StartDate.AddDays(30).ToDateTime(TimeOnly.MinValue)); // Active
         var completed = Seal(sealedAt: SealedOnStart);
         completed.Complete(SealedOnStart.AddDays(7));
         await repo.AddAsync(scheduled);

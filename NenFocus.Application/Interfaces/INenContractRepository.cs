@@ -14,23 +14,6 @@ public interface INenContractRepository
     Task SaveAsync(NenContract contract, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Returns contracts for which NenContract.IsDueForActivation(asOf) is true — that
-    /// method is the canonical definition; the EF Core query must match it exactly, not
-    /// reinvent the comparison. Mirrors GetUnresolvedFocusBlocksAsync's shape.
-    /// </summary>
-    Task<IReadOnlyList<NenContract>> GetDueForActivationAsync(
-        DateTime asOf,
-        CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Returns contracts for which NenContract.IsDueForCompletion(asOf) is true — same
-    /// canonical-definition rule as GetDueForActivationAsync.
-    /// </summary>
-    Task<IReadOnlyList<NenContract>> GetDueForCompletionAsync(
-        DateTime asOf,
-        CancellationToken cancellationToken = default);
-
-    /// <summary>
     /// Returns true if any contract sealed from the given Contract Preset is currently
     /// NenContract.IsInEffect (Scheduled or Active) — that method is the canonical
     /// definition; this query must match it exactly, not reinvent it. Used to block

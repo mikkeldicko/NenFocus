@@ -21,14 +21,13 @@ public class DeleteNenContractValidatorTests
         id: Guid.NewGuid(),
         name: "Summer Focus",
         goal: new NenContractGoal("Goal"),
-        startDate: StartDate,
-        endDate: EndDate,
         strictnessRule: StrictnessRule.DailyFlexibility,
-        dailyFloorPolicy: DailyFloorPolicy.None,
+        calendar: TestCalendars.For(StartDate, EndDate, new DailyFloorRule.None()),
+        floorRule: new DailyFloorRule.None(),
         changeWindow: null,
         allowCancellation: true,
         plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-        sealedAt: sealedAt);
+        localSealedAt: sealedAt);
 
     [Fact]
     public async Task Validate_EmptyContractId_IsInvalid()

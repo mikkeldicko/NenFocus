@@ -59,7 +59,7 @@ Tactical implementation details, current build state, and platform-specific gotc
 - **`PlannedBlockDto.BlockPresetType`** property changed from `string` to `BlockPresetType` domain enum. `PlannerPageViewModel.ParseBlockPresetType(string)` helper deleted — the DTO now carries the typed value directly.
 - **`SessionDto.Status`** changed from `string` to `SessionStatus` enum. `MainPageViewModel` updated: `session.Status == "OnBreak"` → `session.Status == SessionStatus.OnBreak`.
 - **`SessionDto`** gains `Origin (SessionOrigin)` and `OriginatingBlockId (Guid?)`; `PresetId (string)` removed (preset is identified by name only in the DTO).
-- **Nen Contract — Domain layer, per-day floor redesign.** `DailyFloorPolicy`/`WorkHoursPolicy` — see `DESIGN_GAP_HISTORY.md` Gap 6.
+- (policies superseded by Gap 65 — a contract now stores its days) **Nen Contract — Domain layer, per-day floor redesign.** `DailyFloorPolicy`/`WorkHoursPolicy` — see `DESIGN_GAP_HISTORY.md` Gap 6.
 - **Nen Contract — Application/Infrastructure/UI, first vertical slice (2026-07-13).** Seal/Extend/Break/lifecycle sweep — see `DESIGN_GAP_HISTORY.md` Gap 7.
 - **Nen Contract — supporting queries** (deficits, completed hours, planned-hours preview, batch overlap) and Contract Preset CRUD — see `DOMAIN_DICTIONARY_NEN_CONTRACT.md`.
 - **Contract Presets get a Presets-page authoring UI** (2026-08-21) — see `DESIGN_GAP_HISTORY.md` Gap 27.
@@ -114,6 +114,7 @@ Tactical implementation details, current build state, and platform-specific gotc
 - **Enforcement Synchronizer; breaks and session end no longer drop all blocking; Ritual question moved out of the Policy Slice** (2026-09-25) — see `DESIGN_GAP_HISTORY.md` Gap 62.
 - **Time-driven breaks: a session owns its `BreakSchedule`; `OnBreak`, `StartBreak`/`ResumeFromBreak`, the break events and `IBreakScheduleCalculator` removed; session end capped at its planned end** (2026-09-27) — see `DESIGN_GAP_HISTORY.md` Gap 63. Gotcha: `Session`'s breaks are an EF `OwnsMany` on the private `_breaks` field (table `SessionBreaks`); `Session.BreakSchedule`/`BreaksTaken` are computed and explicitly `Ignore`d.
 - **Contract rule "Keep blocking during breaks"** (renamed from `PauseEnforcementDuringBreak`, inverted; set on Contract Presets, copied Seal → Session at Start; `PolicyEngine` no longer takes contracts) (2026-09-27) — see `DESIGN_GAP_HISTORY.md` Gap 64. Gotcha: a `bool` with `HasDefaultValue(false)` must have a DB default of `false` too — EF omits a CLR-default value from INSERTs and lets the column default apply, so renaming the old `DEFAULT 1` column would have silently stored `true`.
+- **Contract days (Gap 65):** a contract is its days (`ContractDay`/`ContractCalendar`, `DailyFloorRule`); activation/completion at exact local moments; `WorkHoursPolicy`/`DailyFloorPolicy` removed — see `DESIGN_GAP_HISTORY.md` Gap 65.
 
 ### Not Yet Built
 

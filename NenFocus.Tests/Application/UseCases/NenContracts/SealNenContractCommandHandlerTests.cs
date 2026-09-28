@@ -6,6 +6,7 @@ using NenFocus.Application.UseCases.NenContracts.Seal;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
 using NenFocus.Domain.Services;
+using NenFocus.Domain.ValueObjects;
 using NSubstitute;
 
 namespace NenFocus.Tests.Application.UseCases.NenContracts;
@@ -26,6 +27,7 @@ public class SealNenContractCommandHandlerTests
     public SealNenContractCommandHandlerTests()
     {
         _clock.UtcNow.Returns(Now);
+        _clock.ToLocal(Arg.Any<DateTime>()).Returns(ci => ci.Arg<DateTime>());
         _checkOverlap.HandleAsync(Arg.Any<CheckFocusBlockBatchOverlapQuery>(), Arg.Any<CancellationToken>())
             .Returns(false);
     }
@@ -84,8 +86,9 @@ public class SealNenContractCommandHandlerTests
 
         result.Success.Should().BeTrue();
         saved.Should().NotBeNull();
-        saved!.DailyFloorPolicy.Default!.Hours.Should().Be(0);
-        saved.DailyFloorPolicy.PerDayExceptions.Should().ContainKey(restDay).WhoseValue.Should().BeNull();
+        saved!.FloorRule.Should().Be(new DailyFloorRule.Fixed(new DailyFloor(0)));
+        saved.FloorHoursFor(StartDate).Should().Be(0);
+        saved.IsRestDay(restDay).Should().BeTrue();
     }
 
     [Fact]
@@ -152,7 +155,7 @@ public class SealNenContractCommandHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_NoWorkHours_SealedContractHasNullWorkHoursPolicy()
+    public async Task HandleAsync_NoWorkHours_EveryDayIsAFullDay()
     {
         _calculator.Calculate(Arg.Any<IEnumerable<(DateTime, DateTime)>>())
             .Returns(new Dictionary<DateOnly, double>());
@@ -161,11 +164,12 @@ public class SealNenContractCommandHandlerTests
 
         await CreateHandler().HandleAsync(BaseCommand(fixedFloor: 0), CancellationToken.None);
 
-        saved!.WorkHoursPolicy.Should().BeNull();
+        saved!.WindowOn(StartDate.AddDays(1)).Should().Be((
+            StartDate.AddDays(1).ToDateTime(TimeOnly.MinValue), StartDate.AddDays(2).ToDateTime(TimeOnly.MinValue)));
     }
 
     [Fact]
-    public async Task HandleAsync_WorkHoursGiven_SealedContractHasMatchingWorkHoursPolicy()
+    public async Task HandleAsync_WorkHoursGiven_EveryDayIsTheWorkHoursWindow()
     {
         _calculator.Calculate(Arg.Any<IEnumerable<(DateTime, DateTime)>>())
             .Returns(new Dictionary<DateOnly, double>());
@@ -179,13 +183,12 @@ public class SealNenContractCommandHandlerTests
 
         await CreateHandler().HandleAsync(command, CancellationToken.None);
 
-        saved!.WorkHoursPolicy.Should().NotBeNull();
-        saved.WorkHoursPolicy!.Default!.Start.Should().Be(new TimeOnly(9, 0));
-        saved.WorkHoursPolicy.Default!.End.Should().Be(new TimeOnly(17, 0));
+        saved!.StartsAt.Should().Be(StartDate.ToDateTime(new TimeOnly(9, 0)));
+        saved.EndsAt.Should().Be(EndDate.ToDateTime(new TimeOnly(17, 0)));
     }
 
     [Fact]
-    public async Task HandleAsync_NoWorkHoursDays_AppliedAsNoConstraintExceptions()
+    public async Task HandleAsync_NoWorkHoursDays_AreFullDays()
     {
         _calculator.Calculate(Arg.Any<IEnumerable<(DateTime, DateTime)>>())
             .Returns(new Dictionary<DateOnly, double>());
@@ -201,8 +204,8 @@ public class SealNenContractCommandHandlerTests
 
         await CreateHandler().HandleAsync(command, CancellationToken.None);
 
-        saved!.WorkHoursPolicy!.For(restDay).Should().BeNull();
-        saved.WorkHoursPolicy.For(StartDate)!.Start.Should().Be(new TimeOnly(9, 0));
+        saved!.WindowOn(restDay).Should().Be((restDay.ToDateTime(TimeOnly.MinValue), restDay.AddDays(1).ToDateTime(TimeOnly.MinValue)));
+        saved.WindowOn(StartDate)!.Value.Start.Should().Be(StartDate.ToDateTime(new TimeOnly(9, 0)));
     }
 
     [Fact]
@@ -259,12 +262,12 @@ public class SealNenContractCommandHandlerTests
         result.Success.Should().BeTrue();
         saved.Should().NotBeNull();
         saved!.ContractFloorHours.Should().Be(9); // 3 + 4 + 2
-        saved.DailyFloorPolicy.Default.Should().BeNull();
-        saved.DailyFloorPolicy.PerDayExceptions.Should().BeEmpty();
+        saved.FloorRule.Should().Be(new DailyFloorRule.None());
+        saved.IsRestDay(StartDate).Should().BeTrue();
     }
 
     [Fact]
-    public async Task HandleAsync_PeriodTimeBudgetWithFixedFloor_UsesFixedDailyFloorPolicy_NotContractFloor()
+    public async Task HandleAsync_PeriodTimeBudgetWithFixedFloor_UsesAFixedDailyFloor_NotContractFloor()
     {
         _calculator.Calculate(Arg.Any<IEnumerable<(DateTime, DateTime)>>())
             .Returns(new Dictionary<DateOnly, double>());
@@ -277,7 +280,7 @@ public class SealNenContractCommandHandlerTests
         result.Success.Should().BeTrue();
         saved.Should().NotBeNull();
         saved!.ContractFloorHours.Should().BeNull();
-        saved.DailyFloorPolicy.Default!.Hours.Should().Be(0);
+        saved.FloorRule.Should().Be(new DailyFloorRule.Fixed(new DailyFloor(0)));
     }
 
     [Fact]
@@ -294,5 +297,69 @@ public class SealNenContractCommandHandlerTests
             BaseCommand(fixedFloor: 0) with { KeepBlockingDuringBreaks = true }, CancellationToken.None);
 
         saved!.KeepBlockingDuringBreaks.Should().BeTrue();
+    }
+// ── Gap 65: start moment, block placement ──────────────────────────────────
+
+    [Fact]
+    public async Task HandleAsync_StartDateAlreadyPast_Fails()
+    {
+        _calculator.Calculate(Arg.Any<IEnumerable<(DateTime, DateTime)>>())
+            .Returns(new Dictionary<DateOnly, double>());
+        var command = BaseCommand(fixedFloor: 0) with { StartDate = StartDate.AddDays(-1) };
+
+        var result = await CreateHandler().HandleAsync(command, CancellationToken.None);
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("start time has passed");
+    }
+
+    [Fact]
+    public async Task HandleAsync_StartsTodayAfterWorkHoursOpened_StartsAtTheCurrentMinute()
+    {
+        _clock.UtcNow.Returns(StartDate.ToDateTime(new TimeOnly(12, 0, 40)));
+        var planned = Enumerable.Range(0, EndDate.DayNumber - StartDate.DayNumber + 1)
+            .ToDictionary(i => StartDate.AddDays(i), _ => 4.0); // meets each day's floor
+        _calculator.Calculate(Arg.Any<IEnumerable<(DateTime, DateTime)>>()).Returns(planned);
+        NenContract? saved = null;
+        await _contracts.AddAsync(Arg.Do<NenContract>(c => saved = c), Arg.Any<CancellationToken>());
+        var command = BaseCommand(fixedFloor: 4) with { WorkHoursStart = new TimeOnly(9, 0), WorkHoursEnd = new TimeOnly(17, 0) };
+
+        var result = await CreateHandler().HandleAsync(command, CancellationToken.None);
+
+        result.Success.Should().BeTrue();
+        saved!.StartsAt.Should().Be(StartDate.ToDateTime(new TimeOnly(12, 0)));
+        saved.Status.Should().Be(NenContractStatus.Active);
+        saved.FloorHoursFor(StartDate).Should().Be(4); // the full floor — 5h are left, never shrunk
+    }
+
+    [Fact]
+    public async Task HandleAsync_StartsTodayWithLessTimeLeftThanTheFloor_Fails()
+    {
+        // The reported case: 16:38 with Work Hours until 18:00 — 1h22m left for a 2h floor.
+        _clock.UtcNow.Returns(StartDate.ToDateTime(new TimeOnly(16, 38)));
+        _calculator.Calculate(Arg.Any<IEnumerable<(DateTime, DateTime)>>())
+            .Returns(new Dictionary<DateOnly, double>());
+        var command = BaseCommand(fixedFloor: 2) with { WorkHoursStart = new TimeOnly(9, 0), WorkHoursEnd = new TimeOnly(18, 0) };
+
+        var result = await CreateHandler().HandleAsync(command, CancellationToken.None);
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().StartWith("Not enough time left on");
+        await _contracts.DidNotReceive().AddAsync(Arg.Any<NenContract>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task HandleAsync_BlockOutsideItsDaysWindow_Fails()
+    {
+        var block = new NenContractBlockSpec(Guid.NewGuid(),
+            new DateTime(2026, 1, 1, 18, 0, 0), new DateTime(2026, 1, 1, 19, 0, 0), IsFocus: true);
+        _calculator.Calculate(Arg.Any<IEnumerable<(DateTime, DateTime)>>())
+            .Returns(new Dictionary<DateOnly, double> { [StartDate] = 1 });
+        var command = BaseCommand(blocks: [block]) with { WorkHoursStart = new TimeOnly(9, 0), WorkHoursEnd = new TimeOnly(17, 0) };
+
+        var result = await CreateHandler().HandleAsync(command, CancellationToken.None);
+
+        result.Success.Should().BeFalse();
+        await _contracts.DidNotReceive().AddAsync(Arg.Any<NenContract>(), Arg.Any<CancellationToken>());
     }
 }

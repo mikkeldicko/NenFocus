@@ -38,7 +38,7 @@ public sealed class BreakNenContractCommandHandler : ICommandHandler<BreakNenCon
             return BreakNenContractResult.Fail("Contract not found.");
 
         var now = _clock.UtcNow;
-        contract.Break(now);
+        contract.Break(_clock.ToLocal(now));
         await _contracts.SaveAsync(contract, ct);
 
         var linkedBlocks = await _blocks.GetForContractAsync(command.ContractId, ct);

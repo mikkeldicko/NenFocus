@@ -1,6 +1,7 @@
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Domain.Entities;
+using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Application.Queries.GetNenContractForEdit;
 
@@ -28,14 +29,12 @@ public sealed class GetNenContractForEditQueryHandler
         if (contract is null)
             return null;
 
-        var isAdvanced = contract.DailyFloorPolicy.Default is not null;
-
-        var restDays = isAdvanced
-            ? contract.DailyFloorPolicy.PerDayExceptions.Where(kv => kv.Value is null).Select(kv => kv.Key).ToList()
-            : (IReadOnlyList<DateOnly>)[];
-
-        var noWorkHoursDays = contract.WorkHoursPolicy?.PerDayExceptions
-            .Where(kv => kv.Value is null).Select(kv => kv.Key).ToList() ?? [];
+        var days = new List<NenContractEditDayDto>();
+        for (var date = contract.StartDate; date <= contract.EndDate; date = date.AddDays(1))
+        {
+            var window = contract.WindowOn(date)!.Value;
+            days.Add(new NenContractEditDayDto(date, window.Start, window.End, contract.FloorHoursFor(date)));
+        }
 
         var linkedBlocks = await _blocks.GetForContractAsync(query.ContractId, cancellationToken);
 
@@ -69,12 +68,8 @@ public sealed class GetNenContractForEditQueryHandler
             EndDate = contract.EndDate,
             StrictnessRule = contract.StrictnessRule,
             AllowCancellation = contract.AllowCancellation,
-            IsAdvanced = isAdvanced,
-            FixedDailyFloorHours = contract.DailyFloorPolicy.Default?.Hours,
-            RestDays = restDays,
-            WorkHoursStart = contract.WorkHoursPolicy?.Default?.Start,
-            WorkHoursEnd = contract.WorkHoursPolicy?.Default?.End,
-            NoWorkHoursDays = noWorkHoursDays,
+            FixedDailyFloorHours = (contract.FloorRule as DailyFloorRule.Fixed)?.Floor.Hours,
+            Days = days,
             ContractPresetId = contract.ContractPresetId,
             RedemptionPlacementPolicy = contract.RedemptionPlacementPolicy,
             KeepBlockingDuringBreaks = contract.KeepBlockingDuringBreaks,

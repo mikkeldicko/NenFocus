@@ -36,11 +36,16 @@ public class GetNenContractCompletionReadinessQueryHandlerTests
         new(_contracts, _blocks, _completedHours, _clock, _outcomeClassifier);
 
     private static NenContract ActiveContract(double committedHours = 4) => NenContract.Seal(
-        id: ContractId, name: "Focused Week", goal: new NenContractGoal("Ship it"),
-        startDate: StartDate, endDate: EndDate, strictnessRule: StrictnessRule.Locked,
-        dailyFloorPolicy: DailyFloorPolicy.None, changeWindow: null, allowCancellation: true,
+        id: ContractId,
+        name: "Focused Week",
+        goal: new NenContractGoal("Ship it"),
+        strictnessRule: StrictnessRule.Locked,
+        calendar: TestCalendars.For(StartDate, EndDate, new DailyFloorRule.None()),
+        floorRule: new DailyFloorRule.None(),
+        changeWindow: null,
+        allowCancellation: true,
         plannedFocusHoursByDay: new Dictionary<DateOnly, double> { [StartDate] = committedHours },
-        sealedAt: StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
+        localSealedAt: StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
 
     private void StubCompleted(double hours) =>
         _completedHours.HandleAsync(Arg.Any<GetNenContractCompletedFocusHoursQuery>(), Arg.Any<CancellationToken>())
@@ -207,14 +212,18 @@ public class GetNenContractCompletionReadinessQueryHandlerTests
     {
         // Same calendar day as EndDate but after Work Hours close — EndsAt correctly
         // excludes it, unlike the old date-only truncation this check used to use.
-        var policy = new WorkHoursPolicy(new WorkHours(new TimeOnly(9, 0), new TimeOnly(17, 0)));
+        var policy = new WorkHours(new TimeOnly(9, 0), new TimeOnly(17, 0));
         var contract = NenContract.Seal(
-            id: ContractId, name: "Focused Week", goal: new NenContractGoal("Ship it"),
-            startDate: StartDate, endDate: EndDate, strictnessRule: StrictnessRule.Locked,
-            dailyFloorPolicy: DailyFloorPolicy.None, changeWindow: null, allowCancellation: true,
+            id: ContractId,
+            name: "Focused Week",
+            goal: new NenContractGoal("Ship it"),
+            strictnessRule: StrictnessRule.Locked,
+            calendar: TestCalendars.For(StartDate, EndDate, new DailyFloorRule.None(), workHours: policy),
+            floorRule: new DailyFloorRule.None(),
+            changeWindow: null,
+            allowCancellation: true,
             plannedFocusHoursByDay: new Dictionary<DateOnly, double> { [StartDate] = 4 },
-            sealedAt: StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc),
-            workHoursPolicy: policy);
+            localSealedAt: StartDate.ToDateTime(new TimeOnly(9, 0))); // Active from its 09:00 start
         _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(contract);
         StubCompleted(4);
         var afterClose = EndDate.ToDateTime(new TimeOnly(18, 0), DateTimeKind.Utc);

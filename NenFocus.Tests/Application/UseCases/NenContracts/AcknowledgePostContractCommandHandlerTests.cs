@@ -23,11 +23,16 @@ public class AcknowledgePostContractCommandHandlerTests
     private AcknowledgePostContractCommandHandler CreateHandler() => new(_contracts, _clock);
 
     private static NenContract CompletedContract() => NenContract.Seal(
-        id: ContractId, name: "Focused Week", goal: new NenContractGoal("Ship it"),
-        startDate: StartDate, endDate: EndDate, strictnessRule: StrictnessRule.Locked,
-        dailyFloorPolicy: DailyFloorPolicy.None, changeWindow: null, allowCancellation: true,
+        id: ContractId,
+        name: "Focused Week",
+        goal: new NenContractGoal("Ship it"),
+        strictnessRule: StrictnessRule.Locked,
+        calendar: TestCalendars.For(StartDate, EndDate, new DailyFloorRule.None()),
+        floorRule: new DailyFloorRule.None(),
+        changeWindow: null,
+        allowCancellation: true,
         plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-        sealedAt: StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
+        localSealedAt: StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
 
     [Fact]
     public async Task HandleAsync_ContractNotFound_Fails()

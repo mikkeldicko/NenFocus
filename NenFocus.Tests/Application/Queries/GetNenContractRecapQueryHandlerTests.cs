@@ -47,25 +47,31 @@ public class GetNenContractRecapQueryHandlerTests
 
     private static NenContract CompletedContract(double committedHours = 4, StrictnessRule strictness = StrictnessRule.Locked) =>
         NenContract.Seal(
-            id: ContractId, name: "Focused Week", goal: new NenContractGoal("Ship it"),
-            startDate: StartDate, endDate: EndDate, strictnessRule: strictness,
-            dailyFloorPolicy: DailyFloorPolicy.None, changeWindow: null, allowCancellation: true,
+            id: ContractId,
+            name: "Focused Week",
+            goal: new NenContractGoal("Ship it"),
+            strictnessRule: strictness,
+            calendar: TestCalendars.For(StartDate, EndDate, new DailyFloorRule.None()),
+            floorRule: new DailyFloorRule.None(),
+            changeWindow: null,
+            allowCancellation: true,
             plannedFocusHoursByDay: new Dictionary<DateOnly, double> { [StartDate] = committedHours },
-            sealedAt: StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
+            localSealedAt: StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
 
     // StartDate..EndDate is a 7-day range (Jan 1-7). A fixed 4h/day floor everywhere by
-    // default; individual tests override specific days via dailyFloorPolicy.
-    private static NenContract FloorContract(DailyFloorPolicy? dailyFloorPolicy = null) => NenContract.Seal(
+    // default; individual tests mark specific days as rest days.
+    private static NenContract FloorContract(IReadOnlyCollection<DateOnly>? restDays = null) => NenContract.Seal(
         id: ContractId, name: "Focused Week", goal: new NenContractGoal("Ship it"),
-        startDate: StartDate, endDate: EndDate, strictnessRule: StrictnessRule.Locked,
-        dailyFloorPolicy: dailyFloorPolicy ?? new DailyFloorPolicy(new DailyFloor(4)),
+        strictnessRule: StrictnessRule.Locked,
+        calendar: TestCalendars.For(StartDate, EndDate, new DailyFloorRule.Fixed(new DailyFloor(4)), restDays: restDays),
+        floorRule: new DailyFloorRule.Fixed(new DailyFloor(4)),
         changeWindow: null, allowCancellation: true,
         plannedFocusHoursByDay: new Dictionary<DateOnly, double>
         {
             [StartDate] = 4, [StartDate.AddDays(1)] = 4, [StartDate.AddDays(2)] = 4, [StartDate.AddDays(3)] = 4,
             [StartDate.AddDays(4)] = 4, [StartDate.AddDays(5)] = 4, [EndDate] = 4
         },
-        sealedAt: StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
+        localSealedAt: StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
 
     private void StubCompletedByDay(Dictionary<DateOnly, double> hoursByDay) =>
         _completedHours.HandleAsync(Arg.Any<GetNenContractCompletedFocusHoursQuery>(), Arg.Any<CancellationToken>())
@@ -88,11 +94,7 @@ public class GetNenContractRecapQueryHandlerTests
     [Fact]
     public async Task HandleAsync_DailyBreakdown_RestDayHasNullPercentageAndIsFlagged()
     {
-        var policy = new DailyFloorPolicy(new DailyFloor(4), new Dictionary<DateOnly, DailyFloor?>
-        {
-            [StartDate.AddDays(3)] = null
-        });
-        _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(FloorContract(policy));
+        _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(FloorContract(restDays: [StartDate.AddDays(3)]));
 
         var result = await CreateHandler().HandleAsync(new GetNenContractRecapQuery(ContractId), CancellationToken.None);
 
@@ -122,11 +124,8 @@ public class GetNenContractRecapQueryHandlerTests
     [Fact]
     public async Task HandleAsync_BestStreakDays_RestDayInTheMiddleDoesNotBreakStreak()
     {
-        var policy = new DailyFloorPolicy(new DailyFloor(4), new Dictionary<DateOnly, DailyFloor?>
-        {
-            [StartDate.AddDays(1)] = null // rest day, sandwiched between two met days
-        });
-        _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(FloorContract(policy));
+        // rest day, sandwiched between two met days
+        _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(FloorContract(restDays: [StartDate.AddDays(1)]));
         StubCompletedByDay(new Dictionary<DateOnly, double>
         {
             [StartDate] = 4, [StartDate.AddDays(2)] = 4
@@ -263,11 +262,16 @@ public class GetNenContractRecapQueryHandlerTests
     {
         // CommittedFocusHours == 0 (nothing was ever planned at Seal) — can't be graded.
         var contract = NenContract.Seal(
-            id: ContractId, name: "Empty", goal: new NenContractGoal("Ship it"),
-            startDate: StartDate, endDate: EndDate, strictnessRule: StrictnessRule.Locked,
-            dailyFloorPolicy: DailyFloorPolicy.None, changeWindow: null, allowCancellation: true,
+            id: ContractId,
+            name: "Empty",
+            goal: new NenContractGoal("Ship it"),
+            strictnessRule: StrictnessRule.Locked,
+            calendar: TestCalendars.For(StartDate, EndDate, new DailyFloorRule.None()),
+            floorRule: new DailyFloorRule.None(),
+            changeWindow: null,
+            allowCancellation: true,
             plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-            sealedAt: StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
+            localSealedAt: StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
         _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(contract);
         _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[]);
 

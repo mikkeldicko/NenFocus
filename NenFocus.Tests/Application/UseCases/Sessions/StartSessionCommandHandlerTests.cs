@@ -355,14 +355,13 @@ public class StartSessionCommandHandlerTests
         id: Guid.NewGuid(),
         name: "Contract",
         goal: new NenContractGoal("Goal"),
-        startDate: DateOnly.FromDateTime(Now),
-        endDate: DateOnly.FromDateTime(Now).AddDays(7),
         strictnessRule: StrictnessRule.Locked,
-        dailyFloorPolicy: DailyFloorPolicy.None,
+        calendar: TestCalendars.For(DateOnly.FromDateTime(Now), DateOnly.FromDateTime(Now).AddDays(7), new DailyFloorRule.None()),
+        floorRule: new DailyFloorRule.None(),
         changeWindow: null,
         allowCancellation: false,
         plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-        sealedAt: Now,
+        localSealedAt: Now.Date,
         keepBlockingDuringBreaks: keepBlockingDuringBreaks);
 
     private StartSessionCommand PlannedCommandFor(FocusBlock block)

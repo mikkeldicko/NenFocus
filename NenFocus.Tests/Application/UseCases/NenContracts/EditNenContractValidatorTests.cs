@@ -29,10 +29,16 @@ public class EditNenContractValidatorTests
     private EditNenContractValidator CreateValidator() => new(_contracts, _presets, _contractPresets, _checkOverlap);
 
     private static NenContract Seal(DateTime sealedAt) => NenContract.Seal(
-        id: Guid.NewGuid(), name: "Original", goal: new NenContractGoal("Goal"),
-        startDate: StartDate, endDate: EndDate, strictnessRule: StrictnessRule.DailyFlexibility,
-        dailyFloorPolicy: DailyFloorPolicy.None, changeWindow: null, allowCancellation: true,
-        plannedFocusHoursByDay: new Dictionary<DateOnly, double>(), sealedAt: sealedAt);
+        id: Guid.NewGuid(),
+        name: "Original",
+        goal: new NenContractGoal("Goal"),
+        strictnessRule: StrictnessRule.DailyFlexibility,
+        calendar: TestCalendars.For(StartDate, EndDate, new DailyFloorRule.None()),
+        floorRule: new DailyFloorRule.None(),
+        changeWindow: null,
+        allowCancellation: true,
+        plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
+        localSealedAt: sealedAt);
 
     private static EditNenContractCommand BaseCommand(Guid contractId) => new()
     {

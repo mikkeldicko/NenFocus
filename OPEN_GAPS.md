@@ -304,28 +304,22 @@ Once a gap (or a self-contained half of one) is fully closed, its write-up moves
 
 **Must be closed before:** Nothing — parked.
 
+\---
+
+### Open Gap W — Contract Wizard: "When" Step and One-Click Date/Time Fields (interrogated 2026-09-28; plan agreed, not built — to close as Gap 66; Gap 65 built)
+
+**Agreed design:**
+- **New order:** Basics (name, goal) → Simple / Advanced → Rules → **When** → Review → drafting. Rules come before When so Work Hours can prefill the times.
+- **When step:** with Work Hours — start date + start time (prefilled with the Work Hours start, editable; editing it edits day 1's window, Gap 65), end date, end time shown read-only (the last day's Work Hours end). Without Work Hours — start date + time and end date + time. Warn right away when the chosen start leaves less time on day 1 than its floor ("Not enough time left today for your 2h floor — start tomorrow or lower the floor"); Seal refuses it anyway (Gap 65).
+- **One reusable date field:** a text box ("Saturday, October 3") that opens a month calendar; one click picks the day and closes it. Built on Avalonia's `CalendarDatePicker`, styled to match. Replaces `DatePicker` in the Planner block form and the wizard; the debug clock keeps its own. No week-number column (would need a custom month grid — declined).
+- **One reusable time field:** extracted from `PlannerPageView`'s code-behind (the start/end time box + popup list), used by both the block form and the When step.
+- **Editing a Scheduled contract** goes through the same When step, and shows and edits the contract's **days** (already true since Gap 65: `GetNenContractForEditQuery` returns the days). Gap 65's temporary UI adapter that fills today's stencil-shaped wizard fields from the days is deleted here.
+
+**Still to interrogate:** warn live when the start time passes while the user is still in the wizard or drafting (vs only at Seal); a "Start now" shortcut; time-option granularity; the When step's layout; confirm Simple mode never has Work Hours.
 
 \---
 
-### Open Gap Q — Contract Activation/Completion Uses the UTC Date (bug found 2026-09-28; fix agreed, not built — to close as Gap 65)
-
-**The bug:** `NenContractRepository.GetDueForActivationAsync` / `GetDueForCompletionAsync` do `DateOnly.FromDateTime(asOf)` with `asOf = _clock.UtcNow` — the **UTC** date — and compare it to `StartDate`/`EndDate`, which are **local** calendar dates. At UTC+2 a contract turns Active ~2 hours late (at 00:28 local on its start day it still showed "Upcoming" while its block ran — observed 2026-09-28) and completes ~2 hours late. `NenContract.Seal` decides Active-vs-Scheduled the same way (`DateOnly.FromDateTime(sealedAt)`, UTC), so sealing between 00:00 and 02:00 local on the start day wrongly yields Scheduled. The repository also restates the entity's `IsDueForActivation`/`IsDueForCompletion` rules in its own words — a duplicated rule (Application Handler Forbidden Zone).
-
-**Agreed fix:**
-- The entity owns the rule in **local** time: `IsDueForActivation(DateTime localNow)`, `IsDueForCompletion(DateTime localNow)`; `Seal` uses the same comparison with a local `sealedAt`.
-- The repository only fetches Scheduled / Active contracts (a handful); the entity decides — the duplicate disappears.
-- `SweepNenContractLifecycleCommandHandler` passes `_clock.ToLocal(now)`.
-- Regression tests: the 00:00–02:00 local window at UTC+2 for activation, completion and Seal.
-
-**Still to interrogate:**
-1. **Midnight or Work Hours?** `NenContract.StartsAt`'s comment records a deliberate decision (Open Gap L, closed as `DESIGN_GAP_HISTORY.md` Gap 59): activation fires at **midnight** on `StartDate`, not at the Work Hours start. Keep that (fix only UTC → local), or change activation to `StartsAt`? The 2026-09-28 proposal assumed `StartsAt` before this was found.
-2. **Doc/code drift:** `EndsAt`'s comment says it "governs completion timing (IsDueForCompletion)", but completion compares dates. Decide which is intended — completion at end of day, or at `EndsAt` (the Work Hours end).
-3. **Audit other UTC-date uses** before finalising: `NenContract.Break` (`DateOnly.FromDateTime(brokenAt)` with a UTC `now`), `GetSuggestedRedemptionPlacementsQueryHandler` (`DateOnly.FromDateTime(query.AsOf)` — check whether `AsOf` is local or UTC), and anything else comparing a UTC instant against a contract's local dates.
-4. No banner change needed: the Planner re-reads contracts every 3 s (`_floorStatusPollTimer`), so once activation is on time the banner follows.
-
-\---
-
-### Open Gap R — Contract Membership: Only Committed and Redemption Blocks Count Toward the Floor (interrogated 2026-09-28; plan agreed, not built — to close as Gap 66)
+### Open Gap R — Contract Membership: Only Committed and Redemption Blocks Count Toward the Floor (interrogated 2026-09-28; plan agreed, not built — to close as Gap 67)
 
 **Why:** a contract's completed hours counted Spontaneous sessions whose preset matched the contract's (`GetNenContractCompletedFocusHoursQueryHandler`), including sessions from *before* the contract was sealed — a fresh contract showed 4.7 completed hours with no block done. **Architect's hard rule:** only blocks committed at Seal and redemption blocks count toward the floor; everything else in the contract's period is Bonus (display only).
 
@@ -350,10 +344,11 @@ Once a gap (or a self-contained half of one) is fully closed, its write-up moves
 
 \---
 
-### Open Gap S — Drafting Adopts the Calendar; Seal Guards (interrogated 2026-09-28; plan agreed, not built — to close as Gap 67; depends on Gap R)
+### Open Gap S — Drafting Adopts the Calendar; Seal Guards (interrogated 2026-09-28, revised the same day; plan agreed, not built — to close as Gap 68; depends on Gap R)
 
 **Agreed design:**
 - **Adoption:** entering contract drafting pulls every *not-yet-finished* block (Focus and Background) already in the contract's range into the draft, next to newly drafted blocks. The user keeps or removes each. Kept → **Committed** at Seal. Removed → **deleted at Seal** (shown as "will be deleted at Seal" in the draft; cancelling the draft deletes nothing). Nothing is included or cast aside automatically. This also covers future recurring blocks (Open Gap E), which are real blocks.
+- **Adopted tiles are theoretical while drafting (revision, 2026-09-28):** an adopted block that hasn't started yet does **not** activate while drafting — no enforcement, no Ritual — exactly like a newly drafted tile. Not a new loophole: such a block is outside any contract, so it can already be deleted in one click (`DeletePlannedBlockValidator` only protects contract blocks and a running session's block). Blocks already running when drafting begins stay live (the guards below). At Seal, a tile whose start has passed is refused: "This block starts in the past — move it forward" (the same rule as Gap 65's start guard). On cancel the blocks return unchanged; one whose start passed during drafting activates late under the normal rules, and one that ended during drafting is swept as Missed. Mechanism: the draft is only in the Planner's memory today, but the heartbeat must now know which real blocks are held back — a small **in-memory** Application service, never persisted (a crash mid-draft brings the blocks back, the safe default).
 - **Finished blocks** in the range are not offered in the draft (they're history — Gap R).
 - **Boundary rule at Seal:** an existing block that **crosses** the contract's start or end → Seal refused until the user moves, shortens or removes it in the draft (no automatic split for future blocks — the user decides).
 - **Background block running at the Seal moment and kept:** **split at the Seal moment** — the part before Seal stays the original block, outside the contract (history); the rest becomes a new **Committed** block. Enforcement continues seamlessly (same preset, back to back). Builds on the existing `SplitPlannedBlock` use case.
@@ -385,6 +380,8 @@ Once a gap (or a self-contained half of one) is fully closed, its write-up moves
 
 **Doesn't exist yet** — `NenContract.OriginalEndDate` is only used by `Break`. **Architect's design:** extending (e.g. on Wednesday, a Friday end → Sunday) re-enters **drafting for the added days only**. Everything up to the original end is locked (already committed); the added days work like a fresh draft — adopt existing blocks with keep/remove (Gap S), no block may cross the new end, and the "Focus time in progress" guard applies. Blocks created after the extension inside the added days are Bonus (Gap R).
 
+After Gap 65, extending means appending Contract Days generated with `ContractCalendar.Generate` — the one-per-day invariant already covers it.
+
 **Still to interrogate:** the floor for the added days (the preset's fixed floor, or per day from drafted blocks?); whether Strictness or Work Hours can differ for the added days; what the recap shows for an extended contract; which contracts may be extended (Active only? any strictness?).
 
 \---
@@ -396,3 +393,15 @@ Once a gap (or a self-contained half of one) is fully closed, its write-up moves
 **Direction (not agreed design):** its own ambient concept — not a `PlannedBlock` (no start or end, so not a calendar entry) and not a contract member. Precedent: `UsageCeiling` (Open Gap A), an ambient policy deliberately independent of presets and contracts. `PolicyEngine` would always include it. Contract membership never has to fold it in — it's active anyway.
 
 **Still to interrogate:** can it be switched off *during* an active contract (a locking question, not membership)? Where it's authored (Presets page? Settings?); whether it appears anywhere on the Planner.
+
+\---
+
+### Open Gap X — Per-Day Hours and Floors in Drafting (raised 2026-09-28, widened the same day; parked, not interrogated)
+
+**Want:** Outlook-style — outside-Work-Hours time shown greyed out on the drafting calendar; the user drags the grey edges per day to set that day's hours (Monday 9–17, Tuesday 12–20). The preset's Work Hours only prefill.
+
+**Also (architect, 2026-09-28):** click a day's floor badge in drafting to change that day's floor or make it a rest day — a fixed daily floor is then only the prefill, like Work Hours. This is the one-click answer to Gap 65's "Not enough time left on day 1" refusal (lower day 1's floor, or rest it).
+
+**Direction:** no new domain concept — after Gap 65 this is editing one `ContractDay`'s window or floor; the two are edited independently. Dragging day 1's start or the last day's end moves `StartsAt`/`EndsAt` automatically, since both are derived.
+
+**Still to interrogate:** dragging a window below that day's floor (stop at the floor? lower the floor?); editing windows or floors after Seal under each strictness rule; whether per-day floors apply to plan-following floors or only fixed ones; the badge UI; how the Seal command carries per-day floors (and Edit keeps them — the days are the truth).

@@ -193,10 +193,17 @@ public class CreatePlannedBlockValidatorTests
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
             .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Now));
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
-            .Returns(NenContract.Seal(contractId, "Contract", new NenContractGoal("Goal"),
-                DateOnly.FromDateTime(Now), DateOnly.FromDateTime(Now).AddDays(7),
-                StrictnessRule.Locked, new DailyFloorPolicy(DailyFloor.None), null, false,
-                new Dictionary<DateOnly, double>(), Now));
+            .Returns(NenContract.Seal(
+                id: contractId,
+                name: "Contract",
+                goal: new NenContractGoal("Goal"),
+                strictnessRule: StrictnessRule.Locked,
+                calendar: TestCalendars.For(DateOnly.FromDateTime(Now), DateOnly.FromDateTime(Now).AddDays(7), new DailyFloorRule.Fixed(DailyFloor.None)),
+                floorRule: new DailyFloorRule.Fixed(DailyFloor.None),
+                changeWindow: null,
+                allowCancellation: false,
+                plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
+                localSealedAt: Now.Date));
         var command = ValidCommand(presetId) with { ContractId = contractId };
 
         var result = await CreateValidator().ValidateAsync(command);
@@ -211,12 +218,19 @@ public class CreatePlannedBlockValidatorTests
         var contractId = Guid.NewGuid();
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
             .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Now));
-        var workHours = new WorkHoursPolicy(new WorkHours(new TimeOnly(9, 0), new TimeOnly(17, 0)));
+        var workHours = new WorkHours(new TimeOnly(9, 0), new TimeOnly(17, 0));
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
-            .Returns(NenContract.Seal(contractId, "Contract", new NenContractGoal("Goal"),
-                DateOnly.FromDateTime(Now), DateOnly.FromDateTime(Now).AddDays(7),
-                StrictnessRule.Locked, new DailyFloorPolicy(DailyFloor.None), null, false,
-                new Dictionary<DateOnly, double>(), Now, workHoursPolicy: workHours));
+            .Returns(NenContract.Seal(
+                id: contractId,
+                name: "Contract",
+                goal: new NenContractGoal("Goal"),
+                strictnessRule: StrictnessRule.Locked,
+                calendar: TestCalendars.For(DateOnly.FromDateTime(Now), DateOnly.FromDateTime(Now).AddDays(7), new DailyFloorRule.Fixed(DailyFloor.None), workHours: workHours),
+                floorRule: new DailyFloorRule.Fixed(DailyFloor.None),
+                changeWindow: null,
+                allowCancellation: false,
+                plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
+                localSealedAt: Now.Date));
         // ValidCommand runs Now+1h to Now+2h; Now is 12:00, so 13:00-14:00 — inside 9-17, flip it outside.
         var command = ValidCommand(presetId) with
         {
@@ -237,12 +251,19 @@ public class CreatePlannedBlockValidatorTests
         var contractId = Guid.NewGuid();
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
             .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Now));
-        var workHours = new WorkHoursPolicy(new WorkHours(new TimeOnly(9, 0), new TimeOnly(17, 0)));
+        var workHours = new WorkHours(new TimeOnly(9, 0), new TimeOnly(17, 0));
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
-            .Returns(NenContract.Seal(contractId, "Contract", new NenContractGoal("Goal"),
-                DateOnly.FromDateTime(Now), DateOnly.FromDateTime(Now).AddDays(7),
-                StrictnessRule.Locked, new DailyFloorPolicy(DailyFloor.None), null, false,
-                new Dictionary<DateOnly, double>(), Now, workHoursPolicy: workHours));
+            .Returns(NenContract.Seal(
+                id: contractId,
+                name: "Contract",
+                goal: new NenContractGoal("Goal"),
+                strictnessRule: StrictnessRule.Locked,
+                calendar: TestCalendars.For(DateOnly.FromDateTime(Now), DateOnly.FromDateTime(Now).AddDays(7), new DailyFloorRule.Fixed(DailyFloor.None), workHours: workHours),
+                floorRule: new DailyFloorRule.Fixed(DailyFloor.None),
+                changeWindow: null,
+                allowCancellation: false,
+                plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
+                localSealedAt: Now.Date));
         var command = ValidCommand(presetId) with { ContractId = contractId }; // Now+1h..Now+2h = 13:00-14:00
 
         var result = await CreateValidator().ValidateAsync(command);
@@ -260,12 +281,19 @@ public class CreatePlannedBlockValidatorTests
         var discoveredContractId = Guid.NewGuid();
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
             .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Now));
-        var workHours = new WorkHoursPolicy(new WorkHours(new TimeOnly(9, 0), new TimeOnly(17, 0)));
+        var workHours = new WorkHours(new TimeOnly(9, 0), new TimeOnly(17, 0));
         _contracts.GetByIdAsync(discoveredContractId, Arg.Any<CancellationToken>())
-            .Returns(NenContract.Seal(discoveredContractId, "Contract", new NenContractGoal("Goal"),
-                DateOnly.FromDateTime(Now), DateOnly.FromDateTime(Now).AddDays(7),
-                StrictnessRule.Locked, new DailyFloorPolicy(DailyFloor.None), null, false,
-                new Dictionary<DateOnly, double>(), Now, workHoursPolicy: workHours));
+            .Returns(NenContract.Seal(
+                id: discoveredContractId,
+                name: "Contract",
+                goal: new NenContractGoal("Goal"),
+                strictnessRule: StrictnessRule.Locked,
+                calendar: TestCalendars.For(DateOnly.FromDateTime(Now), DateOnly.FromDateTime(Now).AddDays(7), new DailyFloorRule.Fixed(DailyFloor.None), workHours: workHours),
+                floorRule: new DailyFloorRule.Fixed(DailyFloor.None),
+                changeWindow: null,
+                allowCancellation: false,
+                plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
+                localSealedAt: Now.Date));
         _computeRedemptionAttribution
             .HandleAsync(Arg.Any<ComputeRedemptionAttributionQuery>(), Arg.Any<CancellationToken>())
             .Returns(new RedemptionAttributionResult(discoveredContractId, [new(Guid.NewGuid(), 30)]));

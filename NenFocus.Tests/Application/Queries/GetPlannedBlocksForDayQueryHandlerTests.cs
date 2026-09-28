@@ -307,10 +307,17 @@ public class GetPlannedBlocksForDayQueryHandlerTests
         _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
         _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>()).Returns(
-            NenContract.Seal(contractId, "Contract", new NenContractGoal("Goal"),
-                DateOnly.FromDateTime(Start), DateOnly.FromDateTime(Start).AddDays(7),
-                StrictnessRule.Locked, new DailyFloorPolicy(DailyFloor.None), null, false,
-                new Dictionary<DateOnly, double>(), sealedAt: Start));
+            NenContract.Seal(
+                id: contractId,
+                name: "Contract",
+                goal: new NenContractGoal("Goal"),
+                strictnessRule: StrictnessRule.Locked,
+                calendar: TestCalendars.For(DateOnly.FromDateTime(Start), DateOnly.FromDateTime(Start).AddDays(7), new DailyFloorRule.Fixed(DailyFloor.None)),
+                floorRule: new DailyFloorRule.Fixed(DailyFloor.None),
+                changeWindow: null,
+                allowCancellation: false,
+                plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
+                localSealedAt: Start.Date));
 
         var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
 
@@ -336,10 +343,17 @@ public class GetPlannedBlocksForDayQueryHandlerTests
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End, contractId: contractId);
         _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
         _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
-        var contract = NenContract.Seal(contractId, "Contract", new NenContractGoal("Goal"),
-            DateOnly.FromDateTime(Start).AddDays(-10), DateOnly.FromDateTime(Start).AddDays(-3),
-            StrictnessRule.Locked, new DailyFloorPolicy(DailyFloor.None), null, false,
-            new Dictionary<DateOnly, double>(), sealedAt: Start.AddDays(-10));
+        var contract = NenContract.Seal(
+            id: contractId,
+            name: "Contract",
+            goal: new NenContractGoal("Goal"),
+            strictnessRule: StrictnessRule.Locked,
+            calendar: TestCalendars.For(DateOnly.FromDateTime(Start).AddDays(-10), DateOnly.FromDateTime(Start).AddDays(-3), new DailyFloorRule.Fixed(DailyFloor.None)),
+            floorRule: new DailyFloorRule.Fixed(DailyFloor.None),
+            changeWindow: null,
+            allowCancellation: false,
+            plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
+            localSealedAt: Start.Date.AddDays(-10));
         contract.Complete(Start.AddDays(-2));
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>()).Returns(contract);
 
@@ -356,10 +370,17 @@ public class GetPlannedBlocksForDayQueryHandlerTests
         _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
         _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>()).Returns(
-            NenContract.Seal(contractId, "Contract", new NenContractGoal("Goal"),
-                DateOnly.FromDateTime(Start), DateOnly.FromDateTime(Start).AddDays(7),
-                StrictnessRule.DailyFlexibility, new DailyFloorPolicy(DailyFloor.None), null, false,
-                new Dictionary<DateOnly, double>(), sealedAt: Start));
+            NenContract.Seal(
+                id: contractId,
+                name: "Contract",
+                goal: new NenContractGoal("Goal"),
+                strictnessRule: StrictnessRule.DailyFlexibility,
+                calendar: TestCalendars.For(DateOnly.FromDateTime(Start), DateOnly.FromDateTime(Start).AddDays(7), new DailyFloorRule.Fixed(DailyFloor.None)),
+                floorRule: new DailyFloorRule.Fixed(DailyFloor.None),
+                changeWindow: null,
+                allowCancellation: false,
+                plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
+                localSealedAt: Start.Date));
 
         var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
 
@@ -384,10 +405,17 @@ public class GetPlannedBlocksForDayQueryHandlerTests
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End); // ContractId null
         _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
         _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
-        var contract = NenContract.Seal(Guid.NewGuid(), "Study Month", new NenContractGoal("Goal"),
-            Day.AddDays(-1), Day.AddDays(5),
-            StrictnessRule.Locked, new DailyFloorPolicy(DailyFloor.None), null, false,
-            new Dictionary<DateOnly, double>(), sealedAt: Start.AddDays(-1));
+        var contract = NenContract.Seal(
+            id: Guid.NewGuid(),
+            name: "Study Month",
+            goal: new NenContractGoal("Goal"),
+            strictnessRule: StrictnessRule.Locked,
+            calendar: TestCalendars.For(Day.AddDays(-1), Day.AddDays(5), new DailyFloorRule.Fixed(DailyFloor.None)),
+            floorRule: new DailyFloorRule.Fixed(DailyFloor.None),
+            changeWindow: null,
+            allowCancellation: false,
+            plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
+            localSealedAt: Start.Date.AddDays(-1));
         _contracts.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<NenContract>)[contract]);
 
         var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
@@ -403,10 +431,17 @@ public class GetPlannedBlocksForDayQueryHandlerTests
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End); // ContractId null
         _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
         _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
-        var contract = NenContract.Seal(Guid.NewGuid(), "Study Month", new NenContractGoal("Goal"),
-            Day.AddDays(10), Day.AddDays(20),
-            StrictnessRule.Locked, new DailyFloorPolicy(DailyFloor.None), null, false,
-            new Dictionary<DateOnly, double>(), sealedAt: Start.AddDays(10));
+        var contract = NenContract.Seal(
+            id: Guid.NewGuid(),
+            name: "Study Month",
+            goal: new NenContractGoal("Goal"),
+            strictnessRule: StrictnessRule.Locked,
+            calendar: TestCalendars.For(Day.AddDays(10), Day.AddDays(20), new DailyFloorRule.Fixed(DailyFloor.None)),
+            floorRule: new DailyFloorRule.Fixed(DailyFloor.None),
+            changeWindow: null,
+            allowCancellation: false,
+            plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
+            localSealedAt: Start.Date.AddDays(10));
         _contracts.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<NenContract>)[contract]);
 
         var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
@@ -423,10 +458,17 @@ public class GetPlannedBlocksForDayQueryHandlerTests
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End, contractId: contractId);
         _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
         _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
-        var contract = NenContract.Seal(contractId, "Study Month", new NenContractGoal("Goal"),
-            Day.AddDays(-1), Day.AddDays(5),
-            StrictnessRule.Locked, new DailyFloorPolicy(DailyFloor.None), null, false,
-            new Dictionary<DateOnly, double>(), sealedAt: Start.AddDays(-1));
+        var contract = NenContract.Seal(
+            id: contractId,
+            name: "Study Month",
+            goal: new NenContractGoal("Goal"),
+            strictnessRule: StrictnessRule.Locked,
+            calendar: TestCalendars.For(Day.AddDays(-1), Day.AddDays(5), new DailyFloorRule.Fixed(DailyFloor.None)),
+            floorRule: new DailyFloorRule.Fixed(DailyFloor.None),
+            changeWindow: null,
+            allowCancellation: false,
+            plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
+            localSealedAt: Start.Date.AddDays(-1));
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>()).Returns(contract);
         _contracts.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<NenContract>)[contract]);
 
@@ -442,10 +484,17 @@ public class GetPlannedBlocksForDayQueryHandlerTests
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End); // ContractId null
         _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
         _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
-        var contract = NenContract.Seal(Guid.NewGuid(), "Study Month", new NenContractGoal("Goal"),
-            Day.AddDays(-1), Day.AddDays(5),
-            StrictnessRule.Locked, new DailyFloorPolicy(DailyFloor.None), null, true,
-            new Dictionary<DateOnly, double>(), sealedAt: Start.AddDays(-1));
+        var contract = NenContract.Seal(
+            id: Guid.NewGuid(),
+            name: "Study Month",
+            goal: new NenContractGoal("Goal"),
+            strictnessRule: StrictnessRule.Locked,
+            calendar: TestCalendars.For(Day.AddDays(-1), Day.AddDays(5), new DailyFloorRule.Fixed(DailyFloor.None)),
+            floorRule: new DailyFloorRule.Fixed(DailyFloor.None),
+            changeWindow: null,
+            allowCancellation: true,
+            plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
+            localSealedAt: Start.Date.AddDays(-1));
         contract.Break(Start);
         _contracts.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<NenContract>)[contract]);
 

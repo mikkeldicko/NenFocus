@@ -1,3 +1,4 @@
+using NenFocus.Application.DTOs;
 using FluentAssertions;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.GetNenContractForEdit;
@@ -36,29 +37,33 @@ public class GetNenContractForEditQueryHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_SimpleContract_IsAdvancedFalseAndNoFloorFields()
+    public async Task HandleAsync_FollowsPlanContract_NoFixedFloor_DaysCarryPlannedFloors()
     {
         var contract = NenContract.Seal(
-            id: ContractId, name: "Study Week", goal: new NenContractGoal("Focus"),
-            startDate: StartDate, endDate: EndDate, strictnessRule: StrictnessRule.DailyFlexibility,
-            dailyFloorPolicy: DailyFloorPolicy.PerDay(new Dictionary<DateOnly, double> { [StartDate] = 2 }),
-            changeWindow: null, allowCancellation: true,
+            id: ContractId,
+            name: "Study Week",
+            goal: new NenContractGoal("Focus"),
+            strictnessRule: StrictnessRule.DailyFlexibility,
+            calendar: TestCalendars.For(StartDate, EndDate, new DailyFloorRule.FollowsPlan(), plannedFocusHoursByDay: new Dictionary<DateOnly, double> { [StartDate] = 2 }),
+            floorRule: new DailyFloorRule.FollowsPlan(),
+            changeWindow: null,
+            allowCancellation: true,
             plannedFocusHoursByDay: new Dictionary<DateOnly, double> { [StartDate] = 2 },
-            sealedAt: StartDate.AddDays(-1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
+            localSealedAt: StartDate.AddDays(-1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
         _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(contract);
 
         var result = await CreateHandler().HandleAsync(new GetNenContractForEditQuery(ContractId));
 
         result.Should().NotBeNull();
-        result!.IsAdvanced.Should().BeFalse();
-        result.FixedDailyFloorHours.Should().BeNull();
-        result.RestDays.Should().BeEmpty();
-        result.Name.Should().Be("Study Week");
+        result!.FixedDailyFloorHours.Should().BeNull();
+        result.Days.Should().HaveCount(EndDate.DayNumber - StartDate.DayNumber + 1);
+        result.Days[0].FloorHours.Should().Be(2);
+        result.Days[1].FloorHours.Should().BeNull();
         result.Goal.Should().Be("Focus");
     }
 
     [Fact]
-    public async Task HandleAsync_AdvancedContract_ExposesFixedFloorRestDaysAndWorkHours()
+    public async Task HandleAsync_FixedFloorContract_ExposesTheRuleAndEachDaysWindowAndFloor()
     {
         var restDay = StartDate.AddDays(3);
         var noWorkHoursDay = StartDate.AddDays(4);
@@ -68,36 +73,41 @@ public class GetNenContractForEditQueryHandlerTests
             .ToDictionary(d => d, _ => 3.0);
         var contract = NenContract.Seal(
             id: ContractId, name: "Advanced", goal: new NenContractGoal("Goal"),
-            startDate: StartDate, endDate: EndDate, strictnessRule: StrictnessRule.Locked,
-            dailyFloorPolicy: DailyFloorPolicy.Fixed(new DailyFloor(3), [restDay]),
+            strictnessRule: StrictnessRule.Locked,
+            calendar: TestCalendars.For(StartDate, EndDate, new DailyFloorRule.Fixed(new DailyFloor(3)),
+                workHours: new WorkHours(new TimeOnly(9, 0), new TimeOnly(17, 0)),
+                restDays: [restDay], noWorkHoursDays: [noWorkHoursDay]),
+            floorRule: new DailyFloorRule.Fixed(new DailyFloor(3)),
             changeWindow: null, allowCancellation: false,
             plannedFocusHoursByDay: plannedHours,
-            sealedAt: StartDate.AddDays(-1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc),
-            workHoursPolicy: new WorkHoursPolicy(
-                new WorkHours(new TimeOnly(9, 0), new TimeOnly(17, 0)),
-                WorkHoursPolicy.NoConstraintExceptions([noWorkHoursDay])));
+            localSealedAt: StartDate.AddDays(-1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
         _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(contract);
 
         var result = await CreateHandler().HandleAsync(new GetNenContractForEditQuery(ContractId));
 
         result.Should().NotBeNull();
-        result!.IsAdvanced.Should().BeTrue();
-        result.FixedDailyFloorHours.Should().Be(3);
-        result.RestDays.Should().ContainSingle().Which.Should().Be(restDay);
-        result.WorkHoursStart.Should().Be(new TimeOnly(9, 0));
-        result.WorkHoursEnd.Should().Be(new TimeOnly(17, 0));
-        result.NoWorkHoursDays.Should().ContainSingle().Which.Should().Be(noWorkHoursDay);
+        result!.FixedDailyFloorHours.Should().Be(3);
+        result.Days.Single(d => d.Date == restDay).FloorHours.Should().BeNull();
+        result.Days.Single(d => d.Date == StartDate).Should().Be(new NenContractEditDayDto(
+            StartDate, StartDate.ToDateTime(new TimeOnly(9, 0)), StartDate.ToDateTime(new TimeOnly(17, 0)), 3));
+        result.Days.Single(d => d.Date == noWorkHoursDay).Should().Be(new NenContractEditDayDto(
+            noWorkHoursDay, noWorkHoursDay.ToDateTime(TimeOnly.MinValue), noWorkHoursDay.AddDays(1).ToDateTime(TimeOnly.MinValue), 3));
     }
 
     [Fact]
     public async Task HandleAsync_WithBlocks_ResolvesPresetNamesAndOrdersByStart()
     {
         var contract = NenContract.Seal(
-            id: ContractId, name: "Contract", goal: new NenContractGoal("Goal"),
-            startDate: StartDate, endDate: EndDate, strictnessRule: StrictnessRule.DailyFlexibility,
-            dailyFloorPolicy: DailyFloorPolicy.None, changeWindow: null, allowCancellation: true,
+            id: ContractId,
+            name: "Contract",
+            goal: new NenContractGoal("Goal"),
+            strictnessRule: StrictnessRule.DailyFlexibility,
+            calendar: TestCalendars.For(StartDate, EndDate, new DailyFloorRule.None()),
+            floorRule: new DailyFloorRule.None(),
+            changeWindow: null,
+            allowCancellation: true,
             plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-            sealedAt: StartDate.AddDays(-1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
+            localSealedAt: StartDate.AddDays(-1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
         _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(contract);
 
         var focusPresetId = Guid.NewGuid();

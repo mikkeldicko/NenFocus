@@ -43,48 +43,59 @@ public sealed class SealNenContractCommandHandler : ICommandHandler<SealNenContr
         if (await _checkOverlap.HandleAsync(new CheckFocusBlockBatchOverlapQuery(preparation.FocusBlocks), ct))
             return SealNenContractResult.Fail("A Focus block already exists here.");
 
-        // Advanced-only "no fixed floor" choice: for Daily Flexibility/Locked this is the
-        // existing PerDay derivation (each day's floor = that day's own planned hours).
-        // For Period Time Budget it means something different — no per-day obligation at
-        // all, only a whole-period total (ContractFloor), derived the same way: whatever
-        // was drafted becomes the committed target.
-        DailyFloorPolicy dailyFloorPolicy;
+        // Advanced-only "no fixed floor" choice: for Daily Flexibility/Locked each day's floor
+        // follows the plan (that day's own planned hours). For Period Time Budget it means
+        // something different — no per-day obligation at all, only a whole-period total
+        // (ContractFloor), derived the same way: whatever was drafted becomes the committed target.
+        DailyFloorRule floorRule;
         ContractFloor? contractFloor = null;
 
         if (command.FixedDailyFloorHours is { } fixedHours)
         {
-            dailyFloorPolicy = DailyFloorPolicy.Fixed(new DailyFloor(fixedHours), command.RestDays);
+            floorRule = new DailyFloorRule.Fixed(new DailyFloor(fixedHours));
         }
         else if (command.StrictnessRule == StrictnessRule.PeriodTimeBudget)
         {
-            dailyFloorPolicy = DailyFloorPolicy.None;
+            floorRule = new DailyFloorRule.None();
             contractFloor = new ContractFloor(preparation.PlannedFocusHoursByDay.Values.Sum());
         }
         else
         {
-            dailyFloorPolicy = DailyFloorPolicy.PerDay(preparation.PlannedFocusHoursByDay);
+            floorRule = new DailyFloorRule.FollowsPlan();
         }
 
-        var workHoursPolicy = command.WorkHoursStart is { } workHoursStart && command.WorkHoursEnd is { } workHoursEnd
-            ? new WorkHoursPolicy(new WorkHours(workHoursStart, workHoursEnd), WorkHoursPolicy.NoConstraintExceptions(command.NoWorkHoursDays))
+        var workHours = command.WorkHoursStart is { } workHoursStart && command.WorkHoursEnd is { } workHoursEnd
+            ? new WorkHours(workHoursStart, workHoursEnd)
             : null;
+
+        var localNow = _clock.ToLocal(_clock.UtcNow);
 
         NenContract contract;
         try
         {
+            // The command carries no start time yet (Open Gap W adds the wizard's "When"
+            // step) — until then the start is the suggested one for StartDate.
+            var calendar = ContractCalendar.Generate(
+                localStart: ContractCalendar.SuggestedStart(command.StartDate, workHours, command.NoWorkHoursDays, localNow),
+                endDate: command.EndDate,
+                endTime: null,
+                workHours: workHours,
+                noWorkHoursDays: command.NoWorkHoursDays,
+                floorRule: floorRule,
+                restDays: command.RestDays,
+                plannedFocusHoursByDay: preparation.PlannedFocusHoursByDay);
+
             contract = NenContract.Seal(
                 id: contractId,
                 name: command.Name,
                 goal: new NenContractGoal(command.Goal),
-                startDate: command.StartDate,
-                endDate: command.EndDate,
                 strictnessRule: command.StrictnessRule,
-                dailyFloorPolicy: dailyFloorPolicy,
+                calendar: calendar,
+                floorRule: floorRule,
                 changeWindow: null,
                 allowCancellation: command.AllowCancellation,
                 plannedFocusHoursByDay: preparation.PlannedFocusHoursByDay,
-                sealedAt: _clock.UtcNow,
-                workHoursPolicy: workHoursPolicy,
+                localSealedAt: localNow,
                 contractPresetId: command.ContractPresetId,
                 contractFloor: contractFloor,
                 redemptionPlacementPolicy: command.RedemptionPlacementPolicy,
@@ -94,6 +105,11 @@ public sealed class SealNenContractCommandHandler : ICommandHandler<SealNenContr
         {
             return SealNenContractResult.Fail(ex.Message);
         }
+
+        // Every block must fit its day's window — which also refuses a block before the
+        // contract's start, i.e. one already in the past.
+        if (preparation.Blocks.Any(b => !contract.AllowsBlockPlacement(_clock.ToLocal(b.Start), _clock.ToLocal(b.End))))
+            return SealNenContractResult.Fail("A block falls outside the contract's hours — move it inside them.");
 
         foreach (var block in preparation.Blocks)
             await _blocks.AddAsync(block, ct);

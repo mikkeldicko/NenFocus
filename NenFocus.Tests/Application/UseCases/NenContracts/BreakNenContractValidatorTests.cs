@@ -21,14 +21,13 @@ public class BreakNenContractValidatorTests
         id: Guid.NewGuid(),
         name: "Focused Week",
         goal: new NenContractGoal("Ship it"),
-        startDate: StartDate,
-        endDate: EndDate,
         strictnessRule: StrictnessRule.DailyFlexibility,
-        dailyFloorPolicy: DailyFloorPolicy.None,
+        calendar: TestCalendars.For(StartDate, EndDate, new DailyFloorRule.None()),
+        floorRule: new DailyFloorRule.None(),
         changeWindow: null,
         allowCancellation: allowCancellation,
         plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-        sealedAt: sealedAt);
+        localSealedAt: sealedAt);
 
     [Fact]
     public async Task Validate_EmptyContractId_IsInvalid()

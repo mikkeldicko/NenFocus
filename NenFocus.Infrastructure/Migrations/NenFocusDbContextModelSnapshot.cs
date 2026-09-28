@@ -208,13 +208,13 @@ namespace NenFocus.Infrastructure.Migrations
                     b.Property<Guid?>("ContractPresetId")
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("DailyFloorPolicy")
-                        .IsRequired()
-                        .HasColumnType("TEXT")
-                        .HasColumnName("DailyFloorPolicy");
-
                     b.Property<DateOnly>("EndDate")
                         .HasColumnType("TEXT");
+
+                    b.Property<string>("FloorRule")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("FloorRule");
 
                     b.Property<string>("Goal")
                         .IsRequired()
@@ -256,9 +256,10 @@ namespace NenFocus.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("WorkHoursPolicy")
+                    b.Property<string>("_calendar")
+                        .IsRequired()
                         .HasColumnType("TEXT")
-                        .HasColumnName("WorkHoursPolicy");
+                        .HasColumnName("Days");
 
                     b.HasKey("Id");
 

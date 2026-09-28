@@ -10,18 +10,28 @@ namespace NenFocus.Tests.Application.Queries;
 
 public class GetContractWorkHoursForDateQueryHandlerTests
 {
-    private static readonly DateTime Now = new(2026, 1, 1, 8, 0, 0, DateTimeKind.Utc);
-    private static readonly DateOnly StartDate = DateOnly.FromDateTime(Now);
+    private static readonly DateOnly StartDate = new(2026, 1, 1);
     private static readonly DateOnly EndDate = StartDate.AddDays(30);
+    private static readonly WorkHours NineToFive = new(new TimeOnly(9, 0), new TimeOnly(17, 0));
 
     private readonly INenContractRepository _contracts = Substitute.For<INenContractRepository>();
 
     private GetContractWorkHoursForDateQueryHandler CreateHandler() => new(_contracts);
 
-    private static NenContract Seal(WorkHoursPolicy? workHoursPolicy, Guid id) =>
-        NenContract.Seal(id, "Contract", new NenContractGoal("Goal"), StartDate, EndDate,
-            StrictnessRule.DailyFlexibility, new DailyFloorPolicy(DailyFloor.None), null, false,
-            new Dictionary<DateOnly, double>(), sealedAt: Now, workHoursPolicy: workHoursPolicy);
+    private static NenContract Seal(Guid id, WorkHours? workHours, IReadOnlyCollection<DateOnly>? noWorkHoursDays = null) =>
+        NenContract.Seal(
+            id: id,
+            name: "Contract",
+            goal: new NenContractGoal("Goal"),
+            strictnessRule: StrictnessRule.DailyFlexibility,
+            calendar: TestCalendars.For(StartDate, EndDate, new DailyFloorRule.None(), workHours: workHours, noWorkHoursDays: noWorkHoursDays),
+            floorRule: new DailyFloorRule.None(),
+            changeWindow: null,
+            allowCancellation: false,
+            plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
+            localSealedAt: StartDate.ToDateTime(TimeOnly.MinValue));
+
+    private static DateTime At(DateOnly date, int hour) => date.ToDateTime(new TimeOnly(hour, 0));
 
     [Fact]
     public async Task Handle_ContractNotFound_ReturnsNull()
@@ -35,59 +45,49 @@ public class GetContractWorkHoursForDateQueryHandlerTests
     }
 
     [Fact]
-    public async Task Handle_ContractHasNoWorkHoursPolicy_ReturnsNull()
+    public async Task Handle_DateOutsideTheContract_ReturnsNull()
     {
         var contractId = Guid.NewGuid();
-        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>()).Returns(Seal(null, contractId));
+        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>()).Returns(Seal(contractId, NineToFive));
 
-        var result = await CreateHandler().HandleAsync(new GetContractWorkHoursForDateQuery(contractId, StartDate));
+        var result = await CreateHandler().HandleAsync(new GetContractWorkHoursForDateQuery(contractId, EndDate.AddDays(1)));
 
         result.Should().BeNull();
     }
 
     [Fact]
-    public async Task Handle_DefaultWorkHours_ReturnsResolvedWindow()
+    public async Task Handle_NoWorkHours_ReturnsTheWholeDay()
     {
         var contractId = Guid.NewGuid();
-        var policy = new WorkHoursPolicy(new WorkHours(new TimeOnly(9, 0), new TimeOnly(17, 0)));
-        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>()).Returns(Seal(policy, contractId));
+        var date = StartDate.AddDays(1);
+        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>()).Returns(Seal(contractId, workHours: null));
 
-        var result = await CreateHandler().HandleAsync(new GetContractWorkHoursForDateQuery(contractId, StartDate));
+        var result = await CreateHandler().HandleAsync(new GetContractWorkHoursForDateQuery(contractId, date));
 
-        result.Should().NotBeNull();
-        result!.Start.Should().Be(new TimeOnly(9, 0));
-        result.End.Should().Be(new TimeOnly(17, 0));
+        result.Should().Be(new NenFocus.Application.DTOs.ContractWorkHoursDto(At(date, 0), At(date.AddDays(1), 0)));
     }
 
     [Fact]
-    public async Task Handle_PerDayExceptionOverridesDefault_ReturnsExceptionWindow()
+    public async Task Handle_WorkHours_ReturnsThatDaysWindow()
     {
         var contractId = Guid.NewGuid();
-        var exceptionDate = StartDate.AddDays(1);
-        var policy = new WorkHoursPolicy(
-            new WorkHours(new TimeOnly(9, 0), new TimeOnly(17, 0)),
-            new Dictionary<DateOnly, WorkHours?> { [exceptionDate] = new WorkHours(new TimeOnly(11, 0), new TimeOnly(20, 0)) });
-        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>()).Returns(Seal(policy, contractId));
+        var date = StartDate.AddDays(1);
+        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>()).Returns(Seal(contractId, NineToFive));
 
-        var result = await CreateHandler().HandleAsync(new GetContractWorkHoursForDateQuery(contractId, exceptionDate));
+        var result = await CreateHandler().HandleAsync(new GetContractWorkHoursForDateQuery(contractId, date));
 
-        result.Should().NotBeNull();
-        result!.Start.Should().Be(new TimeOnly(11, 0));
-        result.End.Should().Be(new TimeOnly(20, 0));
+        result.Should().Be(new NenFocus.Application.DTOs.ContractWorkHoursDto(At(date, 9), At(date, 17)));
     }
 
     [Fact]
-    public async Task Handle_PerDayExceptionExplicitlyNull_ReturnsNoConstraint()
+    public async Task Handle_NoWorkHoursDay_ReturnsTheWholeDay()
     {
         var contractId = Guid.NewGuid();
         var noConstraintDate = StartDate.AddDays(2);
-        var policy = new WorkHoursPolicy(
-            new WorkHours(new TimeOnly(9, 0), new TimeOnly(17, 0)),
-            new Dictionary<DateOnly, WorkHours?> { [noConstraintDate] = null });
-        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>()).Returns(Seal(policy, contractId));
+        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>()).Returns(Seal(contractId, NineToFive, [noConstraintDate]));
 
         var result = await CreateHandler().HandleAsync(new GetContractWorkHoursForDateQuery(contractId, noConstraintDate));
 
-        result.Should().BeNull();
+        result.Should().Be(new NenFocus.Application.DTOs.ContractWorkHoursDto(At(noConstraintDate, 0), At(noConstraintDate.AddDays(1), 0)));
     }
 }

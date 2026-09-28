@@ -18,14 +18,13 @@ public class CheckNenContractDateRangeOverlapQueryHandlerTests
         id: id,
         name: name,
         goal: new NenContractGoal("Goal"),
-        startDate: start,
-        endDate: end,
         strictnessRule: StrictnessRule.DailyFlexibility,
-        dailyFloorPolicy: DailyFloorPolicy.None,
+        calendar: TestCalendars.For(start, end, new DailyFloorRule.None()),
+        floorRule: new DailyFloorRule.None(),
         changeWindow: null,
         allowCancellation: true,
         plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-        sealedAt: start.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
+        localSealedAt: start.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
 
     [Fact]
     public async Task HandleAsync_NoInEffectContracts_ReturnsNull()

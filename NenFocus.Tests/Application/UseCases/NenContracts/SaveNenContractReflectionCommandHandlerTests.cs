@@ -21,11 +21,16 @@ public class SaveNenContractReflectionCommandHandlerTests
     private static NenContract CompletedContract()
     {
         var contract = NenContract.Seal(
-            id: ContractId, name: "Focused Week", goal: new NenContractGoal("Ship it"),
-            startDate: StartDate, endDate: EndDate, strictnessRule: StrictnessRule.Locked,
-            dailyFloorPolicy: DailyFloorPolicy.None, changeWindow: null, allowCancellation: true,
+            id: ContractId,
+            name: "Focused Week",
+            goal: new NenContractGoal("Ship it"),
+            strictnessRule: StrictnessRule.Locked,
+            calendar: TestCalendars.For(StartDate, EndDate, new DailyFloorRule.None()),
+            floorRule: new DailyFloorRule.None(),
+            changeWindow: null,
+            allowCancellation: true,
             plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-            sealedAt: StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
+            localSealedAt: StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
         contract.Complete(EndDate.AddDays(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
         return contract;
     }

@@ -2,7 +2,7 @@ namespace NenFocus.Domain.ValueObjects;
 
 /// <summary>
 /// The minimum total Focus hours required across a whole Nen Contract's period, as an
-/// alternative to DailyFloorPolicy's per-day resolution — used by Period Time Budget
+/// alternative to per-day floors (ContractDay.Floor) — used by Period Time Budget
 /// contracts that opt out of a per-day obligation entirely in favor of a single
 /// whole-period target. Same shape as DailyFloor (Hours + IsSatisfiedBy) but
 /// deliberately not the same type: DailyFloor's upper bound of 24 hours is correct for

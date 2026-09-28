@@ -42,14 +42,13 @@ public class EditNenContractCommandHandlerTests
         id: id,
         name: "Original Name",
         goal: new NenContractGoal("Original goal"),
-        startDate: StartDate,
-        endDate: EndDate,
         strictnessRule: StrictnessRule.DailyFlexibility,
-        dailyFloorPolicy: DailyFloorPolicy.None,
+        calendar: TestCalendars.For(StartDate, EndDate, new DailyFloorRule.None()),
+        floorRule: new DailyFloorRule.None(),
         changeWindow: null,
         allowCancellation: true,
         plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-        sealedAt: StartDate.AddDays(-10).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
+        localSealedAt: StartDate.AddDays(-10).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
 
     private static EditNenContractCommand BaseCommand(
         Guid contractId,
@@ -266,8 +265,7 @@ public class EditNenContractCommandHandlerTests
         result.Success.Should().BeTrue();
         saved.Should().NotBeNull();
         saved!.ContractFloorHours.Should().Be(9); // 3 + 4 + 2
-        saved.DailyFloorPolicy.Default.Should().BeNull();
-        saved.DailyFloorPolicy.PerDayExceptions.Should().BeEmpty();
+        saved.FloorRule.Should().Be(new DailyFloorRule.None());
     }
 
     [Fact]

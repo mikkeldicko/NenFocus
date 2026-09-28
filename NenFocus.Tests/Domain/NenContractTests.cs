@@ -21,42 +21,62 @@ public class NenContractTests
         return map;
     }
 
+    private static readonly WorkHours NineToFive = new(new TimeOnly(9, 0), new TimeOnly(17, 0));
+
+    /// <param name="floorPlan">The hours a FollowsPlan rule turns into floors — defaults to plannedFocusHoursByDay.</param>
+    /// <param name="calendar">Explicit days, for tests about per-day windows no stencil can produce.</param>
     private static NenContract Seal(
-        DailyFloorPolicy? dailyFloorPolicy = null,
+        DailyFloorRule? floorRule = null,
         IReadOnlyDictionary<DateOnly, double>? plannedFocusHoursByDay = null,
         DateTime? sealedAt = null,
         bool allowCancellation = false,
         ChangeWindow? changeWindow = null,
         StrictnessRule strictnessRule = StrictnessRule.Locked,
-        WorkHoursPolicy? workHoursPolicy = null,
+        WorkHours? workHours = null,
+        IReadOnlyCollection<DateOnly>? restDays = null,
+        IReadOnlyCollection<DateOnly>? noWorkHoursDays = null,
+        IReadOnlyDictionary<DateOnly, double>? floorPlan = null,
+        ContractCalendar? calendar = null,
         Guid? contractPresetId = null,
         ContractFloor? contractFloor = null,
         RedemptionPlacementPolicy redemptionPlacementPolicy = RedemptionPlacementPolicy.AnywhereInContract)
-        => NenContract.Seal(
+    {
+        var rule = floorRule ?? (contractFloor is not null ? new DailyFloorRule.None() : new DailyFloorRule.Fixed(new DailyFloor(4)));
+        var plan = plannedFocusHoursByDay ?? FullyPlanned();
+        return NenContract.Seal(
             id: Guid.NewGuid(),
             name: "Focused January",
             goal: new NenContractGoal("Ship the feature"),
-            startDate: StartDate,
-            endDate: EndDate,
             strictnessRule: strictnessRule,
-            dailyFloorPolicy: dailyFloorPolicy ?? (contractFloor is not null ? DailyFloorPolicy.None : new DailyFloorPolicy(new DailyFloor(4))),
+            calendar: calendar ?? TestCalendars.For(StartDate, EndDate, rule, floorPlan ?? plan, workHours, restDays, noWorkHoursDays),
+            floorRule: rule,
             changeWindow: changeWindow,
             allowCancellation: allowCancellation,
-            plannedFocusHoursByDay: plannedFocusHoursByDay ?? FullyPlanned(),
-            sealedAt: sealedAt ?? SealedOnStart,
-            workHoursPolicy: workHoursPolicy,
+            plannedFocusHoursByDay: plan,
+            localSealedAt: sealedAt ?? SealedOnStart,
             contractPresetId: contractPresetId,
             contractFloor: contractFloor,
             redemptionPlacementPolicy: redemptionPlacementPolicy);
+    }
+
+    /// <summary>Full days from StartDate to EndDate, no floors, except the given windows.</summary>
+    private static ContractCalendar DaysWithWindows(Dictionary<DateOnly, (DateTime Start, DateTime End)> windows)
+    {
+        var days = new List<ContractDay>();
+        for (var date = StartDate; date <= EndDate; date = date.AddDays(1))
+        {
+            var (start, end) = windows.TryGetValue(date, out var w)
+                ? w
+                : (date.ToDateTime(TimeOnly.MinValue), date.AddDays(1).ToDateTime(TimeOnly.MinValue));
+            days.Add(new ContractDay(date, start, end, null));
+        }
+        return new ContractCalendar(days);
+    }
 
     [Fact]
     public void Seal_EndBeforeStart_Throws()
     {
-        var act = () => NenContract.Seal(
-            Guid.NewGuid(), "Name", new NenContractGoal("Goal"),
-            startDate: EndDate, endDate: StartDate,
-            StrictnessRule.Locked, new DailyFloorPolicy(DailyFloor.None), null, false,
-            new Dictionary<DateOnly, double>(), SealedOnStart);
+        var act = () => TestCalendars.For(EndDate, StartDate, new DailyFloorRule.None());
 
         act.Should().Throw<ArgumentException>();
     }
@@ -65,10 +85,16 @@ public class NenContractTests
     public void Seal_BlankName_Throws()
     {
         var act = () => NenContract.Seal(
-            Guid.NewGuid(), "   ", new NenContractGoal("Goal"),
-            StartDate, EndDate,
-            StrictnessRule.Locked, new DailyFloorPolicy(DailyFloor.None), null, false,
-            FullyPlanned(), SealedOnStart);
+            id: Guid.NewGuid(),
+            name: "   ",
+            goal: new NenContractGoal("Goal"),
+            strictnessRule: StrictnessRule.Locked,
+            calendar: TestCalendars.For(StartDate, EndDate, new DailyFloorRule.Fixed(DailyFloor.None)),
+            floorRule: new DailyFloorRule.Fixed(DailyFloor.None),
+            changeWindow: null,
+            allowCancellation: false,
+            plannedFocusHoursByDay: FullyPlanned(),
+            localSealedAt: SealedOnStart);
 
         act.Should().Throw<ArgumentException>();
     }
@@ -76,7 +102,7 @@ public class NenContractTests
     [Fact]
     public void Seal_EveryDayMeetsFloor_Succeeds()
     {
-        var act = () => Seal(dailyFloorPolicy: new DailyFloorPolicy(new DailyFloor(4)), plannedFocusHoursByDay: FullyPlanned(4));
+        var act = () => Seal(floorRule: new DailyFloorRule.Fixed(new DailyFloor(4)), plannedFocusHoursByDay: FullyPlanned(4));
 
         act.Should().NotThrow();
     }
@@ -87,7 +113,7 @@ public class NenContractTests
         var plan = FullyPlanned(4);
         plan[StartDate.AddDays(3)] = 2; // below the floor of 4
 
-        var act = () => Seal(dailyFloorPolicy: new DailyFloorPolicy(new DailyFloor(4)), plannedFocusHoursByDay: plan);
+        var act = () => Seal(floorRule: new DailyFloorRule.Fixed(new DailyFloor(4)), plannedFocusHoursByDay: plan);
 
         act.Should().Throw<ArgumentException>();
     }
@@ -98,7 +124,7 @@ public class NenContractTests
         var plan = FullyPlanned(4);
         plan.Remove(StartDate.AddDays(2));
 
-        var act = () => Seal(dailyFloorPolicy: new DailyFloorPolicy(new DailyFloor(4)), plannedFocusHoursByDay: plan);
+        var act = () => Seal(floorRule: new DailyFloorRule.Fixed(new DailyFloor(4)), plannedFocusHoursByDay: plan);
 
         act.Should().Throw<ArgumentException>();
     }
@@ -106,7 +132,7 @@ public class NenContractTests
     [Fact]
     public void Seal_FloorDisabled_NoPlannedHoursRequired()
     {
-        var act = () => Seal(dailyFloorPolicy: DailyFloorPolicy.None, plannedFocusHoursByDay: new Dictionary<DateOnly, double>());
+        var act = () => Seal(floorRule: new DailyFloorRule.None(), plannedFocusHoursByDay: new Dictionary<DateOnly, double>());
 
         act.Should().NotThrow();
     }
@@ -115,14 +141,10 @@ public class NenContractTests
     public void Seal_RestDayViaPerDayException_SkippedEvenWithNoPlannedHours()
     {
         // Default floor of 4h applies every day except the explicit rest-day exception.
-        var policy = new DailyFloorPolicy(new DailyFloor(4), new Dictionary<DateOnly, DailyFloor?>
-        {
-            [StartDate.AddDays(5)] = null
-        });
         var plan = FullyPlanned(4);
         plan.Remove(StartDate.AddDays(5)); // no hours planned on the rest day
 
-        var act = () => Seal(dailyFloorPolicy: policy, plannedFocusHoursByDay: plan);
+        var act = () => Seal(floorRule: new DailyFloorRule.Fixed(new DailyFloor(4)), restDays: [StartDate.AddDays(5)], plannedFocusHoursByDay: plan);
 
         act.Should().NotThrow();
     }
@@ -138,10 +160,7 @@ public class NenContractTests
             [StartDate.AddDays(1)] = 3
             // remaining days omitted — no floor, no plan, true rest days
         };
-        var perDayFloors = plan.ToDictionary(kv => kv.Key, kv => (DailyFloor?)new DailyFloor(kv.Value));
-        var policy = new DailyFloorPolicy(null, perDayFloors);
-
-        var act = () => Seal(dailyFloorPolicy: policy, plannedFocusHoursByDay: plan);
+        var act = () => Seal(floorRule: new DailyFloorRule.FollowsPlan(), plannedFocusHoursByDay: plan);
 
         act.Should().NotThrow();
     }
@@ -324,7 +343,7 @@ public class NenContractTests
     [InlineData(5, true)]    // above floor -> met
     public void IsDayMet_ComparesHoursAgainstFloor(double completedHours, bool expectedMet)
     {
-        var contract = Seal(dailyFloorPolicy: new DailyFloorPolicy(new DailyFloor(4)));
+        var contract = Seal(floorRule: new DailyFloorRule.Fixed(new DailyFloor(4)));
 
         contract.IsDayMet(StartDate, completedHours).Should().Be(expectedMet);
     }
@@ -334,7 +353,7 @@ public class NenContractTests
     {
         // The day verdict is hours-only now — a missed/late block only costs hours
         // that must be made up elsewhere; it does not fail the day directly.
-        var contract = Seal(dailyFloorPolicy: new DailyFloorPolicy(new DailyFloor(4)));
+        var contract = Seal(floorRule: new DailyFloorRule.Fixed(new DailyFloor(4)));
 
         contract.IsDayMet(StartDate, completedFocusHours: 4).Should().BeTrue();
     }
@@ -344,7 +363,7 @@ public class NenContractTests
     [InlineData(2)]
     public void IsDayMet_FloorlessContract_AlwaysMet(double completedHours)
     {
-        var contract = Seal(dailyFloorPolicy: DailyFloorPolicy.None, plannedFocusHoursByDay: new Dictionary<DateOnly, double>());
+        var contract = Seal(floorRule: new DailyFloorRule.None(), plannedFocusHoursByDay: new Dictionary<DateOnly, double>());
 
         contract.IsDayMet(StartDate, completedHours).Should().BeTrue();
     }
@@ -352,13 +371,9 @@ public class NenContractTests
     [Fact]
     public void IsDayMet_RestDayViaPerDayException_AlwaysMet()
     {
-        var policy = new DailyFloorPolicy(new DailyFloor(4), new Dictionary<DateOnly, DailyFloor?>
-        {
-            [StartDate.AddDays(5)] = null
-        });
         var plan = FullyPlanned(4);
         plan.Remove(StartDate.AddDays(5));
-        var contract = Seal(dailyFloorPolicy: policy, plannedFocusHoursByDay: plan);
+        var contract = Seal(floorRule: new DailyFloorRule.Fixed(new DailyFloor(4)), restDays: [StartDate.AddDays(5)], plannedFocusHoursByDay: plan);
 
         contract.IsDayMet(StartDate.AddDays(5), completedFocusHours: 0).Should().BeTrue();
     }
@@ -366,13 +381,8 @@ public class NenContractTests
     [Fact]
     public void IsDayMet_DifferentDaysHaveDifferentFloors()
     {
-        var policy = new DailyFloorPolicy(null, new Dictionary<DateOnly, DailyFloor?>
-        {
-            [StartDate] = new DailyFloor(2),
-            [StartDate.AddDays(1)] = new DailyFloor(3)
-        });
         var plan = new Dictionary<DateOnly, double> { [StartDate] = 2, [StartDate.AddDays(1)] = 3 };
-        var contract = Seal(dailyFloorPolicy: policy, plannedFocusHoursByDay: plan);
+        var contract = Seal(floorRule: new DailyFloorRule.FollowsPlan(), plannedFocusHoursByDay: plan);
 
         contract.IsDayMet(StartDate, completedFocusHours: 2).Should().BeTrue();
         contract.IsDayMet(StartDate.AddDays(1), completedFocusHours: 2).Should().BeFalse(); // below its own 3h floor
@@ -385,7 +395,7 @@ public class NenContractTests
     [InlineData(5.32, 1.33)] // uncapped
     public void PercentOfFloorMet_DelegatesToDailyFloor(double completedHours, double expected)
     {
-        var contract = Seal(dailyFloorPolicy: new DailyFloorPolicy(new DailyFloor(4)));
+        var contract = Seal(floorRule: new DailyFloorRule.Fixed(new DailyFloor(4)));
 
         contract.PercentOfFloorMet(StartDate, completedHours).Should().BeApproximately(expected, 0.001);
     }
@@ -393,13 +403,9 @@ public class NenContractTests
     [Fact]
     public void PercentOfFloorMet_RestDay_ReturnsNull()
     {
-        var policy = new DailyFloorPolicy(new DailyFloor(4), new Dictionary<DateOnly, DailyFloor?>
-        {
-            [StartDate.AddDays(5)] = null
-        });
         var plan = FullyPlanned(4);
         plan.Remove(StartDate.AddDays(5));
-        var contract = Seal(dailyFloorPolicy: policy, plannedFocusHoursByDay: plan);
+        var contract = Seal(floorRule: new DailyFloorRule.Fixed(new DailyFloor(4)), restDays: [StartDate.AddDays(5)], plannedFocusHoursByDay: plan);
 
         contract.PercentOfFloorMet(StartDate.AddDays(5), completedFocusHours: 2).Should().BeNull();
     }
@@ -407,35 +413,61 @@ public class NenContractTests
     [Fact]
     public void PercentOfFloorMet_FloorlessContract_ReturnsNull()
     {
-        var contract = Seal(dailyFloorPolicy: DailyFloorPolicy.None, plannedFocusHoursByDay: new Dictionary<DateOnly, double>());
+        var contract = Seal(floorRule: new DailyFloorRule.None(), plannedFocusHoursByDay: new Dictionary<DateOnly, double>());
 
         contract.PercentOfFloorMet(StartDate, completedFocusHours: 2).Should().BeNull();
     }
 
     [Fact]
-    public void Seal_NoWorkHoursPolicyGiven_DefaultsToNull()
+    public void WindowOn_WithoutWorkHours_IsTheWholeDay()
     {
         var contract = Seal();
 
-        contract.WorkHoursPolicy.Should().BeNull();
+        contract.WindowOn(StartDate.AddDays(1)).Should().Be((
+            StartDate.AddDays(1).ToDateTime(TimeOnly.MinValue),
+            StartDate.AddDays(2).ToDateTime(TimeOnly.MinValue)));
     }
 
     [Fact]
-    public void Seal_WithWorkHoursPolicy_StoresIt()
+    public void WindowOn_WithWorkHours_IsThatDaysWorkHours()
     {
-        var policy = new WorkHoursPolicy(new WorkHours(new TimeOnly(9, 0), new TimeOnly(17, 0)));
+        var contract = Seal(workHours: NineToFive);
 
-        var contract = Seal(workHoursPolicy: policy);
-
-        contract.WorkHoursPolicy.Should().Be(policy);
+        contract.WindowOn(StartDate.AddDays(1)).Should().Be((
+            StartDate.AddDays(1).ToDateTime(new TimeOnly(9, 0)),
+            StartDate.AddDays(1).ToDateTime(new TimeOnly(17, 0))));
     }
 
     [Fact]
-    public void IsDueForActivation_ScheduledAndStartDateArrived_True()
+    public void WindowOn_OutsideTheContract_IsNull()
     {
-        var contract = Seal(sealedAt: SealedBeforeStart); // Scheduled
+        var contract = Seal();
 
-        contract.IsDueForActivation(StartDate).Should().BeTrue();
+        contract.WindowOn(EndDate.AddDays(1)).Should().BeNull();
+    }
+
+    [Fact]
+    public void FloorRule_IsKeptAsSealed()
+    {
+        var contract = Seal(floorRule: new DailyFloorRule.Fixed(new DailyFloor(4)));
+
+        contract.FloorRule.Should().Be(new DailyFloorRule.Fixed(new DailyFloor(4)));
+    }
+
+    [Fact]
+    public void IsDueForActivation_ScheduledAndItsStartMomentArrived_True()
+    {
+        var contract = Seal(sealedAt: SealedBeforeStart, workHours: NineToFive); // Scheduled, starts 09:00
+
+        contract.IsDueForActivation(StartDate.ToDateTime(new TimeOnly(9, 0))).Should().BeTrue();
+    }
+
+    [Fact]
+    public void IsDueForActivation_OnTheStartDayButBeforeItsStartMoment_False()
+    {
+        var contract = Seal(sealedAt: SealedBeforeStart, workHours: NineToFive); // starts 09:00
+
+        contract.IsDueForActivation(StartDate.ToDateTime(new TimeOnly(8, 59))).Should().BeFalse();
     }
 
     [Fact]
@@ -443,7 +475,7 @@ public class NenContractTests
     {
         var contract = Seal(sealedAt: SealedBeforeStart); // Scheduled
 
-        contract.IsDueForActivation(StartDate.AddDays(-1)).Should().BeFalse();
+        contract.IsDueForActivation(StartDate.AddDays(-1).ToDateTime(new TimeOnly(23, 59))).Should().BeFalse();
     }
 
     [Fact]
@@ -451,24 +483,23 @@ public class NenContractTests
     {
         var contract = Seal(sealedAt: SealedOnStart); // Active
 
-        contract.IsDueForActivation(StartDate).Should().BeFalse();
+        contract.IsDueForActivation(StartDate.ToDateTime(new TimeOnly(12, 0))).Should().BeFalse();
     }
 
     [Fact]
-    public void IsDueForCompletion_ActiveAndEndDatePassed_True()
+    public void IsDueForCompletion_ActiveAndItsEndMomentArrived_True()
     {
-        var contract = Seal(sealedAt: SealedOnStart); // Active
+        var contract = Seal(sealedAt: StartDate.ToDateTime(new TimeOnly(9, 0)), workHours: NineToFive); // Active; ends 17:00 on EndDate
 
-        contract.IsDueForCompletion(EndDate.AddDays(1)).Should().BeTrue();
+        contract.IsDueForCompletion(EndDate.ToDateTime(new TimeOnly(17, 0))).Should().BeTrue();
     }
 
     [Fact]
-    public void IsDueForCompletion_OnTheEndDateItself_False()
+    public void IsDueForCompletion_OnTheLastDayBeforeItsEndMoment_False()
     {
-        // EndDate is inclusive — the contract is still running through its last day.
-        var contract = Seal(sealedAt: SealedOnStart); // Active
+        var contract = Seal(sealedAt: SealedOnStart); // Active, runs to midnight after EndDate
 
-        contract.IsDueForCompletion(EndDate).Should().BeFalse();
+        contract.IsDueForCompletion(EndDate.ToDateTime(new TimeOnly(23, 59))).Should().BeFalse();
     }
 
     [Fact]
@@ -476,7 +507,66 @@ public class NenContractTests
     {
         var contract = Seal(sealedAt: SealedBeforeStart); // Scheduled
 
-        contract.IsDueForCompletion(EndDate.AddDays(1)).Should().BeFalse();
+        contract.IsDueForCompletion(EndDate.AddDays(1).ToDateTime(TimeOnly.MinValue)).Should().BeFalse();
+    }
+
+    [Fact]
+    public void Covers_IsTheHalfOpenPeriodFromStartsAtToEndsAt()
+    {
+        var contract = Seal(workHours: NineToFive);
+
+        contract.Covers(StartDate.ToDateTime(new TimeOnly(8, 59))).Should().BeFalse();
+        contract.Covers(StartDate.ToDateTime(new TimeOnly(9, 0))).Should().BeTrue();
+        contract.Covers(EndDate.ToDateTime(new TimeOnly(16, 59))).Should().BeTrue();
+        contract.Covers(EndDate.ToDateTime(new TimeOnly(17, 0))).Should().BeFalse();
+    }
+
+    [Fact]
+    public void Seal_StartMomentAlreadyPassed_Throws()
+    {
+        // Contract starts 09:00 on StartDate; sealing at 09:01 is too late.
+        var act = () => Seal(workHours: NineToFive, sealedAt: StartDate.ToDateTime(new TimeOnly(9, 1)));
+
+        act.Should().Throw<ArgumentException>().WithMessage("*start time has passed*");
+    }
+
+    [Fact]
+    public void Seal_WithinTheStartMinute_IsActive()
+    {
+        // "Right now" is measured to the minute: sealing at 09:00:40 for a 09:00 start is allowed.
+        var contract = Seal(workHours: NineToFive, sealedAt: StartDate.ToDateTime(new TimeOnly(9, 0, 40)));
+
+        contract.Status.Should().Be(NenContractStatus.Active);
+    }
+
+    [Fact]
+    public void Seal_BeforeTheStartMomentOnTheStartDay_IsScheduled()
+    {
+        var contract = Seal(workHours: NineToFive, sealedAt: StartDate.ToDateTime(new TimeOnly(8, 0)));
+
+        contract.Status.Should().Be(NenContractStatus.Scheduled);
+    }
+
+    [Fact]
+    public void Seal_FloorRuleNoneButADayHasAFloor_Throws()
+    {
+        var act = () => Seal(
+            floorRule: new DailyFloorRule.None(),
+            calendar: TestCalendars.For(StartDate, EndDate, new DailyFloorRule.Fixed(new DailyFloor(2))));
+
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
+    public void Break_KeepsTheBreakDayWhole()
+    {
+        var contract = Seal(workHours: NineToFive, sealedAt: SealedOnStart, allowCancellation: true);
+        var breakDay = StartDate.AddDays(2);
+
+        contract.Break(breakDay.ToDateTime(new TimeOnly(9, 5)));
+
+        contract.EndsAt.Should().Be(breakDay.ToDateTime(new TimeOnly(17, 0)));
+        contract.FloorHoursFor(breakDay).Should().Be(4);
     }
 
     [Fact]
@@ -664,9 +754,9 @@ public class NenContractTests
     }
 
     [Fact]
-    public void AllowsBlockPlacement_NoWorkHoursPolicy_AlwaysAllowed()
+    public void AllowsBlockPlacement_NoWorkHours_AnyTimeOfDayAllowed()
     {
-        var contract = Seal(workHoursPolicy: null);
+        var contract = Seal(workHours: null);
 
         contract.AllowsBlockPlacement(StartDate.ToDateTime(new TimeOnly(3, 0)), StartDate.ToDateTime(new TimeOnly(4, 0)))
             .Should().BeTrue();
@@ -675,8 +765,7 @@ public class NenContractTests
     [Fact]
     public void AllowsBlockPlacement_WithinWindow_Allowed()
     {
-        var policy = new WorkHoursPolicy(new WorkHours(new TimeOnly(9, 0), new TimeOnly(17, 0)));
-        var contract = Seal(workHoursPolicy: policy);
+        var contract = Seal(workHours: NineToFive);
 
         contract.AllowsBlockPlacement(StartDate.ToDateTime(new TimeOnly(9, 0)), StartDate.ToDateTime(new TimeOnly(10, 0)))
             .Should().BeTrue();
@@ -685,20 +774,16 @@ public class NenContractTests
     [Fact]
     public void AllowsBlockPlacement_OutsideWindow_NotAllowed()
     {
-        var policy = new WorkHoursPolicy(new WorkHours(new TimeOnly(9, 0), new TimeOnly(17, 0)));
-        var contract = Seal(workHoursPolicy: policy);
+        var contract = Seal(workHours: NineToFive);
 
         contract.AllowsBlockPlacement(StartDate.ToDateTime(new TimeOnly(20, 0)), StartDate.ToDateTime(new TimeOnly(21, 0)))
             .Should().BeFalse();
     }
 
     [Fact]
-    public void AllowsBlockPlacement_PerDayExceptionOverridesDefault()
+    public void AllowsBlockPlacement_NoWorkHoursDay_IsAFullDay()
     {
-        var policy = new WorkHoursPolicy(
-            new WorkHours(new TimeOnly(9, 0), new TimeOnly(17, 0)),
-            new Dictionary<DateOnly, WorkHours?> { [StartDate] = null }); // no constraint that day
-        var contract = Seal(workHoursPolicy: policy);
+        var contract = Seal(workHours: NineToFive, noWorkHoursDays: [StartDate]);
 
         contract.AllowsBlockPlacement(StartDate.ToDateTime(new TimeOnly(20, 0)), StartDate.ToDateTime(new TimeOnly(21, 0)))
             .Should().BeTrue();
@@ -707,18 +792,16 @@ public class NenContractTests
     [Fact]
     public void AllowsBlockPlacement_CrossMidnightBlock_BothDaysWithinTheirOwnWindow_Allowed()
     {
-        // 23:00-01:00 — each day individually configured to allow that late window,
-        // rather than the block being anchored to (and checked only against) its start day.
-        // Day 1's window ends at TimeOnly.MaxValue — as close to midnight as representable,
-        // since TimeOnly can't express "24:00" itself; the day-1 segment produced by the
-        // splitter ends exactly at midnight, resolved via the same one-tick-back idiom
-        // AllowsBlockPlacement applies internally.
-        var lateWindow = new WorkHours(new TimeOnly(22, 0), TimeOnly.MaxValue);
-        var earlyWindow = new WorkHours(new TimeOnly(0, 0), new TimeOnly(2, 0));
-        var policy = new WorkHoursPolicy(
-            new WorkHours(new TimeOnly(9, 0), new TimeOnly(17, 0)),
-            new Dictionary<DateOnly, WorkHours?> { [StartDate] = lateWindow, [StartDate.AddDays(1)] = earlyWindow });
-        var contract = Seal(workHoursPolicy: policy);
+        // 23:00-01:00 — each day individually given a window allowing its part, rather than
+        // the block being anchored to (and checked only against) its start day. Day 1's
+        // window ends at 24:00 — the next day's midnight, exactly where the splitter ends
+        // its segment.
+        var day2 = StartDate.AddDays(1);
+        var contract = Seal(floorRule: new DailyFloorRule.None(), calendar: DaysWithWindows(new()
+        {
+            [StartDate] = (StartDate.ToDateTime(new TimeOnly(22, 0)), day2.ToDateTime(TimeOnly.MinValue)),
+            [day2] = (day2.ToDateTime(TimeOnly.MinValue), day2.ToDateTime(new TimeOnly(2, 0)))
+        }));
 
         contract.AllowsBlockPlacement(StartDate.ToDateTime(new TimeOnly(23, 0)), StartDate.AddDays(1).ToDateTime(new TimeOnly(1, 0)))
             .Should().BeTrue();
@@ -731,76 +814,69 @@ public class NenContractTests
         // doesn't cover 00:00-01:00 — isolates that the rejection comes from Day 2's own
         // window, not (as the earlier, flawed version of this test accidentally allowed
         // to pass unnoticed) from Day 1 spuriously failing the midnight boundary too.
-        var lateWindow = new WorkHours(new TimeOnly(22, 0), TimeOnly.MaxValue);
-        var policy = new WorkHoursPolicy(
-            new WorkHours(new TimeOnly(9, 0), new TimeOnly(17, 0)), // default window doesn't cover 00:00-01:00 either
-            new Dictionary<DateOnly, WorkHours?> { [StartDate] = lateWindow });
-        var contract = Seal(workHoursPolicy: policy);
+        var day2 = StartDate.AddDays(1);
+        var contract = Seal(floorRule: new DailyFloorRule.None(), calendar: DaysWithWindows(new()
+        {
+            [StartDate] = (StartDate.ToDateTime(new TimeOnly(22, 0)), day2.ToDateTime(TimeOnly.MinValue)),
+            [day2] = (day2.ToDateTime(new TimeOnly(9, 0)), day2.ToDateTime(new TimeOnly(17, 0))) // doesn't cover 00:00-01:00
+        }));
 
         contract.AllowsBlockPlacement(StartDate.ToDateTime(new TimeOnly(23, 0)), StartDate.AddDays(1).ToDateTime(new TimeOnly(1, 0)))
             .Should().BeFalse();
     }
 
     [Fact]
-    public void StartsAt_NoWorkHoursPolicy_IsMidnightOnStartDate()
+    public void StartsAt_NoWorkHours_IsMidnightOnStartDate()
     {
-        var contract = Seal(workHoursPolicy: null);
+        var contract = Seal(workHours: null);
 
         contract.StartsAt.Should().Be(StartDate.ToDateTime(TimeOnly.MinValue));
     }
 
     [Fact]
-    public void EndsAt_NoWorkHoursPolicy_IsEndOfDayOnEndDate()
+    public void EndsAt_NoWorkHours_IsMidnightAfterEndDate()
     {
-        var contract = Seal(workHoursPolicy: null);
+        var contract = Seal(workHours: null);
 
-        contract.EndsAt.Should().Be(EndDate.ToDateTime(TimeOnly.MaxValue));
+        contract.EndsAt.Should().Be(EndDate.AddDays(1).ToDateTime(TimeOnly.MinValue));
     }
 
     [Fact]
-    public void StartsAt_WorkHoursPolicyCoversStartDate_IsWorkHoursStart()
+    public void StartsAt_WithWorkHours_IsWorkHoursStart()
     {
-        var policy = new WorkHoursPolicy(new WorkHours(new TimeOnly(9, 0), new TimeOnly(17, 0)));
-        var contract = Seal(workHoursPolicy: policy);
+        var contract = Seal(workHours: NineToFive);
 
         contract.StartsAt.Should().Be(StartDate.ToDateTime(new TimeOnly(9, 0)));
     }
 
     [Fact]
-    public void EndsAt_WorkHoursPolicyCoversEndDate_IsWorkHoursEnd()
+    public void EndsAt_WithWorkHours_IsWorkHoursEnd()
     {
-        var policy = new WorkHoursPolicy(new WorkHours(new TimeOnly(9, 0), new TimeOnly(17, 0)));
-        var contract = Seal(workHoursPolicy: policy);
+        var contract = Seal(workHours: NineToFive);
 
         contract.EndsAt.Should().Be(EndDate.ToDateTime(new TimeOnly(17, 0)));
     }
 
     [Fact]
-    public void StartsAt_PerDayExceptionRemovesConstraintOnStartDate_FallsBackToMidnight()
+    public void StartsAt_NoWorkHoursOnStartDate_IsMidnight()
     {
-        var policy = new WorkHoursPolicy(
-            new WorkHours(new TimeOnly(9, 0), new TimeOnly(17, 0)),
-            new Dictionary<DateOnly, WorkHours?> { [StartDate] = null });
-        var contract = Seal(workHoursPolicy: policy);
+        var contract = Seal(workHours: NineToFive, noWorkHoursDays: [StartDate]);
 
         contract.StartsAt.Should().Be(StartDate.ToDateTime(TimeOnly.MinValue));
     }
 
     [Fact]
-    public void EndsAt_PerDayExceptionRemovesConstraintOnEndDate_FallsBackToEndOfDay()
+    public void EndsAt_NoWorkHoursOnEndDate_IsMidnightAfterIt()
     {
-        var policy = new WorkHoursPolicy(
-            new WorkHours(new TimeOnly(9, 0), new TimeOnly(17, 0)),
-            new Dictionary<DateOnly, WorkHours?> { [EndDate] = null });
-        var contract = Seal(workHoursPolicy: policy);
+        var contract = Seal(workHours: NineToFive, noWorkHoursDays: [EndDate]);
 
-        contract.EndsAt.Should().Be(EndDate.ToDateTime(TimeOnly.MaxValue));
+        contract.EndsAt.Should().Be(EndDate.AddDays(1).ToDateTime(TimeOnly.MinValue));
     }
 
     [Fact]
     public void IsRestDay_DayWithResolvedFloor_ReturnsFalse()
     {
-        var contract = Seal(dailyFloorPolicy: new DailyFloorPolicy(new DailyFloor(4)));
+        var contract = Seal(floorRule: new DailyFloorRule.Fixed(new DailyFloor(4)));
 
         contract.IsRestDay(StartDate).Should().BeFalse();
     }
@@ -808,8 +884,7 @@ public class NenContractTests
     [Fact]
     public void IsRestDay_DayWithNoResolvedFloor_ReturnsTrue()
     {
-        var policy = new DailyFloorPolicy(new DailyFloor(4), new Dictionary<DateOnly, DailyFloor?> { [StartDate] = null });
-        var contract = Seal(dailyFloorPolicy: policy);
+        var contract = Seal(floorRule: new DailyFloorRule.Fixed(new DailyFloor(4)), restDays: [StartDate]);
 
         contract.IsRestDay(StartDate).Should().BeTrue();
     }
@@ -817,7 +892,7 @@ public class NenContractTests
     [Fact]
     public void FloorHoursFor_DayWithResolvedFloor_ReturnsHours()
     {
-        var contract = Seal(dailyFloorPolicy: new DailyFloorPolicy(new DailyFloor(4)));
+        var contract = Seal(floorRule: new DailyFloorRule.Fixed(new DailyFloor(4)));
 
         contract.FloorHoursFor(StartDate).Should().Be(4);
     }
@@ -825,8 +900,7 @@ public class NenContractTests
     [Fact]
     public void FloorHoursFor_RestDay_ReturnsNull()
     {
-        var policy = new DailyFloorPolicy(new DailyFloor(4), new Dictionary<DateOnly, DailyFloor?> { [StartDate] = null });
-        var contract = Seal(dailyFloorPolicy: policy);
+        var contract = Seal(floorRule: new DailyFloorRule.Fixed(new DailyFloor(4)), restDays: [StartDate]);
 
         contract.FloorHoursFor(StartDate).Should().BeNull();
     }
@@ -891,41 +965,43 @@ public class NenContractTests
     // ── ContractFloor ────────────────────────────────────────────────────────────
 
     [Fact]
-    public void Seal_ContractFloorWithRealDailyFloorPolicyDefault_Throws()
+    public void Seal_ContractFloorWithAFixedDailyFloor_Throws()
     {
         var act = () => Seal(
-            dailyFloorPolicy: new DailyFloorPolicy(new DailyFloor(4)),
+            floorRule: new DailyFloorRule.Fixed(new DailyFloor(4)),
             contractFloor: new ContractFloor(9));
 
         act.Should().Throw<ArgumentException>();
     }
 
     [Fact]
-    public void Seal_ContractFloorWithRealPerDayException_Throws()
+    public void Seal_ContractFloorWithADayCarryingAFloor_Throws()
     {
-        var policy = new DailyFloorPolicy(null, new Dictionary<DateOnly, DailyFloor?> { [StartDate] = new DailyFloor(2) });
-
-        var act = () => Seal(dailyFloorPolicy: policy, contractFloor: new ContractFloor(9));
+        var act = () => Seal(
+            floorRule: new DailyFloorRule.FollowsPlan(),
+            floorPlan: new Dictionary<DateOnly, double> { [StartDate] = 2 },
+            contractFloor: new ContractFloor(9));
 
         act.Should().Throw<ArgumentException>();
     }
 
     [Fact]
-    public void Seal_ContractFloorWithDailyFloorPolicyNone_Succeeds()
+    public void Seal_ContractFloorWithNoDailyFloors_Succeeds()
     {
-        var act = () => Seal(dailyFloorPolicy: DailyFloorPolicy.None, contractFloor: new ContractFloor(9));
+        var act = () => Seal(floorRule: new DailyFloorRule.None(), contractFloor: new ContractFloor(9));
 
         act.Should().NotThrow();
     }
 
     [Fact]
-    public void Seal_ContractFloorWithRestDayOnlyExceptions_Succeeds()
+    public void Seal_ContractFloorWithOnlyRestDays_Succeeds()
     {
-        // Per-day exceptions that are all explicit rest days (null) carry no real
-        // obligation — only a non-null exception should conflict with ContractFloor.
-        var policy = new DailyFloorPolicy(null, new Dictionary<DateOnly, DailyFloor?> { [StartDate] = null });
-
-        var act = () => Seal(dailyFloorPolicy: policy, contractFloor: new ContractFloor(9));
+        // Days with no floor carry no real obligation — only a day with a floor should
+        // conflict with ContractFloor.
+        var act = () => Seal(
+            floorRule: new DailyFloorRule.FollowsPlan(),
+            floorPlan: new Dictionary<DateOnly, double>(),
+            contractFloor: new ContractFloor(9));
 
         act.Should().NotThrow();
     }
@@ -954,21 +1030,19 @@ public class NenContractTests
         // commitment is what was actually planned, not the minimum Seal's own validation
         // would have accepted.
         var plan = new Dictionary<DateOnly, double> { [StartDate] = 4, [StartDate.AddDays(1)] = 1 };
-        var policy = new DailyFloorPolicy(null, new Dictionary<DateOnly, DailyFloor?>
-        {
-            [StartDate] = new DailyFloor(1),
-            [StartDate.AddDays(1)] = new DailyFloor(1)
-        });
-        var contract = Seal(dailyFloorPolicy: policy, plannedFocusHoursByDay: plan);
+        var contract = Seal(
+            floorRule: new DailyFloorRule.FollowsPlan(),
+            floorPlan: new Dictionary<DateOnly, double> { [StartDate] = 1, [StartDate.AddDays(1)] = 1 },
+            plannedFocusHoursByDay: plan);
 
         contract.CommittedFocusHours.Should().Be(5);
     }
 
     [Fact]
-    public void CommittedFocusHours_NoDailyFloorPolicyAtAll_StillReflectsWhatWasPlanned()
+    public void CommittedFocusHours_NoDailyFloorsAtAll_StillReflectsWhatWasPlanned()
     {
         var plan = new Dictionary<DateOnly, double> { [StartDate] = 1 };
-        var contract = Seal(dailyFloorPolicy: DailyFloorPolicy.None, plannedFocusHoursByDay: plan);
+        var contract = Seal(floorRule: new DailyFloorRule.None(), plannedFocusHoursByDay: plan);
 
         contract.CommittedFocusHours.Should().Be(1);
     }
@@ -977,7 +1051,7 @@ public class NenContractTests
     public void CommittedFocusHours_MatchesContractFloorHours_ForAContractFloorModeContract()
     {
         var plan = new Dictionary<DateOnly, double> { [StartDate] = 9 };
-        var contract = Seal(dailyFloorPolicy: DailyFloorPolicy.None, plannedFocusHoursByDay: plan, contractFloor: new ContractFloor(9));
+        var contract = Seal(floorRule: new DailyFloorRule.None(), plannedFocusHoursByDay: plan, contractFloor: new ContractFloor(9));
 
         contract.CommittedFocusHours.Should().Be(contract.ContractFloorHours);
     }

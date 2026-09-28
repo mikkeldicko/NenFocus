@@ -27,10 +27,16 @@ public class KeepBlockingDuringBreaksPersistenceTests : SqliteRepositoryTestBase
         var preset = ContractPreset.Create(Guid.NewGuid(), "Strict", StrictnessRule.Locked, null, null, false,
             keepBlockingDuringBreaks: keepBlocking);
         var contract = NenContract.Seal(
-            id: Guid.NewGuid(), name: "Contract", goal: new NenContractGoal("Goal"),
-            startDate: DateOnly.FromDateTime(At), endDate: DateOnly.FromDateTime(At).AddDays(7),
-            strictnessRule: StrictnessRule.Locked, dailyFloorPolicy: DailyFloorPolicy.None, changeWindow: null,
-            allowCancellation: false, plannedFocusHoursByDay: new Dictionary<DateOnly, double>(), sealedAt: At,
+            id: Guid.NewGuid(),
+            name: "Contract",
+            goal: new NenContractGoal("Goal"),
+            strictnessRule: StrictnessRule.Locked,
+            calendar: TestCalendars.For(DateOnly.FromDateTime(At), DateOnly.FromDateTime(At).AddDays(7), new DailyFloorRule.None()),
+            floorRule: new DailyFloorRule.None(),
+            changeWindow: null,
+            allowCancellation: false,
+            plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
+            localSealedAt: At.Date,
             keepBlockingDuringBreaks: keepBlocking);
         var session = Session.Create(Guid.NewGuid(), new SessionGoal("Goal"),
             new SessionDuration(TimeSpan.FromHours(1)), Guid.NewGuid(), SessionOrigin.Spontaneous);

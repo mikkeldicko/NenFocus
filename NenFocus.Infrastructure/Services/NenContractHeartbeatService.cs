@@ -10,9 +10,9 @@ namespace NenFocus.Infrastructure.Services;
 
 /// <summary>
 /// Periodically dispatches SweepNenContractLifecycleCommand so Scheduled contracts
-/// activate and Active contracts complete promptly after their date boundary, even while
-/// the app runs continuously across midnight. Unlike SweepMissedFocusBlocksCommand
-/// (dispatched once, at startup, via SessionStateService.InitializeAsync), a day-boundary
+/// activate and Active contracts complete promptly at their start/end moment, even while
+/// the app runs continuously. Unlike SweepMissedFocusBlocksCommand
+/// (dispatched once, at startup, via SessionStateService.InitializeAsync), a start/end
 /// crossing can happen at any point during a long-running session, not just at launch —
 /// a startup-only sweep would leave a due contract stuck Scheduled/Active for however long
 /// the app happens to stay open.
@@ -23,10 +23,11 @@ public sealed class NenContractHeartbeatService : BackgroundService
     private readonly ISessionStateService _sessionState;
     private readonly ILogger<NenContractHeartbeatService> _logger;
 
-    // Coarser than ScheduledEnforcementService's 5-second interval by design, not
-    // oversight — this only cares about calendar-day boundaries, not session-level
-    // timing, so a much lower check frequency is correct, not just tolerated.
-    private readonly TimeSpan _interval = TimeSpan.FromMinutes(1);
+    // Same 5-second interval as ScheduledEnforcementService: a contract activates and
+    // completes at exact local moments (StartsAt/EndsAt, Gap 65), so it must turn Active
+    // alongside the Focus block that starts with it, not up to a minute later. Cheap — a
+    // tick reads the handful of in-effect contracts and writes only when one is due.
+    private readonly TimeSpan _interval = TimeSpan.FromSeconds(5);
 
     public NenContractHeartbeatService(
         IServiceScopeFactory scopeFactory,

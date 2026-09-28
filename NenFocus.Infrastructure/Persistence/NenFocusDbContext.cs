@@ -4,6 +4,7 @@ using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
 using NenFocus.Domain.Events;
 using NenFocus.Domain.ValueObjects;
+using System.Globalization;
 using System.Text.Json;
 
 namespace NenFocus.Infrastructure.Persistence;
@@ -56,37 +57,46 @@ public class NenFocusDbContext : DbContext
     // JSON round-tripping DTOs for the value objects below — DateOnly dictionary keys are
     // serialized as "yyyy-MM-dd" strings rather than relying on System.Text.Json's own
     // dictionary-key handling, for explicit, provider-independent round-tripping.
-    private sealed record WorkHoursJson(TimeOnly Start, TimeOnly End);
-    private sealed record WorkHoursPolicyJson(WorkHoursJson? Default, Dictionary<string, WorkHoursJson?> PerDayExceptions);
-    private sealed record DailyFloorPolicyJson(double? Default, Dictionary<string, double?> PerDayExceptions);
+    // A contract day's window is stored as local wall-clock "yyyy-MM-ddTHH:mm:ss" strings —
+    // never through the UTC DateTime converter above, since a contract's days are local by
+    // definition and a window may end at 24:00 (the next day's midnight).
+    private sealed record ContractDayJson(string Date, string WindowStart, string WindowEnd, double? Floor);
+    private sealed record DailyFloorRuleJson(string Kind, double? Hours);
     private sealed record RedemptionEntryJson(Guid MissedBlockId, double MinutesCovered);
 
-    private static string SerializeDailyFloorPolicy(DailyFloorPolicy policy) => JsonSerializer.Serialize(
-        new DailyFloorPolicyJson(
-            policy.Default?.Hours,
-            policy.PerDayExceptions.ToDictionary(kv => kv.Key.ToString("yyyy-MM-dd"), kv => kv.Value?.Hours)),
+    private const string LocalMomentFormat = "yyyy-MM-ddTHH:mm:ss";
+
+    internal static string SerializeContractCalendar(ContractCalendar calendar) => JsonSerializer.Serialize(
+        calendar.Days.Select(d => new ContractDayJson(
+            d.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            d.WindowStart.ToString(LocalMomentFormat, CultureInfo.InvariantCulture),
+            d.WindowEnd.ToString(LocalMomentFormat, CultureInfo.InvariantCulture),
+            d.Floor?.Hours)).ToList(),
         (JsonSerializerOptions?)null);
 
-    private static DailyFloorPolicy DeserializeDailyFloorPolicy(string json)
-    {
-        var dto = JsonSerializer.Deserialize<DailyFloorPolicyJson>(json, (JsonSerializerOptions?)null)!;
-        return new DailyFloorPolicy(
-            dto.Default is { } hours ? new DailyFloor(hours) : null,
-            dto.PerDayExceptions.ToDictionary(kv => DateOnly.Parse(kv.Key), kv => kv.Value is { } v ? (DailyFloor?)new DailyFloor(v) : null));
-    }
+    internal static ContractCalendar DeserializeContractCalendar(string json) => new(
+        JsonSerializer.Deserialize<List<ContractDayJson>>(json, (JsonSerializerOptions?)null)!.Select(d => new ContractDay(
+            DateOnly.ParseExact(d.Date, "yyyy-MM-dd", CultureInfo.InvariantCulture),
+            DateTime.ParseExact(d.WindowStart, LocalMomentFormat, CultureInfo.InvariantCulture),
+            DateTime.ParseExact(d.WindowEnd, LocalMomentFormat, CultureInfo.InvariantCulture),
+            d.Floor is { } hours ? new DailyFloor(hours) : null)));
 
-    private static string SerializeWorkHoursPolicy(WorkHoursPolicy policy) => JsonSerializer.Serialize(
-        new WorkHoursPolicyJson(
-            policy.Default is { } d ? new WorkHoursJson(d.Start, d.End) : null,
-            policy.PerDayExceptions.ToDictionary(kv => kv.Key.ToString("yyyy-MM-dd"), kv => kv.Value is { } w ? new WorkHoursJson(w.Start, w.End) : null)),
-        (JsonSerializerOptions?)null);
-
-    private static WorkHoursPolicy DeserializeWorkHoursPolicy(string json)
+    private static string SerializeDailyFloorRule(DailyFloorRule rule) => JsonSerializer.Serialize(rule switch
     {
-        var dto = JsonSerializer.Deserialize<WorkHoursPolicyJson>(json, (JsonSerializerOptions?)null)!;
-        return new WorkHoursPolicy(
-            dto.Default is { } d ? new WorkHours(d.Start, d.End) : null,
-            dto.PerDayExceptions.ToDictionary(kv => DateOnly.Parse(kv.Key), kv => kv.Value is { } w ? (WorkHours?)new WorkHours(w.Start, w.End) : null));
+        DailyFloorRule.Fixed f => new DailyFloorRuleJson("Fixed", f.Floor.Hours),
+        DailyFloorRule.FollowsPlan => new DailyFloorRuleJson("FollowsPlan", null),
+        _ => new DailyFloorRuleJson("None", null)
+    }, (JsonSerializerOptions?)null);
+
+    private static DailyFloorRule DeserializeDailyFloorRule(string json)
+    {
+        var dto = JsonSerializer.Deserialize<DailyFloorRuleJson>(json, (JsonSerializerOptions?)null)!;
+        return dto.Kind switch
+        {
+            "Fixed" => new DailyFloorRule.Fixed(new DailyFloor(dto.Hours!.Value)),
+            "FollowsPlan" => new DailyFloorRule.FollowsPlan(),
+            _ => new DailyFloorRule.None()
+        };
     }
 
     private static string SerializeRedemptionEntries(IReadOnlyList<RedemptionEntry> entries) => JsonSerializer.Serialize(
@@ -490,21 +500,25 @@ public class NenFocusDbContext : DbContext
                 .IsRequired()
                 .HasDefaultValue(false);
 
-            entity.Property(c => c.DailyFloorPolicy)
+            // The contract's days (Gap 65) — a private field, the single source of truth for
+            // windows and floors. Replaced wholesale (never mutated), so reference equality is
+            // enough for change tracking.
+            entity.Property<ContractCalendar>("_calendar")
                 .HasConversion(
-                    policy => SerializeDailyFloorPolicy(policy),
-                    json => DeserializeDailyFloorPolicy(json))
-                .HasColumnName("DailyFloorPolicy")
+                    calendar => SerializeContractCalendar(calendar),
+                    json => DeserializeContractCalendar(json))
+                .HasColumnName("Days")
                 .IsRequired();
 
-            entity.Property(c => c.WorkHoursPolicy)
+            entity.Property(c => c.FloorRule)
                 .HasConversion(
-                    policy => policy == null ? null : SerializeWorkHoursPolicy(policy),
-                    json => json == null ? null : DeserializeWorkHoursPolicy(json))
-                .HasColumnName("WorkHoursPolicy");
+                    rule => SerializeDailyFloorRule(rule),
+                    json => DeserializeDailyFloorRule(json))
+                .HasColumnName("FloorRule")
+                .IsRequired();
 
             // Single-value object — a direct double? conversion needs no JSON, unlike
-            // DailyFloorPolicy/WorkHoursPolicy which carry a shape worth serializing.
+            // the days, which carry a shape worth serializing.
             entity.Property(c => c.ContractFloor)
                 .HasConversion(
                     floor => floor == null ? (double?)null : floor.Hours,
@@ -520,8 +534,7 @@ public class NenFocusDbContext : DbContext
             entity.Property(c => c.PostContractAcknowledgedAt);
 
             // ChangeWindow stays unmapped — parked for v1, no Application-layer consumer
-            // exists yet (see ARCHITECT_GOVERNANCE.md), unlike WorkHoursPolicy/DailyFloorPolicy
-            // which already have real guards built against them even without wizard UI.
+            // exists yet (see ARCHITECT_GOVERNANCE.md).
             entity.Ignore(c => c.ChangeWindow);
         });
     }

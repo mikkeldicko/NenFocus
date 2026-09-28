@@ -66,43 +66,54 @@ public sealed class EditNenContractCommandHandler : ICommandHandler<EditNenContr
 
         // Mirrors SealNenContractCommandHandler's identical branch exactly — see its
         // comment for the Period Time Budget / ContractFloor rationale.
-        DailyFloorPolicy dailyFloorPolicy;
+        DailyFloorRule floorRule;
         ContractFloor? contractFloor = null;
 
         if (command.FixedDailyFloorHours is { } fixedHours)
         {
-            dailyFloorPolicy = DailyFloorPolicy.Fixed(new DailyFloor(fixedHours), command.RestDays);
+            floorRule = new DailyFloorRule.Fixed(new DailyFloor(fixedHours));
         }
         else if (command.StrictnessRule == StrictnessRule.PeriodTimeBudget)
         {
-            dailyFloorPolicy = DailyFloorPolicy.None;
+            floorRule = new DailyFloorRule.None();
             contractFloor = new ContractFloor(preparation.PlannedFocusHoursByDay.Values.Sum());
         }
         else
         {
-            dailyFloorPolicy = DailyFloorPolicy.PerDay(preparation.PlannedFocusHoursByDay);
+            floorRule = new DailyFloorRule.FollowsPlan();
         }
 
-        var workHoursPolicy = command.WorkHoursStart is { } workHoursStart && command.WorkHoursEnd is { } workHoursEnd
-            ? new WorkHoursPolicy(new WorkHours(workHoursStart, workHoursEnd), WorkHoursPolicy.NoConstraintExceptions(command.NoWorkHoursDays))
+        var workHours = command.WorkHoursStart is { } workHoursStart && command.WorkHoursEnd is { } workHoursEnd
+            ? new WorkHours(workHoursStart, workHoursEnd)
             : null;
+
+        var localNow = _clock.ToLocal(_clock.UtcNow);
 
         NenContract newContract;
         try
         {
+            // Same bridge as SealNenContractCommandHandler until Open Gap W adds a start time.
+            var calendar = ContractCalendar.Generate(
+                localStart: ContractCalendar.SuggestedStart(command.StartDate, workHours, command.NoWorkHoursDays, localNow),
+                endDate: command.EndDate,
+                endTime: null,
+                workHours: workHours,
+                noWorkHoursDays: command.NoWorkHoursDays,
+                floorRule: floorRule,
+                restDays: command.RestDays,
+                plannedFocusHoursByDay: preparation.PlannedFocusHoursByDay);
+
             newContract = NenContract.Seal(
                 id: contractId,
                 name: command.Name,
                 goal: new NenContractGoal(command.Goal),
-                startDate: command.StartDate,
-                endDate: command.EndDate,
                 strictnessRule: command.StrictnessRule,
-                dailyFloorPolicy: dailyFloorPolicy,
+                calendar: calendar,
+                floorRule: floorRule,
                 changeWindow: null,
                 allowCancellation: command.AllowCancellation,
                 plannedFocusHoursByDay: preparation.PlannedFocusHoursByDay,
-                sealedAt: _clock.UtcNow,
-                workHoursPolicy: workHoursPolicy,
+                localSealedAt: localNow,
                 contractPresetId: command.ContractPresetId,
                 contractFloor: contractFloor,
                 redemptionPlacementPolicy: command.RedemptionPlacementPolicy,
@@ -112,6 +123,10 @@ public sealed class EditNenContractCommandHandler : ICommandHandler<EditNenContr
         {
             return EditNenContractResult.Fail(ex.Message);
         }
+
+        // Same check as SealNenContractCommandHandler — every block inside its day's window.
+        if (preparation.Blocks.Any(b => !newContract.AllowsBlockPlacement(_clock.ToLocal(b.Start), _clock.ToLocal(b.End))))
+            return EditNenContractResult.Fail("A block falls outside the contract's hours — move it inside them.");
 
         // Only now, after every fallible construction has already succeeded, mutate anything.
         var oldLinkedBlocks = await _blocks.GetForContractAsync(command.ContractId, ct);

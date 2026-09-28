@@ -47,29 +47,6 @@ public sealed class NenContractRepository : INenContractRepository
             _context.NenContracts.Update(contract);
     }
 
-    public async Task<IReadOnlyList<NenContract>> GetDueForActivationAsync(
-        DateTime asOf,
-        CancellationToken cancellationToken = default)
-    {
-        // Mirrors NenContract.IsDueForActivation(DateOnly) exactly — the canonical
-        // definition lives on the entity; this query must not reinvent it.
-        var asOfDate = DateOnly.FromDateTime(asOf);
-        return await _context.NenContracts
-            .Where(c => c.Status == NenContractStatus.Scheduled && asOfDate >= c.StartDate)
-            .ToListAsync(cancellationToken);
-    }
-
-    public async Task<IReadOnlyList<NenContract>> GetDueForCompletionAsync(
-        DateTime asOf,
-        CancellationToken cancellationToken = default)
-    {
-        // Mirrors NenContract.IsDueForCompletion(DateOnly) exactly.
-        var asOfDate = DateOnly.FromDateTime(asOf);
-        return await _context.NenContracts
-            .Where(c => c.Status == NenContractStatus.Active && asOfDate > c.EndDate)
-            .ToListAsync(cancellationToken);
-    }
-
     public async Task<bool> HasContractsInEffectForPresetAsync(
         Guid contractPresetId,
         CancellationToken cancellationToken = default)

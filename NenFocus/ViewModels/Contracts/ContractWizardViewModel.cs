@@ -56,6 +56,7 @@ public partial class ContractWizardViewModel : ViewModelBase
     // PlannerPageViewModel knows to dispatch EditNenContractCommand (replace in place)
     // instead of SealNenContractCommand at the end of drafting.
     private readonly NenContractEditDto? _editingContract;
+    private readonly ContractEditPrefill? _editPrefill;
 
     private ContractBasicsStepViewModel? _basicsVm;
     private ContractModeStepViewModel? _modeVm;
@@ -72,6 +73,7 @@ public partial class ContractWizardViewModel : ViewModelBase
         _onReadyToSchedule = onReadyToSchedule;
         _onCancel = onCancel;
         _editingContract = editingContract;
+        _editPrefill = editingContract is null ? null : ContractEditPrefill.From(editingContract);
 
         if (editingContract is not null)
         {
@@ -79,7 +81,7 @@ public partial class ContractWizardViewModel : ViewModelBase
             _goal = editingContract.Goal;
             _startDate = editingContract.StartDate;
             _endDate = editingContract.EndDate;
-            _isAdvanced = editingContract.IsAdvanced;
+            _isAdvanced = _editPrefill!.IsAdvanced;
         }
         else
         {
@@ -143,11 +145,11 @@ public partial class ContractWizardViewModel : ViewModelBase
             onContinue: NavigateToReview,
             onBack: NavigateToMode,
             initialStrictnessRule: _editingContract?.StrictnessRule,
-            initialFixedDailyFloorHours: _editingContract?.FixedDailyFloorHours,
+            initialFixedDailyFloorHours: _editPrefill?.FixedDailyFloorHours,
             initialAllowCancellation: _editingContract?.AllowCancellation ?? true,
-            initialWorkHoursStart: _editingContract?.WorkHoursStart,
-            initialWorkHoursEnd: _editingContract?.WorkHoursEnd,
-            initialRestDays: _editingContract?.RestDays,
+            initialWorkHoursStart: _editPrefill?.WorkHoursStart,
+            initialWorkHoursEnd: _editPrefill?.WorkHoursEnd,
+            initialRestDays: _editPrefill?.RestDays,
             initialContractPresetId: _editingContract?.ContractPresetId,
             initialRedemptionPlacementPolicy: _editingContract?.RedemptionPlacementPolicy,
             initialKeepBlockingDuringBreaks: _editingContract?.KeepBlockingDuringBreaks ?? false);

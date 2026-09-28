@@ -31,15 +31,32 @@ public class ComputeRedemptionAttributionQueryHandlerTests
     private ComputeRedemptionAttributionQueryHandler CreateHandler() => new(_contracts, _deficits, _clock);
 
     private static NenContract SameDayContract(Guid id) =>
-        NenContract.Seal(id, "Contract", new NenContractGoal("Goal"), Today.AddDays(-1), Today.AddDays(7),
-            StrictnessRule.Locked, new DailyFloorPolicy(DailyFloor.None), null, false,
-            new Dictionary<DateOnly, double>(), Now,
+        NenContract.Seal(
+            id: id,
+            name: "Contract",
+            goal: new NenContractGoal("Goal"),
+            strictnessRule: StrictnessRule.Locked,
+            calendar: TestCalendars.For(Today.AddDays(-1), Today.AddDays(7), new DailyFloorRule.Fixed(DailyFloor.None)),
+            floorRule: new DailyFloorRule.Fixed(DailyFloor.None),
+            changeWindow: null,
+            allowCancellation: false,
+            plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
+            localSealedAt: Today.AddDays(-1).ToDateTime(TimeOnly.MinValue),
             redemptionPlacementPolicy: RedemptionPlacementPolicy.CurrentDayOnly);
 
     private static NenContract AnyDayContract(Guid id) =>
-        NenContract.Seal(id, "Contract", new NenContractGoal("Goal"), Today.AddDays(-7), Today.AddDays(7),
-            StrictnessRule.PeriodTimeBudget, DailyFloorPolicy.None, null, false,
-            new Dictionary<DateOnly, double>(), Now, contractFloor: new ContractFloor(10),
+        NenContract.Seal(
+            id: id,
+            name: "Contract",
+            goal: new NenContractGoal("Goal"),
+            strictnessRule: StrictnessRule.PeriodTimeBudget,
+            calendar: TestCalendars.For(Today.AddDays(-7), Today.AddDays(7), new DailyFloorRule.None()),
+            floorRule: new DailyFloorRule.None(),
+            changeWindow: null,
+            allowCancellation: false,
+            plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
+            localSealedAt: Today.AddDays(-7).ToDateTime(TimeOnly.MinValue),
+            contractFloor: new ContractFloor(10),
             redemptionPlacementPolicy: RedemptionPlacementPolicy.AnywhereInContract);
 
     private static FocusBlockDeficitDto Deficit(Guid presetId, DateTime scheduledStart, double remaining, Guid? focusBlockId = null) =>

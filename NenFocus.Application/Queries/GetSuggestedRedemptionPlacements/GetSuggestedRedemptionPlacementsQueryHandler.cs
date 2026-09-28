@@ -88,18 +88,11 @@ public sealed class GetSuggestedRedemptionPlacementsQueryHandler
     }
 
     /// <summary>
-    /// Midnight, unless the contract has a Work Hours window configured for today — in
-    /// which case that window's own close time is the binding boundary instead.
+    /// The end of the contract's window today (its Work Hours close, its end on its last
+    /// day, or midnight) — or midnight when today is outside the contract.
     /// </summary>
     private static DateTime ResolveBoundary(NenContract contract, DateOnly today, DateTime asOf)
-    {
-        var midnight = asOf.Date.AddDays(1);
-        var workHours = contract.WorkHoursPolicy?.For(today);
-        if (workHours is null) return midnight;
-
-        var workHoursClose = asOf.Date.Add(workHours.End.ToTimeSpan());
-        return workHoursClose < midnight ? workHoursClose : midnight;
-    }
+        => contract.WindowOn(today)?.End ?? asOf.Date.AddDays(1);
 
     /// <summary>
     /// Snaps forward to the next quarter-hour; shifts earlier (never before `now`) only if

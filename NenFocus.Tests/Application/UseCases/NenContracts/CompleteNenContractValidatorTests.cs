@@ -24,11 +24,16 @@ public class CompleteNenContractValidatorTests
     private CompleteNenContractValidator CreateValidator() => new(_contracts, _readiness);
 
     private static NenContract ActiveContract(double committedHours = 4) => NenContract.Seal(
-        id: ContractId, name: "Focused Week", goal: new NenContractGoal("Ship it"),
-        startDate: StartDate, endDate: EndDate, strictnessRule: StrictnessRule.Locked,
-        dailyFloorPolicy: DailyFloorPolicy.None, changeWindow: null, allowCancellation: true,
+        id: ContractId,
+        name: "Focused Week",
+        goal: new NenContractGoal("Ship it"),
+        strictnessRule: StrictnessRule.Locked,
+        calendar: TestCalendars.For(StartDate, EndDate, new DailyFloorRule.None()),
+        floorRule: new DailyFloorRule.None(),
+        changeWindow: null,
+        allowCancellation: true,
         plannedFocusHoursByDay: new Dictionary<DateOnly, double> { [StartDate] = committedHours },
-        sealedAt: StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
+        localSealedAt: StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
 
     private void StubReadiness(bool isReady, double remainingHours = 0, int pendingBlockCount = 0) =>
         _readiness.HandleAsync(Arg.Any<GetNenContractCompletionReadinessQuery>(), Arg.Any<CancellationToken>())

@@ -50,10 +50,17 @@ public class SplitPlannedBlockValidatorTests
     };
 
     private static NenContract SealedContract(StrictnessRule rule, Guid id) =>
-        NenContract.Seal(id, "Contract", new NenContractGoal("Goal"),
-            DateOnly.FromDateTime(Now), DateOnly.FromDateTime(Now).AddDays(30),
-            rule, new DailyFloorPolicy(DailyFloor.None), null, false,
-            new Dictionary<DateOnly, double>(), sealedAt: Now);
+        NenContract.Seal(
+            id: id,
+            name: "Contract",
+            goal: new NenContractGoal("Goal"),
+            strictnessRule: rule,
+            calendar: TestCalendars.For(DateOnly.FromDateTime(Now), DateOnly.FromDateTime(Now).AddDays(30), new DailyFloorRule.Fixed(DailyFloor.None)),
+            floorRule: new DailyFloorRule.Fixed(DailyFloor.None),
+            changeWindow: null,
+            allowCancellation: false,
+            plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
+            localSealedAt: Now.Date);
 
     private void SetUpDailyFlexBlock(Guid blockId, Guid contractId)
     {
@@ -383,10 +390,17 @@ public class SplitPlannedBlockValidatorTests
     // Seal's own check; it's independent of whatever the validator's own floor check
     // (mocked via _computePlannedFocusHours) reports as the live, post-split state.
     private static NenContract SealedContractWithFloor(Guid id, double floorHours, DateOnly day1, DateOnly day2) =>
-        NenContract.Seal(id, "Contract", new NenContractGoal("Goal"),
-            day1, day2,
-            StrictnessRule.DailyFlexibility, new DailyFloorPolicy(new DailyFloor(floorHours)), null, false,
-            new Dictionary<DateOnly, double> { [day1] = floorHours, [day2] = floorHours }, sealedAt: Now);
+        NenContract.Seal(
+            id: id,
+            name: "Contract",
+            goal: new NenContractGoal("Goal"),
+            strictnessRule: StrictnessRule.DailyFlexibility,
+            calendar: TestCalendars.For(day1, day2, new DailyFloorRule.Fixed(new DailyFloor(floorHours))),
+            floorRule: new DailyFloorRule.Fixed(new DailyFloor(floorHours)),
+            changeWindow: null,
+            allowCancellation: false,
+            plannedFocusHoursByDay: new Dictionary<DateOnly, double> { [day1] = floorHours, [day2] = floorHours },
+            localSealedAt: Now);
 
     [Fact]
     public async Task Validate_CrossMidnightOriginal_BothPiecesOnSameDay_LeavesTheOtherDayBelowItsFloor_IsInvalid()
@@ -457,10 +471,17 @@ public class SplitPlannedBlockValidatorTests
     // stays DailyFloor.None (Seal forbids a contract carrying both a daily floor and a
     // whole-contract ContractFloor at once).
     private static NenContract SealedPeriodBudgetContract(Guid id, double contractFloorHours, DateOnly day1, DateOnly day2) =>
-        NenContract.Seal(id, "Contract", new NenContractGoal("Goal"),
-            day1, day2,
-            StrictnessRule.PeriodTimeBudget, DailyFloorPolicy.None, null, false,
-            new Dictionary<DateOnly, double>(), sealedAt: Now,
+        NenContract.Seal(
+            id: id,
+            name: "Contract",
+            goal: new NenContractGoal("Goal"),
+            strictnessRule: StrictnessRule.PeriodTimeBudget,
+            calendar: TestCalendars.For(day1, day2, new DailyFloorRule.None()),
+            floorRule: new DailyFloorRule.None(),
+            changeWindow: null,
+            allowCancellation: false,
+            plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
+            localSealedAt: day1.ToDateTime(TimeOnly.MinValue),
             contractFloor: new ContractFloor(contractFloorHours));
 
     [Fact]
@@ -520,9 +541,17 @@ public class SplitPlannedBlockValidatorTests
         // StrictnessRule is PeriodTimeBudget — this is the "hybrid" shape: no ContractFloor,
         // so the validator's live check falls back to per-day IsDayMet, same as Daily Flex.
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
-            .Returns(NenContract.Seal(contractId, "Contract", new NenContractGoal("Goal"),
-                day1, day2, StrictnessRule.PeriodTimeBudget, new DailyFloorPolicy(new DailyFloor(2)), null, false,
-                new Dictionary<DateOnly, double> { [day1] = 2, [day2] = 2 }, sealedAt: Now));
+            .Returns(NenContract.Seal(
+                id: contractId,
+                name: "Contract",
+                goal: new NenContractGoal("Goal"),
+                strictnessRule: StrictnessRule.PeriodTimeBudget,
+                calendar: TestCalendars.For(day1, day2, new DailyFloorRule.Fixed(new DailyFloor(2))),
+                floorRule: new DailyFloorRule.Fixed(new DailyFloor(2)),
+                changeWindow: null,
+                allowCancellation: false,
+                plannedFocusHoursByDay: new Dictionary<DateOnly, double> { [day1] = 2, [day2] = 2 },
+                localSealedAt: Now));
         _computePlannedFocusHours.HandleAsync(Arg.Any<ComputePlannedFocusHoursQuery>(), Arg.Any<CancellationToken>())
             .Returns(new Dictionary<DateOnly, double> { [day1] = 2 }); // Day2 abandoned entirely = 0
 
@@ -550,11 +579,17 @@ public class SplitPlannedBlockValidatorTests
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
             .Returns(FocusBlock.Create(blockId, Guid.NewGuid(), OriginalStart, OriginalEnd, contractId: contractId));
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
-            .Returns(NenContract.Seal(contractId, "Contract", new NenContractGoal("Goal"),
-                DateOnly.FromDateTime(Now), DateOnly.FromDateTime(Now).AddDays(30),
-                StrictnessRule.DailyFlexibility, new DailyFloorPolicy(DailyFloor.None), null, false,
-                new Dictionary<DateOnly, double>(), sealedAt: Now,
-                workHoursPolicy: new WorkHoursPolicy(new WorkHours(new TimeOnly(15, 0), new TimeOnly(18, 0)))));
+            .Returns(NenContract.Seal(
+                id: contractId,
+                name: "Contract",
+                goal: new NenContractGoal("Goal"),
+                strictnessRule: StrictnessRule.DailyFlexibility,
+                calendar: TestCalendars.For(DateOnly.FromDateTime(Now), DateOnly.FromDateTime(Now).AddDays(30), new DailyFloorRule.Fixed(DailyFloor.None), workHours: new WorkHours(new TimeOnly(15, 0), new TimeOnly(18, 0))),
+                floorRule: new DailyFloorRule.Fixed(DailyFloor.None),
+                changeWindow: null,
+                allowCancellation: false,
+                plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
+                localSealedAt: Now));
 
         var result = await CreateValidator().ValidateAsync(ValidCommand(blockId));
 
@@ -571,11 +606,17 @@ public class SplitPlannedBlockValidatorTests
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
             .Returns(FocusBlock.Create(blockId, Guid.NewGuid(), OriginalStart, OriginalEnd, contractId: contractId));
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
-            .Returns(NenContract.Seal(contractId, "Contract", new NenContractGoal("Goal"),
-                DateOnly.FromDateTime(Now), DateOnly.FromDateTime(Now).AddDays(30),
-                StrictnessRule.DailyFlexibility, new DailyFloorPolicy(DailyFloor.None), null, false,
-                new Dictionary<DateOnly, double>(), sealedAt: Now,
-                workHoursPolicy: new WorkHoursPolicy(new WorkHours(new TimeOnly(9, 0), new TimeOnly(16, 0)))));
+            .Returns(NenContract.Seal(
+                id: contractId,
+                name: "Contract",
+                goal: new NenContractGoal("Goal"),
+                strictnessRule: StrictnessRule.DailyFlexibility,
+                calendar: TestCalendars.For(DateOnly.FromDateTime(Now), DateOnly.FromDateTime(Now).AddDays(30), new DailyFloorRule.Fixed(DailyFloor.None), workHours: new WorkHours(new TimeOnly(9, 0), new TimeOnly(16, 0))),
+                floorRule: new DailyFloorRule.Fixed(DailyFloor.None),
+                changeWindow: null,
+                allowCancellation: false,
+                plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
+                localSealedAt: Now));
 
         var result = await CreateValidator().ValidateAsync(ValidCommand(blockId));
 
@@ -590,11 +631,17 @@ public class SplitPlannedBlockValidatorTests
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
             .Returns(FocusBlock.Create(blockId, Guid.NewGuid(), OriginalStart, OriginalEnd, contractId: contractId));
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
-            .Returns(NenContract.Seal(contractId, "Contract", new NenContractGoal("Goal"),
-                DateOnly.FromDateTime(Now), DateOnly.FromDateTime(Now).AddDays(30),
-                StrictnessRule.DailyFlexibility, new DailyFloorPolicy(DailyFloor.None), null, false,
-                new Dictionary<DateOnly, double>(), sealedAt: Now,
-                workHoursPolicy: new WorkHoursPolicy(new WorkHours(new TimeOnly(9, 0), new TimeOnly(18, 0)))));
+            .Returns(NenContract.Seal(
+                id: contractId,
+                name: "Contract",
+                goal: new NenContractGoal("Goal"),
+                strictnessRule: StrictnessRule.DailyFlexibility,
+                calendar: TestCalendars.For(DateOnly.FromDateTime(Now), DateOnly.FromDateTime(Now).AddDays(30), new DailyFloorRule.Fixed(DailyFloor.None), workHours: new WorkHours(new TimeOnly(9, 0), new TimeOnly(18, 0))),
+                floorRule: new DailyFloorRule.Fixed(DailyFloor.None),
+                changeWindow: null,
+                allowCancellation: false,
+                plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
+                localSealedAt: Now));
 
         var result = await CreateValidator().ValidateAsync(ValidCommand(blockId));
 

@@ -56,7 +56,7 @@ public sealed class GetNenContractBonusFocusHoursQueryHandler
         var bonusBlocks = blocksInRange
             .OfType<FocusBlock>()
             .Where(b => b.ContractId is null)
-            .Where(b => _clock.ToLocal(b.Start) >= contract.StartsAt && _clock.ToLocal(b.Start) <= contract.EndsAt)
+            .Where(b => contract.Covers(_clock.ToLocal(b.Start)))
             .ToList();
 
         var creditedWindows = new List<(DateTime Start, DateTime End)>();

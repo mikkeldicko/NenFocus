@@ -23,14 +23,13 @@ public class NenContractCompletedEventHandlerTests
         id: Guid.NewGuid(),
         name: name,
         goal: new NenContractGoal("Ship it"),
-        startDate: StartDate,
-        endDate: EndDate,
         strictnessRule: StrictnessRule.DailyFlexibility,
-        dailyFloorPolicy: DailyFloorPolicy.None,
+        calendar: TestCalendars.For(StartDate, EndDate, new DailyFloorRule.None()),
+        floorRule: new DailyFloorRule.None(),
         changeWindow: null,
         allowCancellation: true,
         plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-        sealedAt: StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
+        localSealedAt: StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
 
     [Fact]
     public async Task HandleAsync_ContractExists_SendsNotificationWithContractName()

@@ -22,14 +22,13 @@ public class DeleteNenContractCommandHandlerTests
         id: Guid.NewGuid(),
         name: "Summer Focus",
         goal: new NenContractGoal("Goal"),
-        startDate: StartDate,
-        endDate: EndDate,
         strictnessRule: StrictnessRule.DailyFlexibility,
-        dailyFloorPolicy: DailyFloorPolicy.None,
+        calendar: TestCalendars.For(StartDate, EndDate, new DailyFloorRule.None()),
+        floorRule: new DailyFloorRule.None(),
         changeWindow: null,
         allowCancellation: true,
         plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-        sealedAt: StartDate.AddDays(-10).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
+        localSealedAt: StartDate.AddDays(-10).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
 
     [Fact]
     public async Task HandleAsync_ContractNotFound_FailsWithoutTouchingBlocks()
