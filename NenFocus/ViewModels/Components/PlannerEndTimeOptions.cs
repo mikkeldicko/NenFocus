@@ -7,7 +7,7 @@ namespace NenFocus.ViewModels.Components;
 /// <summary>One selectable entry in the Planner form's End dropdown — TimeText is the
 /// raw parseable value written back to FormEndTime on selection (via ValueMemberBinding),
 /// Duration drives the parenthesized suffix shown for each entry (via DurationLabelConverter).</summary>
-public sealed record PlannerEndTimeOptionDto(string TimeText, TimeSpan Duration);
+public sealed record PlannerEndTimeOption(string TimeText, TimeSpan Duration);
 
 /// <summary>
 /// Generates the End dropdown's duration offsets from Start — Start+15/30/45/60 (first

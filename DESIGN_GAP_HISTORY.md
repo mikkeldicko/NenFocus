@@ -1471,3 +1471,60 @@ For active design tension, see the **Open Gaps** section in `ARCHITECT_GOVERNANC
 **Left for Gap 97:** `GetHistoryAsync` still reads its dates as UTC days — a trap for its next caller (the Insights `GetSessionHistoryQuery`, not yet called by any UI); spontaneous sessions still use whole dates while Bonus uses `Covers` (exact moments); "is this block Bonus" is still written in four places.
 
 **Principle demonstrated:** a `DateOnly` has no time zone, so every method that takes one silently picks one. A date that means "the user's day" must be turned into instants through the clock, never by `ToDateTime(..., DateTimeKind.Utc)`.
+
+\---
+
+## Gap 98 — Architecture Tests: Rules That Fail on Drift *(first pass closed, 2026-09-29)*
+
+**Why it was a gap:** written rules alone didn't stop drift — the Design Review Rules in `MODULE_STANDARDS.md` exist because mistakes were made with the rules already loaded. What reliably stops drift is a test that fails at `dotnet test` time. One precedent exists: `CompositionRootTests` (ViewModel tree resolves under `ValidateScopes`, Gap 40).
+
+**Three kinds of rule, three timings:**
+1. **Already holds today → test now**, locking it in before the Architecture box's refactors move code.
+2. **Broken today → test now with a known-exceptions list that may only shrink** (a new violation fails at once; each gap that fixes a file removes it; empty list = rule complete).
+3. **Made true by a gap → that gap's last step** (the box rule in `ARCHITECT_GOVERNANCE.md`): e.g. after Gap 88, nothing but `BlockPlacementChecker` decides placement / no `ritualOnly`; after Gap 93, no ViewModel computes edit permissions; after Gap 90, no public `PlannedBlock.Start`/`End` comparisons.
+
+**What a test can and can't check (agreed 2026-09-29):** tests catch *structural* drift; *judgment* stays a review job (Design Review Rules, "check the plan against the standards **and the code**"). Tests make the review smaller, not unnecessary.
+
+| `MODULE_STANDARDS.md` section | Testable? | How |
+|---|---|---|
+| Layer rules (Domain references nothing; UI → Application ← Infrastructure) | ✅ | dependency rules on compiled assemblies |
+| Domain forbidden (no async, no `DateTime.UtcNow`) | ✅ | type and source scan |
+| ViewModel Forbidden Zone — no repositories, handlers, Domain entities, timers | ✅ mostly | dependency rules (`CompositionRootTests` already guards one) |
+| ViewModel — no math, no formatting | ⚠️ partly | ban specific calls (`Math.Clamp`, `ToString("…")`, `ToLocalTime()`); can't spot all arithmetic |
+| Vertical slices (four files, validator in its folder, `ICommand<T>`) | ✅ | naming/folder rules |
+| Naming conventions (`…Query`, `…CommandHandler`, Domain services not `…Service`) | ✅ | name rules per folder/type |
+| Interface-first, ≤ 5 members | ✅ as a number | count public members — flags big interfaces, can't judge whether the size is justified |
+| Deep Module ("30 seconds", small interface hiding a lot) | ❌ | needs judgment |
+| Where a Rule Lives (entity / value object / service) | ❌ | a design decision — tests only enforce its consequences afterwards |
+| One source of truth | ⚠️ indirectly | (1) ban the known wrong way once a right way exists (e.g. no `ritualOnly`, no raw `.Start`/`.End` on blocks outside `TimeSlot` after Gap 88 — the compiler takes over after Gap 90); (2) parity tests where a copy must exist (SQL mirrors of `IsUnresolved`, `IsInEffect`); (3) per-gap behaviour tests pinning the same answer in two places (preview vs save) |
+| Rounding rule | ⚠️ partly | a regression test per case (like Gap 33's), not a general check |
+
+**Interrogated 2026-09-29 — decisions:**
+- **Tooling: plain xUnit, no library.** Reflection for type rules (as `CompositionRootTests`, `NotificationDoorTests`), a comment-stripping source scan (`SourceCode`) for call bans. Rejected: NetArchTest (can't ban a call like `.UtcNow`, only "uses `DateTime`" — would split rules across two mechanisms), ArchUnitNET (heavier, call bans unproven), BannedApiAnalyzers (build-time, but exceptions become scattered `#pragma`s and type rules still need tests).
+- **Exceptions: an array in the test, next to its rule, one reason comment per entry naming the gap that removes it.** `KnownExceptions.Check` fails both ways — a new violation, and a listed entry that no longer violates (stale) — so the list can only shrink. Rejected: central baseline file (rule and exceptions in two homes), attributes at the violation site (test concern in production code), fix-everything-first (pulls other gaps' refactors in), one-way check, count ratchet.
+- **Generated code is out of scope, not an exception** — EF `Migrations/`, Avalonia's `CompiledAvaloniaXaml`/`XamlClosure_<n>`/`!`-named members. Matched narrowly, so a rename on their side fails red, never silently green.
+- **Guard hierarchy** added to `MODULE_STANDARDS.md`: compiler → test → review; each gap's plan says which guards its rule. Rule 10 below is a test standing in for Gap 90's compiler step.
+- **Depth itself stays a review job** (the interface-first sign-off). A member-count target would be gamed into worse design (one method with a mode flag); the tests catch the *signs* of shallow modules instead — logic leaking out (rule 10), second doors (rules 2, 3), silent growth (rule 9).
+
+**First-pass rules** (`NenFocus.Tests/ArchitectureTests/`; each probed red with a deliberate violation before being trusted):
+
+| # | Rule | Exceptions at close |
+|---|---|---|
+| 1 | Layers: Domain → nothing, Application → Domain, Infrastructure → Application + Domain; only the composition root (`App`, `Program`) uses Infrastructure from the UI | 0 |
+| 2 | Only `SystemClock` reads the machine clock (all four projects); Domain has no async | `WindowsNotificationService` toast expiry (permanent, Windows wall-clock) |
+| 3 | UI holds no repositories, no handlers, no `IServiceProvider`/`IServiceScopeFactory` | 0 |
+| 4 | Command slices (four files, `ICommand<T>` ⇄ `…Command`, validator in its command's folder); query slices (one Query + one QueryHandler; a result type in the folder isn't shared with another slice) | `RedemptionAttributionResult` (→ Gap 88 phase 3) |
+| 5 | Naming: handler = request + `Handler`, result = command − `Command` + `Result`, events `…Event`, nothing in Domain `…Service`, observable UI types `…ViewModel`, queries Get/Compute/Check, every `…Dto` in `DTOs/`, `IValueConverter` ⇄ `…Converter`, Converter Catalogue ⇄ code | 3 formatters named like converters (→ Gap 89 area 2). The 10 converters missing from the catalogue got their rows the same day — that list is empty |
+| 6 | No `ToLocalTime()`/`ToUniversalTime()` outside `SystemClock` (all four projects) | 12 files: `NenFocusDbContext` silent save-time conversion (→ Gap 99, first thought permanent, then judged a hidden second copy of the rule); Create/Update block handlers (→ Gap 88 phase 3); `PlannedBlockRepository` local-day window (→ Gap 97); `PlannerClockService.LocalNow` (→ Gap 89 area 3); 7 UI files (→ Gap 89). The earlier count of 9 missed the three Infrastructure files |
+| 7 | No UI code uses Domain entities or Domain services (source scan — an entity's constant is copied into the caller at compile time, so reflection can't see it) | `PlannerEndTimeOptions` (→ Gap 89 area 2) |
+| 8 | No UI code owns a timer — any timer type or a `Task.Delay` loop, source scan of the whole UI project except the composition root (Views included, so polling can't move there; visual effects use Avalonia animations) | `PlannerPageViewModel` badge poll (→ Gap 89 area 3, "the heartbeat announces what changed") |
+| 9 | New interfaces ≤ 5 public members; existing larger ones may not grow — entries are "Name has N", so growing *and* shrinking both force an edit (a new member is a visible decision) | 8 capped: `ISessionStateService` 15 (→ Gap 92 A3), `IActiveSessionMonitor` 10 (→ Gap 92 A4), and six repositories — `IPlannedBlockRepository` 12, `INenContractRepository` 9, `ISessionRepository` 9, `IBlockPresetRepository` 7, `IBreakTimerPresetRepository` 6, `IContractPresetRepository` 6 — capped deliberately: an extra query method is usually a business rule moving into SQL (Gap 92 A6) |
+| 10 | Only Domain combines raw time fields (`Start`, `End`, `StartedAt`, `RitualCompletedAt`, …) — operators *and* the method-call forms (FluentValidation `.GreaterThan(x => x.Start)`, `CompareTo`, `DateTime.Compare`, `Math.Min/Max`); entity and DTO fields alike (a ViewModel asking "has it ended?" of a DTO re-answers a Domain question too); entries "File has N", so growth inside a listed file fails. Bridge until Gap 90 — then deleted; repositories/`DbContext` excluded (parity tests guard SQL mirrors). Rejected: Roslyn semantic analysis (heavy, would tempt narrowing to entities, and Gap 90/99 hand the job to the compiler), compiled-IL inspection (can't tell a comparison from copying into a DTO) | 16 files: Gap 88 — day-view display end, Cover Deficit and drag overlap checks, Create/Update/Seal/Edit validators' copies of `FocusBlock`/`TimeSlot` rules; Gap 93 — "has it started" in the Split validator and `PlannerPageViewModel`; Gap 89 — "has it ended" in `HatsuPageViewModel`, `ShellViewModel`; Gap 90 — lengths and "how long until" (`ActiveSessionMonitor`, `StartSession`, Ritual context, `BlockMarkerNotifier`); allowed — `PlannerPageView.axaml.cs` drag geometry |
+
+**Standards written down along the way (`MODULE_STANDARDS.md`):** Guard Hierarchy; no machine-clock reads in any layer; query slice shape; validators check form and ask, never own a rule; naming table (`Check…Query`, what a DTO is, yes/no converter names, catalogue must match code). **Code changed:** `PlannerEndTimeOptionDto` → `PlannerEndTimeOption` (a UI item, not a DTO); CS8629 in `CreateContractPresetValidator` silenced with `!` like its sibling (the duplication behind it → Gap 92 V9).
+
+**Surfaced by the tests, each routed to its gap rather than fixed here:** `PlannerPageViewModel`'s 3 s badge poll timer and ViewModels formatting strings through static "converters" (→ Gap 89 area 2); `PlannerClockService` designed for 60 s but firing about every second, plus the agreed heartbeat direction — one clock, one background heartbeat, events instead of polling (→ Gap 89 area 3); duplicated contract-preset rules in two validators while `ContractPreset` enforces none (→ Gap 92 V9); a query result type saved by commands, i.e. a business rule living in a query (→ Gap 88 phase 3); EF's storage converter silently converting non-UTC values, which raised **Gap 99** (moments vs calendar times as types). Each of Gaps 88, 90, 93, 95, 97 and 99 now ends with a "last step" naming the narrow rule it must guard and the exception entries it deletes.
+
+**Confirmed via `NenFocus.Tests` (1483 passing, up from 1449):** 34 new tests in `ArchitectureTests/` — the `SourceCode` scanner and `KnownExceptions` two-way check test themselves (7), plus 27 rule tests. Every rule was probed red with a deliberate violation (a temporary `ZzProbe` file, or a line appended to a listed file and restored from a backup) before being trusted; two probes exposed gaps in the tests themselves — static classes skipped by the converter-name rule (.NET marks them abstract), and Avalonia's generated XAML code flagged by the service-locator rule.
+
+**Principle demonstrated:** a rule on paper is a promise; a rule in a test is a guarantee — but only for what a test can see. Structure (layers, names, doors, sizes, raw comparisons) fails at `dotnet test`; judgment (is it deep, is this the right home) stays with the architect's sign-off. And a test that stands in for the compiler says so and names the gap that retires it.

@@ -35,7 +35,7 @@ public sealed class CreateContractPresetValidator : AbstractValidator<CreateCont
         // A floor that can never be satisfied within the enforced work hours window makes
         // no sense to allow — e.g. a 5h window can never fit a 6h daily floor.
         RuleFor(x => x)
-            .Must(x => x.DailyFloorHours.Value <= (x.WorkHoursEnd!.Value - x.WorkHoursStart!.Value).TotalHours)
+            .Must(x => x.DailyFloorHours!.Value <= (x.WorkHoursEnd!.Value - x.WorkHoursStart!.Value).TotalHours)
             .When(x => x.DailyFloorHours.HasValue && x.WorkHoursStart.HasValue && x.WorkHoursEnd.HasValue)
             .WithMessage("Daily floor cannot exceed the total work hours window.");
     }

@@ -566,7 +566,7 @@
 											<ScrollViewer Name="FormEndTimeScrollViewer" MaxHeight="200">
 												<ItemsControl Name="FormEndTimeList" Classes="timeOptionsList" ItemsSource="{Binding EndTimeOptions}">
 													<ItemsControl.ItemTemplate>
-														<DataTemplate DataType="comp:PlannerEndTimeOptionDto">
+														<DataTemplate DataType="comp:PlannerEndTimeOption">
 															<Border Classes="timeOption" Padding="10,6" HorizontalAlignment="Stretch">
 																<StackPanel Orientation="Horizontal" Spacing="6">
 																	<TextBlock Text="{Binding TimeText}"/>
@@ -804,7 +804,7 @@
 										<ScrollViewer Name="SplitFirstEndTimeScrollViewer" MaxHeight="200">
 											<ItemsControl Name="SplitFirstEndTimeList" Classes="timeOptionsList" ItemsSource="{Binding SplitFirstEndTimeOptions}">
 												<ItemsControl.ItemTemplate>
-													<DataTemplate DataType="comp:PlannerEndTimeOptionDto">
+													<DataTemplate DataType="comp:PlannerEndTimeOption">
 														<Border Classes="timeOption" Padding="10,6" HorizontalAlignment="Stretch">
 															<StackPanel Orientation="Horizontal" Spacing="6">
 																<TextBlock Text="{Binding TimeText}"/>
@@ -859,7 +859,7 @@
 										<ScrollViewer Name="SplitSecondEndTimeScrollViewer" MaxHeight="200">
 											<ItemsControl Name="SplitSecondEndTimeList" Classes="timeOptionsList" ItemsSource="{Binding SplitSecondEndTimeOptions}">
 												<ItemsControl.ItemTemplate>
-													<DataTemplate DataType="comp:PlannerEndTimeOptionDto">
+													<DataTemplate DataType="comp:PlannerEndTimeOption">
 														<Border Classes="timeOption" Padding="10,6" HorizontalAlignment="Stretch">
 															<StackPanel Orientation="Horizontal" Spacing="6">
 																<TextBlock Text="{Binding TimeText}"/>

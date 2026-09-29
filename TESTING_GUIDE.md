@@ -43,6 +43,7 @@ NenFocus.Tests/
 │   │   └── EfCoreUnitOfWorkTests.cs
 │   ├── Services/               ← BlockedAttemptTrackerTests.cs, SessionStateServiceTests.cs, TransactionalCommandHandlerTests.cs, InProcessDomainEventPublisherTests.cs
 │   └── CompositionRootTests.cs ← confirms every handler/service resolves from DI with no missing registrations
+├── ArchitectureTests/          ← MODULE_STANDARDS rules that fail on drift (Gap 98) — see "Architecture Tests" below
 └── NenFocus.Tests.csproj
 ```
 
@@ -193,6 +194,26 @@ public async Task HandleAsync_ValidDurations_AllSucceed(int durationMinutes)
 | ViewModels | They delegate everything; test the service they call instead |
 | `WindowsEnforcementService` | Windows API calls; use integration tests in a real process |
 | XAML bindings | Visual; use manual testing or a UI test framework |
+
+---
+
+## Architecture Tests (Gap 98)
+
+`NenFocus.Tests/ArchitectureTests/` checks the structure `MODULE_STANDARDS.md` describes — layers, the ViewModel Forbidden Zone, vertical slices, naming, interface size, one clock, raw time comparisons. Plain xUnit, no library:
+
+| Rule | Mechanism |
+|------|-----------|
+| Type rules (references, what a class holds, names) | reflection over the compiled assemblies |
+| Call bans (`DateTime.UtcNow`, `ToLocalTime()`, raw `.Start <`) and anything reflection can't see (constants are copied into the caller at compile time) | `SourceCode.Files(project)` — the `.cs` files with comments stripped, `obj/`, `bin/` and `Migrations/` skipped |
+
+**Exceptions lists may only shrink.** A rule broken today lists its known violations in an array next to it, each with a comment naming the gap that removes it. `KnownExceptions.Check(violations, exceptions)` fails both ways: a violation not on the list (new drift), and an entry that no longer violates (stale — delete it). Where one file can hold several violations, entries are `"<file or type> has N"`, so growth inside a listed file fails too.
+
+**Working with them:**
+- **A rule fails on your change** — fix the code. Add an exception only for a deliberate, reasoned choice, and say why in the comment.
+- **A gap removes a violation** — delete its entry; the test stays red until you do.
+- **A gap makes a new rule true** (the Architecture box rule) — add its test here, and probe it: add a deliberate violation (a temporary `ZzProbe` file), watch it go red, remove it. A test never seen failing is not trusted.
+- **Generated code** (EF migrations, Avalonia's compiled XAML) is out of scope, matched narrowly so a change on their side fails red rather than passing silently.
+- **What these can't check** — whether a module is deep, whether a rule is in the right home — stays with the interface-first sign-off (`MODULE_STANDARDS.md` → Guard Hierarchy).
 
 ---
 

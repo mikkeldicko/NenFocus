@@ -180,10 +180,10 @@ public partial class PlannerPageView : UserControl
                 if (_vm is not null && index is { } i && i < _vm.EndTimeOptions.Count) _vm.SelectEndTimeOption(_vm.EndTimeOptions[i].TimeText);
                 else _vm?.CloseEndTimeDropdown();
             },
-            selectFromSource: source => { if (source.DataContext is PlannerEndTimeOptionDto dto) _vm?.SelectEndTimeOption(dto.TimeText); },
+            selectFromSource: source => { if (source.DataContext is PlannerEndTimeOption dto) _vm?.SelectEndTimeOption(dto.TimeText); },
             hoverFromSource: source =>
             {
-                if (_vm is null || _formEndTimeList is null || source.DataContext is not PlannerEndTimeOptionDto dto) return;
+                if (_vm is null || _formEndTimeList is null || source.DataContext is not PlannerEndTimeOption dto) return;
                 var index = _vm.EndTimeOptions.IndexOf(dto);
                 if (index < 0 || index == _formEndTimeHoveredIndex) return;
                 _formEndTimeHoveredIndex = index;
@@ -258,7 +258,7 @@ public partial class PlannerPageView : UserControl
 
     /// <summary>
     /// Duration-space counterpart to <see cref="WireFlatTimePicker"/> — for Split's First/
-    /// Second End fields, which bind to a PlannerEndTimeOptionDto list (TimeText + Duration)
+    /// Second End fields, which bind to a PlannerEndTimeOption list (TimeText + Duration)
     /// instead of a plain flat list of strings, mirroring End's own bespoke wiring in the
     /// constructor above rather than End's methods being retrofitted onto this (see
     /// PlannerPageViewModel's ResolveApproxDurationFrom doc comment for why).
@@ -267,7 +267,7 @@ public partial class PlannerPageView : UserControl
         Func<int?> getHoveredIndex, Action<int?> setHoveredIndex,
         Func<Border?> getHighlighted, Action<Border?> setHighlighted,
         Func<bool> isOpen, Action openViewModel, Action close, Action moveNext, Action movePrevious,
-        Action<string> select, Func<int?> getScrollIndex, Func<ObservableCollection<PlannerEndTimeOptionDto>?> getOptions)
+        Action<string> select, Func<int?> getScrollIndex, Func<ObservableCollection<PlannerEndTimeOption>?> getOptions)
     {
         void ScrollToWindow(int? centerIndex) => ScrollTimeDropdownToWindow(scrollViewer, list, isOpen, () => getOptions()?.Count ?? 0, getHighlighted, setHighlighted, centerIndex);
 
@@ -283,11 +283,11 @@ public partial class PlannerPageView : UserControl
                 if (options is not null && index is { } i && i < options.Count) select(options[i].TimeText);
                 else close();
             },
-            selectFromSource: source => { if (source.DataContext is PlannerEndTimeOptionDto dto) select(dto.TimeText); },
+            selectFromSource: source => { if (source.DataContext is PlannerEndTimeOption dto) select(dto.TimeText); },
             hoverFromSource: source =>
             {
                 var options = getOptions();
-                if (list is null || options is null || source.DataContext is not PlannerEndTimeOptionDto dto) return;
+                if (list is null || options is null || source.DataContext is not PlannerEndTimeOption dto) return;
                 var index = options.IndexOf(dto);
                 if (index < 0 || index == getHoveredIndex()) return;
                 setHoveredIndex(index);

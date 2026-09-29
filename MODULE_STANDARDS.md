@@ -66,6 +66,22 @@ Learned from the Gap 88 interrogation, where every one of these was a real mista
 
 ---
 
+## Guard Hierarchy (added 2026-09-29, Gap 98)
+
+Once a rule has its home, something must stop code from going around it. Use the strongest guard that can reach the rule:
+
+| Rank | Guard | When | Examples |
+|------|-------|------|----------|
+| 1 | **Compiler** — encapsulation, value objects, private fields: the wrong code can't be written | The rule has a natural owner (see Where a Rule Lives) | `TimeSlot` held by blocks and sessions (Gap 90) — no raw `Start`/`End` left to compare |
+| 2 | **Test** — architecture tests (`ArchitectureTests/`), parity tests: the wrong code fails `dotnet test` | The compiler can't reach it (SQL mirrors, the UI boundary where DTOs carry plain values), or the compiler step's gap isn't built yet | Only `SystemClock` reads the machine clock; repository SQL matches `FocusBlock.IsUnresolved` |
+| 3 | **Review** — Design Review Rules above | Judgment only: is the module deep, is this the right home | Deep Module test, Where a Rule Lives |
+
+**Every gap's plan answers:** *can the compiler own this rule? If not yet, which test guards it until then?* A test standing in for a later compiler step says so in its header and names the gap that retires it.
+
+**Don't over-apply rank 1:** a value object is earned by values that travel together *and* carry a rule — wrapping a primitive used once only adds a type (see Where a Rule Lives → Warning signs).
+
+---
+
 ## Layer Responsibilities
 
 ### Domain (`NenFocus.Domain`)
@@ -98,6 +114,7 @@ Learned from the Gap 88 interrogation, where every one of these was a real mista
 - Direct `new` of infrastructure types
 - EF Core, SQLite, Windows API references
 - UI framework types (`DispatcherTimer`, Avalonia types)
+- Reading the machine clock (`DateTime.UtcNow`/`Now`/`Today`) — here or in any layer. `ISystemClock` is the one source of "now"; only `SystemClock` reads the machine clock, because it carries the debug offset (added 2026-09-29, Gap 98)
 - `Math.Clamp`, `TimeSpan.ToString(format)`, progress-percentage arithmetic — these belong here only if they are domain rules; if they are purely for display, they belong in a converter
 
 **Forbidden (added 2026-08-21 — The Application Handler Forbidden Zone):**
@@ -156,14 +173,14 @@ A handler must not convert a fractional `double` (minutes, hours, or any unit de
 
 **Allowed:**
 - ViewModels (`ObservableObject`, `RelayCommand`)
-- Views (XAML + minimal code-behind for purely visual concerns)
+- Views (XAML + minimal code-behind for purely visual concerns). Code-behind may do **pixel geometry** (drag/resize positions — a converter can't, it needs pointer events), never a **business rule** (where a block may go, caps, snapping to allowed times, UTC↔local); those belong in the Domain (added 2026-09-29, Gap 98)
 - Value converters (XAML `IValueConverter` implementations)
 - Navigation callbacks passed as `Action` delegates
 
 **Forbidden (The ViewModel Forbidden Zone):**
 
 #### No Timers
-ViewModels must never own or start a timer of any kind (`DispatcherTimer`, `System.Timers.Timer`, `Task.Delay` loops).
+ViewModels must never own or start a timer of any kind (`DispatcherTimer`, `System.Timers.Timer`, `Task.Delay` loops). Neither may Views' code-behind (added 2026-09-29, Gap 98), so polling can't simply move there — visual effects use Avalonia's animations/transitions declared in XAML, not code timers. Guarded by `ViewModelRuleTests.NoUiCodeOwnsATimer`.
 
 > **Rule:** If a ViewModel needs to update a display value over time, it subscribes to a `Tick` event from a service that owns the timer.
 >
@@ -209,6 +226,8 @@ A ViewModel must not hold a constructor-injected `IQueryHandler<,>`/`ICommandHan
 ViewModels must never hold or navigate a Domain entity (`Session`, `BlockPreset`, etc.) directly.
 
 > **Rule:** Data flows from the Application layer through DTOs (`SessionDto`, `BlockPresetDto`, etc.). The ViewModel binds to DTOs and their properties.
+>
+> The same goes for Domain services and entity constants (added 2026-09-29, Gap 98): no UI code names `NenFocus.Domain.Entities` or `NenFocus.Domain.Services`. A limit like `FocusBlock.MaxDurationHours` reaches the UI through Application, not by reading the entity. Guarded by `ViewModelRuleTests.NoUiCodeUsesDomainEntitiesOrServices`.
 
 ---
 
@@ -218,7 +237,7 @@ Every new service must have its interface defined before any implementation is w
 
 **Checklist before creating a new interface:**
 - [ ] Can the interface be understood without reading any implementation?
-- [ ] Does it have 5 or fewer public members? (If more, consider splitting)
+- [ ] Does it have 5 or fewer public members? (If more, consider splitting.) `InterfaceSizeRuleTests` holds new interfaces to 5; an existing larger one is listed with its count and may not grow — adding a member means editing that count, a visible decision (added 2026-09-29, Gap 98). Repositories count too: an extra query method is usually a business rule moving into SQL.
 - [ ] Does it avoid leaking infrastructure types in its signature?
 - [ ] Is it named for *what it does*, not *how it does it*? (`IActiveSessionMonitor`, not `ITimerWrapper`)
 
@@ -226,7 +245,7 @@ Every new service must have its interface defined before any implementation is w
 
 ## Converter Catalogue
 
-These converters are approved. Reuse before creating new ones. **Registration is per-view, not centralized** (corrected 2026-08-18 — this table previously claimed all converters are "registered in `MainPageView.axaml`"; in practice only `TimeSpanConverter`/`DateTimeConverter` still are, and every converter added since (Planner, Nen Contract wizard) is registered as a resource in whichever `.axaml` view actually uses it, e.g. `ContractWizardView.axaml`, `RitualShellView.axaml`, `PlannerPageView.axaml`).
+These converters are approved. Reuse before creating new ones. **This list must match the code** — `ConverterCatalogueTests` fails when a converter is missing here or listed but gone (added 2026-09-29, Gap 98). **Registration is per-view, not centralized** (corrected 2026-08-18 — this table previously claimed all converters are "registered in `MainPageView.axaml`"; in practice only `TimeSpanConverter`/`DateTimeConverter` still are, and every converter added since (Planner, Nen Contract wizard) is registered as a resource in whichever `.axaml` view actually uses it, e.g. `ContractWizardView.axaml`, `RitualShellView.axaml`, `PlannerPageView.axaml`).
 
 | Converter | Key | Input → Output | Format Parameter |
 |-----------|-----|----------------|-----------------|
@@ -250,6 +269,18 @@ These converters are approved. Reuse before creating new ones. **Registration is
 | `BlockPresetTypeToForegroundConverter` | `Instance` | `BlockPresetType` → brush | None. Companion foreground color to `BlockPresetTypeToColorConverter`. |
 | `BlockPresetTypeToLabelConverter` | `Instance` | `BlockPresetType` → `string` | None. "Focus" / "Background". |
 | `StrictnessRuleToLabelConverter` | `Instance` | `StrictnessRule` → `string` | None. "Lockdown" / "Daily Flex" / "Period Study". |
+| `RedemptionPlacementPolicyToLabelConverter` | `Instance` | `RedemptionPlacementPolicy` → `string` | None. "Anywhere in the contract" / "Current day only". |
+| `FocusBlockOutcomeToLabelConverter` | `Instance` | `FocusBlockOutcome` → `string` | None. "MISSED" / "STARTED LATE" / "ENDED EARLY" / "COMPLETED ON TIME". |
+| `FocusBlockOutcomeToBrushConverter` | `Instance` | `FocusBlockOutcome` → brush | None. Missed red, late/early amber, on time green, else neutral grey — mirrors the Planner tile colours (`UI_UX_STANDARDS.md`). |
+| `EnumEqualConverter` | `Instance` | any enum (nullable) → `bool` | Enum member name. `true` when `value.ToString()` equals it — one converter for every enum-driven visibility. |
+| `DayFloorStatusHasBonusConverter` | `Instance` | `DayFloorPreviewViewModel?` → `bool` | None. Whether the Bonus pill shows; bound to the whole status so a null (no contract) is `false`, same null-safety as `DayFloorStatusToBrushConverter`. |
+| `DailyFloorToLabelConverter` | `Instance` | `double?` (hours) → `string` | None. "1.5h / day", or "Derived from scheduled blocks" when null. Also `FormatFloor(hours)`. |
+| `HoursToStringConverter` | `Instance` | `double` (hours) → `string` | None. "2.5h" — one decimal-hours figure (day badges, bonus pill). Also `FormatHours(hours)`. |
+| `MinutesToStringConverter` | `Instance` | `double`/`int` (minutes) → `string` | None. "1h 30m" / "1h" / "30 min" — never a pointless "0m". Also `FormatMinutes(minutes)`. |
+| `DurationLabelConverter` | `DurationLabelConverter` | `TimeSpan` → `string` | None. Parenthesized End-dropdown suffix: "(30 mins)", "(1 hr)", "(1.5 hrs)". A sibling of `DurationToStringConverter`, not a change to it (that one is shared with Post-Session). |
+| `PercentageToLabelConverter` | `Instance` | `double?` (fraction) → `string` | None. "50%" / "133%" (uncapped), "Rest" when null. Also `FormatPercentage(fraction)`. |
+
+**Static `Format…` entry points** (`FormatFloor`, `FormatHours`, `FormatMinutes`, `FormatPercentage`) let a ViewModel weave the same text into a composed string. Calling them from a ViewModel is still "No String Formatting" — the Gap 89 ViewModel audit decides what replaces it, together with the three static formatters that are named like converters but aren't (`DateRangeToLabelConverter`, `DateTimeRangeToLabelConverter`, `WorkHoursRangeToLabelConverter`).
 
 ---
 
@@ -260,14 +291,14 @@ These converters are approved. Reuse before creating new ones. **Registration is
 | Command | `<Verb><Noun>Command` | `StartSessionCommand` |
 | Command handler | `<Verb><Noun>CommandHandler` | `StartSessionCommandHandler` |
 | Command result | `<Verb><Noun>Result` | `StartSessionResult` |
-| Query | `Get<Noun>Query` / `Compute<Noun>Query` | `GetActiveSessionQuery` |
+| Query | `Get<Noun>Query` (fetch) / `Compute<Noun>Query` (derive) / `Check<Noun>Query` (yes/no question; `Check` added 2026-09-29, Gap 98) | `GetActiveSessionQuery`, `CheckNenContractDateRangeOverlapQuery` |
 | Interface | `I<Noun><Role>` | `ISessionStateService`, `IActiveSessionMonitor` |
-| DTO | `<Noun>Dto` | `SessionDto`, `PostSessionDto` |
+| DTO | `<Noun>Dto` — a read model the Application hands out; every `…Dto` lives in `Application/DTOs/`. That folder is the home for any data shape shared across the Application boundary, so it also holds a few non-DTOs named for what they are (command input `NenContractBlockSpec`, event payload `RitualRequirementChange`). A UI-only item is not a DTO and doesn't take the suffix | `SessionDto`, `PostSessionDto` |
 | Domain event | `<Noun><PastTense>Event` | `SessionStartedEvent`, `SessionEndedEvent` |
 | Value object | Noun only | `SessionGoal`, `BreakTimer` |
 | Domain service | Agent noun — names the role it plays (`-Engine`, `-Classifier`, `-Calculator`, `-Checker`, …); never `-Service`, which is reserved for Infrastructure and the Application↔UI bridges. Interface `I<Name>` in `Domain/Services/` | `PolicyEngine`, `FocusBlockOutcomeClassifier`, `BlockPlacementChecker` |
 | ViewModel | `<Page>ViewModel` | `MainPageViewModel`, `HatsuPageViewModel` |
-| Converter | `<Input>To<Output>Converter` | `TimeSpanToStringConverter` |
+| Converter | `<Input>To<Output>Converter` for a mapping; `<What>EqualConverter` / `<Subject>Has<X>Converter` for a yes/no test (added 2026-09-29, Gap 98 — the catalogue already listed `IntEqualConverter`). Every converter is listed in the Converter Catalogue above — a test fails otherwise | `TimeSpanToStringConverter`, `StringEqualConverter` |
 
 ---
 
@@ -284,6 +315,10 @@ UseCases/Sessions/StartSession/
 ```
 
 No shared base classes for commands or results. No `BaseCommand`. Copy the pattern, don't abstract it.
+
+**Query slices (added 2026-09-29, Gap 98):** every query lives in `Queries/<Name>/` with exactly one `…Query.cs` and one `…QueryHandler.cs`. A result type only this query produces may sit next to them; the moment another slice uses it, it moves to `DTOs/` — one shared definition, never a second copy. The UI reading the answer doesn't count as sharing; it's the reader the type was shaped for. Queries only read: a query handler whose answer commands save (e.g. `ComputeRedemptionAttribution`, used by Create/Update/Split block) is a business rule living in the wrong place — it belongs in the Domain.
+
+**Validators check form and ask, never own a rule (added 2026-09-29, Gap 98):** a validator checks the input's shape (required, in range, well-formed) and asks the Domain or a repository whether the change is allowed. It never holds its own copy of a business rule — two validators with the same formula are two sources of truth (see Gap 92 V9, Gap 93).
 
 **Validator location rule:** Validators are co-located inside the use-case folder — never in a top-level `Validators/` or `Application/Validators/` directory. The `AddValidatorsFromAssembly` scan in `DependencyInjection.cs` finds them automatically anywhere in the assembly.
 

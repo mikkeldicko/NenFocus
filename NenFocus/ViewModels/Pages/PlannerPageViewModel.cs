@@ -97,7 +97,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     public ObservableCollection<string> TimeOptions { get; } = new();
     // Regenerated from the current Start value (and Focus/Background type, for the 12h
     // cap) whenever either changes — see RegenerateEndTimeOptions.
-    public ObservableCollection<PlannerEndTimeOptionDto> EndTimeOptions { get; } = new();
+    public ObservableCollection<PlannerEndTimeOption> EndTimeOptions { get; } = new();
 
     // Start and End both use a custom TextBox + Popup + ItemsControl (not AutoCompleteBox) —
     // TimeOptions/EndTimeOptions are always bound in full (see above); typing/arrow-keys only
@@ -249,8 +249,8 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     // architect's explicit call: all four fields stay fully independent, no cross-block
     // coupling at all, with SplitWarningMessage (below) surfacing any resulting mismatch
     // instead of a dropdown silently narrowing what's selectable.
-    public ObservableCollection<PlannerEndTimeOptionDto> SplitFirstEndTimeOptions { get; } = new();
-    public ObservableCollection<PlannerEndTimeOptionDto> SplitSecondEndTimeOptions { get; } = new();
+    public ObservableCollection<PlannerEndTimeOption> SplitFirstEndTimeOptions { get; } = new();
+    public ObservableCollection<PlannerEndTimeOption> SplitSecondEndTimeOptions { get; } = new();
 
     // Live summary shown next to each block's header and the dialog's total — always
     // visible regardless of validity (the architect's explicit ask: don't make "everything
@@ -1132,7 +1132,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         return ResolveApproxTime(endText) is { } approxEnd ? PlannerTimeShiftMath.ResolvedDuration(start, approxEnd) : null;
     }
 
-    private void OpenDurationDropdown(Func<string> getStartText, Func<string> getEndText, ObservableCollection<PlannerEndTimeOptionDto> options, Action<bool> setOpen, Action<int?> setScrollIndex)
+    private void OpenDurationDropdown(Func<string> getStartText, Func<string> getEndText, ObservableCollection<PlannerEndTimeOption> options, Action<bool> setOpen, Action<int?> setScrollIndex)
     {
         setOpen(true);
         var durations = options.Select(o => o.Duration).ToList();
@@ -1141,7 +1141,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
             : null);
     }
 
-    private void MoveDurationNext(Func<string> getStartText, Func<string> getEndText, ObservableCollection<PlannerEndTimeOptionDto> options, Action<string> setEndText)
+    private void MoveDurationNext(Func<string> getStartText, Func<string> getEndText, ObservableCollection<PlannerEndTimeOption> options, Action<string> setEndText)
     {
         var durations = options.Select(o => o.Duration).ToList();
         if (durations.Count == 0) return;
@@ -1149,7 +1149,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         setEndText(options[PlannerTimeOptionLookup.IndexAfter(current, durations)].TimeText);
     }
 
-    private void MoveDurationPrevious(Func<string> getStartText, Func<string> getEndText, ObservableCollection<PlannerEndTimeOptionDto> options, Action<string> setEndText)
+    private void MoveDurationPrevious(Func<string> getStartText, Func<string> getEndText, ObservableCollection<PlannerEndTimeOption> options, Action<string> setEndText)
     {
         var durations = options.Select(o => o.Duration).ToList();
         if (durations.Count == 0) return;
@@ -1218,7 +1218,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
             if (IsDraftingContract && PlannerTimeShiftMath.EndRollsToNextDay(start, end))
                 break;
 
-            EndTimeOptions.Add(new PlannerEndTimeOptionDto($"{(int)end.TotalHours:D2}:{end.Minutes:D2}", offset));
+            EndTimeOptions.Add(new PlannerEndTimeOption($"{(int)end.TotalHours:D2}:{end.Minutes:D2}", offset));
         }
     }
 
@@ -1228,7 +1228,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     /// on IsDraftingContract) — the Split dialog's own stated rule is that both resulting
     /// pieces stay on the same day as the original block, unconditionally.
     /// </summary>
-    private void RegenerateSplitEndTimeOptions(string startText, ObservableCollection<PlannerEndTimeOptionDto> target)
+    private void RegenerateSplitEndTimeOptions(string startText, ObservableCollection<PlannerEndTimeOption> target)
     {
         target.Clear();
         if (!TryParseFormTime(startText, out var start)) return;
@@ -1239,7 +1239,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
             if (PlannerTimeShiftMath.EndRollsToNextDay(start, end))
                 break;
 
-            target.Add(new PlannerEndTimeOptionDto($"{(int)end.TotalHours:D2}:{end.Minutes:D2}", offset));
+            target.Add(new PlannerEndTimeOption($"{(int)end.TotalHours:D2}:{end.Minutes:D2}", offset));
         }
     }
 
