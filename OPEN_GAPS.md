@@ -715,6 +715,31 @@ public interface IBlockPlacementChecker
 
 \---
 
+### Gap 102 — Update Avalonia 11.0.10 → 11.3.x (raised 2026-09-29; direction agreed, not started; first in box 1, before the big UI gaps)
+
+**Why it's a gap:** the dependency scan's last finding is `Tmds.DBus.Protocol` 0.15.0 (CVE-2026-39959, high: a malicious peer on the same D-Bus can spoof signals or crash the app). It comes in through Avalonia 11.0.10's Linux-only parts (`Avalonia.Desktop` → `Avalonia.X11` → `Avalonia.FreeDesktop`). **Windows has no D-Bus, so the library is never loaded and the real risk on Windows is zero**, but the scan stays red until it's fixed, and a warning that's always there teaches everyone to ignore the scan. The two other flagged packages were fixed the same day (SQLite via EF Core 9.0.20, `System.Drawing.Common` pinned to 4.7.2).
+
+**Direction agreed 2026-09-29 (architect's choice: fix at the source, not pin):** update all five Avalonia packages (`Avalonia`, `.Desktop`, `.Diagnostics`, `.Fonts.Inter`, `.Themes.Fluent`) from 11.0.10 to the latest 11.3.x (11.3.22 when raised, which depends on `Tmds.DBus.Protocol` 0.21.3, the backported fix). That also brings three minor versions of UI bug fixes and keeps the app on a supported release. **Placed before Gaps 88/93/89** so their Planner rewrites are built and tested once, on the new version.
+
+**Plan:**
+1. Bump the five packages; build; fix compile errors and new warnings.
+2. Full test suite; dependency scan (`dotnet list NenFocus.slnx package --vulnerable --include-transitive`) fully clean, with no pin needed.
+3. **Manual click-through**, because tests don't see visual or interaction changes:
+   - Ritual overlay, all four steps
+   - Planner: create, drag, resize, the End dropdown, Split
+   - Contract wizard and its date pickers
+   - Block and Contract Preset pages
+   - Post-Session screen
+   - toasts
+   - **closing with X**: Gap 101's shutdown flow relies on Avalonia's `ShutdownRequested`/`e.Cancel` behaviour, so check the hosts file keeps a running block's sites after closing
+4. Commit only when the checklist passes.
+
+**Fallback:** if a real regression isn't quick to fix, revert the bump and pin `Tmds.DBus.Protocol` 0.21.3 directly instead (the same pattern as `System.Drawing.Common`). That pin is one line, changes nothing on Windows, and is the version Avalonia 11.3 itself ships with.
+
+**Still to check when starting:** the Avalonia 11.1–11.3 release notes for breaking changes that touch this app (compiled bindings defaults, `Window` and `ShutdownRequested` behaviour, `DatePicker`/`CalendarDatePicker` since Gap 66 plans to use them, pointer capture used by the Planner drag).
+
+\---
+
 ### Gap 99 — Moments vs Calendar Times as Types (raised 2026-09-29 during Gap 98; direction preferred, form not decided; decided at the start of Gap 88's interface review)
 
 **Why it's a gap:** one type, `DateTime`, means two different things — **a moment** (a point in time, stored UTC: when a session started) and **a calendar time** (what the user sees and types: 09:00 on their calendar). Nothing but discipline tells them apart, and it has cost three fixes already: Gap 65 (contract activation on UTC dates), Gap 87 (Cover Deficit local time), Gap 96 (spontaneous sessions on UTC days). Found while building Gap 98 rule 6: EF's storage converter (`NenFocusDbContext.UtcDateTimeConverter`) **silently converts** any non-UTC value on save, treating an unmarked one as local — a hidden second copy of the local→UTC rule that hides a mix-up instead of failing on it.
