@@ -31,7 +31,7 @@ public static class DependencyInjection
 
         // Singleton: stateless, and called by ActiveSessionMonitor (a singleton); its only
         // dependencies are singletons too (Gap 63).
-        services.AddSingleton<IBreakTransitionHandler, BreakTransitionHandler>();
+        services.AddSingleton<IBreakTransitionResponder, BreakTransitionResponder>();
 
         // Singleton: pure wording over the (singleton) toaster; the one door to it.
         services.AddSingleton<INotifier, Notifier>();

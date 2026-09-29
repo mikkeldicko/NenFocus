@@ -44,12 +44,4 @@ public class SessionDurationTests
 
         duration.Value.Should().Be(new TimeSpan(1, 30, 0));
     }
-
-    [Fact]
-    public void ToString_FormatsAsHoursColonMinutes()
-    {
-        var duration = SessionDuration.FromHoursAndMinutes(2, 5);
-
-        duration.ToString().Should().Be("02:05");
-    }
 }

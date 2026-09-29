@@ -189,7 +189,7 @@ Full merge rules and current behavior — see `DOMAIN_DICTIONARY.md`'s "Policy S
 
 - **FocusBlock update**: There is no `FocusBlock.Update()` method — `UpdatePlannedBlockCommand` uses delete + recreate.
 - **Hosts file markers**: must be exactly `# NEN_FOCUS_START` and `# NEN_FOCUS_END` (case-sensitive, underscores). Any deviation causes duplicate entries on next write.
-- (removed in Gap 84 — the unused `ScheduleBreakReminderAsync` family was deleted) **Break reminders**: breaks are announced by `BreakTransitionHandler` from the session's `BreakSchedule` (Gap 63).
+- (removed in Gap 84 — the unused `ScheduleBreakReminderAsync` family was deleted) **Break reminders**: breaks are announced by `BreakTransitionResponder` from the session's `BreakSchedule` (Gap 63).
 - **No index on `PlannedBlocks.Start`/`End`**: confirmed 2026-07-15 while sizing the Recurring Blocks materialization horizon (see `ARCHITECT_GOVERNANCE.md` → Open Gap E) — every range query (`GetForDayAsync`, `GetForRangeAsync`, `GetOverlappingAsync`, etc.) is currently a full table scan. Not a problem at current or foreseeable single-user scale; worth adding an index on `(Start, End)` before row counts climb into the tens of thousands, independent of any specific feature.
 - **Two time frames — never compare across them.** Stored times (`PlannedBlock.Start`/`End`, session times, `AsOf` arguments) are UTC; contract days, Work Hours and "today" are the user's local wall clock (Gap 65). A handler that decides in local time converts in once with `ISystemClock.ToLocal` and back once with `ISystemClock.ToUtc`, never `ToLocalTime()`/`ToUniversalTime()` directly (untestable). Gap 87 was a handler comparing UTC "now" with a local Work Hours close.
 

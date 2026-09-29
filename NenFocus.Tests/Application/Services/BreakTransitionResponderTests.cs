@@ -7,14 +7,14 @@ using NSubstitute;
 
 namespace NenFocus.Tests.Application.Services;
 
-public class BreakTransitionHandlerTests
+public class BreakTransitionResponderTests
 {
     private static readonly DateTime At = new(2026, 1, 1, 17, 25, 0, DateTimeKind.Utc);
 
     private readonly IEnforcementSynchronizer _synchronizer = Substitute.For<IEnforcementSynchronizer>();
     private readonly INotifier _notifier = Substitute.For<INotifier>();
 
-    private BreakTransitionHandler CreateHandler() => new(_synchronizer, _notifier);
+    private BreakTransitionResponder CreateResponder() => new(_synchronizer, _notifier);
 
     private static BreakTransition Started(SessionPhaseKind kind = SessionPhaseKind.ShortBreak) =>
         new(BreakTransitionKind.Started, kind, TimeSpan.FromMinutes(25));
@@ -23,9 +23,9 @@ public class BreakTransitionHandlerTests
         new(BreakTransitionKind.Ended, SessionPhaseKind.ShortBreak, TimeSpan.FromMinutes(30));
 
     [Fact]
-    public async Task HandleAsync_BreakStarted_SyncsEnforcementThenReportsBreakStarted()
+    public async Task RespondAsync_BreakStarted_SyncsEnforcementThenReportsBreakStarted()
     {
-        await CreateHandler().HandleAsync([Started()], At, keepBlockingDuringBreaks: false);
+        await CreateResponder().RespondAsync([Started()], At, keepBlockingDuringBreaks: false);
 
         Received.InOrder(() =>
         {
@@ -35,37 +35,37 @@ public class BreakTransitionHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_LongBreakStarted_ReportsLongBreak()
+    public async Task RespondAsync_LongBreakStarted_ReportsLongBreak()
     {
-        await CreateHandler().HandleAsync([Started(SessionPhaseKind.LongBreak)], At, keepBlockingDuringBreaks: false);
+        await CreateResponder().RespondAsync([Started(SessionPhaseKind.LongBreak)], At, keepBlockingDuringBreaks: false);
 
         await _notifier.Received(1).NotifyAsync(
             new BreakStarted(IsLong: true, KeepsBlocking: false), Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task HandleAsync_BreakStarted_KeepBlocking_ReportsItKeepsBlocking()
+    public async Task RespondAsync_BreakStarted_KeepBlocking_ReportsItKeepsBlocking()
     {
-        await CreateHandler().HandleAsync([Started()], At, keepBlockingDuringBreaks: true);
+        await CreateResponder().RespondAsync([Started()], At, keepBlockingDuringBreaks: true);
 
         await _notifier.Received(1).NotifyAsync(
             new BreakStarted(IsLong: false, KeepsBlocking: true), Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task HandleAsync_BreakEnded_SyncsAndReportsBreakEnded()
+    public async Task RespondAsync_BreakEnded_SyncsAndReportsBreakEnded()
     {
-        await CreateHandler().HandleAsync([Ended()], At, keepBlockingDuringBreaks: false);
+        await CreateResponder().RespondAsync([Ended()], At, keepBlockingDuringBreaks: false);
 
         await _synchronizer.Received(1).SyncAsync(At, Arg.Any<CancellationToken>());
         await _notifier.Received(1).NotifyAsync(new BreakEnded(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task HandleAsync_WholeBreakCrossedAtOnce_SyncsOnceAndOnlyAnnouncesWhereTheSessionIsNow()
+    public async Task RespondAsync_WholeBreakCrossedAtOnce_SyncsOnceAndOnlyAnnouncesWhereTheSessionIsNow()
     {
         // Laptop slept through the entire break: "Break time" would be stale.
-        await CreateHandler().HandleAsync([Started(), Ended()], At, keepBlockingDuringBreaks: false);
+        await CreateResponder().RespondAsync([Started(), Ended()], At, keepBlockingDuringBreaks: false);
 
         await _synchronizer.Received(1).SyncAsync(At, Arg.Any<CancellationToken>());
         await _notifier.Received(1).NotifyAsync(Arg.Any<NenNotification>(), Arg.Any<CancellationToken>());
@@ -73,9 +73,9 @@ public class BreakTransitionHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_NoTransitions_DoesNothing()
+    public async Task RespondAsync_NoTransitions_DoesNothing()
     {
-        await CreateHandler().HandleAsync([], At, keepBlockingDuringBreaks: false);
+        await CreateResponder().RespondAsync([], At, keepBlockingDuringBreaks: false);
 
         await _synchronizer.DidNotReceiveWithAnyArgs().SyncAsync(default);
         await _notifier.DidNotReceiveWithAnyArgs().NotifyAsync(default!);

@@ -82,7 +82,7 @@ Dependencies only flow inward: UI → Application ← Infrastructure → Domain.
 * **MVVM**: CommunityToolkit.Mvvm (`ObservableObject`, `RelayCommand`). ViewModels never reference Views.
 * **Value objects**: `record` types with validation in the constructor — `SessionGoal`, `SessionDuration`, `BreakTimer`, `BlockedApp`, `BlockedSite`.
 * **Vertical Slice Architecture**: Every use case lives in its own feature folder (e.g., `UseCases/Sessions/StartSession/`) containing exactly four files: `Command`, `CommandHandler`, `Result`, `Validator`. Validators are auto-registered via `AddValidatorsFromAssembly`.
-* **Enforcement pipeline**: `ScheduledEnforcementService` (heartbeat, 5s interval), the session event handlers and `BreakTransitionHandler` (break boundaries, reported by `ActiveSessionMonitor`) → `IEnforcementSynchronizer` (sole caller that turns policy into an apply/remove) → `ComputeActivePolicySliceQueryHandler` / `PolicyEngine` (what should be blocked) → `WindowsEnforcementService` (kills processes, rewrites hosts file, exposes local HTTP API).
+* **Enforcement pipeline**: `ScheduledEnforcementService` (heartbeat, 5s interval), the session event handlers and `BreakTransitionResponder` (break boundaries, reported by `ActiveSessionMonitor`) → `IEnforcementSynchronizer` (sole caller that turns policy into an apply/remove) → `ComputeActivePolicySliceQueryHandler` / `PolicyEngine` (what should be blocked) → `WindowsEnforcementService` (kills processes, rewrites hosts file, exposes local HTTP API).
 
 \---
 

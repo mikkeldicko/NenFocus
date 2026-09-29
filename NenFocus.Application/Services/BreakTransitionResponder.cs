@@ -11,18 +11,18 @@ namespace NenFocus.Application.Services;
 /// (Gap 63). PolicyEngine already reads the schedule, so SyncAsync alone decides what a
 /// break lifts; this only makes that happen now rather than on the next heartbeat.
 /// </summary>
-public sealed class BreakTransitionHandler : IBreakTransitionHandler
+public sealed class BreakTransitionResponder : IBreakTransitionResponder
 {
     private readonly IEnforcementSynchronizer _synchronizer;
     private readonly INotifier _notifier;
 
-    public BreakTransitionHandler(IEnforcementSynchronizer synchronizer, INotifier notifier)
+    public BreakTransitionResponder(IEnforcementSynchronizer synchronizer, INotifier notifier)
     {
         _synchronizer = synchronizer;
         _notifier = notifier;
     }
 
-    public async Task HandleAsync(
+    public async Task RespondAsync(
         IReadOnlyList<BreakTransition> transitions, DateTime at, bool keepBlockingDuringBreaks, CancellationToken ct = default)
     {
         if (transitions.Count == 0) return;

@@ -1,7 +1,7 @@
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
 
-namespace NenFocus.Domain.Services;
+namespace NenFocus.Domain.ValueObjects;
 
 public sealed record ContractBlockBatchPreparation
 {

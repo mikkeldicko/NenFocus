@@ -17,6 +17,4 @@ public record SessionDuration
 
     public static SessionDuration FromHoursAndMinutes(int hours, int minutes)
         => new SessionDuration(new TimeSpan(hours, minutes, 0));
-
-    public override string ToString() => Value.ToString(@"hh\:mm");
 }

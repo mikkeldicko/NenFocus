@@ -9,7 +9,7 @@ namespace NenFocus.Application.Interfaces;
 /// more if the clock jumped (sleep, a restart). keepBlockingDuringBreaks is the session's own
 /// contract rule (Gap 64), so the user is told when a break won't lift blocking.
 /// </summary>
-public interface IBreakTransitionHandler
+public interface IBreakTransitionResponder
 {
-    Task HandleAsync(IReadOnlyList<BreakTransition> transitions, DateTime at, bool keepBlockingDuringBreaks, CancellationToken ct = default);
+    Task RespondAsync(IReadOnlyList<BreakTransition> transitions, DateTime at, bool keepBlockingDuringBreaks, CancellationToken ct = default);
 }

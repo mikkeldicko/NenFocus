@@ -1,3 +1,4 @@
+using NenFocus.Domain.ValueObjects;
 using NenFocus.Domain.Entities;
 
 namespace NenFocus.Domain.Services;

@@ -15,13 +15,13 @@ namespace NenFocus.Infrastructure.Services;
 /// against the clock, so nothing can get stuck or drift — a missed tick, sleep or a
 /// clock jump is simply re-read on the next one. Its only memory is a cursor ("when did
 /// I last look") so it can ask which break boundaries were crossed since, and hand
-/// those to IBreakTransitionHandler.
+/// those to IBreakTransitionResponder.
 /// </summary>
 public sealed class ActiveSessionMonitor : IActiveSessionMonitor, IDisposable
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ISystemClock _clock;
-    private readonly IBreakTransitionHandler _breakTransitions;
+    private readonly IBreakTransitionResponder _breakTransitions;
     private readonly ILogger<ActiveSessionMonitor> _logger;
     private readonly object _gate = new();
     private System.Timers.Timer? _timer;
@@ -49,7 +49,7 @@ public sealed class ActiveSessionMonitor : IActiveSessionMonitor, IDisposable
 
     public ActiveSessionMonitor(
         ISessionStateService sessionState, IServiceScopeFactory scopeFactory, ISystemClock clock,
-        IBreakTransitionHandler breakTransitions, ILogger<ActiveSessionMonitor> logger)
+        IBreakTransitionResponder breakTransitions, ILogger<ActiveSessionMonitor> logger)
     {
         _scopeFactory = scopeFactory;
         _clock = clock;
@@ -205,7 +205,7 @@ public sealed class ActiveSessionMonitor : IActiveSessionMonitor, IDisposable
     {
         try
         {
-            await _breakTransitions.HandleAsync(transitions, at, keepBlockingDuringBreaks);
+            await _breakTransitions.RespondAsync(transitions, at, keepBlockingDuringBreaks);
         }
         catch (Exception ex)
         {

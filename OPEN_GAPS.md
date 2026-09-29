@@ -556,14 +556,14 @@ public interface IBlockPlacementChecker
 | V4 | `WorkHours.ContainsRange` vs `ContractDay.Contains` | Two "fits the window" rules; `ContainsRange`'s only caller is `PlannerPageViewModel` drafting | → Gap 88 phase 4 (#10) |
 | V5 | `ContractDay` window, `WorkHours`, `ChangeWindow` | `Start`+`End` travelling together again, but **local** times — Gap 88 made `TimeSlot` UTC-only | **Decision needed** in Gap 88/90: local windows as they are, or a local counterpart |
 | V6 | `DailyFloor` | `GetNenContractsForDateRange` builds throwaway floors to fake an ad-hoc floor the Domain doesn't know | → Gap 95 #3 |
-| V7 | `SessionDuration.ToString()` | `hh\:mm` display formatting inside the Domain | Open — move to a converter |
+| V7 | `SessionDuration.ToString()` | `hh\:mm` display formatting inside the Domain | **Deleted 2026-09-29** — only its own test used it, so nothing to move |
 | V8 | `RedemptionEntry.MinutesCovered` (`double`) | Fractional minutes flowing into a saved timestamp | → Gap 88 (`TimeSlot.Covering`) |
 | S2 | `FocusBlockOutcomeClassifier` | Four jobs; `Classify(block, asOf)` is a single-entity question, yet `MODULE_STANDARDS.md` names this class as its example domain service — the standard contradicts itself | → Gap 95 #6; fix the example when resolved |
-| S3 | `PlannedBlockResolutionExtensions.IsResolved` | Single-block question as an extension in `Services/`, taking the classifier | Open — onto `PlannedBlock` once `Classify` moves onto the block |
+| S3 | `PlannedBlockResolutionExtensions.IsResolved` | Single-block question as an extension in `Services/`, taking the classifier | Open — not standalone: waits for `Classify` to move onto the block (Gap 95); moving it first would give the entity a classifier dependency |
 | S4 | `PlannedFocusHoursCalculator` (+ interface + DI) | A registered service around ~5 lines; misnamed — also sums *credited* hours (completed/Bonus queries) | → after Gap 88: `TimeSlot.SplitByDay` + a sum |
 | S5 | `DayRangeSplitter` | Static class in `Services/` | → Gap 88 (onto `TimeSlot`) |
-| S6 | `ContractBlockBatchPreparation` | Result type in `Services/`, not `ValueObjects/` | Open — move (Design Review Rule 6/7) |
-| A2 | `BreakTransitionHandler` | Not a CQRS handler but named like one | Open — rename (e.g. `BreakTransitionAnnouncer`) |
+| S6 | `ContractBlockBatchPreparation` | Result type in `Services/`, not `ValueObjects/` | **Moved 2026-09-29** to `ValueObjects/` |
+| A2 | `BreakTransitionHandler` | Not a CQRS handler but named like one | **Renamed 2026-09-29** to `BreakTransitionResponder` (`RespondAsync`) — it syncs enforcement *and* notifies, so "Announcer" would have undersold it |
 | A3 | `ISessionStateService` — 15 members | Three jobs: active session, Ritual prompt, post-session/post-contract relays | Open — split; with Gap 89 area 4 |
 | A4 | `IActiveSessionMonitor` — 10 members | Over the checklist; possibly fine as a UI read model — decide deliberately | Open |
 | A5 | `DOMAIN_DICTIONARY.md` Deep Module table | Member counts out of date | **Fixed 2026-09-29** |
