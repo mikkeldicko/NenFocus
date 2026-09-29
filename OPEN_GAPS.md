@@ -651,4 +651,20 @@ public interface IBlockPlacementChecker
    - No ViewModel uses `NenFocus.Domain.Entities` — exception: `PlannerEndTimeOptions`.
 3. **Made true by a gap → that gap's last step** (the box rule in `ARCHITECT_GOVERNANCE.md`): e.g. after Gap 88, nothing but `BlockPlacementChecker` decides placement / no `ritualOnly`; after Gap 93, no ViewModel computes edit permissions; after Gap 90, no public `PlannedBlock.Start`/`End` comparisons.
 
+**What a test can and can't check (agreed 2026-09-29):** tests catch *structural* drift; *judgment* stays a review job (Design Review Rules, "check the plan against the standards **and the code**"). Tests make the review smaller, not unnecessary.
+
+| `MODULE_STANDARDS.md` section | Testable? | How |
+|---|---|---|
+| Layer rules (Domain references nothing; UI → Application ← Infrastructure) | ✅ | dependency rules on compiled assemblies |
+| Domain forbidden (no async, no `DateTime.UtcNow`) | ✅ | type and source scan |
+| ViewModel Forbidden Zone — no repositories, handlers, Domain entities, timers | ✅ mostly | dependency rules (`CompositionRootTests` already guards one) |
+| ViewModel — no math, no formatting | ⚠️ partly | ban specific calls (`Math.Clamp`, `ToString("…")`, `ToLocalTime()`); can't spot all arithmetic |
+| Vertical slices (four files, validator in its folder, `ICommand<T>`) | ✅ | naming/folder rules |
+| Naming conventions (`…Query`, `…CommandHandler`, Domain services not `…Service`) | ✅ | name rules per folder/type |
+| Interface-first, ≤ 5 members | ✅ as a number | count public members — flags big interfaces, can't judge whether the size is justified |
+| Deep Module ("30 seconds", small interface hiding a lot) | ❌ | needs judgment |
+| Where a Rule Lives (entity / value object / service) | ❌ | a design decision — tests only enforce its consequences afterwards |
+| One source of truth | ⚠️ indirectly | (1) ban the known wrong way once a right way exists (e.g. no `ritualOnly`, no raw `.Start`/`.End` on blocks outside `TimeSlot` after Gap 88 — the compiler takes over after Gap 90); (2) parity tests where a copy must exist (SQL mirrors of `IsUnresolved`, `IsInEffect`); (3) per-gap behaviour tests pinning the same answer in two places (preview vs save) |
+| Rounding rule | ⚠️ partly | a regression test per case (like Gap 33's), not a general check |
+
 **Still to interrogate:** tooling — a library (e.g. NetArchTest, dependency and naming rules on compiled types) vs plain source-scanning tests (can see calls like `ToLocalTime()`, which type rules can't); where the exceptions lists live (in the test, next to the rule); which further "already holds" rules are worth locking in (e.g. Domain references no Application/Infrastructure, validators live in their use-case folder, commands implement `ICommand<T>`).
