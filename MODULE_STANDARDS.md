@@ -223,6 +223,8 @@ A ViewModel must not hold a constructor-injected `IQueryHandler<,>`/`ICommandHan
 > **Canonical example:** `PlannerPageViewModel` used to take 18 individually-injected handlers; it now takes exactly `IQueryDispatcher queryDispatcher, ICommandDispatcher commandDispatcher`.
 >
 > **Regression guard:** `CompositionRootTests.AddInfrastructure_ShellViewModel_ResolvesFromRootProviderLikeAppAxamlDoes` resolves `ShellViewModel` the same way `App.axaml.cs` does, under `ValidateScopes: true` — it fails immediately if this rule is ever violated anywhere in the ViewModel tree.
+>
+> **Widened to Infrastructure (2026-09-29, Gap 98 / Gap 89 Pass 2):** outside Application, a use case runs *only* through the dispatchers — no UI type or Infrastructure service holds a handler, or fetches one from the container by hand (`GetRequiredService<ICommandHandler<…>>`). The dispatcher is the one door that creates the scope; long-lived services (heartbeats, monitors) are exactly the ones that must not hold one. Exempt by role: the dispatchers themselves, Infrastructure's `DependencyInjection.cs` (it wraps every handler in validation and a transaction), handler wrappers, the composition root. Application code keeps depending on handlers directly. Guarded by `DispatcherRuleTests`.
 
 #### No Domain Entity References
 ViewModels must never hold or navigate a Domain entity (`Session`, `BlockPreset`, etc.) directly.
@@ -295,7 +297,7 @@ These converters are approved. Reuse before creating new ones. **This list must 
 | Command result | `<Verb><Noun>Result` | `StartSessionResult` |
 | Query | `Get<Noun>Query` (fetch) / `Compute<Noun>Query` (derive) / `Check<Noun>Query` (yes/no question; `Check` added 2026-09-29, Gap 98) | `GetActiveSessionQuery`, `CheckNenContractDateRangeOverlapQuery` |
 | Interface | `I<Noun><Role>` | `ISessionStateService`, `IActiveSessionMonitor` |
-| DTO | `<Noun>Dto` — a read model the Application hands out; every `…Dto` lives in `Application/DTOs/`. That folder is the home for any data shape shared across the Application boundary, so it also holds a few non-DTOs named for what they are (command input `NenContractBlockSpec`, event payload `RitualRequirementChange`). A UI-only item is not a DTO and doesn't take the suffix | `SessionDto`, `PostSessionDto` |
+| DTO | `<Noun>Dto` — a read model the Application hands out; every `…Dto` lives in `Application/DTOs/`. That folder is the home for any data shape shared across the Application boundary, so it also holds a few non-DTOs named for what they are (command input `NenContractBlockSpec`, event payload `RitualRequirementChange`). A UI-only item is not a DTO and doesn't take the suffix. **One builder per DTO** (added 2026-09-29): "what the UI sees of this entity" is a rule, so each DTO is built in one production file; a DTO needed by several use cases gets a named factory on itself (`SessionDto.From(…)`, like the existing `SessionDto.MapBreaks`) that they call — guarded by `DtoBuilderRuleTests` | `SessionDto`, `PostSessionDto` |
 | Domain event | `<Noun><PastTense>Event` | `SessionStartedEvent`, `SessionEndedEvent` |
 | Value object | Noun only | `SessionGoal`, `BreakTimer` |
 | Domain service | Agent noun — names the role it plays (`-Engine`, `-Classifier`, `-Calculator`, `-Checker`, …); never `-Service`, which is reserved for Infrastructure and the Application↔UI bridges. Interface `I<Name>` in `Domain/Services/` | `PolicyEngine`, `FocusBlockOutcomeClassifier`, `BlockPlacementChecker` |

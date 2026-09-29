@@ -35,20 +35,7 @@ public class ViewModelRuleTests
         KnownExceptions.Check(violations, []);
     }
 
-    /// <summary>ViewModels take IQueryDispatcher/ICommandDispatcher, never a handler — a handler held by a
-    /// root-resolved ViewModel shares one DbContext for the app's lifetime (Gap 40).</summary>
-    [Fact]
-    public void NoViewModelHoldsAHandler()
-    {
-        var violations = UiTypes()
-            .SelectMany(t => TypesUsedBy(t)
-                .Where(u => u.IsGenericType
-                            && u.GetGenericTypeDefinition() is var d
-                            && (d == typeof(IQueryHandler<,>) || d == typeof(ICommandHandler<,>)))
-                .Select(u => $"{t.FullName} → {u.Name}"));
-
-        KnownExceptions.Check(violations, []);
-    }
+    // "No handlers" lives in DispatcherRuleTests — one rule for the UI and Infrastructure alike.
 
     private static readonly System.Text.RegularExpressions.Regex DomainEntityOrServiceUse = new(@"\bDomain\s*\.\s*(Entities|Services)\b");
 

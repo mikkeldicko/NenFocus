@@ -426,6 +426,8 @@ After Gap 65, extending means appending Contract Days generated with `ContractCa
 
 **Last step:** Gap 88's typed-reasons test has an empty exceptions list — every validator returns typed reasons.
 
+**Also found (Gap 89 Pass 2, F5):** a missing block preset's name falls back to `"Unknown Preset"`, `"Unknown"` or `""` depending on which of three code paths built the session — wording drift a single home removes.
+
 **Still to interrogate:** the typed-reason shape (one result type per use case, or one shared refusal type); where desktop wording lives (a `Notifier`-like Application service vs `.resx` resources vs both); whether XAML labels move in this gap or only when translation arrives.
 
 \---
@@ -525,7 +527,7 @@ public interface IBlockPlacementChecker
 
 \---
 
-### Gap 89 — Architecture Audit, Areas 2–5 (raised 2026-09-28; not started)
+### Gap 89 — Architecture Audit, Areas 2–5 (raised 2026-09-28; areas 3 and 4 read 2026-09-29 in Pass 2, findings F1–F6 below; area 2 partly via Gap 98)
 
 **Why it's a gap:** the 2026-09-28 audit for multiple sources of truth, shallow modules and DDD drift finished area 1 (Application code re-deriving block facts — Gaps 85, 86, 87, the area-1 cleanups, and Gap 88). Four areas were identified but not audited yet. Same method as area 1: a written list of findings (file:line, why it matters, suggested fix) first; nothing changed without sign-off.
 
@@ -550,7 +552,12 @@ public interface IBlockPlacementChecker
    - **`PlannerPageViewModel` owns a 3 s timer** (`_floorStatusPollTimer`) that re-queries every contract so today's badge counts up during a session — Gap 98 rule 8's only exception. First consumer of "the heartbeat announces what changed"; it only needs to refresh while a session runs.
    - **`PlannerClockService` is designed to tick every 60 s but really fires about every second**: it also forwards `IDebugClockController.Changed`, which `SystemClock`'s always-on 1 s ambient ticker raises. Harmless for the now-line today, but it rules the service out as a trigger for anything heavier (e.g. the badge poll) and hides the real cadence.
    - Rejected for the badge poll meanwhile: subscribing to `PlannerClockService.Tick` (a database query per second), or to `IActiveSessionMonitor.Tick` with a throttle in the ViewModel (tick counting is timer logic back in the ViewModel); a new service for this one caller (Design Review Rule 3).
-4. **Active session in memory vs the database** — `ISessionStateService` keeps its own copy; the Ritual query deliberately checks the database. Confirm which is the truth for each question.
+   - **F4 (read 2026-09-29, Pass 2):** `NenContractHeartbeatService` calls `SweepNenContractLifecycleCommand()` with no `AsOf` — it reads its own clock, the race Gap 21 fixed for missed blocks — and its order relative to the enforcement heartbeat is undefined. The enforcement heartbeat does it right: one `now` for sweep, sync, markers and the Ritual query. Both heartbeats, `ActiveSessionMonitor` and `SessionStateService` also fetch handlers from the container by hand instead of dispatching — not a bug (they get the same wrapped handler), but on Gap 98's dispatcher rule list (`DispatcherRuleTests`); switching costs one scope per call instead of one per tick, which also reads fresh after a save.
+4. **Active session in memory vs the database** — `ISessionStateService` keeps its own copy; the Ritual query deliberately checks the database. Confirm which is the truth for each question. **Read 2026-09-29 (Pass 2) — findings:**
+   - **F1 — three copies of "Session → `SessionDto`", already drifted.** `StartSessionCommandHandler:147` sets `Origin` and `OriginatingBlockId`; the restart path `SessionStateService.InitializeAsync` (`MapToDto`, line 131) sets **neither**; `GetActiveSessionQueryHandler:32` sets `EndedAt` but not `BlockPresetId`. Fix: one factory on the DTO (`SessionDto.From(session, presetName)`, beside `MapBreaks`) — guarded by Gap 98's `DtoBuilderRuleTests` ("SessionDto built in 3 files").
+   - **F2 — consequence of F1 (→ Gap 93):** after an app restart during a planned session, `ActiveSession.OriginatingBlockId` is empty, so the Planner stops locking the running block's tile (`PlannerPageViewModel` lines 675–713, 1471, 2009 — Save, Delete, Split, drag). Delete is still refused by the backend (its validator asks the database); **Update only checks whether the start moved, so changing the running block's end may get through — suspected, verify with a real run.**
+   - **F3 — `GetActiveSessionQuery` is dead code:** nothing calls it, and it is a third, different copy of F1's mapping. Delete, or make it *the* rehydration path `SessionStateService` dispatches — which answers this area's question ("the database is the truth at startup").
+   - **F5 (→ Gap 100):** a missing preset's name has three fallbacks — `"Unknown Preset"`, `"Unknown"`, `""` — one per F1 copy.
 5. **Nen Contract queries** (deficits, completed hours, bonus hours, recap) — historically the most bug-prone area (Gaps 22, 24, 29, 33 were all "two calculations of one number"); includes whether credited minutes can read the block's stamps now that `SessionEndedAt` is a faithful copy (Gap 86). **Investigated 2026-09-29 — findings in Gap 95** (they can: `RitualCompletedAt` equals `Session.StartedAt`).
 
 \---
@@ -635,6 +642,8 @@ public interface IBlockPlacementChecker
 
 **Finding (Gap 98, 2026-09-29):** the floor-protection messages are written three times — "This would drop {date}'s total below its {floor}h daily floor." twice in `UpdatePlannedBlockValidator` and once in `SplitPlannedBlockValidator`, and "…the contract's total planned hours below its {floor}h…" in both. Same guard, same wording, three copies; a typed reason (`BelowDailyFloor { Day, FloorHours }`) with wording built once removes them.
 
+**Finding F2 (Gap 89 Pass 2, 2026-09-29) — suspected live bug, to verify:** after an app restart during a planned session, the Planner's "is this the running block" checks read `ActiveSession.OriginatingBlockId`, which the restart path never fills (Gap 89 area 4, F1) — so the running block's tile is unlocked. Delete is still refused (its validator asks the database); Update's validator only checks whether the start moved, so changing the running block's **end** may get through. The permission answer this gap builds should come from the database or the block DTO, never from the in-memory session copy.
+
 \---
 
 ### Gap 95 — One Source for Focus Hours (raised 2026-09-29 from a one-source investigation; findings recorded, not interrogated; before Gap 67)
@@ -649,6 +658,7 @@ public interface IBlockPlacementChecker
 5. **A missed block's deficit computed twice** — `GetNenContractsForDateRange` recomputes it without the deficits query's "outcome is final only once the session has ended" rule (Redemption Rule 18).
 6. **Service shape** — `FocusBlockOutcomeClassifier` has four jobs (late start, outcome, credited minutes, credited window); `Classify(block, asOf)` is a single-entity question (the "Where a Rule Lives" warning sign), yet `MODULE_STANDARDS.md` names this class as its example domain service. For Gap 92.
 7. **For Gap 67** — completed hours also count spontaneous sessions on the contract's Focus presets; Bonus hours don't. Gap 67 changes exactly this, decided today inside one handler's loop.
+8. **Seen again in Gap 89 Pass 2 (F6, 2026-09-29):** `PostSessionDto` is built in three handlers (`EndSession`, `MarkFocusBlockMissed`, `GetUnacknowledgedPostSessions`); all ask `FocusBlockOutcomeClassifier.CreditedFocusMinutes`, but each assembles its inputs. On Gap 98's `DtoBuilderRuleTests` list ("PostSessionDto built in 3 files") — this gap's one source for credited minutes should give it one builder.
 
 **Direction (for interrogation, not decided):** the block answers "how much did I earn" from its own stamps; the contract answers "is this block mine, Bonus, or neither" and "what does this day owe" (including whether an ad-hoc target is real); one per-day read model on top, used by the badge, banner, recap, readiness and the floor guards alike.
 
