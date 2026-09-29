@@ -51,19 +51,19 @@ public sealed class NenContractRepository : INenContractRepository
         Guid contractPresetId,
         CancellationToken cancellationToken = default)
     {
-        // Mirrors NenContract.IsInEffect exactly.
-        return await _context.NenContracts
+        // Fetch, and the entity decides (MODULE_STANDARDS → Repositories): contracts are few,
+        // so there is no SQL copy of IsInEffect to drift (Gap 101).
+        var contracts = await _context.NenContracts
             .Where(c => c.ContractPresetId == contractPresetId)
-            .Where(c => c.Status == NenContractStatus.Scheduled || c.Status == NenContractStatus.Active)
-            .AnyAsync(cancellationToken);
+            .ToListAsync(cancellationToken);
+        return contracts.Any(c => c.IsInEffect);
     }
 
     public async Task<IReadOnlyList<NenContract>> GetAllInEffectAsync(CancellationToken cancellationToken = default)
     {
-        // Mirrors NenContract.IsInEffect exactly.
-        return await _context.NenContracts
-            .Where(c => c.Status == NenContractStatus.Scheduled || c.Status == NenContractStatus.Active)
-            .ToListAsync(cancellationToken);
+        // Fetch, and the entity decides — see above.
+        var contracts = await _context.NenContracts.ToListAsync(cancellationToken);
+        return contracts.Where(c => c.IsInEffect).ToList();
     }
 
     public async Task<IReadOnlyList<NenContract>> GetAllAsync(CancellationToken cancellationToken = default)

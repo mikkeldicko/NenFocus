@@ -3,11 +3,14 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Data.Core.Plugins;
 using Avalonia.Markup.Xaml;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using NenFocus.Application.Interfaces;
-using NenFocus.Infrastructure.Services;
 using NenFocus.ViewModels;
 using NenFocus.Views;
+using System;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace NenFocus;
 
@@ -24,27 +27,18 @@ public partial class App : Avalonia.Application
         {
             DisableAvaloniaDataAnnotationValidation();
 
-            desktop.ShutdownRequested += async (_, _) =>
+            // Closing leaves blocking exactly as PolicyEngine says it should be right now — a
+            // running session, an active Focus or Background block — through the one door that
+            // applies policy (Gap 101). The first request is held until the sync finishes, so a
+            // hosts-file write is never cut off by the process exiting; the second passes through.
+            desktop.ShutdownRequested += async (_, e) =>
             {
-                using (var scope = Program.AppHost!.Services.CreateScope())
-                {
-                    var enforcement = scope.ServiceProvider.GetRequiredService<IEnforcementService>();
-                    var sessionState = scope.ServiceProvider.GetRequiredService<ISessionStateService>();
+                if (_enforcementSyncedForShutdown) return;
 
-                    // A running session needs nothing saved here: its breaks are a stored
-                    // schedule read against the clock, not live state to persist (Gap 63).
-                    if (sessionState.ActiveSession is null)
-                    {
-                        // Keep enforcement active if a FocusBlock is currently running,
-                        // even if the ritual wasn't completed before the app closed.
-                        var clock = scope.ServiceProvider.GetRequiredService<ISystemClock>();
-                        var plannedBlocks = scope.ServiceProvider.GetRequiredService<IPlannedBlockRepository>();
-                        bool hasFocusBlock = await plannedBlocks.HasActiveFocusBlockAsync(clock.UtcNow);
-
-                        if (!hasFocusBlock)
-                            await enforcement.RemoveEnforcementAsync();
-                    }
-                }
+                e.Cancel = true;
+                await SyncEnforcementForShutdownAsync();
+                _enforcementSyncedForShutdown = true;
+                desktop.Shutdown();
             };
 
             desktop.MainWindow = new MainWindow
@@ -54,6 +48,28 @@ public partial class App : Avalonia.Application
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    private static readonly TimeSpan ShutdownSyncLimit = TimeSpan.FromSeconds(2);
+
+    private bool _enforcementSyncedForShutdown;
+
+    // Fail closed: if the sync fails or runs past the limit (well inside Windows' own shutdown
+    // patience), blocking is left exactly as it is.
+    private static async Task SyncEnforcementForShutdownAsync()
+    {
+        var services = Program.AppHost!.Services;
+        try
+        {
+            using var limit = new CancellationTokenSource(ShutdownSyncLimit);
+            var clock = services.GetRequiredService<ISystemClock>();
+            await services.GetRequiredService<IEnforcementSynchronizer>().SyncAsync(clock.UtcNow, limit.Token);
+        }
+        catch (Exception ex)
+        {
+            services.GetRequiredService<ILogger<App>>()
+                .LogError(ex, "Enforcement sync at shutdown failed; blocking left as it was");
+        }
     }
 
     private static void DisableAvaloniaDataAnnotationValidation()

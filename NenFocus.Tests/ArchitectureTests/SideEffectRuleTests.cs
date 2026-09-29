@@ -59,12 +59,14 @@ public class SideEffectRuleTests
     }
 
     /// <summary>One locked step computes the slice and applies or removes it, so a stale answer can
-    /// never overwrite a fresh one. (App's shutdown path resolves it from the container — the
-    /// composition root, not a holder.)</summary>
+    /// never overwrite a fresh one. No exemption — not even the composition root: since Gap 101 the
+    /// shutdown path asks the synchronizer too. Includes the compiler's hidden classes, so a local
+    /// variable inside an async method counts.</summary>
     [Fact]
     public void OnlyTheSynchronizerAppliesEnforcement()
     {
-        var holders = AllTypes()
+        var holders = new[] { typeof(Notifier), typeof(SystemClock), typeof(ShellViewModel) }
+            .SelectMany(t => t.Assembly.GetTypes())
             .Where(t => TypeUse.TypesUsedBy(t).Contains(typeof(IEnforcementService)))
             .Select(t => t.FullName!);
 

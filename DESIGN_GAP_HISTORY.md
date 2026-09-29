@@ -1555,3 +1555,28 @@ The findings (F1–F6) are recorded in their gaps (89, 93, 95, 100). **1491 pass
 - **Use cases (U1–U4).** U1: start and end update the session noticeboard in different layers. That led to **rule 19** (command handlers don't update the noticeboard; a bridge, with `StartSession` listed) and the agreed direction for Gap 89 area 4: the noticeboard **refreshes itself** from `GetActiveSessionQuery` instead of being handed a `SessionDto`. That one change fixes F1, F3 and U1; the read/write split was weighed and set aside for Gap 92 A3's job split. U2 (input checks in handlers) → Gap 100/88; U3 confirms R3; U4 → Gap 97.
 
 Pass 2 is done apart from Gap 89 area 2 (`PlannerPageViewModel`), to be read after Gap 93 rewrites its placement and permission logic. **1492 passing.**
+
+\---
+
+## Gap 101 — Shutdown Asks the Synchronizer *(closed, 2026-09-29)*
+
+**Found by** Gap 89 Pass 2 (R1) while reading the repositories. When the app closed with no session running, `App.axaml.cs` decided for itself whether to keep blocking. It asked `IPlannedBlockRepository.HasActiveFocusBlockAsync`, which was its only caller. That SQL (`Start <= now < End`, not cancelled) **ignored Background blocks entirely**, so closing the app lifted blocking for a running Background block. It also ignored `EffectiveEnd`, so a Focus block whose session had ended early still counted. That made a third answer to "what should be blocked right now", beside `PolicyEngine` and the heartbeat. A repository test, `HasActiveFocusBlockAsync_BackgroundBlockActiveOnly_ReturnsFalse`, had pinned the bug as intended behaviour.
+
+**Changed:**
+- **Shutdown asks the one door.** The handler holds the first close request, calls `IEnforcementSynchronizer.SyncAsync(now)` with a **2-second limit**, then closes for real; an "already synced" flag lets the second request pass. On any error or timeout, blocking is left as it was (**fail closed**). Holding the request matters: the old `async` handler let the process exit mid-way, so its own removal could be cut off halfway.
+- `HasActiveFocusBlockAsync` and its three tests are deleted, and the repository cap goes from 12 to 11 (rule 9 forced the edit).
+- `App` no longer touches `IEnforcementService`, so Gap 98 rule 13 lost its only exemption. It was made red first, then green.
+- **R2 rode along:** `NenContractRepository`'s two "mirrors `IsInEffect` exactly" SQL copies now fetch and let `NenContract.IsInEffect` decide. All the existing behaviour tests stayed green.
+
+**Narrowed while designing:** it first also covered hiding to the tray on X and refusing Quit while enforcing (the architect's requirement: "always active like other blockers"). Those moved to Gap 76 as its first step. They're a feature rather than a fix, and their key question is Gap 76's still-open Master Locked Mode idea. Relaunching a closed window was rejected: a watchdog can itself be killed, and a window popping back reads as a bug.
+
+**Rejected:** waiting synchronously on the UI thread, which risks freezing the app if anything inside needs the UI thread back; and fire-and-forget, which doesn't guarantee fail-closed.
+
+**Confirmed via `NenFocus.Tests` (1489 passing; 3 obsolete repository tests removed) and by hand** (hosts file checked after each close with X):
+- a running Background block: blocking kept (the bug)
+- nothing active: blocking removed
+- a running session: blocking kept
+
+**Known limit (Gap 76):** once the app is closed, only the hosts-file website blocking survives. Blocked apps aren't killed, the extension loses its local server, and nothing lifts blocking at a block's end until the app reopens.
+
+**Principle demonstrated:** a decision that has one owner (`PolicyEngine` decides, the synchronizer applies) must not grow a shortcut copy at the edges of the app. Shutdown was the one path that answered "what should be blocked" with its own small rule, and that rule quietly disagreed with the real one. And a test can pin a bug just as firmly as it pins a feature.

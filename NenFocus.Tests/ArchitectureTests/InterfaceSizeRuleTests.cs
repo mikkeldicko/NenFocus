@@ -28,7 +28,7 @@ public class InterfaceSizeRuleTests
         // Repositories: in DDD a collection-like door to one aggregate. Each extra query method is
         // usually a business rule moving into SQL (e.g. HasFutureBlocksForPresetAsync, Gap 92 A6),
         // so these are capped too — a new method is a decision, not a habit.
-        "IPlannedBlockRepository has 12",
+        "IPlannedBlockRepository has 11",
         "INenContractRepository has 9",
         "ISessionRepository has 9",
         "IBlockPresetRepository has 7",

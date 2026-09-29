@@ -715,25 +715,6 @@ public interface IBlockPlacementChecker
 
 \---
 
-### Gap 101 — Shutdown Asks the Synchronizer (raised 2026-09-29 in Gap 89 Pass 2, narrowed the same day; direction agreed; first in box 1 as a live-behaviour fix)
-
-**Why it's a gap:**
-- **R1, a live bug.** When the app closes with no session running, `App.axaml.cs`'s shutdown handler decides for itself whether to keep blocking. It asks `IPlannedBlockRepository.HasActiveFocusBlockAsync` (its only caller), whose SQL (`Start <= now < End`, not cancelled) ignores `EffectiveEnd` (a Focus block that ended early or was missed still counts) and ignores Background blocks entirely. So **closing the app lifts blocking for a running Background block**. That's a third answer to "what should be blocked now", beside `PolicyEngine` and the heartbeat.
-**Direction agreed 2026-09-29:** the shutdown handler (app closing, Windows shutdown or log-off) becomes `await synchronizer.SyncAsync(now)`, so `PolicyEngine` decides as it does everywhere else. Blocking stays on for whatever is active at that moment: a running session, a Focus block (even with its Ritual not done), a Background block. **On any error, leave blocking as it is (fail closed).**
-
-**Narrowed the same day:** the gap first also covered hiding to the tray on X and refusing Quit while enforcing (the architect's "always active like other blockers" requirement). Those moved to **Gap 76** as its first step. They're a feature, not a fix; their key question (refuse Quit during any enforcement, or only during a sealed contract) is Gap 76's still-open Master Locked Mode idea; and designed together with the service they need one slow manual-testing round instead of two.
-
-**Consequences:**
-- `HasActiveFocusBlockAsync` is deleted (the repository cap drops from 12 to 11).
-- `App` no longer takes `IEnforcementService`, so Gap 98 rule 13 loses its only exemption.
-- **R2 rides along:** `NenContractRepository`'s two "mirrors `IsInEffect` exactly" SQL copies (`HasContractsInEffectForPresetAsync`, `GetAllInEffectAsync`) become "fetch, and the entity decides" (`MODULE_STANDARDS.md` → Repositories). Contracts are few, so there's no copy left to test.
-
-**Honest limit:** once the app is closed, blocking stays on until it reopens, and a block planned for later can't start. That's already true today and is **Gap 76's** job (the Windows service). The shutdown hook becomes unnecessary once the service owns enforcement.
-
-**Checked before building (2026-09-29):** Gap 89 F2 is confirmed and UI-only (after a restart the running tile is unlocked, but the backend refuses every change). It doesn't block this gap: the shutdown fix doesn't read the in-memory session.
-
-\---
-
 ### Gap 99 — Moments vs Calendar Times as Types (raised 2026-09-29 during Gap 98; direction preferred, form not decided; decided at the start of Gap 88's interface review)
 
 **Why it's a gap:** one type, `DateTime`, means two different things — **a moment** (a point in time, stored UTC: when a session started) and **a calendar time** (what the user sees and types: 09:00 on their calendar). Nothing but discipline tells them apart, and it has cost three fixes already: Gap 65 (contract activation on UTC dates), Gap 87 (Cover Deficit local time), Gap 96 (spontaneous sessions on UTC days). Found while building Gap 98 rule 6: EF's storage converter (`NenFocusDbContext.UtcDateTimeConverter`) **silently converts** any non-UTC value on save, treating an unmarked one as local — a hidden second copy of the local→UTC rule that hides a mix-up instead of failing on it.

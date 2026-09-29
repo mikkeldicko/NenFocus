@@ -210,8 +210,7 @@ public class NenContract : AggregateRoot
     /// <summary>
     /// Canonical definition of "currently a live commitment" — Scheduled (not yet
     /// started, but will be) or Active. Completed and Broken contracts are not in
-    /// effect. The repository query behind ContractPreset deletion protection must
-    /// match this exactly.
+    /// effect. The only definition: the repository fetches and asks this (Gap 101).
     /// </summary>
     public bool IsInEffect
         => Status is NenContractStatus.Scheduled or NenContractStatus.Active;

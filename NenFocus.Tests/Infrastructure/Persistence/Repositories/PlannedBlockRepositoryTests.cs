@@ -309,44 +309,6 @@ public class PlannedBlockRepositoryTests : SqliteRepositoryTestBase
     }
 
     [Fact]
-    public async Task HasActiveFocusBlockAsync_WithinWindow_ReturnsTrue()
-    {
-        var repo = CreateRepository();
-        await repo.AddAsync(FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End));
-        await Context.SaveChangesAsync();
-
-        var result = await CreateRepository().HasActiveFocusBlockAsync(Start.AddMinutes(30));
-
-        result.Should().BeTrue();
-    }
-
-    [Fact]
-    public async Task HasActiveFocusBlockAsync_BackgroundBlockActiveOnly_ReturnsFalse()
-    {
-        var repo = CreateRepository();
-        await repo.AddAsync(BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End));
-        await Context.SaveChangesAsync();
-
-        var result = await CreateRepository().HasActiveFocusBlockAsync(Start.AddMinutes(30));
-
-        result.Should().BeFalse();
-    }
-
-    [Fact]
-    public async Task HasActiveFocusBlockAsync_CancelledBlock_IsExcluded()
-    {
-        var repo = CreateRepository();
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End);
-        block.MarkCancelled(Start.AddMinutes(-10));
-        await repo.AddAsync(block);
-        await Context.SaveChangesAsync();
-
-        var result = await CreateRepository().HasActiveFocusBlockAsync(Start.AddMinutes(30));
-
-        result.Should().BeFalse();
-    }
-
-    [Fact]
     public async Task GetUnresolvedFocusBlocksAsync_ClosedWindowRitualNeverCompleted_ReturnsBlock()
     {
         var repo = CreateRepository();

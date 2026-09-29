@@ -142,17 +142,6 @@ public sealed class PlannedBlockRepository : IPlannedBlockRepository
             .AnyAsync(b => b.BlockPresetId == presetId && b.End > after && b.CancelledAt == null, cancellationToken);
     }
 
-    public Task<bool> HasActiveFocusBlockAsync(
-        DateTime at,
-        CancellationToken cancellationToken = default)
-    {
-        // Cancelled excluded: a cancelled block's window overlapping "now" must not be
-        // read as real enforcement to preserve on shutdown.
-        return _context.PlannedBlocks
-            .OfType<FocusBlock>()
-            .AnyAsync(b => b.Start <= at && b.End > at && b.CancelledAt == null, cancellationToken);
-    }
-
     public async Task<IReadOnlyList<FocusBlock>> GetUnresolvedFocusBlocksAsync(
         DateTime asOf,
         CancellationToken cancellationToken = default)

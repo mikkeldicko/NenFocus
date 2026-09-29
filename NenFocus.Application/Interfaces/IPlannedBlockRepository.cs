@@ -80,13 +80,6 @@ public interface IPlannedBlockRepository
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Returns true if a FocusBlock is active at the given point in time.
-    /// </summary>
-    Task<bool> HasActiveFocusBlockAsync(
-        DateTime at,
-        CancellationToken cancellationToken = default);
-
-    /// <summary>
     /// Returns Focus blocks whose window has closed (End &lt; asOf) without the
     /// ritual ever being completed. Used by the missed-session sweep on startup
     /// and on live enforcement release.
