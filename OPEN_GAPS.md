@@ -530,16 +530,6 @@ public interface IBlockPlacementChecker
 
 \---
 
-### Gap 91 — One-Source Sweep: Same Fact, Several Derivations (raised 2026-09-29; not started)
-
-**Why it's a gap:** Gap 88 began as one finding in the area-1 audit and turned out to be the same fact ("may this block go here", "has this block ended") answered in about ten places, several of which disagreed. The same shape has produced most of this project's bugs (Gaps 22, 24, 29, 30, 33, 85–87). Gap 89 covers four named areas; this is the sweep of everything else.
-
-**Method (same as area 1, see `MODULE_STANDARDS.md` → Design Review Rules):** list the business facts the code asks (e.g. "is this preset locked", "how many Focus hours did this day get", "is a session running", "which contract governs this block", "is it a break right now"); for each, grep every place it is answered — including raw-field expressions, repository SQL, validators, ViewModels and `Planner*Math`; record findings (file:line, how they differ, which one is right, suggested home) before changing anything. Nothing changed without sign-off; each fix becomes its own gap or a phase of an existing one.
-
-**Already known, to include:** "is this preset locked?" computed inline in both the Update and Delete preset validators (noted in Gap 88); `(Start, End)` tuples in credit/planned-hours code (Gap 90 folds these in).
-
-\---
-
 ### Gap 92 — Value Object and Service Review (raised 2026-09-29; review done the same day, findings below; quick wins done, rest open)
 
 **Why it's a gap:** Gap 88's interrogation showed the existing catalogue has never been checked as a whole against `MODULE_STANDARDS.md` → Where a Rule Lives: e.g. `ContractBlockBatchPreparation` (a result type) sits in `Domain/Services/`, the Interface-First Rule's text disagrees with where every Domain service interface lives, and whether each Domain service name follows the new naming row was never checked.
@@ -567,7 +557,7 @@ public interface IBlockPlacementChecker
 | A3 | `ISessionStateService` — 15 members | Three jobs: active session, Ritual prompt, post-session/post-contract relays | Open — split; with Gap 89 area 4 |
 | A4 | `IActiveSessionMonitor` — 10 members | Over the checklist; possibly fine as a UI read model — decide deliberately | Open |
 | A5 | `DOMAIN_DICTIONARY.md` Deep Module table | Member counts out of date | **Fixed 2026-09-29** |
-| A6 | `IPlannedBlockRepository.HasFutureBlocksForPresetAsync` | "Preset locked" rule (`End > after`) lives in SQL | → Gap 91 known item |
+| A6 | `IPlannedBlockRepository.HasFutureBlocksForPresetAsync` | "Preset locked" rule (`End > after`) lives in SQL | → Gap 89 (with the inline "is this preset locked" checks noted in Gap 88) |
 | A7 | `ISystemClock` / `IPlannerClockService` / `IDebugClockController` | Three clock abstractions | → Gap 89 area 3 |
 
 \---
@@ -647,3 +637,18 @@ public interface IBlockPlacementChecker
 **Direction (for interrogation, not decided):** `NenContract` answers "what is this block to me" (`Committed | Redemption | Bonus | None` — Gap 67's `ContractRole`) and "does this moment count as inside me", with `Covers` as the one meaning; Bonus hours, completed hours, recap, readiness, the tile badge and Gap 95's per-day read model ask it.
 
 **Why before Gap 95 and 67:** Gap 95's per-day read model and Gap 67's membership change both build on "what counts as the contract's" — one definition first.
+
+\---
+
+### Gap 98 — Architecture Tests: Rules That Fail on Drift (raised 2026-09-29; not started; first in the Architecture box)
+
+**Why it's a gap:** written rules alone didn't stop drift — the Design Review Rules in `MODULE_STANDARDS.md` exist because mistakes were made with the rules already loaded. What reliably stops drift is a test that fails at `dotnet test` time. One precedent exists: `CompositionRootTests` (ViewModel tree resolves under `ValidateScopes`, Gap 40).
+
+**Three kinds of rule, three timings:**
+1. **Already holds today → test now** (locks it in before the refactors move code): no `DateTime.UtcNow`/`Now` in `NenFocus.Domain` (0 violations); no ViewModel references an `I…Repository` (0).
+2. **Broken today → test now with a known-exceptions list that may only shrink** (a new violation fails at once; each gap that fixes a file removes it; empty list = rule complete):
+   - No `ToLocalTime()`/`ToUniversalTime()` outside `ISystemClock` — exceptions (checked 2026-09-29): UI `PlannerDragMath`, `DebugClockViewModel`, `PlannerPageViewModel`, `PostSessionViewModel`, `HatsuPageViewModel`, `RitualShellViewModel`, `PlannerPageView.axaml.cs`; Application `CreatePlannedBlockCommandHandler`, `UpdatePlannedBlockCommandHandler` (their session-clash messages — removed by Gap 88 phase 3). `ISystemClock.cs` only mentions it in a comment.
+   - No ViewModel uses `NenFocus.Domain.Entities` — exception: `PlannerEndTimeOptions`.
+3. **Made true by a gap → that gap's last step** (the box rule in `ARCHITECT_GOVERNANCE.md`): e.g. after Gap 88, nothing but `BlockPlacementChecker` decides placement / no `ritualOnly`; after Gap 93, no ViewModel computes edit permissions; after Gap 90, no public `PlannedBlock.Start`/`End` comparisons.
+
+**Still to interrogate:** tooling — a library (e.g. NetArchTest, dependency and naming rules on compiled types) vs plain source-scanning tests (can see calls like `ToLocalTime()`, which type rules can't); where the exceptions lists live (in the test, next to the rule); which further "already holds" rules are worth locking in (e.g. Domain references no Application/Infrastructure, validators live in their use-case folder, commands implement `ICommand<T>`).
