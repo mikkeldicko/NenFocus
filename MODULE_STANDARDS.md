@@ -35,6 +35,8 @@ Every rule has exactly one home, chosen by **what data it needs** and **whether 
 - A value object wrapping something used once, with no rule attached → it adds a type without removing any duplication.
 - The same expression over raw fields in a second place → the rule has no home yet (see the Application Handler Forbidden Zone below).
 
+**Repositories: narrow in SQL, decide in the entity (added 2026-09-29, Gap 89 Pass 2).** A repository query may *narrow* with a filter that can only include too much — a superset (e.g. `End > now`, since `EffectiveEnd` is never later than `End`); the entity makes the final decision (`IsActive`, `HasEnded`, `IsInEffect`). Precedent: `PolicyEngine` over-fetches by ±1 s and `IsActive` decides (Gap 21). A superset filter can't drift into a wrong answer, only into a few extra rows. A SQL **copy of the rule itself** is allowed only when even the narrowed data is too large to load, and then it is marked as a copy and pinned by a parity test (as `GetUnresolvedFocusBlocksAsync` mirrors `FocusBlock.IsUnresolved`). A comment saying "mirrors X exactly" with no parity test is a promise nothing checks (Gap 94).
+
 ---
 
 ## Design Review Rules (added 2026-09-29)

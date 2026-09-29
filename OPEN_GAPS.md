@@ -246,6 +246,8 @@ Once a gap (or a self-contained half of one) is fully closed, its write-up moves
 - **Resolved: the installer runs the database migration once, before either process starts** — not the GUI alone (today's behavior) and not both GUI and Service independently. Today, only the GUI runs migrations, once, at its own startup (`Program.cs` → `HostExtensions.EnsureDatabase()`). Once an update ships two independently-startable processes (GUI and Service) built from the same release, there's a real window where the Service could auto-start immediately after an update finishes — before the user has ever opened the GUI — and run its read/append queries against a schema that hasn't been migrated yet, risking a runtime error on anything touching a changed table. This risk didn't exist before this gap; it only arises from having two independently-launchable processes share one schema. **A real alternative was weighed and rejected:** make the Service tolerant of a stale schema instead (skip and retry on the next heartbeat tick until the GUI eventually migrates it) — rejected because it would leave the Service doing nothing at all until the user opens the GUI at least once after every update, quietly reopening the exact gap this whole feature exists to close (enforcement not truly independent of the GUI being opened). **Real cost, accepted rather than hidden:** the installer must trigger the *same* existing `EnsureDatabase()` logic rather than reimplementing migration steps natively in WiX — most likely by briefly running the app or Service in a "migrate only, then exit" mode as an installer custom action. This doesn't replace the GUI's own migration call outright; a direct dev-mode run (not through the installer) still needs it exactly as today. **Not a DDD decision** — migrations are pure Infrastructure-layer plumbing with no domain-model content — but it is consistent with a broader Clean Architecture principle already used repeatedly elsewhere in this document (a single, unambiguous owner for a piece of state rather than shared/ambiguous responsibility — the same reasoning behind `PolicyEngine` being "the sole owner of all merge rules" and the GUI being sole authority over every core aggregate earlier in this gap), just applied to schema lifecycle instead of domain writes.
 - Exact WAL-mode migration mechanics, the exact new heartbeat interval value, the exact `OnStop` handler logic for the "is anything enforcing right now" check (now also checking for the update marker), the exact Layer 2 grace-period length, the self-healing registry check's own interval, the Chrome Web Store Unlisted listing setup itself, and the MSI/WiX authoring are all left as implementation-time calls — consistent with how other gaps in this document leave DTO shapes and query-bundling decisions open until Slice 1 begins.
 
+**Step before this gap (2026-09-29):** Gap 101 makes closing the window hide it to the tray, refuses Quit while anything is enforcing, and keeps blocking through Windows shutdown via `SyncAsync`. The architect's requirement is that NenFocus be "always active like other blockers". Gap 101 covers the moment-of-weakness click on X; this gap covers the Task Manager kill and a reboot. Gap 101's Quit rule is where the Master Locked Mode question below first gets a concrete answer.
+
 **Relationship to Open Gap B:** adjacent but distinct. Gap B is about recovering *session state* correctly after a clean restart (was a session active when the app died, does enforcement get correctly re-applied). This gap is about enforcement having *no existence at all* between the process dying and the process (if ever) restarting — a different, larger failure mode that Gap B's candidate fixes don't address.
 
 **Must be closed before:** Nothing urgent — deferred until picked up. Interrogation is complete — every question this gap raised has a settled answer (the last two, stop-resistance's update exemption and migration ownership, resolved 2026-09-07 in the same session as everything else above). Only implementation-time calls remain.
@@ -426,6 +428,8 @@ After Gap 65, extending means appending Contract Days generated with `ContractCa
 
 **Last step:** Gap 88's typed-reasons test has an empty exceptions list — every validator returns typed reasons.
 
+**Also found (Gap 89 Pass 2, U2):** input checks live in handlers, each writing its own sentence. The six preset handlers (block/contract/break-timer, create/update) check name uniqueness themselves, and `StartSessionCommandHandler` checks the missing block, a session already existing, and a missing break preset — while other validators already ask repositories (`DeletePlannedBlockValidator`). Moving them into validators with typed reasons belongs here. `StartSession`'s "a Focus block is coming up" check is placement → Gap 88.
+
 **Also found (Gap 89 Pass 2, F5):** a missing block preset's name falls back to `"Unknown Preset"`, `"Unknown"` or `""` depending on which of three code paths built the session — wording drift a single home removes.
 
 **Still to interrogate:** the typed-reason shape (one result type per use case, or one shared refusal type); where desktop wording lives (a `Notifier`-like Application service vs `.resx` resources vs both); whether XAML labels move in this gap or only when translation arrives.
@@ -558,6 +562,10 @@ public interface IBlockPlacementChecker
    - **F2 — consequence of F1 (→ Gap 93):** after an app restart during a planned session, `ActiveSession.OriginatingBlockId` is empty, so the Planner stops locking the running block's tile (`PlannerPageViewModel` lines 675–713, 1471, 2009 — Save, Delete, Split, drag). Delete is still refused by the backend (its validator asks the database); **Update only checks whether the start moved, so changing the running block's end may get through — suspected, verify with a real run.**
    - **F3 — `GetActiveSessionQuery` is dead code:** nothing calls it, and it is a third, different copy of F1's mapping. Delete, or make it *the* rehydration path `SessionStateService` dispatches — which answers this area's question ("the database is the truth at startup").
    - **F5 (→ Gap 100):** a missing preset's name has three fallbacks — `"Unknown Preset"`, `"Unknown"`, `""` — one per F1 copy.
+   - **U1 — start and end update the noticeboard in different layers.** `StartSessionCommandHandler:147` calls `SetActive` itself; the end is `SessionEndedEventHandler:43` calling `Clear()`. Guarded meanwhile by Gap 98 rule 19 (`SideEffectRuleTests.CommandHandlersDoNotUpdateTheSessionNoticeboard`, a bridge with `StartSession` listed).
+   - **Direction agreed 2026-09-29 for F1, F3, U1 and this area's question — "refresh from the one query":** replace `SetActive(dto)`/`Clear()` with `RefreshAsync()`. The noticeboard loads the truth itself through `GetActiveSessionQuery` (F3's dead query becomes *the* path), at startup and from the session-started/ended event handlers, called **first** in each. Nothing is pushed, so a wrong or incomplete `SessionDto` can't be handed in, and a call from anywhere is harmless (it re-reads). That makes one source (the database), one mapping (F1's three copies become one) and a narrower interface. Rule 19 and the `SessionDto` entry in `DtoBuilderRuleTests` are then deleted. Cost weighed: one small SQLite read per session start and end (milliseconds, against the heartbeat's reads every 5 s); avoiding it would mean pushing data again. Read-vs-write interface split considered and set aside: the Ritual prompt and the relays have other writers (heartbeat, `ShellViewModel`), so that is Gap 92 A3's job split, not this.
+6. **Repositories (read 2026-09-29, Pass 2)** — findings R1–R4; R1 (shutdown re-decides enforcement) and R2 (`IsInEffect` SQL copies) → **Gap 101**; R4 → Gap 92 A8.
+   - **R3 (confirmed again by U3: both preset validators compute it) — "is this block preset locked" lives in SQL** (`HasFutureBlocksForPresetAsync`: `End > after`, not cancelled) and uses the raw `End`, not `EffectiveEnd` — only conservative (a preset stays locked a little longer than needed), but it's the rule in the wrong home (Gap 92 A6). `UpdateBlockPresetValidator` and `DeleteBlockPresetValidator` both compute "locked" inline (session running, or future blocks). **Direction:** SQL narrows with `End > now` (a superset — `EffectiveEnd` is never later), each block's `HasEnded` decides (`MODULE_STANDARDS.md` → Repositories); one named question both validators ask.
 5. **Nen Contract queries** (deficits, completed hours, bonus hours, recap) — historically the most bug-prone area (Gaps 22, 24, 29, 33 were all "two calculations of one number"); includes whether credited minutes can read the block's stamps now that `SessionEndedAt` is a faithful copy (Gap 86). **Investigated 2026-09-29 — findings in Gap 95** (they can: `RitualCompletedAt` equals `Session.StartedAt`).
 
 \---
@@ -601,11 +609,12 @@ public interface IBlockPlacementChecker
 | S5 | `DayRangeSplitter` | Static class in `Services/` | → Gap 88 (onto `TimeSlot`) |
 | S6 | `ContractBlockBatchPreparation` | Result type in `Services/`, not `ValueObjects/` | **Moved 2026-09-29** to `ValueObjects/` |
 | A2 | `BreakTransitionHandler` | Not a CQRS handler but named like one | **Renamed 2026-09-29** to `BreakTransitionResponder` (`RespondAsync`) — it syncs enforcement *and* notifies, so "Announcer" would have undersold it |
-| A3 | `ISessionStateService` — 15 members | Three jobs: active session, Ritual prompt, post-session/post-contract relays | Open — split; with Gap 89 area 4 |
+| A3 | `ISessionStateService` — 15 members | Three jobs: active session, Ritual prompt, post-session/post-contract relays | Open — split; with Gap 89 area 4. The active-session job's direction is agreed there (2026-09-29): `RefreshAsync()` reading `GetActiveSessionQuery` replaces `SetActive`/`Clear`, so nothing is pushed in |
 | A4 | `IActiveSessionMonitor` — 10 members | Over the checklist; possibly fine as a UI read model — decide deliberately | Open |
 | A5 | `DOMAIN_DICTIONARY.md` Deep Module table | Member counts out of date | **Fixed 2026-09-29** |
 | A6 | `IPlannedBlockRepository.HasFutureBlocksForPresetAsync` | "Preset locked" rule (`End > after`) lives in SQL | → Gap 89 (with the inline "is this preset locked" checks noted in Gap 88) |
 | A7 | `ISystemClock` / `IPlannerClockService` / `IDebugClockController` | Three clock abstractions | → Gap 89 area 3 |
+| A8 | `ISessionRepository`, `IPlannedBlockRepository`, `INenContractRepository` | Found 2026-09-29 (Gap 89 Pass 2, R4). More doors than questions: three methods ask "is a session active" with the same condition (`GetActiveAsync`, `HasActiveSessionAsync`, `GetActiveSessionsAsync`), and the block and contract repositories each have both `UpdateAsync` and an add-or-update `SaveAsync` | Open — keep one of each (`GetActiveAsync`: "is there one" = `is not null`, the policy's list = a one-item wrap; one write method), then lower Gap 98 rule 9's counts |
 
 \---
 
@@ -689,12 +698,42 @@ public interface IBlockPlacementChecker
 4. **`IsInEffect` copied in SQL** without a parity test (unlike `IsUnresolved`).
 5. **`ISessionRepository.GetHistoryAsync(DateOnly, DateOnly)` reads its dates as UTC days** — the trap behind Gap 96; its next caller (Insights `GetSessionHistoryQuery`, no UI caller yet) would repeat it. Should take UTC instants, or local dates plus the clock. Its sibling `PlannedBlockRepository` (the day query) gets the local day right but with its own `ToUniversalTime()` copy of `ISystemClock.ToUtc` — on Gap 98's local-time rule exceptions list; fix both the same way.
 6. `PlannerPageViewModel` chooses "the" contract itself (`_contractsThisWeek`, `SelectedContract` for Cover Deficit) — mostly UI selection; the rest of its contract logic is Gap 93.
+7. **Found in Gap 89 Pass 2 (U4, 2026-09-29):** `StartSessionCommandHandler:127` decides which contract's keep-blocking rule applies with `originatingBlock.ContractId is {}` — the "Bonus = no `ContractId`" definition this gap replaces with a role. One more caller `ContractRole` must answer.
 
 **Direction (for interrogation, not decided):** `NenContract` answers "what is this block to me" (`Committed | Redemption | Bonus | None` — Gap 67's `ContractRole`) and "does this moment count as inside me", with `Covers` as the one meaning; Bonus hours, completed hours, recap, readiness, the tile badge and Gap 95's per-day read model ask it.
 
 **Why before Gap 95 and 67:** Gap 95's per-day read model and Gap 67's membership change both build on "what counts as the contract's" — one definition first.
 
 **Last step — architecture tests (Gap 98):** add the narrow rule this gap makes true — *only `NenContract` decides membership*: no `ContractId` comparison outside the Domain and persistence to decide "is this block the contract's / Bonus", and a parity test if `Covers` gets a SQL mirror. Delete `PlannedBlockRepository` from `LocalTimeRuleTests` once the repositories take UTC instants or local dates plus the clock (finding 5). Exact test form decided when the gap is designed.
+
+\---
+
+### Gap 101 — Closing the Window Never Stops Enforcement (raised 2026-09-29 in Gap 89 Pass 2; direction agreed, not interrogated; first in box 1 as a live-behaviour fix)
+
+**Why it's a gap:**
+- **R1, a live bug.** When the app closes with no session running, `App.axaml.cs`'s shutdown handler decides for itself whether to keep blocking. It asks `IPlannedBlockRepository.HasActiveFocusBlockAsync` (its only caller), whose SQL (`Start <= now < End`, not cancelled) ignores `EffectiveEnd` (a Focus block that ended early or was missed still counts) and ignores Background blocks entirely. So **closing the app lifts blocking for a running Background block**. That's a third answer to "what should be blocked now", beside `PolicyEngine` and the heartbeat.
+- **The requirement (architect, 2026-09-29): the app must behave "always active like other blockers".** A closed window must never mean enforcement stops.
+
+**Direction agreed 2026-09-29:**
+
+| Action | Behaviour |
+|---|---|
+| Click **X** | the window hides to the system tray; the app keeps running and enforcing |
+| **Quit** from the tray | refused while anything is enforcing: "is anything enforcing" = `SyncAsync` returns a non-empty `ActivePolicySlice`, the one source, no new rule |
+| Windows shutdown / log-off | the handler becomes `await synchronizer.SyncAsync(now)`, so `PolicyEngine` decides as everywhere else; **on any error, leave blocking as it is (fail closed)** |
+
+**Consequences:**
+- `HasActiveFocusBlockAsync` is deleted (the repository cap drops from 12 to 11).
+- `App` no longer takes `IEnforcementService`, so Gap 98 rule 13 loses its only exemption.
+- **R2 rides along:** `NenContractRepository`'s two "mirrors `IsInEffect` exactly" SQL copies (`HasContractsInEffectForPresetAsync`, `GetAllInEffectAsync`) become "fetch, and the entity decides" (`MODULE_STANDARDS.md` → Repositories). Contracts are few, so there's no copy left to test.
+
+**Rejected:** relaunching the window when it's closed. The watchdog doing the relaunch can itself be killed, and a window popping back reads as a bug. The established blockers hide to the tray.
+
+**Honest limit:** a Task Manager kill still stops everything, and once the app is closed, blocking stays on until it reopens (planned blocks can't start). Both are **Gap 76's** job (the Windows service). This gap is the step before it, not a replacement. The tray survives Gap 76 (the window still lives there), and the shutdown hook becomes unnecessary once the service owns enforcement.
+
+**Still to interrogate:** whether Quit is refused during *any* enforcement or only during a sealed contract (Gap 76's Master Locked Mode question); the wording and look of the refusal; whether the tray icon shows state (enforcing or not); what happens at Windows startup (the app isn't auto-started today).
+
+**Before building:** verify Gap 89 F2 (a restart during a planned session unlocks the running tile), since both touch what the app knows after a restart.
 
 \---
 

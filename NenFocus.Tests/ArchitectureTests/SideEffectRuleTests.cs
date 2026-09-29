@@ -38,6 +38,26 @@ public class SideEffectRuleTests
         KnownExceptions.Check(violations, []);
     }
 
+    private static readonly string[] SessionStateExceptions =
+    [
+        // Sets the in-memory session itself; the end side already does it in SessionEndedEventHandler (U1). → Gap 89 area 4.
+        "NenFocus.Application.UseCases.Sessions.StartSession.StartSessionCommandHandler",
+    ];
+
+    /// <summary>Updating the UI's noticeboard is a side effect like any other: event handlers do it, so start
+    /// and end update it the same way. A bridge — once the noticeboard only refreshes itself from
+    /// GetActiveSessionQuery (Gap 89 area 4), there is nothing left to push and this test is deleted.</summary>
+    [Fact]
+    public void CommandHandlersDoNotUpdateTheSessionNoticeboard()
+    {
+        var violations = AllTypes()
+            .Where(t => t.Name.EndsWith("CommandHandler", StringComparison.Ordinal)
+                        && TypeUse.TypesUsedBy(t).Contains(typeof(ISessionStateService)))
+            .Select(t => t.FullName!);
+
+        KnownExceptions.Check(violations, SessionStateExceptions);
+    }
+
     /// <summary>One locked step computes the slice and applies or removes it, so a stale answer can
     /// never overwrite a fresh one. (App's shutdown path resolves it from the container — the
     /// composition root, not a holder.)</summary>
