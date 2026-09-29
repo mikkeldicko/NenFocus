@@ -75,10 +75,12 @@ Once a rule has its home, something must stop code from going around it. Use the
 | Rank | Guard | When | Examples |
 |------|-------|------|----------|
 | 1 | **Compiler** — encapsulation, value objects, private fields: the wrong code can't be written | The rule has a natural owner (see Where a Rule Lives) | `TimeSlot` held by blocks and sessions (Gap 90) — no raw `Start`/`End` left to compare |
-| 2 | **Test** — architecture tests (`ArchitectureTests/`), parity tests: the wrong code fails `dotnet test` | The compiler can't reach it (SQL mirrors, the UI boundary where DTOs carry plain values), or the compiler step's gap isn't built yet | Only `SystemClock` reads the machine clock; repository SQL matches `FocusBlock.IsUnresolved` |
+| 2 | **Test** — architecture tests (`ArchitectureTests/`), parity tests: the wrong code fails `dotnet test` | The compiler can't reach it (SQL mirrors, EF's storage converters, a DTO field with no value object behind it), or the compiler step's gap isn't built yet. The UI boundary is **not** out of reach by itself: a DTO may carry a Domain value object (only entities and services are forbidden in the UI), and then the compiler guards the UI too (corrected 2026-09-29, Gap 99) | Only `SystemClock` reads the machine clock; repository SQL matches `FocusBlock.IsUnresolved` |
 | 3 | **Review** — Design Review Rules above | Judgment only: is the module deep, is this the right home | Deep Module test, Where a Rule Lives |
 
 **Every gap's plan answers:** *can the compiler own this rule? If not yet, which test guards it until then?* A test standing in for a later compiler step says so in its header and names the gap that retires it.
+
+**Before settling for rank 2, name what the compiler can't reach and check that claim in the code** (added 2026-09-29, Gap 99). "Can't reach" is a claim like any other (Design Review Rules 9, 14). *(Gap 99 nearly guarded `Moment`'s raw exit with a test listing every DTO builder, repeating this table's old "DTOs carry plain values" example; one grep of `ViewModelRuleTests` showed DTOs could carry `Moment` itself, leaving one storage exit for the test.)*
 
 **Don't over-apply rank 1:** a value object is earned by values that travel together *and* carry a rule — wrapping a primitive used once only adds a type (see Where a Rule Lives → Warning signs).
 

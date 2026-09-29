@@ -19,7 +19,7 @@ public class LocalTimeRuleTests
         // copy of the rule. Once stored times are UTC by type, it throws instead of converting.
         "NenFocus.Infrastructure/Persistence/NenFocusDbContext.cs",
 
-        // Gap 88 phase 3: their session-clash messages move into the placement verdict.
+        // Gap 88 phase 8: their session-clash messages move into the placement verdict.
         "NenFocus.Application/UseCases/Planner/CreatePlannedBlock/CreatePlannedBlockCommandHandler.cs",
         "NenFocus.Application/UseCases/Planner/UpdatePlannedBlock/UpdatePlannedBlockCommandHandler.cs",
 

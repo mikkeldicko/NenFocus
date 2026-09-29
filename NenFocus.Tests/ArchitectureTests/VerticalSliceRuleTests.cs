@@ -85,7 +85,7 @@ public class VerticalSliceRuleTests
 
     private static readonly string[] SharedQueryResultExceptions =
     [
-        // A business rule living in a query: Create/Update/Split block save its answer. Gap 88 phase 3
+        // A business rule living in a query: Create/Update/Split block save its answer. Gap 88 phase 8
         // moves attribution into the Domain (it returns the final slot).
         "NenFocus.Application/Queries/ComputeRedemptionAttribution/RedemptionAttributionResult.cs",
     ];
