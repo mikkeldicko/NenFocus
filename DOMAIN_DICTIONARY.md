@@ -567,8 +567,8 @@ ActivePolicySlice ComputeSlice(
 
 | Module | Why it is deep |
 |--------|---------------|
-| `IActiveSessionMonitor` | 4 properties + 2 events; hides a background timer, UTC math, break tracking, and command handler invocation |
-| `ISessionStateService` | 3 methods + 2 events; hides DB rehydration, preset name resolution, and broadcast coordination |
+| `IActiveSessionMonitor` | 10 members (a read model the UI binds to); hides a background timer, UTC math, break tracking, and command handler invocation — over the 5-member checklist, see Gap 92 |
+| `ISessionStateService` | 15 members (was 3 methods + 2 events; grew with Ritual prompting and post-session/post-contract relays); hides DB rehydration, preset name resolution, and broadcast coordination — over the 5-member checklist, see Gap 92 / Gap 89 area 4 |
 | `IEnforcementService` | 2 methods (`ApplyPolicyAsync`, `RemoveEnforcementAsync`); hides process kill loop, hosts file, DNS flush, registry, HTTP API |
 | `IEnforcementSynchronizer` | 1 method (`SyncAsync(at)`); hides the policy query, the apply-vs-remove choice, and the lock that stops a stale answer overwriting a fresh one |
 | `INotifier` | 1 method (`NotifyAsync(fact)`); hides every notification's wording and the toaster behind it |

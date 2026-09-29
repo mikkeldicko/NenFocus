@@ -540,11 +540,35 @@ public interface IBlockPlacementChecker
 
 \---
 
-### Gap 92 — Value Object and Service Review (raised 2026-09-29; not started)
+### Gap 92 — Value Object and Service Review (raised 2026-09-29; review done the same day, findings below; quick wins done, rest open)
 
 **Why it's a gap:** Gap 88's interrogation showed the existing catalogue has never been checked as a whole against `MODULE_STANDARDS.md` → Where a Rule Lives: e.g. `ContractBlockBatchPreparation` (a result type) sits in `Domain/Services/`, the Interface-First Rule's text disagrees with where every Domain service interface lives, and whether each Domain service name follows the new naming row was never checked.
 
 **Method:** for every value object — does it carry a rule of its own (constructor invariant or behaviour), or is it a wrapper used once (the warning sign)? Does it hold values that really travel together? For every service (Domain `Services/`, Application `Services/`, Infrastructure `…Service`) — rule or coordination, and is it in the matching layer? Does it answer a question about a single entity (belongs on the entity)? Does it pass the Deep Module test and the ≤ 5-member checklist? Is it named per the Naming Conventions table? Output: a findings table (type, verdict, suggested change); nothing changed without sign-off.
+
+**Review done 2026-09-29 (usage counted in code before calling anything unused).** Sound: `BreakSchedule`, `BreakTimer`, `ContractDay`, `ContractCalendar`, `ActivePolicySlice`, `BlockedApp`/`BlockedSite`/`SessionGoal`/`NenContractGoal`, `DailyFloor`/`ContractFloor`, `SessionBreak`, `BlockMarker`/`BreakTransition` (results used in several places); `PolicyEngine`, `ContractBlockBatchPreparer`; `EnforcementSynchronizer`, `Notifier`, `BlockMarkerNotifier`.
+
+| # | Item | Finding | Status |
+|---|---|---|---|
+| V1 | `BreakSettings` | Dead — replaced by `BreakTimer`, only old migration snapshots named it | **Deleted 2026-09-29** (with its tests) |
+| V2 | `DailyFloor.HoursRemaining`, `ContractDay.WindowLength` | Dead members, tests only | **Deleted 2026-09-29** |
+| V3 | `ChangeWindow` | Parked: EF-ignored, only ever `null` — a type waiting for its feature | Open — keep or delete until the Change Window feature is designed |
+| V4 | `WorkHours.ContainsRange` vs `ContractDay.Contains` | Two "fits the window" rules; `ContainsRange`'s only caller is `PlannerPageViewModel` drafting | → Gap 88 phase 4 (#10) |
+| V5 | `ContractDay` window, `WorkHours`, `ChangeWindow` | `Start`+`End` travelling together again, but **local** times — Gap 88 made `TimeSlot` UTC-only | **Decision needed** in Gap 88/90: local windows as they are, or a local counterpart |
+| V6 | `DailyFloor` | `GetNenContractsForDateRange` builds throwaway floors to fake an ad-hoc floor the Domain doesn't know | → Gap 95 #3 |
+| V7 | `SessionDuration.ToString()` | `hh\:mm` display formatting inside the Domain | Open — move to a converter |
+| V8 | `RedemptionEntry.MinutesCovered` (`double`) | Fractional minutes flowing into a saved timestamp | → Gap 88 (`TimeSlot.Covering`) |
+| S2 | `FocusBlockOutcomeClassifier` | Four jobs; `Classify(block, asOf)` is a single-entity question, yet `MODULE_STANDARDS.md` names this class as its example domain service — the standard contradicts itself | → Gap 95 #6; fix the example when resolved |
+| S3 | `PlannedBlockResolutionExtensions.IsResolved` | Single-block question as an extension in `Services/`, taking the classifier | Open — onto `PlannedBlock` once `Classify` moves onto the block |
+| S4 | `PlannedFocusHoursCalculator` (+ interface + DI) | A registered service around ~5 lines; misnamed — also sums *credited* hours (completed/Bonus queries) | → after Gap 88: `TimeSlot.SplitByDay` + a sum |
+| S5 | `DayRangeSplitter` | Static class in `Services/` | → Gap 88 (onto `TimeSlot`) |
+| S6 | `ContractBlockBatchPreparation` | Result type in `Services/`, not `ValueObjects/` | Open — move (Design Review Rule 6/7) |
+| A2 | `BreakTransitionHandler` | Not a CQRS handler but named like one | Open — rename (e.g. `BreakTransitionAnnouncer`) |
+| A3 | `ISessionStateService` — 15 members | Three jobs: active session, Ritual prompt, post-session/post-contract relays | Open — split; with Gap 89 area 4 |
+| A4 | `IActiveSessionMonitor` — 10 members | Over the checklist; possibly fine as a UI read model — decide deliberately | Open |
+| A5 | `DOMAIN_DICTIONARY.md` Deep Module table | Member counts out of date | **Fixed 2026-09-29** |
+| A6 | `IPlannedBlockRepository.HasFutureBlocksForPresetAsync` | "Preset locked" rule (`End > after`) lives in SQL | → Gap 91 known item |
+| A7 | `ISystemClock` / `IPlannerClockService` / `IDebugClockController` | Three clock abstractions | → Gap 89 area 3 |
 
 \---
 

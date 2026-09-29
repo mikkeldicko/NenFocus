@@ -56,18 +56,6 @@ public class DailyFloorTests
         DailyFloor.None.IsSatisfiedBy(focusHours).Should().BeTrue();
     }
 
-    [Theory]
-    [InlineData(4, 0, 4)]
-    [InlineData(4, 1.5, 2.5)]
-    [InlineData(4, 4, 0)]
-    [InlineData(4, 5, 0)]   // exceeding the floor clamps to zero, never negative
-    public void HoursRemaining_ClampsAtZero(double floorHours, double focusHours, double expected)
-    {
-        var floor = new DailyFloor(floorHours);
-
-        floor.HoursRemaining(focusHours).Should().Be(expected);
-    }
-
     [Fact]
     public void PercentComplete_WhenNone_ReturnsNull()
     {

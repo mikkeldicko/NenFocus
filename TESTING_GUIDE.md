@@ -30,7 +30,7 @@ dotnet test NenFocus.Tests/NenFocus.Tests.csproj --collect:"XPlat Code Coverage"
 NenFocus.Tests/
 ├── Domain/
 │   ├── SessionTests.cs, BlockPresetTests.cs, NenContractTests.cs, PolicyEngineTests.cs, ...  ← entity/service state-machine tests (zero mocks)
-│   ├── ValueObjects/          ← WorkHoursTests.cs, DailyFloorTests.cs, BreakSettingsTests.cs, etc.
+│   ├── ValueObjects/          ← WorkHoursTests.cs, DailyFloorTests.cs, BreakScheduleTests.cs, etc.
 │   └── Services/              ← ContractBlockBatchPreparerTests.cs, PlannedFocusHoursCalculatorTests.cs
 ├── Application/
 │   ├── UseCases/{BlockPresets,ContractPresets,NenContracts,Planner,Sessions}/  ← one *CommandHandlerTests.cs + *ValidatorTests.cs pair per vertical slice

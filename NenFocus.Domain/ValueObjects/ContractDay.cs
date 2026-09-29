@@ -42,8 +42,6 @@ public sealed record ContractDay
 
     public bool IsRestDay => Floor is null;
 
-    public TimeSpan WindowLength => WindowEnd - WindowStart;
-
     /// <summary>Whether [localStart, localEnd] fits inside this day's window — ending exactly at WindowEnd is inside.</summary>
     public bool Contains(DateTime localStart, DateTime localEnd)
         => localStart >= WindowStart && localEnd <= WindowEnd;

@@ -159,7 +159,7 @@ Grouped into six boxes, worked top to bottom (agreed 2026-09-28; architecture bo
 3. **Gap 93 — One Source for Block Change Permissions** ("may this block be changed or deleted": three validators and seven ViewModel properties, several disagreeing — incl. a live bug, the Split button hidden for Period Study contracts) — raised 2026-09-29; findings recorded, not interrogated. After Gap 88, whose phase 0 already removes part of it.
 4. **Gap 95 — One Source for Focus Hours** (credited minutes fed by the same three steps in six handlers; "which blocks are Bonus" defined three times; the day badge and the banner/recap answer "was this day met" differently) — raised 2026-09-29; findings recorded, not interrogated. Before Gap 67, which changes what counts.
 5. **Gap 91 — One-Source Sweep: Same Fact, Several Derivations** (whole codebase, beyond Gap 89's four areas) — raised 2026-09-29; not started.
-6. **Gap 92 — Value Object and Service Review** (does every value object carry a rule, is every service in the right layer with the right name) — raised 2026-09-29; not started.
+6. **Gap 92 — Value Object and Service Review** (does every value object carry a rule, is every service in the right layer with the right name) — raised 2026-09-29; review done the same day, dead code deleted; open items listed in `OPEN_GAPS.md`.
 7. **Gap 89 — Architecture Audit, Areas 2–5** (PlannerPageViewModel, two heartbeats' clocks, in-memory session vs database, Nen Contract queries) — raised 2026-09-28; not started. Moved here from box 3 on 2026-09-29; area 5 (Nen Contract queries) largely investigated as Gap 95.
 
 **2. Contracts — now**

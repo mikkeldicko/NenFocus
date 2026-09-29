@@ -25,12 +25,6 @@ public record DailyFloor
     public bool IsSatisfiedBy(double focusHours) => focusHours >= Hours;
 
     /// <summary>
-    /// Hours still needed to satisfy the floor, clamped at zero — exceeding the floor
-    /// never reads as a negative "remaining" amount.
-    /// </summary>
-    public double HoursRemaining(double focusHours) => Math.Max(0, Hours - focusHours);
-
-    /// <summary>
     /// completedHours ÷ Hours, uncapped (133% displays as 133%, never clamped to 100%) —
     /// null only when Hours is 0 (DailyFloor.None), since there's nothing meaningful to
     /// express a percentage of. See ARCHITECT_GOVERNANCE.md Open Gap C, C1.
