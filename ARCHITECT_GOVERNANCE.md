@@ -143,6 +143,16 @@ Once the interface is approved, implement the thinnest possible vertical slice:
 
 Each slice must compile and produce the correct output before the next slice begins. If the project has an active test suite (`NenFocus.Tests`), a passing test is required before moving on. This is the "headlight management" rule: never implement further than you can verify.
 
+### Step 5 — Guard Before Closing (added 2026-09-29)
+
+Before any gap is closed — every gap, not only the Architecture box — ask: **"Did this gap reveal a rule a test could guard?"** Answer it explicitly in the close-out, and record the answer in the gap's `DESIGN_GAP_HISTORY.md` entry:
+
+* **Yes →** add the rule to `NenFocus.Tests/ArchitectureTests/` (or a parity/regression test when it's a single case), probe it red with a deliberate violation, and write it into `MODULE_STANDARDS.md` if it isn't already there. Follow the Guard Hierarchy: if the compiler can own the rule, prefer that, and note which gap will.
+* **The gap fixed something a test lists →** delete that exception entry (the test stays red until you do).
+* **No →** say why in one line (e.g. a judgment call no test can see, or a one-off already pinned by a regression test).
+
+Why: written rules alone didn't stop drift; every rule a gap makes true but leaves unguarded can quietly come back. How-to: `TESTING_GUIDE.md` → Architecture Tests.
+
 \---
 
 ## Open Gaps

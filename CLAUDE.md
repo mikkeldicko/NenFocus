@@ -16,6 +16,7 @@ These files govern every decision. Read them, do not override them, surface drif
 ## Process (governs how you work, not the code)
 - **Architecture decisions belong to Mikkel.** Claude executes; does not silently change design.
 - **Design Gap Protocol is mandatory before any new feature.** Interrogate design first, produce a written plan, get sign-off, then implement. Never skip to code.
+- **Before closing any gap, ask "did this gap reveal a rule a test could guard?"** Answer it explicitly to Mikkel and in the gap's history entry: add the rule to the architecture tests (probed red first), delete any exception entry the gap retired, or say in one line why no test can guard it. See `ARCHITECT_GOVERNANCE.md` → Design Gap Protocol → Step 5.
 - **Surface drift, don't fix silently.** If code contradicts governance docs, flag it and ask.
 - **Clean Architecture + DDD, CQRS marker interfaces, ViewModel Forbidden Zone all apply.** See `MODULE_STANDARDS.md` and `DOMAIN_DICTIONARY.md` for specifics before proposing changes in those areas.
 - **Git commits are authored by Mikkel, not Claude.** Never add `Co-Authored-By: Claude`, "🤖 Generated with Claude Code", "Assisted by Claude", or any similar attribution to commit messages or PR descriptions. Write commit messages as if Mikkel wrote them.
