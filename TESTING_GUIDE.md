@@ -44,6 +44,7 @@ NenFocus.Tests/
 │   ├── Services/               ← BlockedAttemptTrackerTests.cs, SessionStateServiceTests.cs, TransactionalCommandHandlerTests.cs, InProcessDomainEventPublisherTests.cs
 │   └── CompositionRootTests.cs ← confirms every handler/service resolves from DI with no missing registrations
 ├── ArchitectureTests/          ← MODULE_STANDARDS rules that fail on drift (Gap 98) — see "Architecture Tests" below
+├── Headless/                   ← real views rendered with no screen (Avalonia.Headless) — see "Headless UI Tests" below
 └── NenFocus.Tests.csproj
 ```
 
@@ -51,7 +52,7 @@ NenFocus.Tests/
 - `Domain/` tests never use mocks. Domain is pure logic.
 - `Application/` tests mock all interfaces (`ISessionRepository`, `ISessionStateService`, etc.) with NSubstitute.
 - `Infrastructure/` tests **are built** — they run against a real SQLite database (via `SqliteRepositoryTestBase`'s in-memory connection, not a fake in-memory EF provider), not mocks. This is the correct place for repository/EF Core behavior and DI composition tests.
-- No ViewModel tests — ViewModels are tested via the Application layer they delegate to.
+- No stand-alone ViewModel logic tests — ViewModels stay thin and are tested via the Application layer they delegate to. A view and its ViewModel together can be checked end-to-end in `Headless/` (since 2026-09-29).
 
 ---
 
@@ -214,6 +215,21 @@ public async Task HandleAsync_ValidDurations_AllSucceed(int durationMinutes)
 - **A gap makes a new rule true** (the Architecture box rule) — add its test here, and probe it: add a deliberate violation (a temporary `ZzProbe` file), watch it go red, remove it. A test never seen failing is not trusted.
 - **Generated code** (EF migrations, Avalonia's compiled XAML) is out of scope, matched narrowly so a change on their side fails red rather than passing silently.
 - **What these can't check** — whether a module is deep, whether a rule is in the right home — stays with the interface-first sign-off (`MODULE_STANDARDS.md` → Guard Hierarchy).
+
+---
+
+## Headless UI Tests (added 2026-09-29)
+
+`NenFocus.Tests/Headless/` renders real views on Avalonia's headless platform: no window on screen, but the real `App` styles, XAML, bindings and ViewModels. `TestAppBuilder` starts it once for the test run; each test is an `[AvaloniaFact]` (runs on Avalonia's UI thread). The package `Avalonia.Headless.XUnit` must stay at the app's Avalonia version (Gap 102 moves both together).
+
+**What they're for:** behaviour a person would check by clicking. What the screen shows, and whether pressing a button reaches the ViewModel (`TenPageViewTests` is the first). Useful for any gap that changes a view, and as before/after smoke tests around the Avalonia update (Gap 102).
+
+**What they're not for:**
+- **Binding names.** Views use compiled bindings (`x:DataType`), so a wrong name already fails the build (checked 2026-09-29).
+- **Business rules.** Those are tested in Domain/Application, where they live.
+- **Anything outside the window:** Windows toasts, the hosts file, real shutdown. Those stay manual.
+
+**Pattern:** create the view, set `DataContext` to a ViewModel built with test doubles (dispatchers mocked with NSubstitute), put it in a `Window`, `Show()`, then find controls via `GetLogicalDescendants()` and act or assert.
 
 ---
 

@@ -722,6 +722,7 @@ public interface IBlockPlacementChecker
 **Direction agreed 2026-09-29 (architect's choice: fix at the source, not pin):** update all five Avalonia packages (`Avalonia`, `.Desktop`, `.Diagnostics`, `.Fonts.Inter`, `.Themes.Fluent`) from 11.0.10 to the latest 11.3.x (11.3.22 when raised, which depends on `Tmds.DBus.Protocol` 0.21.3, the backported fix). That also brings three minor versions of UI bug fixes and keeps the app on a supported release. **Placed before Gaps 88/93/89** so their Planner rewrites are built and tested once, on the new version.
 
 **Plan:**
+0. **Before the bump, write headless smoke tests** (`NenFocus.Tests/Headless/`, set up 2026-09-29) for the screens on the checklist below that can render with test doubles: the Ritual steps, the Planner's End dropdown, Post-Session, the preset pages. Run them green on 11.0.10, then again after the bump. They automate part of step 3 as a before/after comparison. Bump `Avalonia.Headless.XUnit` together with the app's packages.
 1. Bump the five packages; build; fix compile errors and new warnings.
 2. Full test suite; dependency scan (`dotnet list NenFocus.slnx package --vulnerable --include-transitive`) fully clean, with no pin needed.
 3. **Manual click-through**, because tests don't see visual or interaction changes:
