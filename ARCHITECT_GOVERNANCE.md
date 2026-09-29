@@ -157,10 +157,11 @@ Grouped into six boxes, worked top to bottom (agreed 2026-09-28; architecture bo
 1. **Gap 88 — One Source for Time Slots and Block Placement** (`TimeSlot`, reserved vs scheduled slot, `BlockPlacementChecker`, started blocks locked, Cover Deficit and UI checks built on it) — raised 2026-09-28 in the area-1 audit; interrogated 2026-09-29, plan saved in `OPEN_GAPS.md`, interface awaiting approval; not being built yet. Before Gap 68 so drafting builds on it.
 2. **Gap 90 — Blocks and Sessions Hold a `TimeSlot`** (stored value object instead of loose `Start`/`End`, so a raw comparison can't be written) — raised 2026-09-29 during Gap 88; direction agreed, not interrogated. Straight after Gap 88.
 3. **Gap 93 — One Source for Block Change Permissions** ("may this block be changed or deleted": three validators and seven ViewModel properties, several disagreeing — incl. a live bug, the Split button hidden for Period Study contracts) — raised 2026-09-29; findings recorded, not interrogated. After Gap 88, whose phase 0 already removes part of it.
-4. **Gap 95 — One Source for Focus Hours** (credited minutes fed by the same three steps in six handlers; "which blocks are Bonus" defined three times; the day badge and the banner/recap answer "was this day met" differently) — raised 2026-09-29; findings recorded, not interrogated. Before Gap 67, which changes what counts.
-5. **Gap 91 — One-Source Sweep: Same Fact, Several Derivations** (whole codebase, beyond Gap 89's four areas) — raised 2026-09-29; not started.
-6. **Gap 92 — Value Object and Service Review** (does every value object carry a rule, is every service in the right layer with the right name) — raised 2026-09-29; review done the same day, dead code deleted; open items listed in `OPEN_GAPS.md`.
-7. **Gap 89 — Architecture Audit, Areas 2–5** (PlannerPageViewModel, two heartbeats' clocks, in-memory session vs database, Nen Contract queries) — raised 2026-09-28; not started. Moved here from box 3 on 2026-09-29; area 5 (Nen Contract queries) largely investigated as Gap 95.
+4. **Gap 97 — One Source for Contract Membership** ("which contract governs this block, and how": Bonus decided in four places, two meanings of "inside the contract", a UTC-days repository trap — Gap 67's `ContractRole`) — raised 2026-09-29; findings recorded, not interrogated. Before Gap 95, which builds on it.
+5. **Gap 95 — One Source for Focus Hours** (credited minutes fed by the same three steps in six handlers; "which blocks are Bonus" defined three times; the day badge and the banner/recap answer "was this day met" differently) — raised 2026-09-29; findings recorded, not interrogated. Before Gap 67, which changes what counts.
+6. **Gap 91 — One-Source Sweep: Same Fact, Several Derivations** (whole codebase, beyond Gap 89's four areas) — raised 2026-09-29; not started.
+7. **Gap 92 — Value Object and Service Review** (does every value object carry a rule, is every service in the right layer with the right name) — raised 2026-09-29; review done the same day, dead code deleted; open items listed in `OPEN_GAPS.md`.
+8. **Gap 89 — Architecture Audit, Areas 2–5** (PlannerPageViewModel, two heartbeats' clocks, in-memory session vs database, Nen Contract queries) — raised 2026-09-28; not started. Moved here from box 3 on 2026-09-29; area 5 (Nen Contract queries) largely investigated as Gap 95.
 
 **2. Contracts — now**
 1. **Gap 66 (W) — Contract Wizard: "When" Step and One-Click Date/Time Fields** — interrogated 2026-09-28; plan agreed.
@@ -190,7 +191,7 @@ Grouped into six boxes, worked top to bottom (agreed 2026-09-28; architecture bo
 3. **Gap 76 (K) — Enforcement Has No Life Independent of the GUI Process** (Windows Service split) — interrogated 2026-09-07; not yet built.
 4. **Gap 77 (O) — Cross-Platform Suite: iOS App, Multi-Device Sync, "Hardcore iOS Lockdown"** — raised 2026-09-27; not interrogated.
 
-Next free number: **96** (84–87 used 2026-09-28 by fixes built directly; 88–89 raised as open gaps the same day; 90–93 and 95 raised 2026-09-29; 94 a fix built directly the same day).
+Next free number: **98** (84–87 used 2026-09-28 by fixes built directly; 88–89 raised as open gaps the same day; 90–93, 95 and 97 raised 2026-09-29; 94 and 96 fixes built directly the same day).
 
 \---
 

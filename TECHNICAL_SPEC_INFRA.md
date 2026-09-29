@@ -120,6 +120,7 @@ Tactical implementation details, current build state, and platform-specific gotc
 - **`Classify(FocusBlock, asOf)` the only way to classify (Gap 86):** the block's own stamps are the one source; the five-argument form is private; the recap no longer loads sessions — see `DESIGN_GAP_HISTORY.md` Gap 86.
 - **Cover Deficit suggestions decide in local time (Gap 87):** `GetSuggestedRedemptionPlacementsQueryHandler` no longer mixed UTC "now" with local Work Hours; `ISystemClock.ToUtc` added — see `DESIGN_GAP_HISTORY.md` Gap 87.
 - **Recap Bonus block count is Focus-only (Gap 94):** matches the set Bonus hours come from — see `DESIGN_GAP_HISTORY.md` Gap 94.
+- **Spontaneous sessions matched on local dates; Background tiles never "Bonus" (Gap 96)** — see `DESIGN_GAP_HISTORY.md` Gap 96. Gotcha: `ISessionRepository.GetHistoryAsync(DateOnly, DateOnly)` reads its dates as **UTC** days — a caller holding local dates must fetch a day either side and filter by `ISystemClock.ToLocalDate` (Gap 97).
 
 ### Not Yet Built
 

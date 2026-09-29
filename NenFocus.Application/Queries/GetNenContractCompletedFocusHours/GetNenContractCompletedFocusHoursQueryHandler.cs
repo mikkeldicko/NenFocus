@@ -66,12 +66,19 @@ public sealed class GetNenContractCompletedFocusHoursQueryHandler
                 creditedWindows.Add((_clock.ToLocal(w.Start), _clock.ToLocal(w.End)));
         }
 
-        var spontaneousSessions = await _sessions.GetHistoryAsync(contract.StartDate, contract.EndDate, presetId: null, ct);
+        // The contract's dates are local, but GetHistoryAsync reads its dates as UTC days — so
+        // fetch a day either side and decide on the session's own local date here, or a session
+        // just after local midnight on the first day (still the previous UTC day) is missed and
+        // one just after the last day (still its UTC day) is counted.
+        var spontaneousSessions = await _sessions.GetHistoryAsync(
+            contract.StartDate.AddDays(-1), contract.EndDate.AddDays(1), presetId: null, ct);
         foreach (var session in spontaneousSessions)
         {
             if (session.Origin != SessionOrigin.Spontaneous) continue;
             if (!focusPresetIds.Contains(session.BlockPresetId)) continue;
             if (session.StartedAt is not { } startedAt) continue;
+            var localDate = _clock.ToLocalDate(startedAt);
+            if (localDate < contract.StartDate || localDate > contract.EndDate) continue;
 
             var minutes = session.GetElapsedTime(now)?.TotalMinutes ?? 0;
             if (minutes <= 0) continue;

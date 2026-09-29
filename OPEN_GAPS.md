@@ -619,3 +619,31 @@ public interface IBlockPlacementChecker
 **Direction (for interrogation, not decided):** the block answers "how much did I earn" from its own stamps; the contract answers "is this block mine, Bonus, or neither" and "what does this day owe" (including whether an ad-hoc target is real); one per-day read model on top, used by the badge, banner, recap, readiness and the floor guards alike.
 
 **Why before Gap 67 and not folded into it:** Gap 67 changes *what counts*; today that is decided in several places, so it would have to be changed in each. After this gap it is one place. This gap should change no numbers (bug fixes aside, each pinned by a test); Gap 67 deliberately does — kept apart, any number that moves traces to the gap that moved it.
+
+\---
+
+### Gap 97 — One Source for Contract Membership (raised 2026-09-29 from a one-source investigation; findings recorded, not interrogated; before Gap 95)
+
+**The question:** "which contract governs this block — and how?" (committed, redemption, Bonus, or none), and for spontaneous sessions "does this count toward the contract?". This is Gap 67's agreed `ContractRole` concept, currently answered piecemeal.
+
+**Where it is answered today:**
+
+| Relationship | Decided by | Where |
+|---|---|---|
+| Committed / redemption | the block's stored `ContractId` | validators, `StartSession` (`KeepBlockingDuringBreaks`), completed hours, deficits |
+| Which contract a new redemption attaches to | oldest eligible deficit across **all in-effect contracts** | `ComputeRedemptionAttributionQueryHandler.cs:68-97` |
+| Bonus (unlinked block inside the contract) | `contract.Covers(localStart)` — exact local moments | Bonus hours, recap count (Gap 94), completion readiness, Planner tile badge (Gap 96) — **four places** |
+| Spontaneous sessions counting toward the contract | **whole local dates** (fixed from UTC days in Gap 96) | completed hours |
+| Contract still in force | `NenContract.IsInEffect` + a SQL copy "mirrors … exactly" (`NenContractRepository.cs:54,63`), no parity test | Update validator, Break, tile DTO |
+
+**Findings still open:**
+1. **Two meanings of "inside the contract":** Bonus uses `Covers` (respects Work Hours on the first and last day); spontaneous sessions use whole dates. A session and a Bonus block at the same moment (e.g. before Work Hours open on day 1) are treated differently. Product question: should spontaneous sessions use `Covers`? (Gap 67 may stop counting them at all.)
+2. **"Is this block Bonus" in four places** (above), each with its own type filter and pre-fetch range.
+3. **A redemption can attach to "some" contract:** attribution searches every in-effect contract, not the one covering the block's date; whether `CheckRedemptionEligibility` already prevents a mismatch is not yet traced.
+4. **`IsInEffect` copied in SQL** without a parity test (unlike `IsUnresolved`).
+5. **`ISessionRepository.GetHistoryAsync(DateOnly, DateOnly)` reads its dates as UTC days** — the trap behind Gap 96; its next caller (Insights `GetSessionHistoryQuery`, no UI caller yet) would repeat it. Should take UTC instants, or local dates plus the clock.
+6. `PlannerPageViewModel` chooses "the" contract itself (`_contractsThisWeek`, `SelectedContract` for Cover Deficit) — mostly UI selection; the rest of its contract logic is Gap 93.
+
+**Direction (for interrogation, not decided):** `NenContract` answers "what is this block to me" (`Committed | Redemption | Bonus | None` — Gap 67's `ContractRole`) and "does this moment count as inside me", with `Covers` as the one meaning; Bonus hours, completed hours, recap, readiness, the tile badge and Gap 95's per-day read model ask it.
+
+**Why before Gap 95 and 67:** Gap 95's per-day read model and Gap 67's membership change both build on "what counts as the contract's" — one definition first.

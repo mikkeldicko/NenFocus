@@ -426,6 +426,34 @@ public class GetPlannedBlocksForDayQueryHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_UnlinkedBackgroundBlockWithinAContractRange_HasNoBonusBadge()
+    {
+        // Bonus hours only ever come from Focus blocks, so a Background block inside a
+        // contract's range is not a Bonus block and must not be badged as one.
+        var block = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End); // ContractId null
+        _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
+        _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
+        var contract = NenContract.Seal(
+            id: Guid.NewGuid(),
+            name: "Study Month",
+            goal: new NenContractGoal("Goal"),
+            strictnessRule: StrictnessRule.Locked,
+            calendar: TestCalendars.For(Day.AddDays(-1), Day.AddDays(5), new DailyFloorRule.Fixed(DailyFloor.None)),
+            floorRule: new DailyFloorRule.Fixed(DailyFloor.None),
+            changeWindow: null,
+            allowCancellation: false,
+            plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
+            localSealedAt: Start.Date.AddDays(-1));
+        _contracts.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<NenContract>)[contract]);
+
+        var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
+
+        var dto = result.Should().ContainSingle().Subject;
+        dto.ContractBadge.Should().BeNull();
+        dto.BonusContractName.Should().BeNull();
+    }
+
+    [Fact]
     public async Task HandleAsync_UnlinkedBlockOutsideAnyContractRange_ContractBadgeIsNull()
     {
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End); // ContractId null

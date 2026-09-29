@@ -165,7 +165,7 @@ public class GetNenContractCompletedFocusHoursQueryHandlerTests
             backgroundPresetId, SessionOrigin.Spontaneous); // deliberately uses the Background preset's ID
         spontaneous.Start(spontaneousStart);
         spontaneous.Complete(spontaneousStart.AddMinutes(45));
-        _sessions.GetHistoryAsync(StartDate, EndDate, null, Arg.Any<CancellationToken>())
+        _sessions.GetHistoryAsync(StartDate.AddDays(-1), EndDate.AddDays(1), null, Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<Session>)[spontaneous]);
 
         var result = await CreateHandler().HandleAsync(new GetNenContractCompletedFocusHoursQuery(ContractId), CancellationToken.None);
@@ -207,12 +207,44 @@ public class GetNenContractCompletedFocusHoursQueryHandlerTests
             presetId, SessionOrigin.Spontaneous);
         spontaneous.Start(spontaneousStart);
         spontaneous.Complete(spontaneousStart.AddMinutes(45));
-        _sessions.GetHistoryAsync(StartDate, EndDate, null, Arg.Any<CancellationToken>())
+        _sessions.GetHistoryAsync(StartDate.AddDays(-1), EndDate.AddDays(1), null, Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<Session>)[spontaneous]);
 
         var result = await CreateHandler().HandleAsync(new GetNenContractCompletedFocusHoursQuery(ContractId), CancellationToken.None);
 
         result[DateOnly.FromDateTime(spontaneousStart)].Should().Be(0.75); // 45 minutes
+    }
+
+    [Fact]
+    public async Task HandleAsync_SpontaneousSessions_MatchedOnTheContractsLocalDays()
+    {
+        // At UTC+2, 01:00 local on the first day is 23:00 UTC the day before, and 01:00 local
+        // the day after the last day is 23:00 UTC on the last day. The contract's dates are
+        // local, so the first counts and the second doesn't — whatever UTC day they fall on.
+        _clock.ToLocal(Arg.Any<DateTime>()).Returns(ci => ci.Arg<DateTime>().AddHours(2));
+        _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(ActiveContract());
+        var presetId = Guid.NewGuid();
+        var block = FocusBlock.Create(Guid.NewGuid(), presetId, Now.AddDays(-1), Now.AddDays(-1).AddHours(1), contractId: ContractId);
+        _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
+
+        var firstDayLocal = Spontaneous(presetId, new DateTime(2025, 12, 31, 23, 0, 0, DateTimeKind.Utc));
+        var dayAfterEndLocal = Spontaneous(presetId, new DateTime(2026, 1, 7, 23, 0, 0, DateTimeKind.Utc));
+        _sessions.GetHistoryAsync(StartDate.AddDays(-1), EndDate.AddDays(1), null, Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyList<Session>)[firstDayLocal, dayAfterEndLocal]);
+
+        var result = await CreateHandler().HandleAsync(new GetNenContractCompletedFocusHoursQuery(ContractId), CancellationToken.None);
+
+        result[StartDate].Should().Be(0.5);
+        result.Should().NotContainKey(EndDate.AddDays(1));
+    }
+
+    private static Session Spontaneous(Guid presetId, DateTime startUtc)
+    {
+        var session = Session.Create(Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(30)),
+            presetId, SessionOrigin.Spontaneous);
+        session.Start(startUtc);
+        session.Complete(startUtc.AddMinutes(30));
+        return session;
     }
 
     [Fact]
@@ -228,7 +260,7 @@ public class GetNenContractCompletedFocusHoursQueryHandlerTests
             presetId, SessionOrigin.Spontaneous);
         spontaneous.Start(spontaneousStart);
         spontaneous.Complete(spontaneousStart.AddHours(2)); // 23:00-01:00
-        _sessions.GetHistoryAsync(StartDate, EndDate, null, Arg.Any<CancellationToken>())
+        _sessions.GetHistoryAsync(StartDate.AddDays(-1), EndDate.AddDays(1), null, Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<Session>)[spontaneous]);
 
         var result = await CreateHandler().HandleAsync(new GetNenContractCompletedFocusHoursQuery(ContractId), CancellationToken.None);
@@ -248,7 +280,7 @@ public class GetNenContractCompletedFocusHoursQueryHandlerTests
             Guid.NewGuid(), SessionOrigin.Spontaneous); // preset unrelated to the contract
         spontaneous.Start(spontaneousStart);
         spontaneous.Complete(spontaneousStart.AddMinutes(45));
-        _sessions.GetHistoryAsync(StartDate, EndDate, null, Arg.Any<CancellationToken>())
+        _sessions.GetHistoryAsync(StartDate.AddDays(-1), EndDate.AddDays(1), null, Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<Session>)[spontaneous]);
 
         var result = await CreateHandler().HandleAsync(new GetNenContractCompletedFocusHoursQuery(ContractId), CancellationToken.None);
@@ -270,7 +302,7 @@ public class GetNenContractCompletedFocusHoursQueryHandlerTests
         plannedOriginSession.Start(plannedLikeStart);
         plannedOriginSession.Complete(plannedLikeStart.AddMinutes(30));
 
-        _sessions.GetHistoryAsync(StartDate, EndDate, null, Arg.Any<CancellationToken>())
+        _sessions.GetHistoryAsync(StartDate.AddDays(-1), EndDate.AddDays(1), null, Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<Session>)[plannedOriginSession]);
 
         var result = await CreateHandler().HandleAsync(new GetNenContractCompletedFocusHoursQuery(ContractId), CancellationToken.None);

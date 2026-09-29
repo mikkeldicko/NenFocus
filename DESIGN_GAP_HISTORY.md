@@ -1454,3 +1454,20 @@ For active design tension, see the **Open Gaps** section in `ARCHITECT_GOVERNANC
 **Confirmed via `NenFocus.Tests` (1461 passing, up from 1460):** `HandleAsync_BonusBlockCount_IgnoresBackgroundBlocks` — one Focus Bonus block plus one unlinked Background block counts 1 (counted 2 before the fix).
 
 **Principle demonstrated:** a comment that says "mirrors X exactly" is a promise nothing checks. "Which blocks are Bonus for this contract" is still defined in three places (hours, this count, completion readiness) — the real fix is one definition; that is Gap 95.
+
+\---
+
+## Gap 96 — Spontaneous Sessions Matched on UTC Days; Background Tiles Badged "Bonus" *(closed, 2026-09-29)*
+
+**Found by** the one-source investigation of "which contract governs this block" (raised as Gap 97). Two bugs:
+
+1. **Spontaneous sessions on the wrong days.** `GetNenContractCompletedFocusHoursQueryHandler` asked `ISessionRepository.GetHistoryAsync(contract.StartDate, contract.EndDate)` for the spontaneous sessions that count toward the contract. The contract's dates are **local**; the repository turns them into **UTC** midnights (`SessionRepository.cs:35-36`) and compares with the UTC `StartedAt`. At UTC+2, a session at 01:00 local on the first day (23:00 UTC the day before) was left out, and one at 01:00 local the day after the last day (23:00 UTC on the last day) was counted — same local/UTC mix-up as Gap 87.
+2. **"BONUS" on Background tiles.** `GetPlannedBlocksForDayQueryHandler` gave any unlinked block the contract `Covers` a Bonus badge, with no Focus filter, and `PlannerPageView.axaml.cs` draws it — so a Background tile inside a contract read "BONUS" while earning no Bonus hours. Same slip as Gap 94.
+
+**Changed:** the handler fetches a day either side and keeps a session only if its local start date (`ISystemClock.ToLocalDate`) is inside the contract's dates. The tile takes Bonus only for a `FocusBlock`.
+
+**Confirmed via `NenFocus.Tests` (1449 passing, up from 1447):** `HandleAsync_SpontaneousSessions_MatchedOnTheContractsLocalDays` (UTC+2 clock; the first-day session counts, the day-after session doesn't — failed before) and `HandleAsync_UnlinkedBackgroundBlockWithinAContractRange_HasNoBonusBadge` (failed before). Existing completed-hours tests re-stubbed for the wider fetch; behaviour unchanged.
+
+**Left for Gap 97:** `GetHistoryAsync` still reads its dates as UTC days — a trap for its next caller (the Insights `GetSessionHistoryQuery`, not yet called by any UI); spontaneous sessions still use whole dates while Bonus uses `Covers` (exact moments); "is this block Bonus" is still written in four places.
+
+**Principle demonstrated:** a `DateOnly` has no time zone, so every method that takes one silently picks one. A date that means "the user's day" must be turned into instants through the clock, never by `ToDateTime(..., DateTimeKind.Utc)`.

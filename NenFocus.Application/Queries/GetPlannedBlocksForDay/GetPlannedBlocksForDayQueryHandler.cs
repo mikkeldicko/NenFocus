@@ -80,7 +80,9 @@ public sealed class GetPlannedBlocksForDayQueryHandler
             // EndsAt, not a date-only truncation — a Work-Hours contract's true boundary
             // isn't midnight. b.Start is UTC; StartsAt/EndsAt are local wall-clock instants.
             var localStart = _clock.ToLocal(b.Start);
-            var bonusContract = b.ContractId is null
+            // Focus only — Bonus hours only ever come from Focus blocks (same set as
+            // GetNenContractBonusFocusHoursQueryHandler); a Background block is never Bonus.
+            var bonusContract = b is FocusBlock && b.ContractId is null
                 ? allContracts.FirstOrDefault(c => c.Covers(localStart))
                 : null;
 
