@@ -327,7 +327,10 @@ public partial class PlannerPageView : UserControl
         box.GotFocus += (_, _) => Open();
         box.AddHandler(InputElement.PointerPressedEvent, (_, _) => Open(), RoutingStrategies.Bubble, handledEventsToo: true);
 
-        box.KeyDown += (_, e) =>
+        // Tunnel, not a plain KeyDown handler: since Avalonia 11.1-11.3 a TextBox with a selection
+        // (Open() selects all) handles Down itself — collapsing the selection — before a bubbling
+        // handler ever sees it. Tunnelling reaches the keys first, whatever the TextBox does (Gap 102).
+        box.AddHandler(InputElement.KeyDownEvent, (_, e) =>
         {
             switch (e.Key)
             {
@@ -346,7 +349,7 @@ public partial class PlannerPageView : UserControl
                     close();
                     break;
             }
-        };
+        }, RoutingStrategies.Tunnel);
 
         list?.AddHandler(InputElement.PointerPressedEvent, (_, e) =>
         {

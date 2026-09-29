@@ -715,32 +715,6 @@ public interface IBlockPlacementChecker
 
 \---
 
-### Gap 102 — Update Avalonia 11.0.10 → 11.3.x (raised 2026-09-29; direction agreed, not started; first in box 1, before the big UI gaps)
-
-**Why it's a gap:** the dependency scan's last finding is `Tmds.DBus.Protocol` 0.15.0 (CVE-2026-39959, high: a malicious peer on the same D-Bus can spoof signals or crash the app). It comes in through Avalonia 11.0.10's Linux-only parts (`Avalonia.Desktop` → `Avalonia.X11` → `Avalonia.FreeDesktop`). **Windows has no D-Bus, so the library is never loaded and the real risk on Windows is zero**, but the scan stays red until it's fixed, and a warning that's always there teaches everyone to ignore the scan. The two other flagged packages were fixed the same day (SQLite via EF Core 9.0.20, `System.Drawing.Common` pinned to 4.7.2).
-
-**Direction agreed 2026-09-29 (architect's choice: fix at the source, not pin):** update all five Avalonia packages (`Avalonia`, `.Desktop`, `.Diagnostics`, `.Fonts.Inter`, `.Themes.Fluent`) from 11.0.10 to the latest 11.3.x (11.3.22 when raised, which depends on `Tmds.DBus.Protocol` 0.21.3, the backported fix). That also brings three minor versions of UI bug fixes and keeps the app on a supported release. **Placed before Gaps 88/93/89** so their Planner rewrites are built and tested once, on the new version.
-
-**Plan:**
-0. **Before the bump, write headless smoke tests** (`NenFocus.Tests/Headless/`, set up 2026-09-29) for the screens on the checklist below that can render with test doubles: the Ritual steps, the Planner's End dropdown, Post-Session, the preset pages. Run them green on 11.0.10, then again after the bump. They automate part of step 3 as a before/after comparison. Bump `Avalonia.Headless.XUnit` together with the app's packages.
-1. Bump the five packages; build; fix compile errors and new warnings.
-2. Full test suite; dependency scan (`dotnet list NenFocus.slnx package --vulnerable --include-transitive`) fully clean, with no pin needed.
-3. **Manual click-through**, because tests don't see visual or interaction changes:
-   - Ritual overlay, all four steps
-   - Planner: create, drag, resize, the End dropdown, Split
-   - Contract wizard and its date pickers
-   - Block and Contract Preset pages
-   - Post-Session screen
-   - toasts
-   - **closing with X**: Gap 101's shutdown flow relies on Avalonia's `ShutdownRequested`/`e.Cancel` behaviour, so check the hosts file keeps a running block's sites after closing
-4. Commit only when the checklist passes.
-
-**Fallback:** if a real regression isn't quick to fix, revert the bump and pin `Tmds.DBus.Protocol` 0.21.3 directly instead (the same pattern as `System.Drawing.Common`). That pin is one line, changes nothing on Windows, and is the version Avalonia 11.3 itself ships with.
-
-**Still to check when starting:** the Avalonia 11.1–11.3 release notes for breaking changes that touch this app (compiled bindings defaults, `Window` and `ShutdownRequested` behaviour, `DatePicker`/`CalendarDatePicker` since Gap 66 plans to use them, pointer capture used by the Planner drag).
-
-\---
-
 ### Gap 99 — Moments vs Calendar Times as Types (raised 2026-09-29 during Gap 98; direction preferred, form not decided; decided at the start of Gap 88's interface review)
 
 **Why it's a gap:** one type, `DateTime`, means two different things — **a moment** (a point in time, stored UTC: when a session started) and **a calendar time** (what the user sees and types: 09:00 on their calendar). Nothing but discipline tells them apart, and it has cost three fixes already: Gap 65 (contract activation on UTC dates), Gap 87 (Cover Deficit local time), Gap 96 (spontaneous sessions on UTC days). Found while building Gap 98 rule 6: EF's storage converter (`NenFocusDbContext.UtcDateTimeConverter`) **silently converts** any non-UTC value on save, treating an unmarked one as local — a hidden second copy of the local→UTC rule that hides a mix-up instead of failing on it.
@@ -752,3 +726,20 @@ public interface IBlockPlacementChecker
 **To decide (first thing in Gap 88's interface review, so `TimeSlot` is built on it from day one):** which form of option 2 — our own `Instant` value object (simplest, rule in our Domain), `DateTimeOffset` (built in, but carries an offset rather than guaranteeing UTC), or NodaTime (most complete model of moments and calendar times; a new dependency in every layer). Also takes over Gap 92 V5: local windows (`ContractDay`, `WorkHours`, `ChangeWindow`) are the calendar-time side of the same question.
 
 **Last step:** once stored times are guaranteed UTC by type, the storage converter stops converting and throws on a non-UTC value; delete `NenFocusDbContext` from Gap 98's local-time rule exceptions list.
+
+\---
+
+### Gap 103 — A New Contract May Start on the Day Another Was Broken (raised 2026-09-29 during Gap 102's click-through; direction agreed, not interrogated)
+
+**Why it's a gap:** cancelling a contract and starting a fresh one the same day is refused. Found live: contract "asdf" was broken on 2026-09-29, and a new contract starting 2026-09-29 got "Overlaps with your existing contract "asdf"", although the Planner shows no contract that week (its banner only shows in-effect contracts). **Architect's direction (2026-09-29):** a broken contract must not stop a new one starting on the same day.
+
+**Today's rule, and where it came from:** `CheckNenContractDateRangeOverlapQueryHandler` checks *every* contract regardless of status (`GetAllAsync`). Gap 59 (2026-09-08) chose that deliberately: `Break()` shrinks `EndDate` to the break day, and a Completed or Broken contract "still occupies the days it actually ran". So the break day itself stays taken. This gap reverses that choice for (at least) the break day.
+
+**Drift to fix at the same time:** `DOMAIN_DICTIONARY_NEN_CONTRACT.md` → "No two in-effect contracts may share any day" still says the check runs against Scheduled/Active contracts only, which contradicts both the code and Gap 59.
+
+**To interrogate:**
+- Does a broken contract free its break day only, or also count as "not there" for overlap entirely? (Its earlier days are in the past, and a new contract can't start in the past anyway.)
+- Completed contracts: same treatment? A contract ending today and a new one starting today is the same "shared boundary day" question.
+- The break day then belongs to two contracts, one broken and one new. Which one owns that day's blocks, floor and Day Met, and how do the Planner badges and the Post-Contract recap show it? (Touches Gap 97, contract membership.)
+- What blocks the broken contract left on that day become (they're no longer governed by it).
+- Guard: a test that sealing on a broken contract's break day passes, and that an in-effect overlap is still refused.

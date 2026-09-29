@@ -9,8 +9,8 @@
 
   <ItemGroup>
     <!-- Renders real views with no screen, so UI tests can click and read them (Headless/). Keep the
-         version equal to the app's Avalonia version — Gap 102 moves both together. -->
-    <PackageReference Include="Avalonia.Headless.XUnit" Version="11.0.10" />
+         version equal to the app's Avalonia version — bump both together. -->
+    <PackageReference Include="Avalonia.Headless.XUnit" Version="11.3.22" />
     <PackageReference Include="coverlet.collector" Version="6.0.2" />
     <PackageReference Include="FluentAssertions" Version="6.12.2" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />

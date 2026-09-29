@@ -220,16 +220,22 @@ public async Task HandleAsync_ValidDurations_AllSucceed(int durationMinutes)
 
 ## Headless UI Tests (added 2026-09-29)
 
-`NenFocus.Tests/Headless/` renders real views on Avalonia's headless platform: no window on screen, but the real `App` styles, XAML, bindings and ViewModels. `TestAppBuilder` starts it once for the test run; each test is an `[AvaloniaFact]` (runs on Avalonia's UI thread). The package `Avalonia.Headless.XUnit` must stay at the app's Avalonia version (Gap 102 moves both together).
+`NenFocus.Tests/Headless/` renders real views on Avalonia's headless platform: no window on screen, but the real `App` styles, XAML, bindings and ViewModels. `TestAppBuilder` starts it once for the test run; each test is an `[AvaloniaFact]` (runs on Avalonia's UI thread). The package `Avalonia.Headless.XUnit` must stay at the app's Avalonia version — bump both together.
 
-**What they're for:** behaviour a person would check by clicking. What the screen shows, and whether pressing a button reaches the ViewModel (`TenPageViewTests` is the first). Useful for any gap that changes a view, and as before/after smoke tests around the Avalonia update (Gap 102).
+**What they're for:** behaviour a person would check by clicking. What the screen shows, and whether typing, clicking or a key reaches the ViewModel. Useful for any gap that changes a view, and as the before/after check around an Avalonia update: run them green on the old version first. They caught Gap 102's regression (Down arrow in the Planner's time fields) and Gap 104's bug.
 
 **What they're not for:**
 - **Binding names.** Views use compiled bindings (`x:DataType`), so a wrong name already fails the build (checked 2026-09-29).
 - **Business rules.** Those are tested in Domain/Application, where they live.
 - **Anything outside the window:** Windows toasts, the hosts file, real shutdown. Those stay manual.
 
-**Pattern:** create the view, set `DataContext` to a ViewModel built with test doubles (dispatchers mocked with NSubstitute), put it in a `Window`, `Show()`, then find controls via `GetLogicalDescendants()` and act or assert.
+**Pattern:** create the view, set `DataContext` to a ViewModel built with test doubles, then use `HeadlessTestKit`:
+- `FakeQueryDispatcher` answers the queries you list (`.Answer<TQuery, TResult>(…)`); any other query gets an empty list or its default, so a screen's side loads see "nothing". Commands: NSubstitute on `ICommandDispatcher`.
+- `Show(view)` puts it in a window; `Settle()` runs queued UI work after anything asynchronous.
+- `VisibleTexts`, `ButtonWithText` (innermost match), `Click` (a real mouse click), `Type` (real keyboard text), `PressKey`.
+- Gotcha: `IsEffectivelyVisible` can report true under a hidden panel — use `IsShown`, which checks every logical parent.
+
+Suites: `RitualStepViewTests`, `TenPageViewTests`, `PostSessionViewTests`, `PresetPageViewTests`, `PlannerEndDropdownViewTests`.
 
 ---
 

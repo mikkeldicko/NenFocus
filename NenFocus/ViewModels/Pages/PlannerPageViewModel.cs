@@ -1346,6 +1346,11 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         FormEndTime = $"{(int)end.TotalHours:D2}:{end.Minutes:D2}";
         _isPopulatingFormTimes = false;
 
+        // Rebuilt on every form open, not only when Start changes: the form may already hold
+        // this Start (it begins at "09:00"), and the drafting cutoff may have changed since (Gap 104).
+        RegenerateEndTimeOptions();
+        RecenterEndTimeScrollIndex();
+
         _preservedFormDuration = PlannerTimeShiftMath.ResolvedDuration(start, end);
         UpdateEndRolloverDisplay(start, end);
     }

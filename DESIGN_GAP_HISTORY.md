@@ -1580,3 +1580,32 @@ Pass 2 is done apart from Gap 89 area 2 (`PlannerPageViewModel`), to be read aft
 **Known limit (Gap 76):** once the app is closed, only the hosts-file website blocking survives. Blocked apps aren't killed, the extension loses its local server, and nothing lifts blocking at a block's end until the app reopens.
 
 **Principle demonstrated:** a decision that has one owner (`PolicyEngine` decides, the synchronizer applies) must not grow a shortcut copy at the edges of the app. Shutdown was the one path that answered "what should be blocked" with its own small rule, and that rule quietly disagreed with the real one. And a test can pin a bug just as firmly as it pins a feature.
+
+## Gap 102 — Avalonia 11.0.10 → 11.3.22 *(closed, 2026-09-29)*
+
+**Why:** the dependency scan's last finding, `Tmds.DBus.Protocol` 0.15.0 (CVE-2026-39959), came in through Avalonia 11.0.10's Linux-only parts. It was never loaded on Windows, but a scan that's always red teaches everyone to ignore it. The architect chose to fix it at the source rather than pin it, and to do it before Gaps 88/93/89 so their Planner rewrites are built once, on the new version.
+
+**Changed:**
+- All five app packages and `Avalonia.Headless.XUnit` moved to 11.3.22. The build stayed at 0 warnings, 0 errors. The 11.1–11.3 release notes list no breaking changes for this app (binding rewrite in 11.1, TextBox keeps its selection on lost focus since 11.2).
+- **Dependency scan fully clean, no pin needed.**
+- **Before the bump:** 13 headless smoke tests (Zetsu, Ren spontaneous/planned/allowlist, Hatsu, Post-Session completed/missed/reflection, Block and Contract Presets, the Planner End dropdown), green on 11.0.10 first, plus a small kit (`HeadlessTestKit`, `FakeQueryDispatcher`).
+- **Regression they caught:** since 11.1–11.3, a TextBox **with a selection handles Down itself** (collapsing the selection) before a bubbling `KeyDown` handler runs. The Planner's six time fields select all on focus, so Down stopped stepping through their options (Up still worked). Fixed in `PlannerPageView.WireTimePickerDropdown` by listening in the **tunnel** phase. The Planner test was red on 11.3 before the fix.
+- **Manual click-through passed:** the Ritual, Planner create/drag/resize/Split/arrow keys, the Contract wizard date pickers, both preset pages, Post-Session, toasts, and close with X (a running Blocklist Background block kept its 5 sites in the hosts file — Gap 101 unaffected).
+
+**Found on the way, not part of this gap:** Gap 103 (a broken contract's day blocks a new contract) and Gap 104 (first 09:00 block's empty End list, built directly).
+
+**Guard (step 5):** yes — `PlannerEndDropdownViewTests` fails if the time fields' arrow keys stop reaching the Planner again, on any future Avalonia update. The headless tests as a whole are the before/after check for the next update.
+
+**Principle demonstrated:** a "no breaking changes" release note isn't the same as "nothing changes for us". A behaviour change in one control (a TextBox handling a key) broke code that depended on the old event order. Tests written *before* the update turned "does it still work?" into a red/green answer.
+
+## Gap 104 — First Planner Block at 09:00 Got an Empty End List *(closed, 2026-09-29)*
+
+**Found by** Gap 102's headless Planner test. The End dropdown's options were rebuilt only when Start or the block type *changed*. The form's Start already defaults to "09:00", so the first block of an app run created at 09:00 changed nothing and its End dropdown opened empty (typing still worked). Any other hour, or 09:00 after another block, was fine — which is why it didn't show up when checked by hand.
+
+**Changed:** `PlannerPageViewModel.SetFormTimes`, which every form-opening path goes through (new, drag-create, edit, edit draft, Cover Deficit), now always rebuilds the End options and re-centres their scroll. That also covers the same gap for drafting: its "no next-day End times" cutoff was only applied when the list happened to be rebuilt.
+
+**Confirmed via** a new headless test (`FirstBlockAtTheFormsDefaultStartStillGetsEndOptions`), red before the fix, and the full suite (1504 passing).
+
+**Guard (step 5):** yes — that test.
+
+**Principle demonstrated:** a derived list rebuilt only "on change" silently depends on the starting value being different from the first real one. Rebuild it where its inputs are set, not only where they change.
