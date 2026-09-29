@@ -246,7 +246,14 @@ Once a gap (or a self-contained half of one) is fully closed, its write-up moves
 - **Resolved: the installer runs the database migration once, before either process starts** — not the GUI alone (today's behavior) and not both GUI and Service independently. Today, only the GUI runs migrations, once, at its own startup (`Program.cs` → `HostExtensions.EnsureDatabase()`). Once an update ships two independently-startable processes (GUI and Service) built from the same release, there's a real window where the Service could auto-start immediately after an update finishes — before the user has ever opened the GUI — and run its read/append queries against a schema that hasn't been migrated yet, risking a runtime error on anything touching a changed table. This risk didn't exist before this gap; it only arises from having two independently-launchable processes share one schema. **A real alternative was weighed and rejected:** make the Service tolerant of a stale schema instead (skip and retry on the next heartbeat tick until the GUI eventually migrates it) — rejected because it would leave the Service doing nothing at all until the user opens the GUI at least once after every update, quietly reopening the exact gap this whole feature exists to close (enforcement not truly independent of the GUI being opened). **Real cost, accepted rather than hidden:** the installer must trigger the *same* existing `EnsureDatabase()` logic rather than reimplementing migration steps natively in WiX — most likely by briefly running the app or Service in a "migrate only, then exit" mode as an installer custom action. This doesn't replace the GUI's own migration call outright; a direct dev-mode run (not through the installer) still needs it exactly as today. **Not a DDD decision** — migrations are pure Infrastructure-layer plumbing with no domain-model content — but it is consistent with a broader Clean Architecture principle already used repeatedly elsewhere in this document (a single, unambiguous owner for a piece of state rather than shared/ambiguous responsibility — the same reasoning behind `PolicyEngine` being "the sole owner of all merge rules" and the GUI being sole authority over every core aggregate earlier in this gap), just applied to schema lifecycle instead of domain writes.
 - Exact WAL-mode migration mechanics, the exact new heartbeat interval value, the exact `OnStop` handler logic for the "is anything enforcing right now" check (now also checking for the update marker), the exact Layer 2 grace-period length, the self-healing registry check's own interval, the Chrome Web Store Unlisted listing setup itself, and the MSI/WiX authoring are all left as implementation-time calls — consistent with how other gaps in this document leave DTO shapes and query-bundling decisions open until Slice 1 begins.
 
-**Step before this gap (2026-09-29):** Gap 101 makes closing the window hide it to the tray, refuses Quit while anything is enforcing, and keeps blocking through Windows shutdown via `SyncAsync`. The architect's requirement is that NenFocus be "always active like other blockers". Gap 101 covers the moment-of-weakness click on X; this gap covers the Task Manager kill and a reboot. Gap 101's Quit rule is where the Master Locked Mode question below first gets a concrete answer.
+**First step of this gap (added 2026-09-29, moved here from Gap 101):** the architect's requirement is that NenFocus be **"always active like other blockers"**. Before the service itself:
+
+| Action | Behaviour |
+|---|---|
+| Click **X** | the window hides to the system tray; the app keeps running and enforcing |
+| **Quit** from the tray | refused while anything is enforcing: "is anything enforcing" = `SyncAsync` returns a non-empty `ActivePolicySlice`, the one source, no new rule |
+
+The tray stops the moment-of-weakness click on X; the service stops a Task Manager kill and a reboot. The tray survives the service (the window still lives there). **Rejected:** relaunching the window when it's closed. The watchdog doing it can itself be killed, and a window popping back reads as a bug; the established blockers hide to the tray. **To interrogate:** whether Quit is refused during *any* enforcement or only during a sealed contract (the Master Locked Mode question below gets its first concrete answer here); the refusal's wording; whether the tray icon shows state; auto-start at Windows startup. (Gap 101, the shutdown fix, already made closing keep blocking whatever is active.)
 
 **Relationship to Open Gap B:** adjacent but distinct. Gap B is about recovering *session state* correctly after a clean restart (was a session active when the app died, does enforcement get correctly re-applied). This gap is about enforcement having *no existence at all* between the process dying and the process (if ever) restarting — a different, larger failure mode that Gap B's candidate fixes don't address.
 
@@ -708,30 +715,20 @@ public interface IBlockPlacementChecker
 
 \---
 
-### Gap 101 — Closing the Window Never Stops Enforcement (raised 2026-09-29 in Gap 89 Pass 2; direction agreed, not interrogated; first in box 1 as a live-behaviour fix)
+### Gap 101 — Shutdown Asks the Synchronizer (raised 2026-09-29 in Gap 89 Pass 2, narrowed the same day; direction agreed; first in box 1 as a live-behaviour fix)
 
 **Why it's a gap:**
 - **R1, a live bug.** When the app closes with no session running, `App.axaml.cs`'s shutdown handler decides for itself whether to keep blocking. It asks `IPlannedBlockRepository.HasActiveFocusBlockAsync` (its only caller), whose SQL (`Start <= now < End`, not cancelled) ignores `EffectiveEnd` (a Focus block that ended early or was missed still counts) and ignores Background blocks entirely. So **closing the app lifts blocking for a running Background block**. That's a third answer to "what should be blocked now", beside `PolicyEngine` and the heartbeat.
-- **The requirement (architect, 2026-09-29): the app must behave "always active like other blockers".** A closed window must never mean enforcement stops.
+**Direction agreed 2026-09-29:** the shutdown handler (app closing, Windows shutdown or log-off) becomes `await synchronizer.SyncAsync(now)`, so `PolicyEngine` decides as it does everywhere else. Blocking stays on for whatever is active at that moment: a running session, a Focus block (even with its Ritual not done), a Background block. **On any error, leave blocking as it is (fail closed).**
 
-**Direction agreed 2026-09-29:**
-
-| Action | Behaviour |
-|---|---|
-| Click **X** | the window hides to the system tray; the app keeps running and enforcing |
-| **Quit** from the tray | refused while anything is enforcing: "is anything enforcing" = `SyncAsync` returns a non-empty `ActivePolicySlice`, the one source, no new rule |
-| Windows shutdown / log-off | the handler becomes `await synchronizer.SyncAsync(now)`, so `PolicyEngine` decides as everywhere else; **on any error, leave blocking as it is (fail closed)** |
+**Narrowed the same day:** the gap first also covered hiding to the tray on X and refusing Quit while enforcing (the architect's "always active like other blockers" requirement). Those moved to **Gap 76** as its first step. They're a feature, not a fix; their key question (refuse Quit during any enforcement, or only during a sealed contract) is Gap 76's still-open Master Locked Mode idea; and designed together with the service they need one slow manual-testing round instead of two.
 
 **Consequences:**
 - `HasActiveFocusBlockAsync` is deleted (the repository cap drops from 12 to 11).
 - `App` no longer takes `IEnforcementService`, so Gap 98 rule 13 loses its only exemption.
 - **R2 rides along:** `NenContractRepository`'s two "mirrors `IsInEffect` exactly" SQL copies (`HasContractsInEffectForPresetAsync`, `GetAllInEffectAsync`) become "fetch, and the entity decides" (`MODULE_STANDARDS.md` → Repositories). Contracts are few, so there's no copy left to test.
 
-**Rejected:** relaunching the window when it's closed. The watchdog doing the relaunch can itself be killed, and a window popping back reads as a bug. The established blockers hide to the tray.
-
-**Honest limit:** a Task Manager kill still stops everything, and once the app is closed, blocking stays on until it reopens (planned blocks can't start). Both are **Gap 76's** job (the Windows service). This gap is the step before it, not a replacement. The tray survives Gap 76 (the window still lives there), and the shutdown hook becomes unnecessary once the service owns enforcement.
-
-**Still to interrogate:** whether Quit is refused during *any* enforcement or only during a sealed contract (Gap 76's Master Locked Mode question); the wording and look of the refusal; whether the tray icon shows state (enforcing or not); what happens at Windows startup (the app isn't auto-started today).
+**Honest limit:** once the app is closed, blocking stays on until it reopens, and a block planned for later can't start. That's already true today and is **Gap 76's** job (the Windows service). The shutdown hook becomes unnecessary once the service owns enforcement.
 
 **Before building:** verify Gap 89 F2 (a restart during a planned session unlocks the running tile), since both touch what the app knows after a restart.
 
