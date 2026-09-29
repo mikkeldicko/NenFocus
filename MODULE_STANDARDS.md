@@ -203,6 +203,8 @@ ViewModels must not call `.ToString(format)` on `TimeSpan`, `DateTime`, numeric 
 > **Banned patterns:** `remaining.ToString(@"hh\:mm\:ss")`, `progress.ToString("P0")`, `string.Format(...)` for display values.
 >
 > **Canonical example:** `SessionTimeRemaining` is a `TimeSpan` property. `MainPageView.axaml` binds it with `Converter={StaticResource TimeSpanConverter}`.
+>
+> **What counts (added 2026-09-29, Gap 98):** formatting a *value* — `{x:HH:mm}`, `.ToString("0.#")`, `string.Format`, or calling a converter's static `Format…` helper — is banned. Composing plain UI copy from names (`$"Delete \"{card.Name}\"? This cannot be undone."`) is wording, not value formatting, and may stay in a ViewModel until it has a reason to move: a second front end needs it (Gap 77), translation arrives, or the same sentence appears twice — then it moves to one home (Gap 100). Guarded by `ViewModelRuleTests.NoViewModelFormatsValues`.
 
 #### No Direct Repository Access
 ViewModels must never hold a reference to any `IRepository` interface or call one directly.
@@ -319,6 +321,8 @@ No shared base classes for commands or results. No `BaseCommand`. Copy the patte
 **Query slices (added 2026-09-29, Gap 98):** every query lives in `Queries/<Name>/` with exactly one `…Query.cs` and one `…QueryHandler.cs`. A result type only this query produces may sit next to them; the moment another slice uses it, it moves to `DTOs/` — one shared definition, never a second copy. The UI reading the answer doesn't count as sharing; it's the reader the type was shaped for. Queries only read: a query handler whose answer commands save (e.g. `ComputeRedemptionAttribution`, used by Create/Update/Split block) is a business rule living in the wrong place — it belongs in the Domain.
 
 **Validators check form and ask, never own a rule (added 2026-09-29, Gap 98):** a validator checks the input's shape (required, in range, well-formed) and asks the Domain or a repository whether the change is allowed. It never holds its own copy of a business rule — two validators with the same formula are two sources of truth (see Gap 92 V9, Gap 93).
+
+**A refusal is a typed reason, not a sentence (added 2026-09-29, Gap 98):** a validator or query that refuses something returns *what* went wrong as data (e.g. below the daily floor, which day, which floor), and the wording is built in one place — the same split as `INotifier`'s typed `NenNotification` facts. Why: the same sentence written in several validators is duplicated wording (the floor message is written three times today), and a future front end (the SwiftUI app, Gap 77) or a translation needs the reason, not an English sentence. Applied as validators are rewritten — Gap 88 (placement) creates the mechanism and adds a test with every sentence-writing validator on a shrink-only list; Gap 93 (permissions) and Gap 100 (the rest) empty it.
 
 **Validator location rule:** Validators are co-located inside the use-case folder — never in a top-level `Validators/` or `Application/Validators/` directory. The `AddValidatorsFromAssembly` scan in `DependencyInjection.cs` finds them automatically anywhere in the assembly.
 

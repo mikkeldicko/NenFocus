@@ -1,4 +1,3 @@
-using System.Reflection;
 using NenFocus.Application.Interfaces;
 using NenFocus.ViewModels;
 
@@ -10,9 +9,6 @@ namespace NenFocus.Tests.ArchitectureTests;
 /// </summary>
 public class ViewModelRuleTests
 {
-    private const BindingFlags AllDeclared =
-        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
-
     private static readonly string[] CompositionRoot = ["NenFocus.App", "NenFocus.Program"];
     private static readonly string[] CompositionRootFiles = ["NenFocus/App.axaml.cs", "NenFocus/Program.cs"];
 
@@ -26,21 +22,7 @@ public class ViewModelRuleTests
 
     private static readonly System.Text.RegularExpressions.Regex GeneratedXamlClosure = new(@"\+XamlClosure_\d+(\+|$)");
 
-    /// <summary>Every type a UI type holds or is handed: fields, properties, constructor and method
-    /// parameters, return types — generic arguments included, so <c>Func&lt;IRepo&gt;</c> counts too.</summary>
-    private static IEnumerable<Type> TypesUsedBy(Type type)
-    {
-        var used = type.GetFields(AllDeclared).Select(f => f.FieldType)
-            .Concat(type.GetProperties(AllDeclared).Select(p => p.PropertyType))
-            .Concat(type.GetConstructors(AllDeclared).SelectMany(c => c.GetParameters()).Select(p => p.ParameterType))
-            .Concat(type.GetMethods(AllDeclared).Where(m => !m.Name.StartsWith('!')).SelectMany(m => m.GetParameters().Select(p => p.ParameterType).Append(m.ReturnType)));
-        return used.SelectMany(Flatten).Distinct();
-    }
-
-    private static IEnumerable<Type> Flatten(Type type) =>
-        type.IsGenericType
-            ? type.GetGenericArguments().SelectMany(Flatten).Prepend(type)
-            : type.HasElementType ? Flatten(type.GetElementType()!).Prepend(type) : [type];
+    private static IEnumerable<Type> TypesUsedBy(Type type) => TypeUse.TypesUsedBy(type);
 
     [Fact]
     public void NoViewModelTouchesARepository()
@@ -110,6 +92,60 @@ public class ViewModelRuleTests
             .Select(f => f.Path);
 
         KnownExceptions.Check(violations, TimerExceptions);
+    }
+
+    // Formatting a value: a format specifier in an interpolation ({x:HH:mm}), ToString("…"),
+    // string.Format, or a converter's static Format… helper. Plain copy built from names is allowed
+    // (MODULE_STANDARDS → No String Formatting → What counts).
+    private static readonly System.Text.RegularExpressions.Regex ValueFormatting = new(
+        @"\.ToString\(\s*@?""|\{[^{}""]+:[A-Za-z0-9#.,:]+\}|\b[Ss]tring\s*\.\s*Format\s*\(|\b\w+Converter\s*\.\s*Format\w*\s*\(");
+
+    private static readonly string[] ValueFormattingExceptions =
+    [
+        // All → Gap 89 (ViewModel audit): values should reach the View raw and be formatted by a converter.
+        "NenFocus/ViewModels/Pages/PlannerPageViewModel.cs has 35",
+        "NenFocus/ViewModels/Pages/ContractPresetPageViewModel.cs has 6",
+        "NenFocus/ViewModels/Components/DayFloorPreviewViewModel.cs has 6",
+        "NenFocus/ViewModels/Contracts/ContractWizardViewModel.cs has 3",
+        "NenFocus/ViewModels/Pages/PostContractViewModel.cs has 2",
+        "NenFocus/ViewModels/Contracts/ContractRulesStepViewModel.cs has 2",
+        "NenFocus/ViewModels/Components/HourLabelViewModel.cs has 1",
+    ];
+
+    /// <summary>A ViewModel exposes the raw value; a converter turns it into text (MODULE_STANDARDS → No String
+    /// Formatting). Entries are "File has N", so a new format call in a listed file fails too.</summary>
+    [Fact]
+    public void NoViewModelFormatsValues()
+    {
+        var violations = SourceCode.Files("NenFocus/ViewModels")
+            .Select(f => (f.Path, Count: ValueFormatting.Matches(f.Code).Count))
+            .Where(x => x.Count > 0)
+            .Select(x => $"{x.Path} has {x.Count}");
+
+        KnownExceptions.Check(violations, ValueFormattingExceptions);
+    }
+
+    private static readonly System.Text.RegularExpressions.Regex MathCall = new(@"\bMath\s*\.\s*\w+\s*\(");
+
+    private static readonly string[] MathExceptions =
+    [
+        // Allowed: Planner pixel geometry — drag/resize positions, tile layout, the dropdown's visible window
+        // (MODULE_STANDARDS → UI → Views: pixel geometry yes, business rules never). Helpers in ViewModels/Components.
+        "NenFocus/ViewModels/Components/PlannerDragMath.cs",
+        "NenFocus/ViewModels/Components/PlannerLayout.cs",
+        "NenFocus/ViewModels/Components/PlannerDropdownWindow.cs",
+    ];
+
+    /// <summary>A ViewModel binds ready-made values — progress, remaining time — computed by a service
+    /// (MODULE_STANDARDS → No Math). Catches Math.*; plain + − × ÷ is beyond a text scan.</summary>
+    [Fact]
+    public void NoViewModelDoesMath()
+    {
+        var violations = SourceCode.Files("NenFocus/ViewModels")
+            .Where(f => MathCall.IsMatch(f.Code))
+            .Select(f => f.Path);
+
+        KnownExceptions.Check(violations, MathExceptions);
     }
 
     /// <summary>The dispatchers are the UI's one door to data. A service locator would be a second,

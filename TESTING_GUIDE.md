@@ -199,7 +199,7 @@ public async Task HandleAsync_ValidDurations_AllSucceed(int durationMinutes)
 
 ## Architecture Tests (Gap 98)
 
-`NenFocus.Tests/ArchitectureTests/` checks the structure `MODULE_STANDARDS.md` describes — layers, the ViewModel Forbidden Zone, vertical slices, naming, interface size, one clock, raw time comparisons. Plain xUnit, no library:
+`NenFocus.Tests/ArchitectureTests/` checks the structure `MODULE_STANDARDS.md` describes — layers, the ViewModel Forbidden Zone, vertical slices, naming, interface size, one clock, raw time comparisons, side effects through their one door, queries that only read, ViewModels that neither format values nor do math. Plain xUnit, no library:
 
 | Rule | Mechanism |
 |------|-----------|

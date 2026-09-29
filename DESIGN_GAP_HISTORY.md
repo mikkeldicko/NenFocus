@@ -1528,3 +1528,18 @@ For active design tension, see the **Open Gaps** section in `ARCHITECT_GOVERNANC
 **Confirmed via `NenFocus.Tests` (1483 passing, up from 1449):** 34 new tests in `ArchitectureTests/` — the `SourceCode` scanner and `KnownExceptions` two-way check test themselves (7), plus 27 rule tests. Every rule was probed red with a deliberate violation (a temporary `ZzProbe` file, or a line appended to a listed file and restored from a backup) before being trusted; two probes exposed gaps in the tests themselves — static classes skipped by the converter-name rule (.NET marks them abstract), and Avalonia's generated XAML code flagged by the service-locator rule.
 
 **Principle demonstrated:** a rule on paper is a promise; a rule in a test is a guarantee — but only for what a test can see. Structure (layers, names, doors, sizes, raw comparisons) fails at `dotnet test`; judgment (is it deep, is this the right home) stays with the architect's sign-off. And a test that stands in for the compiler says so and names the gap that retires it.
+
+**Addendum — pass 1, 2026-09-29 (same day, after the commit):** the written rules that were still untested. A scan of each came first, so every decision was made on real counts.
+
+| # | Rule | Violations | Outcome |
+|---|---|---|---|
+| 11 | Command handlers leave side effects (enforcement, notifications) to event handlers | 0 | built — `SideEffectRuleTests` |
+| 12 | Queries only read: no unit of work, no command dispatch, no write call | 0 | built — `CqrsRuleTests` |
+| 13 | Only `EnforcementSynchronizer` holds `IEnforcementService` (Gap 62) | 0 | built — `SideEffectRuleTests` |
+| 14 | ViewModels don't format values (format specifiers, `ToString("…")`, `string.Format`, converters' static `Format…` helpers) | 7 ViewModels, 55 uses | built, "File has N" → Gap 89 — far more spread than the Planner alone |
+| 15 | ViewModels don't do math (`Math.*`) | 3 Planner geometry helpers | built; the three listed as allowed pixel geometry |
+| 16 | Application does no display formatting | 5 files, all validator messages | **not built** — a message must be text when it leaves a validator. Its finding went further: the floor message is written three times (→ Gap 93) |
+
+Rule 16 led to a design rule instead: **a refusal is a typed reason, not a sentence** (`MODULE_STANDARDS.md`), with the wording built in one place, like `INotifier`. Its test arrives with Gap 88, which creates the mechanism; Gaps 93 and 100 empty its list. **Gap 100** (One Home for User-Facing Text) was raised first in box 4. It was reshaped when the iOS front end turned out to be SwiftUI: C# wording can't reach Swift, but typed reasons can be its contract. Plain UI copy built from names may stay in ViewModels until a second front end, translation or a repeated sentence gives it a reason to move.
+
+Two probes showed what reflection can see. `App`'s shutdown path turned up because the compiler stores an async method's local variables as fields on a hidden class, so the composition root is excluded by name. `System.Math.Round` is caught by the same pattern as `Math.Round`. Shared reflection logic was moved into `TypeUse`. **1489 passing, up from 1483.**

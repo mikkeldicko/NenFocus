@@ -282,7 +282,7 @@ Once a gap (or a self-contained half of one) is fully closed, its write-up moves
 - **Scope of platforms.** Android and macOS are named in the vision but have no mechanism described. In scope for this gap, or separate gaps?
 - **App Store review risk** for an iOS app whose companion tool silently supervises devices.
 
-**Relationship to other gaps:** depends on Open Gap K's process/installer story (the lockdown tab ships inside the desktop app that K restructures), and would reopen K's Master Locked Mode question. Independent of A, C, E, G in principle, but anything they add to the Domain becomes something mobile must mirror or sync.
+**Relationship to other gaps:** depends on Open Gap K's process/installer story (the lockdown tab ships inside the desktop app that K restructures), and would reopen K's Master Locked Mode question. Independent of A, C, E, G in principle, but anything they add to the Domain becomes something mobile must mirror or sync. **Note added 2026-09-29 (Gap 98/100) — a pointer, not design:** the desktop is moving refusals from English sentences to typed reasons (Gap 100). A SwiftUI app can't reuse C# wording, but it can take those reasons as its contract — over the sync API if rules run in C#, or as the specification Swift mirrors — and write its own wording in String Catalogs. Worth raising in this gap's "where the Domain lives" question.
 
 **Must be closed before:** Nothing — parked until the desktop app is finished. Not interrogated: the architect will run the interrogation personally when the iOS work begins.
 
@@ -413,6 +413,23 @@ After Gap 65, extending means appending Contract Days generated with `ContractCa
 
 \---
 
+### Gap 100 — One Home for User-Facing Text (raised 2026-09-29 during Gap 98; direction agreed, not interrogated; first in box 4)
+
+**Why it's a gap:** about 560 user-facing strings live where they're used — ~330 in XAML (22 files), ~100 in ViewModels, ~110 validator messages, ~25 in `Notifier`. Validators write English sentences, and the same one is written several times (the daily-floor message three times across the Update and Split validators — Gap 98 finding). Two planned features need text to have a home: Settings (Gap 83 — e.g. customising the Post-Session screen) and the SwiftUI iOS app (Gap 77); translation is a possibility.
+
+**Direction agreed 2026-09-29:**
+- **A refusal is a typed reason, not a sentence** (`MODULE_STANDARDS.md` → Vertical Slice Structure): a validator returns *what* went wrong as data; the wording is built in one place — the same split as `INotifier`'s `NenNotification` facts. For iOS this is what matters: SwiftUI can't read C# resources or call `Notifier`, it writes its own wording (String Catalogs); the typed reasons are the contract — sent over the sync API if rules run in C#, or the specification Swift mirrors if they're re-implemented (Gap 77's open "where the Domain lives" question).
+- **Desktop text into resource files** for translation and Settings.
+- **UI copy composed from names** (`Delete "{name}"?`) may stay in ViewModels until one of those triggers applies (`MODULE_STANDARDS.md` → No String Formatting → What counts).
+
+**Order:** placement validators convert inside Gap 88 (which creates the typed-reason mechanism, likely from `PlacementOutcome`, and adds the test), permission validators inside Gap 93; this gap converts the remaining validators (contract presets, Complete contract, Seal/Edit, …) and moves the text. After the Architecture box so text moves once; before Gap 83 and Gap 77.
+
+**Last step:** Gap 88's typed-reasons test has an empty exceptions list — every validator returns typed reasons.
+
+**Still to interrogate:** the typed-reason shape (one result type per use case, or one shared refusal type); where desktop wording lives (a `Notifier`-like Application service vs `.resx` resources vs both); whether XAML labels move in this gap or only when translation arrives.
+
+\---
+
 ### Gap 83 — Settings Page MVP (raised 2026-09-28; not interrogated)
 
 **Why it's a gap:** the Settings page is one of the five sidebar pages (`DOMAIN_DICTIONARY.md` → App Structure) but has never been built, and other work already assumes it exists.
@@ -503,7 +520,7 @@ public interface IBlockPlacementChecker
 
 **Not now:** replacing every `(Start, End)` tuple in credit/planned-hours code — only as those files are touched. The Planner tile's "actual worked window" (late start / early end trim, computed inline in `GetPlannedBlocksForDayQueryHandler`) becomes a `FocusBlock` method returning a `TimeSlot` once a second caller needs it (area-1 finding G).
 
-**Last step — architecture tests (Gap 98):** add the narrow rules this gap makes true — *only `BlockPlacementChecker` decides placement* (no `OverlapsWith` call outside the Domain; no `ritualOnly` anywhere). Delete the exception entries it retires, each tagged "Gap 88" in the tests: `RawTimeFieldRuleTests` (day-view display end, Cover Deficit and drag overlap checks, Create/Update/Seal/Edit validators), `LocalTimeRuleTests` (Create/Update handlers' clash messages), `VerticalSliceRuleTests` (`RedemptionAttributionResult`). Exact test form decided in the interface review.
+**Last step — architecture tests (Gap 98):** add the narrow rules this gap makes true — *only `BlockPlacementChecker` decides placement* (no `OverlapsWith` call outside the Domain; no `ritualOnly` anywhere). Delete the exception entries it retires, each tagged "Gap 88" in the tests: `RawTimeFieldRuleTests` (day-view display end, Cover Deficit and drag overlap checks, Create/Update/Seal/Edit validators), `LocalTimeRuleTests` (Create/Update handlers' clash messages), `VerticalSliceRuleTests` (`RedemptionAttributionResult`). **Also:** this gap creates the typed-reason mechanism (a refusal is data, not a sentence — `MODULE_STANDARDS.md`, Gap 100), so it adds the test *"validators don't write sentences"* with every still-sentence-writing validator on a shrink-only list as "File has N" (~108 messages today); Gap 93 and Gap 100 empty it. Exact test form decided in the interface review.
 
 
 \---
@@ -515,7 +532,7 @@ public interface IBlockPlacementChecker
 **Areas, in suggested order:**
 2. **`PlannerPageViewModel`** — 2,501 lines, five times any other ViewModel; the likeliest place for ViewModel Forbidden Zone breaches (math, formatting, direct `ToLocalTime`/`ToUniversalTime`). Some math sits in extracted `Planner*Math` helpers that may be legitimate pixel geometry — needs reading, not grepping. Gap 88 already covers its placement checks. **Found 2026-09-29 by Gap 98's architecture tests (each on a shrink-only exceptions list, so the fix must also delete the entry):**
    - **Owns a timer** — `_floorStatusPollTimer` (`System.Timers.Timer`, 3 s) breaks "No Timers"; fixed by area 3's direction (the heartbeat announces what changed), not by a new service for this one caller.
-   - **Formats strings** — `$"{(int)end.TotalHours:D2}:{end.Minutes:D2}"` for the End dropdown, and validation messages built with times inline.
+   - **Formats values** — `$"{(int)end.TotalHours:D2}:{end.Minutes:D2}"` for the End dropdown, and validation messages built with times inline. **Not only the Planner** (Gap 98 pass 1, `NoViewModelFormatsValues`): 7 ViewModels format values — `PlannerPageViewModel` 35, `ContractPresetPageViewModel` 6, `DayFloorPreviewViewModel` 6, `ContractWizardViewModel` 3, `PostContractViewModel` 2, `ContractRulesStepViewModel` 2, `HourLabelViewModel` 1. Plain UI copy built from names is allowed (Gap 100 decides when it moves).
    - **Formatters named like converters** — `DateRangeToLabelConverter`, `DateTimeRangeToLabelConverter`, `WorkHoursRangeToLabelConverter` are static helpers, not `IValueConverter`s; ViewModels call them to build display strings (`PlannerPageViewModel`, `ContractWizardViewModel`, `ContractRulesStepViewModel`, `ContractPresetPageViewModel`) — "No String Formatting" done through a helper so it doesn't look like it.
    - **`PlannerEndTimeOptions` reads a Domain entity** — it uses `FocusBlock`'s 12-hour cap in the UI (a business rule outside the Domain, and the "no ViewModel uses Domain entities" rule's only exception).
 3. **Two heartbeats, two clocks** — (also: `PlannerClockService.LocalNow` does `_clock.UtcNow.ToLocalTime()`, bypassing `_clock.ToLocal` on the clock it holds — on Gap 98's local-time rule exceptions list; see Gap 92 A7) — `ScheduledEnforcementService` and `NenContractHeartbeatService` each read "now" separately every 5 s; since Gap 65 a contract starts at the same moment its first Focus block can. Gap 21 fixed exactly this kind of race for missed blocks ("one now per tick").
@@ -614,7 +631,9 @@ public interface IBlockPlacementChecker
 
 **Still to interrogate:** whether Delete should respect contract status; where "in effect" belongs; the service/method shape and name (per `MODULE_STANDARDS.md` → Design Review Rules); how it relates to Gap 88's `GetBlockPlacementVerdictQuery` (Update and Split ask both "may it change" and "may it go there").
 
-**Last step — architecture tests (Gap 98):** add the narrow rule this gap makes true — *no validator or ViewModel decides change permissions itself*: nothing outside the Domain branches on `StrictnessRule` values (the label converter excepted) and no ViewModel computes `Can…`/`…Locked` from fields — it reads the block DTO's flags. Delete the "Gap 93" entries in `RawTimeFieldRuleTests` (Split validator, `PlannerPageViewModel`'s "has it started"). Exact test form decided when the gap is designed.
+**Last step — architecture tests (Gap 98):** add the narrow rule this gap makes true — *no validator or ViewModel decides change permissions itself*: nothing outside the Domain branches on `StrictnessRule` values (the label converter excepted) and no ViewModel computes `Can…`/`…Locked` from fields — it reads the block DTO's flags. Delete the "Gap 93" entries in `RawTimeFieldRuleTests` (Split validator, `PlannerPageViewModel`'s "has it started"). The permission validators return typed reasons as they're rewritten (Gap 100 direction) — delete their entries from Gap 88's typed-reasons test. Exact test form decided when the gap is designed.
+
+**Finding (Gap 98, 2026-09-29):** the floor-protection messages are written three times — "This would drop {date}'s total below its {floor}h daily floor." twice in `UpdatePlannedBlockValidator` and once in `SplitPlannedBlockValidator`, and "…the contract's total planned hours below its {floor}h…" in both. Same guard, same wording, three copies; a typed reason (`BelowDailyFloor { Day, FloorHours }`) with wording built once removes them.
 
 \---
 
