@@ -337,6 +337,7 @@ ActivePolicySlice ComputeSlice(
 **Domain behaviour:** `PlannedBlock` carries these domain methods, used by both subtypes and the query layer:
 - `IsActive(DateTime atTime)` — returns `true` if `atTime` falls within `[Start, EffectiveEnd(atTime))`.
 - `EffectiveEnd(DateTime asOf)` — the one rule for how much of the window the block really occupies; every reason it shrinks lives here. Base: cancellation (ends at the cancel moment; empty if cancelled before `Start`). `FocusBlock` adds session-ended-early and missed; the earliest reason wins. `IsActive`, overlap checks and markers never check `CancelledAt` themselves (Gap 85).
+- `HasStarted(DateTime asOf)` — `Start <= asOf`; once true the block is locked: no edit or split, no delete until it has ended (Gap 88 phase 0).
 - `HasEnded(DateTime asOf)` — `End < asOf`; the one canonical "is this past" check.
 - `OverlapsWith(PlannedBlock other)` — returns `true` if the two windows intersect; used by the planner to prevent scheduling conflicts.
 - `MarkersPassedBetween(from, to)` — the markers the clock passed in (from, to]: `StartingSoon` (`UpcomingWarningLead`, 5 min, before `Start`), `Started`/`Ended` (`IsActive` flipped — the definition enforcement uses). `Ended` only if the block owns its ending: a `FocusBlock` whose Ritual was completed does not — its session announces it (Gap 84).

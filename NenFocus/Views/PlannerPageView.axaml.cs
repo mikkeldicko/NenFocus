@@ -1056,18 +1056,12 @@ public partial class PlannerPageView : UserControl
         _dragTile            = tile;
         _effectiveDragColumn = tile.ColumnIndex;
 
-        bool startLocked = _vm.IsTileStartLocked(tile.Id);
-
-        if (posInBtn.Y <= ResizeHotZonePx && !startLocked)
+        if (posInBtn.Y <= ResizeHotZonePx)
             _dragKind = DragKind.ResizingTopPending;
         else if (posInBtn.Y >= btn.Height - ResizeHotZonePx)
-            _dragKind = DragKind.ResizingBottomPending; // start-lock doesn't block end-resize
-        else if (!startLocked)
-            _dragKind = DragKind.MovePending;
+            _dragKind = DragKind.ResizingBottomPending;
         else
-            _dragKind = DragKind.None;
-
-        if (_dragKind == DragKind.None) { e.Handled = true; return; }
+            _dragKind = DragKind.MovePending;
 
         e.Pointer.Capture(ownerCanvas);
         e.Handled = true;
@@ -1085,17 +1079,13 @@ public partial class PlannerPageView : UserControl
             return;
         }
 
-        var posInBtn     = e.GetPosition(hoverBtn);
-        bool startLocked = _vm.IsTileStartLocked(tile.Id);
-        bool inBottom    = posInBtn.Y >= hoverBtn.Height - ResizeHotZonePx;
-        bool inTop       = posInBtn.Y <= ResizeHotZonePx;
+        var posInBtn  = e.GetPosition(hoverBtn);
+        bool inBottom = posInBtn.Y >= hoverBtn.Height - ResizeHotZonePx;
+        bool inTop    = posInBtn.Y <= ResizeHotZonePx;
 
-        if (inBottom || (inTop && !startLocked))
-            hoverBtn.Cursor = new Cursor(StandardCursorType.SizeNorthSouth);
-        else if (!startLocked)
-            hoverBtn.Cursor = new Cursor(StandardCursorType.SizeAll);
-        else
-            hoverBtn.Cursor = new Cursor(StandardCursorType.Arrow);
+        hoverBtn.Cursor = inBottom || inTop
+            ? new Cursor(StandardCursorType.SizeNorthSouth)
+            : new Cursor(StandardCursorType.SizeAll);
     }
 
     // ── Tile ghost visual ─────────────────────────────────────────────────────

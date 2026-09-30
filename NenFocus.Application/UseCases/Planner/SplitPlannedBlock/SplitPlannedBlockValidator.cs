@@ -117,7 +117,7 @@ public sealed class SplitPlannedBlockValidator : AbstractValidator<SplitPlannedB
             .MustAsync(async (command, ct) =>
             {
                 var block = await blocks.GetByIdAsync(command.OriginalBlockId, ct);
-                return block is not null && block.Start > clock.UtcNow;
+                return block is not null && !block.HasStarted(clock.UtcNow);
             })
             .WithMessage("Only a future block can be split.");
 

@@ -39,17 +39,13 @@ public class RawTimeFieldRuleTests
         "NenFocus.Application/Queries/GetSuggestedRedemptionPlacements/GetSuggestedRedemptionPlacementsQueryHandler.cs has 2",
         // "do these overlap" in the UI — UI checks built on the checker.
         "NenFocus/ViewModels/Components/PlannerDragMath.cs has 2",
+        "NenFocus/ViewModels/Pages/PlannerPageViewModel.cs has 2",
         // end after start, ≥ 1 minute, Focus ≤ 12 h — copies of FocusBlock.Create's own rules.
         "NenFocus.Application/UseCases/Planner/CreatePlannedBlock/CreatePlannedBlockValidator.cs has 3",
-        "NenFocus.Application/UseCases/Planner/UpdatePlannedBlock/UpdatePlannedBlockValidator.cs has 3",
+        "NenFocus.Application/UseCases/Planner/UpdatePlannedBlock/UpdatePlannedBlockValidator.cs has 2",
         // "end after start" on input — a rule TimeSlot's constructor will own (Gaps 88/99).
         "NenFocus.Application/UseCases/NenContracts/Seal/SealNenContractValidator.cs has 1",
         "NenFocus.Application/UseCases/NenContracts/Edit/EditNenContractValidator.cs has 1",
-
-        // Gap 93 — one source for block change permissions: "has this block started" (Start <= now),
-        // plus the ViewModel's own overlap check.
-        "NenFocus.Application/UseCases/Planner/SplitPlannedBlock/SplitPlannedBlockValidator.cs has 1",
-        "NenFocus/ViewModels/Pages/PlannerPageViewModel.cs has 4",
 
         // Gap 89 — "has the block ended" decided in the UI.
         "NenFocus/ViewModels/Ritual/HatsuPageViewModel.cs has 1",

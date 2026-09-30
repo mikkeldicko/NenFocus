@@ -52,6 +52,12 @@ public abstract class PlannedBlock : AggregateRoot
     public bool HasEnded(DateTime asOf) => End < asOf;
 
     /// <summary>
+    /// True from <see cref="Start"/> onward. Once started, a block is locked: no edit, no
+    /// split, and no delete until it has ended (Gap 88 phase 0).
+    /// </summary>
+    public bool HasStarted(DateTime asOf) => Start <= asOf;
+
+    /// <summary>
     /// How much of this block's window is still actually reserved, as of <paramref name="asOf"/> —
     /// the boundary overlap-checks use instead of <see cref="End"/>, so a block that no longer
     /// occupies its full scheduled span (e.g. a Focus session that ended early) frees the rest

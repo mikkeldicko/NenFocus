@@ -31,6 +31,12 @@ public sealed record PlannedBlockDto
     public bool HasEnded { get; init; }
 
     /// <summary>
+    /// PlannedBlock.HasStarted(now) — the Update/Delete/Split validators' lock. The Planner
+    /// locks the tile and form on this, never on Start (which is a trimmed display span).
+    /// </summary>
+    public bool HasStarted { get; init; }
+
+    /// <summary>
     /// True when ContractId resolves to a contract that is still a live commitment
     /// (NenContract.IsInEffect — Scheduled or Active). Mirrors DeletePlannedBlockValidator/
     /// UpdatePlannedBlockValidator's own resolution exactly, so the UI never re-derives

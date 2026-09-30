@@ -244,6 +244,18 @@ public class PlannedBlockTests
     }
 
     [Fact]
+    public void HasStarted_BeforeStart_IsFalse()
+        => CreateFocusBlock().HasStarted(Start.AddMinutes(-1)).Should().BeFalse();
+
+    [Fact]
+    public void HasStarted_AtStart_IsTrue()
+        => CreateFocusBlock().HasStarted(Start).Should().BeTrue();
+
+    [Fact]
+    public void HasStarted_AfterEnd_IsTrue()
+        => CreateBackgroundBlock().HasStarted(End.AddMinutes(1)).Should().BeTrue();
+
+    [Fact]
     public void HasEnded_BeforeEnd_IsFalse()
         => CreateFocusBlock().HasEnded(End.AddMinutes(-1)).Should().BeFalse();
 

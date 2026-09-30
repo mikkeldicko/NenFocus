@@ -221,9 +221,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
     [ObservableProperty] private bool _isFocusBlock = true;
     [ObservableProperty] private BlockPresetDto? _selectedPreset;
-    [ObservableProperty] private bool _isStartLocked;
-    [ObservableProperty] private bool _isEditingCompleted;
-    [ObservableProperty] private bool _isEditingBlockEnded;
+    [ObservableProperty] private bool _isEditingBlockStarted;
     [ObservableProperty] private bool _isEditingBlockContractLocked;
     [ObservableProperty] private bool _isEditingBlockDailyFlexibility;
     [ObservableProperty] private string? _dragError;
@@ -600,7 +598,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         _editingBlockId = null;
         _editingIsDraft = false;
         IsEditing = false;
-        IsStartLocked = false;
+        IsEditingBlockStarted = false;
         FormTitle = "Cover Deficit";
         ResetForm();
 
@@ -667,17 +665,17 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
     public string SaveButtonLabel => IsEditing ? "Save Changes" : "Create Block";
 
-    // Mirrors DeletePlannedBlockValidator's rejection conditions exactly — sourced from
-    // dto.HasEnded / dto.IsUnderInEffectContract (Application-computed, same predicates the
-    // validator calls) and the live active-session noticeboard, not re-derived here.
+    // Mirrors DeletePlannedBlockValidator — contract-linked never, running (started, not ended)
+    // not until it ends. The form only opens for blocks that haven't ended (ended ones get the
+    // snapshot), so "started" is the whole running check here. Read off the DTO, never
+    // re-derived (Gap 88 phase 0).
     public bool CanDeleteFromForm =>
-        IsEditing && !IsEditingBlockEnded && !IsEditingBlockContractLocked
-        && _sessionState.ActiveSession?.OriginatingBlockId != _editingBlockId;
+        IsEditing && !IsEditingBlockStarted && !IsEditingBlockContractLocked;
 
-    // True when the editing block is either currently running (active session) or already completed.
+    // A started block is fully locked (Gap 88 phase 0) — this also covers a running session's
+    // block and a completed Ritual, both of which only happen once the block has started.
     // Controls visibility of the Save button and disables form inputs.
-    public bool IsBlockLocked =>
-        IsEditing && (IsEditingCompleted || _sessionState.ActiveSession?.OriginatingBlockId == _editingBlockId);
+    public bool IsBlockLocked => IsEditing && IsEditingBlockStarted;
 
     public bool CanSaveBlock => !IsBlockLocked;
 
@@ -695,12 +693,11 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
     // Mirrors SplitPlannedBlockValidator's gating conditions exactly — sourced from
     // dto.IsUnderInEffectContract + dto.ContractStrictnessRule (Application-computed),
-    // IsStartLocked (the future-only guard — a block that hasn't started yet always has
-    // Start > now), IsEditingCompleted (a completed ritual means a session ran), IsFocusBlock
-    // (Split is Focus-only — a Background block has no session and no Daily Floor
-    // relevance), and the live active-session noticeboard. The validator remains the sole
-    // authority; this only gates button visibility, same relationship CanDeleteFromForm has
-    // to its validator.
+    // IsEditingBlockStarted (only a block that hasn't started can be split — which also rules
+    // out a ran session and the running session's own block), and IsFocusBlock (Split is
+    // Focus-only — a Background block has no session and no Daily Floor relevance). The
+    // validator remains the sole authority; this only gates button visibility, same
+    // relationship CanDeleteFromForm has to its validator.
     //
     // The Cover Deficit path (_isCreatingRedemption) is a second, independent way in: the
     // block doesn't exist yet, so none of SplitPlannedBlockValidator's rules apply at all —
@@ -709,8 +706,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     public bool CanSplitBlock => _isCreatingRedemption || (
         IsEditing && !_editingIsDraft && IsFocusBlock
         && IsEditingBlockContractLocked && IsEditingBlockDailyFlexibility
-        && !IsStartLocked && !IsEditingCompleted
-        && _sessionState.ActiveSession?.OriginatingBlockId != _editingBlockId);
+        && !IsEditingBlockStarted);
 
     // Preset is locked to the deficit's own preset while creating a redemption block —
     // the popover already picked which preset this covers, so re-picking a different one
@@ -748,16 +744,12 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(ShowTypeToggle));
     }
 
-    partial void OnIsEditingCompletedChanged(bool value)
+    partial void OnIsEditingBlockStartedChanged(bool value)
     {
+        OnPropertyChanged(nameof(CanDeleteFromForm));
         OnPropertyChanged(nameof(IsBlockLocked));
         OnPropertyChanged(nameof(CanSaveBlock));
         OnPropertyChanged(nameof(CanSplitBlock));
-    }
-
-    partial void OnIsEditingBlockEndedChanged(bool value)
-    {
-        OnPropertyChanged(nameof(CanDeleteFromForm));
     }
 
     partial void OnIsEditingBlockContractLockedChanged(bool value)
@@ -767,11 +759,6 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     }
 
     partial void OnIsEditingBlockDailyFlexibilityChanged(bool value)
-    {
-        OnPropertyChanged(nameof(CanSplitBlock));
-    }
-
-    partial void OnIsStartLockedChanged(bool value)
     {
         OnPropertyChanged(nameof(CanSplitBlock));
     }
@@ -1429,7 +1416,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         _editingBlockId = null;
         _editingIsDraft = false;
         IsEditing = false;
-        IsStartLocked = false;
+        IsEditingBlockStarted = false;
         FormTitle = "New Block";
         ResetForm();
 
@@ -1452,9 +1439,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
             _editingBlockId = draft.Id;
             _editingIsDraft = true;
             IsEditing = true;
-            IsStartLocked = false;
-            IsEditingCompleted = false;
-            IsEditingBlockEnded = false;
+            IsEditingBlockStarted = false;
             IsEditingBlockContractLocked = false;
             IsEditingBlockDailyFlexibility = false;
             FormTitle = "Edit Draft Block";
@@ -1490,9 +1475,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         _editingBlockId = dto.Id;
         _editingIsDraft = false;
         IsEditing = true;
-        IsStartLocked = dto.Start <= _clockService.LocalNow.ToUniversalTime();
-        IsEditingCompleted = dto.IsCompleted;
-        IsEditingBlockEnded = dto.HasEnded;
+        IsEditingBlockStarted = dto.HasStarted;
         IsEditingBlockContractLocked = dto.IsUnderInEffectContract;
         IsEditingBlockDailyFlexibility = dto.ContractStrictnessRule == StrictnessRule.DailyFlexibility;
         FormTitle = "Edit Block";
@@ -1975,9 +1958,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     {
         IsFormVisible = false;
         FormError = null;
-        IsStartLocked = false;
-        IsEditingCompleted = false;
-        IsEditingBlockEnded = false;
+        IsEditingBlockStarted = false;
         IsEditingBlockContractLocked = false;
         IsEditingBlockDailyFlexibility = false;
         IsSplitDialogVisible = false;
@@ -2003,27 +1984,16 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     // ── Drag lock checks (called from code-behind before starting a drag) ──────
 
     /// <summary>
-    /// True when the tile must not be dragged at all — it is completed, has already
-    /// ended (covers Missed, EndedEarly, and any other resolved-in-the-past block), or
-    /// is the active session's originating block. Draft blocks are never locked.
+    /// True when the tile must not be dragged at all — no move, no resize of either edge. A
+    /// started block is locked (Gap 88 phase 0); that covers a completed Ritual, an ended block
+    /// and the running session's block, all of which only exist once the block has started.
+    /// Draft blocks are never locked.
     /// </summary>
     public bool IsTileFullyLocked(Guid blockId)
     {
         if (_draftBlocks.Any(d => d.Id == blockId)) return false;
         if (!_blocksInWeek.TryGetValue(blockId, out var dto)) return true;
-        return dto.IsCompleted || dto.HasEnded || _sessionState.ActiveSession?.OriginatingBlockId == blockId;
-    }
-
-    /// <summary>
-    /// True when the block's start time is in the past — move and top-resize
-    /// are disallowed; bottom-resize on a past-start block is also disallowed.
-    /// Draft blocks are never start-locked.
-    /// </summary>
-    public bool IsTileStartLocked(Guid blockId)
-    {
-        if (_draftBlocks.Any(d => d.Id == blockId)) return false;
-        if (!_blocksInWeek.TryGetValue(blockId, out var dto)) return true;
-        return dto.Start <= _clockService.LocalNow.ToUniversalTime();
+        return dto.HasStarted;
     }
 
     // ── Drag-create: open the form pre-filled with the dragged range ──────────
@@ -2035,7 +2005,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         _editingBlockId = null;
         _editingIsDraft = false;
         IsEditing = false;
-        IsStartLocked = false;
+        IsEditingBlockStarted = false;
         FormTitle = "New Block";
         ResetForm();
 

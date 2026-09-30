@@ -2,7 +2,6 @@ using FluentAssertions;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.UseCases.Planner.DeletePlannedBlock;
 using NenFocus.Domain.Entities;
-using NenFocus.Domain.ValueObjects;
 using NSubstitute;
 
 namespace NenFocus.Tests.Application.UseCases.Planner;
@@ -12,15 +11,15 @@ public class DeletePlannedBlockValidatorTests
     private static readonly DateTime Now = new(2026, 1, 5, 12, 0, 0, DateTimeKind.Utc);
 
     private readonly IPlannedBlockRepository _blocks = Substitute.For<IPlannedBlockRepository>();
-    private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
+    private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
 
     public DeletePlannedBlockValidatorTests()
     {
         _blocks.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((PlannedBlock?)null);
-        _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns((Session?)null);
+        _clock.UtcNow.Returns(Now);
     }
 
-    private DeletePlannedBlockValidator CreateValidator() => new(_blocks, _sessions);
+    private DeletePlannedBlockValidator CreateValidator() => new(_blocks, _clock);
 
     [Fact]
     public async Task Validate_ValidBlockId_IsValid()
@@ -89,26 +88,11 @@ public class DeletePlannedBlockValidatorTests
     }
 
     [Fact]
-    public async Task Validate_CurrentlyActiveBlockNotYetEnded_IsValid()
+    public async Task Validate_RunningBackgroundBlock_IsInvalid()
     {
+        // Gap 88 phase 0: a started block runs to its end — it can't be deleted mid-run.
         var block = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Now.AddHours(-1), Now.AddHours(1));
         _blocks.GetByIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns(block);
-
-        var result = await CreateValidator().ValidateAsync(new DeletePlannedBlockCommand { BlockId = block.Id });
-
-        result.IsValid.Should().BeTrue();
-    }
-
-    [Fact]
-    public async Task Validate_ActiveSessionsOriginatingBlock_IsInvalid()
-    {
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Now.AddHours(-1), Now.AddHours(1));
-        _blocks.GetByIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns(block);
-
-        var session = Session.Create(
-            Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromHours(2)),
-            block.BlockPresetId, NenFocus.Domain.Enums.SessionOrigin.Planned, originatingBlockId: block.Id);
-        _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns(session);
 
         var result = await CreateValidator().ValidateAsync(new DeletePlannedBlockCommand { BlockId = block.Id });
 
@@ -116,37 +100,40 @@ public class DeletePlannedBlockValidatorTests
     }
 
     [Fact]
-    public async Task Validate_ActiveSessionOriginatingFromADifferentBlock_DoesNotBlockThisOne()
+    public async Task Validate_RunningFocusBlockAwaitingRitual_IsInvalid()
     {
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Now.AddHours(1), Now.AddHours(2));
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Now.AddMinutes(-5), Now.AddHours(1));
         _blocks.GetByIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns(block);
-
-        var session = Session.Create(
-            Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromHours(1)),
-            Guid.NewGuid(), NenFocus.Domain.Enums.SessionOrigin.Planned, originatingBlockId: Guid.NewGuid());
-        _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns(session);
 
         var result = await CreateValidator().ValidateAsync(new DeletePlannedBlockCommand { BlockId = block.Id });
 
-        result.IsValid.Should().BeTrue();
+        result.IsValid.Should().BeFalse();
     }
 
     [Fact]
-    public async Task Validate_ActiveSpontaneousSession_DoesNotBlockAnyPlannedBlock()
+    public async Task Validate_BlockStartingExactlyNow_IsInvalid()
     {
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Now.AddHours(1), Now.AddHours(2));
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Now, Now.AddHours(1));
         _blocks.GetByIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns(block);
-
-        var session = Session.Create(
-            Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromHours(1)),
-            Guid.NewGuid(), NenFocus.Domain.Enums.SessionOrigin.Spontaneous); // OriginatingBlockId null
-        _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns(session);
 
         var result = await CreateValidator().ValidateAsync(new DeletePlannedBlockCommand { BlockId = block.Id });
 
-        result.IsValid.Should().BeTrue();
+        result.IsValid.Should().BeFalse();
     }
 
+    [Fact]
+    public async Task Validate_RunningSessionsOriginatingBlock_IsInvalid()
+    {
+        // Was its own rule (the active session's originating block); a planned session only
+        // runs inside its block's window, so the running-block rule covers it.
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Now.AddHours(-1), Now.AddHours(1));
+        block.MarkRitualCompleted(Now.AddHours(-1));
+        _blocks.GetByIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns(block);
+
+        var result = await CreateValidator().ValidateAsync(new DeletePlannedBlockCommand { BlockId = block.Id });
+
+        result.IsValid.Should().BeFalse();
+    }
     [Fact]
     public async Task Validate_BlockUnderActiveContract_IsInvalid()
     {

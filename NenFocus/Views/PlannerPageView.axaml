@@ -523,7 +523,7 @@
 										<TextBox Name="FormStartTimeBox"
                                                  Text="{Binding FormStartTime, Mode=TwoWay}"
                                                  Watermark="HH:mm"
-                                                 IsEnabled="{Binding !IsStartLocked}"/>
+                                                 IsEnabled="{Binding !IsBlockLocked}"/>
 									</Border>
 									<Popup Name="FormStartTimePopup"
                                            IsOpen="{Binding IsStartTimeDropDownOpen, Mode=TwoWay}"

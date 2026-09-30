@@ -27,17 +27,16 @@ public sealed class UpdatePlannedBlockValidator : AbstractValidator<UpdatePlanne
         RuleFor(x => x.PresetId)
             .NotEmpty().WithMessage("Preset ID is required.");
 
-        // Mirrors DeletePlannedBlockValidator's identical guard — an already-ended block
-        // (Missed, EndedEarly, or otherwise resolved) is kept as a historical record and
-        // must be just as immutable to Update as it already is to Delete.
+        // A started block is locked — no move, resize, end or preset change (Gap 88 phase 0).
+        // It ends early only through End Early or by breaking its contract.
         RuleFor(x => x)
             .MustAsync(async (command, ct) =>
             {
                 if (command.BlockId == Guid.Empty) return true;
                 var block = await _blocks.GetByIdAsync(command.BlockId, ct);
-                return block is null || !block.HasEnded(_clock.UtcNow);
+                return block is null || !block.HasStarted(_clock.UtcNow);
             })
-            .WithMessage("This block has already ended and is kept as a historical record — it cannot be edited.");
+            .WithMessage("This block has already started — it cannot be edited.");
 
         RuleFor(x => x)
             .MustAsync(async (command, ct) =>
@@ -51,17 +50,8 @@ public sealed class UpdatePlannedBlockValidator : AbstractValidator<UpdatePlanne
             })
             .WithMessage("The selected preset type does not match this block preset type.");
 
-        // If the block has already started its start time is locked — the UI greys it
-        // out and sends the original value. Skip the future check in that case so a
-        // valid end-time-only edit isn't rejected by the past start time.
         RuleFor(x => x.Start)
-            .MustAsync(async (command, start, ct) =>
-            {
-                var existing = await _blocks.GetByIdAsync(command.BlockId, ct);
-                if (existing is not null && existing.Start <= _clock.UtcNow)
-                    return true;
-                return start > _clock.UtcNow;
-            })
+            .Must(start => start > _clock.UtcNow)
             .WithMessage("Start time must be in the future.");
 
         RuleFor(x => x.End)

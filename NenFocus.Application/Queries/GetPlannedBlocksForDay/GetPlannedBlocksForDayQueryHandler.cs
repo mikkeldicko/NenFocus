@@ -107,6 +107,7 @@ public sealed class GetPlannedBlocksForDayQueryHandler
                 ContractId = b.ContractId,
                 IsCompleted = focusBlock?.RitualCompletedAt.HasValue ?? false,
                 HasEnded = b.HasEnded(now),
+                HasStarted = b.HasStarted(now),
                 IsUnderInEffectContract = b.ContractId.HasValue && (contractsById.GetValueOrDefault(b.ContractId.Value)?.IsInEffect ?? false),
                 ContractStrictnessRule = b.ContractId.HasValue ? contractsById.GetValueOrDefault(b.ContractId.Value)?.StrictnessRule : null,
                 Outcome = focusBlock is not null

@@ -179,6 +179,19 @@ public class GetPlannedBlocksForDayQueryHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_BlockAtItsStart_HasStartedIsTrue()
+    {
+        _clock.UtcNow.Returns(Start);
+        var block = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End);
+        _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
+        _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
+
+        var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
+
+        result.Should().ContainSingle().Subject.HasStarted.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task HandleAsync_BlockAlreadyEnded_HasEndedIsTrue()
     {
         _clock.UtcNow.Returns(End.AddMinutes(1));

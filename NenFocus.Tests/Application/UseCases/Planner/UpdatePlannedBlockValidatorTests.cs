@@ -105,21 +105,37 @@ public class UpdatePlannedBlockValidatorTests
     }
 
     [Fact]
-    public async Task Validate_StartInPast_ButBlockAlreadyStarted_SkipsFutureCheck()
+    public async Task Validate_BlockAlreadyStarted_EndOnlyEdit_IsInvalid()
     {
+        // Gap 88 phase 0: a started block is locked — not even its end may change.
         var blockId = Guid.NewGuid();
         var presetId = Guid.NewGuid();
-        // Existing block's own Start is already in the past (it's live/locked).
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
             .Returns(FocusBlock.Create(blockId, presetId, Now.AddMinutes(-30), Now.AddHours(1)));
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
             .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Now));
-        // The UI sends back the original (now-past) start time unchanged.
-        var command = ValidCommand(blockId, presetId) with { Start = Now.AddMinutes(-30) };
+        var command = ValidCommand(blockId, presetId) with { Start = Now.AddMinutes(-30), End = Now.AddHours(2) };
 
         var result = await CreateValidator().ValidateAsync(command);
 
-        result.IsValid.Should().BeTrue();
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.ErrorMessage.Contains("already started"));
+    }
+
+    [Fact]
+    public async Task Validate_BlockStartsExactlyNow_IsInvalid()
+    {
+        var blockId = Guid.NewGuid();
+        var presetId = Guid.NewGuid();
+        _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
+            .Returns(BackgroundBlock.Create(blockId, presetId, Now, Now.AddHours(1)));
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
+            .Returns(BlockPreset.Create(presetId, "Background", WebsiteFilterType.Blocklist, BlockPresetType.Background, Now));
+        var command = ValidCommand(blockId, presetId) with { Start = Now.AddHours(1), End = Now.AddHours(2) };
+
+        var result = await CreateValidator().ValidateAsync(command);
+
+        result.Errors.Should().Contain(e => e.ErrorMessage.Contains("already started"));
     }
 
     [Fact]
