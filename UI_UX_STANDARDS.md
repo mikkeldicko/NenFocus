@@ -74,23 +74,17 @@ Naming rules:
 
 ## ViewModel Binding Contract
 
-- Views bind to ViewModels **only**. No business logic in code-behind.
-- ViewModels receive all dependencies (command handlers, query handlers, services) via constructor injection.
+What a ViewModel may and may not hold or do (dispatchers only, no handlers, no timers, math or value formatting, no Domain entities; code-behind does pixel geometry only) is `MODULE_STANDARDS.md` → UI and The ViewModel Forbidden Zone, guarded by the architecture tests. The UI-only conventions:
+
 - Navigation between pages is handled by passing `Action` callbacks into ViewModel constructors — ViewModels never reference the Shell or other ViewModels directly.
 - Observable properties use `[ObservableProperty]` from CommunityToolkit.Mvvm.
-- Commands use `[RelayCommand]`. Can-execute guards use `[NotifyCanExecuteChangedFor]`.
+- Commands use `[RelayCommand]` (a method `FooAsync` becomes `FooCommand`). Can-execute guards use `[NotifyCanExecuteChangedFor]`.
 
 ---
 
 ## Time Display Formatting
 
-All time values are exposed from ViewModels as `TimeSpan` properties. Views convert to strings using `TimeSpanToStringConverter` registered in each view's resources:
-
-```xml
-<UserControl.Resources>
-    <vm:TimeSpanToStringConverter x:Key="TimeSpanConverter"/>
-</UserControl.Resources>
-```
+ViewModels expose raw values and Views format them with converters — the rule and the list of approved converters are `MODULE_STANDARDS.md` → No String Formatting and Converter Catalogue. The session screen's formats:
 
 | Display | Binding | ConverterParameter |
 |---------|---------|-------------------|
@@ -105,7 +99,7 @@ All time values are exposed from ViewModels as `TimeSpan` properties. Views conv
 - All progress bars use `Minimum="0" Maximum="1"` with a `double` binding from the ViewModel.
 - Session progress: `Foreground="#B8922A"`, `Background="#EEEEF5"`, `Height="3"`, `CornerRadius="2"`.
 - Break progress: same style, shown only during `IsOnBreak`.
-- Progress values are computed by `IActiveSessionMonitor` — the ViewModel passes them through without modification.
+- Progress values arrive ready from `IActiveSessionMonitor` (which asks `TimeSlot`/`SessionBreak`); the ViewModel passes them through (`MODULE_STANDARDS.md` → No Math).
 
 ---
 
@@ -120,7 +114,7 @@ All time values are exposed from ViewModels as `TimeSpan` properties. Views conv
 | Click on empty space | Shows a 1-hour gold ghost at the clicked slot, opens the new-block form pre-filled with that range |
 | Drag on empty space | Paints a live gold ghost; on release opens the new-block form pre-filled with the dragged range |
 | Drag tile body | Moves the tile; ghost overlay follows pixel-smooth, original tile dims to 30% opacity |
-| Drag bottom edge (10 px hot zone) | Resizes end time; ghost overlay extends/shrinks *(commit partially broken — parked)* |
+| Drag bottom edge (10 px hot zone) | Resizes end time; ghost overlay extends/shrinks |
 | Drag top edge (10 px hot zone) | Resizes start time; disabled when start is in the past |
 | Click tile | Opens edit form |
 
@@ -139,21 +133,20 @@ All time values are exposed from ViewModels as `TimeSpan` properties. Views conv
 |-------|----------|------|
 | UI | `PlannerPageView.axaml.cs` | All drag state machine, ghost lifecycle, pointer routing |
 | UI | `PlannerPageViewModel` | `OpenNewBlockFormWithRangeCommand`, `MoveOrResizeBlockCommand`, `IsTileFullyLocked`, `DragError`, `IsBlockLocked`, `CanSaveBlock` |
-| UI | `PlannerDragMath` (`ViewModels/Components/`) | Pure static helper: `YToSnappedTime`, `DeltaYToSnappedMinutes`, `ClampRange`, `WouldCollide` |
+| UI | `PlannerDragMath` (`ViewModels/Components/`) | Pure static pixel-geometry helper: `YToSnappedTime`, `DeltaYToSnappedMinutes`, `ClampRange`, `ClampMoveStart`, `ClampResizeTopStart`, `ClampResizeBottomEnd`. No placement rules — overlap is `BlockPlacementChecker`'s (Gap 88 phase 8) |
 | UI | `DragCreatedRange` | Record struct passed from code-behind → ViewModel on drag-create completion |
 | UI | `DragMoveResult` | Record struct passed from code-behind → ViewModel on drag-move/resize completion |
-| Application | `CreatePlannedBlockCommandHandler` | Rejects Focus Block if it overlaps a running session (in addition to existing Focus-block overlap check). Compares against `activeSession.EndAt`, not `StartedAt + Duration` (fixed 2026-08-21, `DESIGN_GAP_HISTORY.md` Gap 32) — for a Planned session started within the grace period, `EndAt` is pinned to the originating block's own scheduled end while `Duration` is the block's full nominal length, so the old recomputed window overshot the session's real end by the lateness amount and could wrongly reject a block that legitimately fit right after it. |
-| Application | `UpdatePlannedBlockCommandHandler` | Same active-session overlap guard for move/resize, same `EndAt` fix (Gap 32) |
+| Application | Create/Update validators → `GetBlockPlacementVerdictQuery` → `BlockPlacementChecker` | Decide whether a drop or form save is allowed (past, contract hours, Focus time taken by a block or running session); the refusal text lands in `DragError`/`FormError` (Gap 88) |
 
 **Form locking:** `IsBlockLocked` (= `IsEditing && IsEditingBlockStarted`, copied from `PlannedBlockDto.HasStarted`) disables every field and hides Save. It covers a completed Ritual and the running session's block too — both only exist once the block has started. The ViewModel never compares times itself (Gap 88 phase 0).
 
-**Deletion protection:** `DeletePlannedBlockValidator` refuses (a) any block linked to a Nen Contract, forever, and (b) a running block (`HasStarted(now) && !HasEnded(now)`) — including a Focus block still awaiting its Ritual and the running session's own block. An ordinary block may be deleted before it starts, or after it ends (from the snapshot view). `CanDeleteFromForm` (`IsEditing && !IsEditingBlockStarted && !IsEditingBlockContractLocked`) and `CanDeleteSnapshotBlock` (`ContractId is null`) mirror it from DTO fields — the form only opens for blocks that haven't ended, so "started" is the running check there. History: Gaps 9, 28, 88.
+**Deletion:** Delete shows in the form (`CanDeleteFromForm`) for a block that hasn't started and isn't a contract block, and in the snapshot (`CanDeleteSnapshotBlock`) for an ended block that was never in a contract. The rule itself is `DeletePlannedBlockValidator`'s; these flags only hide the button. Who may change or delete which block is being given one Domain answer in `OPEN_GAPS.md` → Gap 93, which replaces these flags.
 
-**Block Snapshot — read-only view for a done block *(built, 2026-08-21 — see `DESIGN_GAP_HISTORY.md` Gap 28)*:** clicking a **done** block no longer opens the edit form with fields disabled — it opens a dedicated, genuinely separate read-only overlay. "Done" means: for a Focus Block, `Outcome` has resolved (`Missed`/`StartedLate`/`EndedEarly`/`CompletedOnTime` — the block is no longer open); for a Background Block, which has no `Outcome` concept at all, `HasEnded` is the only signal. The pre-existing active-session-originating-block guard (`_sessionState.ActiveSession?.OriginatingBlockId == tile.Id`) is checked first and unchanged — a block whose session is still running keeps opening nothing (matching the existing behavior the locked edit-form fields were already built for), never the snapshot.
+**Block Snapshot — read-only view for a done block (Gap 28):** clicking a **done** block opens a separate read-only overlay, not the edit form. "Done" means: a Focus block whose `Outcome` has resolved; a Background block that has ended. The running session's own block opens nothing (checked first, via `ActiveSession?.OriginatingBlockId` — unreliable after a restart, see Gap 89 area 4 F2).
 
-- **Content, Focus block with a Session** (`GetSessionSnapshotForBlockQuery` returns non-null): type/outcome/redemption badges, date, time range, duration, Zetsu goal, reflection (placeholder text when blank — a session ending without a reflection is a valid, deliberate outcome per `Session.SetReflection`'s own precedent, not an error state), a full expandable list of blocked attempts (`BlockedAttemptSnapshotDto` — resource name, type, timestamp), and — when `IsRedemption` — which missed block(s) it covered and how much. The sub-minute "within grace, full credit given" note this section used to show (Gap 45) is gone — see `DESIGN_GAP_HISTORY.md` for the whole-minutes crediting redesign that removed Gap 45's forgiveness outright; an `EndedEarly` badge now always has a real, honest deficit behind it, however small.
-- **Content, no Session** (Missed Focus block, or any Background block — the query returns `null`): minimal snapshot only — type, preset, date, scheduled time range, duration. No session section at all, since there is structurally nothing to show. (A Cancelled block never reaches this view, or any Planner tile — `GetPlannedBlocksForDayQueryHandler` already filters `CancelledAt.HasValue` blocks out of the tile list entirely.)
-- **Delete, from the snapshot only:** enabled iff the block has never been linked to a Nen Contract (`ContractId is null`) — permanently, even after that contract concludes. This **reverses** the historical-record protection `DeletePlannedBlockValidator` has had since Gap 9 (ended blocks were previously never deletable, full stop) for the non-contract-linked case specifically, while making contract-linkage protection **stronger** than before (previously scoped to `IsInEffect`, i.e. only while the contract was still live).
+- **Focus block with a session** (`GetSessionSnapshotForBlockQuery` returns one): type/outcome/redemption badges, date, time range, duration, Zetsu goal, reflection (placeholder when blank — a valid outcome, not an error), an expandable list of blocked attempts, and — for a redemption block — which missed blocks it covered and how much.
+- **No session** (a missed Focus block, or any Background block): type, preset, date, scheduled time range, duration only. Cancelled blocks never appear as tiles (`GetPlannedBlocksForDayQueryHandler` filters them out).
+- **Delete** shows only for a block never linked to a contract (see Deletion above).
 
 **Technical mapping (Block Snapshot):**
 
