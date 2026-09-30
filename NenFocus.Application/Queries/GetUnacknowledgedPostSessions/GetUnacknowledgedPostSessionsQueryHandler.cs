@@ -91,11 +91,7 @@ public sealed class GetUnacknowledgedPostSessionsQueryHandler
             return actualElapsedMinutes;
 
         return _classifier.CreditedFocusMinutes(
-            focusBlock.Start,
-            focusBlock.End,
-            focusBlock.RitualCompletedAt,
-            session.EndedAt,
-            actualElapsedMinutes);
+            focusBlock.Scheduled, focusBlock.RitualCompletedAt, session.EndedAt, actualElapsedMinutes);
     }
 
     private async Task<string> ResolvePresetNameAsync(

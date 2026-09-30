@@ -1,4 +1,5 @@
 using FluentAssertions;
+using TestAt = NenFocus.Tests.At;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.ComputeActivePolicySlice;
 using NenFocus.Domain.Entities;
@@ -20,7 +21,7 @@ public class ComputeActivePolicySliceQueryHandlerTests
 
     public ComputeActivePolicySliceQueryHandlerTests()
     {
-        _blocks.GetForRangeAsync(Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
+        _blocks.GetForRangeAsync(Arg.Any<TimeSlot>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[]);
         _sessions.GetActiveSessionsAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<Session>)[]);
     }
@@ -30,19 +31,19 @@ public class ComputeActivePolicySliceQueryHandlerTests
     [Fact]
     public async Task HandleAsync_FetchesBlocksForOneSecondWindowAroundAt()
     {
-        await CreateHandler().HandleAsync(new ComputeActivePolicySliceQuery(At), CancellationToken.None);
+        await CreateHandler().HandleAsync(new ComputeActivePolicySliceQuery(TestAt.Utc(At)), CancellationToken.None);
 
-        await _blocks.Received(1).GetForRangeAsync(At.AddSeconds(-1), At.AddSeconds(1), Arg.Any<CancellationToken>());
+        await _blocks.Received(1).GetForRangeAsync(new TimeSlot(TestAt.Utc(At.AddSeconds(-1)), TestAt.Utc(At.AddSeconds(1))), Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task HandleAsync_ReturnsWhateverThePolicyEngineComputes()
     {
-        var expectedSlice = new ActivePolicySlice { SliceStart = At, BlockedSites = new HashSet<string> { "youtube.com" } };
-        _policyEngine.ComputeSlice(At, Arg.Any<IEnumerable<BlockPreset>>(), Arg.Any<IEnumerable<Session>>(), Arg.Any<IEnumerable<PlannedBlock>>())
+        var expectedSlice = new ActivePolicySlice { SliceStart = TestAt.Utc(At), BlockedSites = new HashSet<string> { "youtube.com" } };
+        _policyEngine.ComputeSlice(TestAt.Utc(At), Arg.Any<IEnumerable<BlockPreset>>(), Arg.Any<IEnumerable<Session>>(), Arg.Any<IEnumerable<PlannedBlock>>())
             .Returns(expectedSlice);
 
-        var result = await CreateHandler().HandleAsync(new ComputeActivePolicySliceQuery(At), CancellationToken.None);
+        var result = await CreateHandler().HandleAsync(new ComputeActivePolicySliceQuery(TestAt.Utc(At)), CancellationToken.None);
 
         result.Should().BeSameAs(expectedSlice);
     }
@@ -52,25 +53,25 @@ public class ComputeActivePolicySliceQueryHandlerTests
     {
         var sharedPresetId = Guid.NewGuid();
         var sessionOnlyPresetId = Guid.NewGuid();
-        var block = FocusBlock.Create(Guid.NewGuid(), sharedPresetId, At, At.AddHours(1));
+        var block = FocusBlock.Create(Guid.NewGuid(), sharedPresetId,TestAt.Slot(At, At.AddHours(1)));
         var session = Session.Create(
             Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(30)),
             sessionOnlyPresetId, SessionOrigin.Spontaneous);
-        session.Start(At);
+        session.Start(TestAt.Utc(At));
 
-        _blocks.GetForRangeAsync(Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
+        _blocks.GetForRangeAsync(Arg.Any<TimeSlot>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[block]);
         _sessions.GetActiveSessionsAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<Session>)[session]);
 
-        var sharedPreset = BlockPreset.Create(sharedPresetId, "Shared", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At);
-        var sessionPreset = BlockPreset.Create(sessionOnlyPresetId, "SessionOnly", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At);
+        var sharedPreset = BlockPreset.Create(sharedPresetId, "Shared", WebsiteFilterType.Blocklist, BlockPresetType.Focus, TestAt.Utc(At));
+        var sessionPreset = BlockPreset.Create(sessionOnlyPresetId, "SessionOnly", WebsiteFilterType.Blocklist, BlockPresetType.Focus, TestAt.Utc(At));
         _presets.GetByIdAsync(sharedPresetId, Arg.Any<CancellationToken>()).Returns(sharedPreset);
         _presets.GetByIdAsync(sessionOnlyPresetId, Arg.Any<CancellationToken>()).Returns(sessionPreset);
 
-        await CreateHandler().HandleAsync(new ComputeActivePolicySliceQuery(At), CancellationToken.None);
+        await CreateHandler().HandleAsync(new ComputeActivePolicySliceQuery(TestAt.Utc(At)), CancellationToken.None);
 
         _policyEngine.Received(1).ComputeSlice(
-            At,
+            TestAt.Utc(At),
             Arg.Is<IEnumerable<BlockPreset>>(p => p.Count() == 2 && p.Contains(sharedPreset) && p.Contains(sessionPreset)),
             Arg.Is<IEnumerable<Session>>(s => s.Contains(session)),
             Arg.Is<IEnumerable<PlannedBlock>>(b => b.Contains(block)));
@@ -82,16 +83,16 @@ public class ComputeActivePolicySliceQueryHandlerTests
         // The handler no longer filters cancelled blocks: a cancelled block's own IsActive
         // says no (PlannedBlock.EffectiveEnd), and PolicyEngine asks it — see
         // PolicyEngineTests.ComputeSlice_CancelledBlockHandedIn_BlocksNothing.
-        var cancelledBlock = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At, At.AddHours(1));
-        cancelledBlock.MarkCancelled(At);
+        var cancelledBlock = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),TestAt.Slot(At, At.AddHours(1)));
+        cancelledBlock.MarkCancelled(TestAt.Utc(At));
 
-        _blocks.GetForRangeAsync(Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
+        _blocks.GetForRangeAsync(Arg.Any<TimeSlot>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[cancelledBlock]);
 
-        await CreateHandler().HandleAsync(new ComputeActivePolicySliceQuery(At), CancellationToken.None);
+        await CreateHandler().HandleAsync(new ComputeActivePolicySliceQuery(TestAt.Utc(At)), CancellationToken.None);
 
         _policyEngine.Received(1).ComputeSlice(
-            At,
+            TestAt.Utc(At),
             Arg.Any<IEnumerable<BlockPreset>>(),
             Arg.Any<IEnumerable<Session>>(),
             Arg.Is<IEnumerable<PlannedBlock>>(b => b.Single() == cancelledBlock));
@@ -101,14 +102,14 @@ public class ComputeActivePolicySliceQueryHandlerTests
     public async Task HandleAsync_UnresolvablePreset_IsOmittedNotThrown()
     {
         var presetId = Guid.NewGuid();
-        var block = FocusBlock.Create(Guid.NewGuid(), presetId, At, At.AddHours(1));
-        _blocks.GetForRangeAsync(Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
+        var block = FocusBlock.Create(Guid.NewGuid(), presetId,TestAt.Slot(At, At.AddHours(1)));
+        _blocks.GetForRangeAsync(Arg.Any<TimeSlot>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[block]);
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>()).Returns((BlockPreset?)null);
 
-        await CreateHandler().HandleAsync(new ComputeActivePolicySliceQuery(At), CancellationToken.None);
+        await CreateHandler().HandleAsync(new ComputeActivePolicySliceQuery(TestAt.Utc(At)), CancellationToken.None);
 
         _policyEngine.Received(1).ComputeSlice(
-            At, Arg.Is<IEnumerable<BlockPreset>>(p => !p.Any()), Arg.Any<IEnumerable<Session>>(), Arg.Any<IEnumerable<PlannedBlock>>());
+            TestAt.Utc(At), Arg.Is<IEnumerable<BlockPreset>>(p => !p.Any()), Arg.Any<IEnumerable<Session>>(), Arg.Any<IEnumerable<PlannedBlock>>());
     }
 }

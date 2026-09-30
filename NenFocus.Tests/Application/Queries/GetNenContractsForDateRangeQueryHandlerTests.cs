@@ -36,12 +36,13 @@ public class GetNenContractsForDateRangeQueryHandlerTests
     private readonly IPlannedBlockRepository _blocks = Substitute.For<IPlannedBlockRepository>();
     private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
     private readonly IFocusBlockOutcomeClassifier _classifier = Substitute.For<IFocusBlockOutcomeClassifier>();
-    private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
+    private readonly ISystemClock _clock = TestClock.Create();
 
     public GetNenContractsForDateRangeQueryHandlerTests()
     {
-        _clock.UtcNow.Returns(Today);
-        _clock.ToLocal(Arg.Any<DateTime>()).Returns(ci => ci.Arg<DateTime>());
+        _clock.SetNow(Today);
+        _clock.SetTimeZoneOffset(TimeSpan.Zero);
+        _clock.SetTimeZoneOffset(TimeSpan.Zero);
         _deficits.HandleAsync(Arg.Any<GetNenContractDeficitsQuery>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<FocusBlockDeficitDto>)[]);
         _completedHours.HandleAsync(Arg.Any<GetNenContractCompletedFocusHoursQuery>(), Arg.Any<CancellationToken>())
@@ -80,7 +81,7 @@ public class GetNenContractsForDateRangeQueryHandlerTests
             floorRule: rule,
             changeWindow: null, allowCancellation: false,
             plannedFocusHoursByDay: plan,
-            localSealedAt: sealedAt ?? (startDate ?? StartDate).ToDateTime(TimeOnly.MinValue));
+            sealedAt: At.Utc(sealedAt ?? (startDate ?? StartDate).ToDateTime(TimeOnly.MinValue)), timeZone: At.UtcZone);
     }
 
     private static Dictionary<DateOnly, double> FullyPlanned(DateOnly start, DateOnly end, double hoursPerDay)
@@ -105,7 +106,7 @@ public class GetNenContractsForDateRangeQueryHandlerTests
             changeWindow: null,
             allowCancellation: false,
             plannedFocusHoursByDay: new Dictionary<DateOnly, double> { [StartDate] = contractFloorHours },
-            localSealedAt: StartDate.ToDateTime(TimeOnly.MinValue),
+            sealedAt: At.Utc(StartDate.ToDateTime(TimeOnly.MinValue)), timeZone: At.UtcZone,
             contractFloor: new ContractFloor(contractFloorHours));
 
     [Fact]
@@ -152,8 +153,9 @@ public class GetNenContractsForDateRangeQueryHandlerTests
         // 1:00 AM UTC Jan 5 — but 8:00 PM local (UTC-5) on Jan 4. A fix that forgot to
         // convert would compute "today" as Jan 5 (DayNumber 5) instead of Jan 4 (DayNumber 4).
         var utcNow = new DateTime(2026, 1, 5, 1, 0, 0, DateTimeKind.Utc);
-        _clock.UtcNow.Returns(utcNow);
-        _clock.ToLocal(Arg.Any<DateTime>()).Returns(ci => ci.Arg<DateTime>().AddHours(-5));
+        _clock.SetNow(utcNow);
+        _clock.SetTimeZoneOffset(TimeSpan.FromHours(-5));
+        _clock.SetTimeZoneOffset(TimeSpan.FromHours(-5));
         var contract = Contract();
         SetInEffect(contract);
 
@@ -267,7 +269,7 @@ public class GetNenContractsForDateRangeQueryHandlerTests
             changeWindow: null,
             allowCancellation: allowCancellation,
             plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-            localSealedAt: StartDate.ToDateTime(TimeOnly.MinValue));
+            sealedAt: At.Utc(StartDate.ToDateTime(TimeOnly.MinValue)), timeZone: At.UtcZone);
         SetInEffect(contract);
 
         var result = (await CreateHandler().HandleAsync(AnyRange)).Single();
@@ -614,23 +616,20 @@ public class GetNenContractsForDateRangeQueryHandlerTests
         var contract = Contract(floorRule: new DailyFloorRule.None());
         SetInEffect(contract);
 
-        var missed = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),
-            missedDay.ToDateTime(new TimeOnly(9, 0)), missedDay.ToDateTime(new TimeOnly(10, 0)), contractId: contract.Id);
+        var missed = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(missedDay.ToDateTime(new TimeOnly(9, 0)), missedDay.ToDateTime(new TimeOnly(10, 0))), contractId: contract.Id);
         // First attempt: claimed the full 60-minute deficit, ended early after 20 minutes.
-        var attempt1 = FocusBlock.Create(Guid.NewGuid(), missed.BlockPresetId,
-            redemptionDay.ToDateTime(new TimeOnly(9, 0)), redemptionDay.ToDateTime(new TimeOnly(10, 0)),
+        var attempt1 = FocusBlock.Create(Guid.NewGuid(), missed.BlockPresetId,At.Slot(redemptionDay.ToDateTime(new TimeOnly(9, 0)), redemptionDay.ToDateTime(new TimeOnly(10, 0))),
             contractId: contract.Id, redemptionEntries: [new RedemptionEntry(missed.Id, 60)]);
         // Second attempt, same day: claims exactly what's left after the first attempt's
         // real 20-minute credit (40 minutes), and completes it fully.
-        var attempt2 = FocusBlock.Create(Guid.NewGuid(), missed.BlockPresetId,
-            redemptionDay.ToDateTime(new TimeOnly(11, 0)), redemptionDay.ToDateTime(new TimeOnly(11, 40)),
+        var attempt2 = FocusBlock.Create(Guid.NewGuid(), missed.BlockPresetId,At.Slot(redemptionDay.ToDateTime(new TimeOnly(11, 0)), redemptionDay.ToDateTime(new TimeOnly(11, 40))),
             contractId: contract.Id, redemptionEntries: [new RedemptionEntry(missed.Id, 40)]);
 
         _blocks.GetForContractAsync(contract.Id, Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[missed, attempt1, attempt2]);
         // The missed block itself never started — nothing credited, its full 60 minutes
         // stays owed forever once settled.
-        _classifier.CreditedFocusMinutes(missed.Start, missed.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Arg.Any<double>())
+        _classifier.CreditedFocusMinutes(missed.Scheduled, Arg.Any<Moment?>(), Arg.Any<Moment?>(), Arg.Any<double>())
             .Returns(0);
         // The raw (buggy) scheduled-span sum a naive read would report for redemptionDay:
         // attempt1's full 1h claim plus attempt2's 40-minute claim = 1h40m.
@@ -661,18 +660,15 @@ public class GetNenContractsForDateRangeQueryHandlerTests
         var contract = Contract(floorRule: new DailyFloorRule.None());
         SetInEffect(contract);
 
-        var missed = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),
-            missedDay.ToDateTime(new TimeOnly(9, 0)), missedDay.ToDateTime(new TimeOnly(10, 0)), contractId: contract.Id);
-        var attempt1 = FocusBlock.Create(Guid.NewGuid(), missed.BlockPresetId,
-            firstAttemptDay.ToDateTime(new TimeOnly(9, 0)), firstAttemptDay.ToDateTime(new TimeOnly(10, 0)),
+        var missed = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(missedDay.ToDateTime(new TimeOnly(9, 0)), missedDay.ToDateTime(new TimeOnly(10, 0))), contractId: contract.Id);
+        var attempt1 = FocusBlock.Create(Guid.NewGuid(), missed.BlockPresetId,At.Slot(firstAttemptDay.ToDateTime(new TimeOnly(9, 0)), firstAttemptDay.ToDateTime(new TimeOnly(10, 0))),
             contractId: contract.Id, redemptionEntries: [new RedemptionEntry(missed.Id, 60)]);
-        var attempt2 = FocusBlock.Create(Guid.NewGuid(), missed.BlockPresetId,
-            secondAttemptDay.ToDateTime(new TimeOnly(9, 0)), secondAttemptDay.ToDateTime(new TimeOnly(9, 30)),
+        var attempt2 = FocusBlock.Create(Guid.NewGuid(), missed.BlockPresetId,At.Slot(secondAttemptDay.ToDateTime(new TimeOnly(9, 0)), secondAttemptDay.ToDateTime(new TimeOnly(9, 30))),
             contractId: contract.Id, redemptionEntries: [new RedemptionEntry(missed.Id, 30)]);
 
         _blocks.GetForContractAsync(contract.Id, Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[missed, attempt1, attempt2]);
-        _classifier.CreditedFocusMinutes(missed.Start, missed.End, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Arg.Any<double>())
+        _classifier.CreditedFocusMinutes(missed.Scheduled, Arg.Any<Moment?>(), Arg.Any<Moment?>(), Arg.Any<double>())
             .Returns(0);
         _plannedHours.HandleAsync(Arg.Any<ComputePlannedFocusHoursQuery>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyDictionary<DateOnly, double>)new Dictionary<DateOnly, double>

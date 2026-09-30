@@ -1,4 +1,5 @@
 using FluentAssertions;
+using NenFocus.Domain.ValueObjects;
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.UseCases.Sessions.MarkFocusBlockMissed;
@@ -15,11 +16,11 @@ public class SweepMissedFocusBlocksCommandHandlerTests
     private readonly IPlannedBlockRepository _blocks = Substitute.For<IPlannedBlockRepository>();
     private readonly ICommandHandler<MarkFocusBlockMissedCommand, MarkFocusBlockMissedResult> _markMissed =
         Substitute.For<ICommandHandler<MarkFocusBlockMissedCommand, MarkFocusBlockMissedResult>>();
-    private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
+    private readonly ISystemClock _clock = TestClock.Create();
 
     public SweepMissedFocusBlocksCommandHandlerTests()
     {
-        _clock.UtcNow.Returns(Now);
+        _clock.SetNow(Now);
     }
 
     private SweepMissedFocusBlocksCommandHandler CreateHandler() => new(_blocks, _markMissed, _clock);
@@ -27,7 +28,7 @@ public class SweepMissedFocusBlocksCommandHandlerTests
     [Fact]
     public async Task HandleAsync_NoUnresolvedBlocks_ReturnsEmptyResult()
     {
-        _blocks.GetUnresolvedFocusBlocksAsync(Now, Arg.Any<CancellationToken>())
+        _blocks.GetUnresolvedFocusBlocksAsync(At.Utc(Now), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<FocusBlock>)[]);
 
         var result = await CreateHandler().HandleAsync(new SweepMissedFocusBlocksCommand());
@@ -39,9 +40,9 @@ public class SweepMissedFocusBlocksCommandHandlerTests
     [Fact]
     public async Task HandleAsync_UnresolvedBlocks_MarksEachMissedInStartOrderAndCollectsPostSessions()
     {
-        var earlier = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Now.AddHours(-3), Now.AddHours(-2));
-        var later = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Now.AddHours(-2), Now.AddHours(-1));
-        _blocks.GetUnresolvedFocusBlocksAsync(Now, Arg.Any<CancellationToken>())
+        var earlier = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now.AddHours(-3), Now.AddHours(-2)));
+        var later = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now.AddHours(-2), Now.AddHours(-1)));
+        _blocks.GetUnresolvedFocusBlocksAsync(At.Utc(Now), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<FocusBlock>)[later, earlier]);
 
         var earlierPostSession = new PostSessionDto { SessionId = Guid.NewGuid() };
@@ -69,21 +70,21 @@ public class SweepMissedFocusBlocksCommandHandlerTests
         // still see a block as active after this handler's own independent clock read had
         // already moved past its End, triggering the Ritual for a block already marked Missed.
         var asOf = Now.AddHours(1);
-        _blocks.GetUnresolvedFocusBlocksAsync(asOf, Arg.Any<CancellationToken>())
+        _blocks.GetUnresolvedFocusBlocksAsync(At.Utc(asOf), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<FocusBlock>)[]);
 
-        await CreateHandler().HandleAsync(new SweepMissedFocusBlocksCommand { AsOf = asOf });
+        await CreateHandler().HandleAsync(new SweepMissedFocusBlocksCommand { AsOf = At.Utc(asOf) });
 
-        await _blocks.Received(1).GetUnresolvedFocusBlocksAsync(asOf, Arg.Any<CancellationToken>());
-        await _blocks.DidNotReceive().GetUnresolvedFocusBlocksAsync(Now, Arg.Any<CancellationToken>());
+        await _blocks.Received(1).GetUnresolvedFocusBlocksAsync(At.Utc(asOf), Arg.Any<CancellationToken>());
+        await _blocks.DidNotReceive().GetUnresolvedFocusBlocksAsync(At.Utc(Now), Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task HandleAsync_MarkMissedFails_SkipsThatBlockButContinues()
     {
-        var failing = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Now.AddHours(-3), Now.AddHours(-2));
-        var succeeding = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Now.AddHours(-2), Now.AddHours(-1));
-        _blocks.GetUnresolvedFocusBlocksAsync(Now, Arg.Any<CancellationToken>())
+        var failing = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now.AddHours(-3), Now.AddHours(-2)));
+        var succeeding = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now.AddHours(-2), Now.AddHours(-1)));
+        _blocks.GetUnresolvedFocusBlocksAsync(At.Utc(Now), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<FocusBlock>)[failing, succeeding]);
 
         var postSession = new PostSessionDto { SessionId = Guid.NewGuid() };

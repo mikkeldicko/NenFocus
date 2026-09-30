@@ -55,7 +55,7 @@ public sealed class EndSessionCommandHandler
             .GroupBy(a => a.ResourceName)
             .ToDictionary(g => g.Key, g => g.Count());
 
-        session.Complete(_clock.UtcNow);
+        session.Complete(_clock.Now);
         // Capped at the planned end by Complete itself (Gap 63). Everything below reads the
         // recorded end, never "now", so an end noticed late can't leak past the plan.
         var endedAt = session.EndedAt!.Value;
@@ -94,11 +94,7 @@ public sealed class EndSessionCommandHandler
         // block — an impromptu session has no scheduled window to be graced against.
         var creditedMinutes = originatingFocusBlock is not null
             ? _classifier.CreditedFocusMinutes(
-                originatingFocusBlock.Start,
-                originatingFocusBlock.End,
-                originatingFocusBlock.RitualCompletedAt,
-                session.EndedAt,
-                actualElapsedMinutes)
+            originatingFocusBlock.Scheduled, originatingFocusBlock.RitualCompletedAt, session.EndedAt, actualElapsedMinutes)
             : actualElapsedMinutes;
 
         var postSession = new PostSessionDto

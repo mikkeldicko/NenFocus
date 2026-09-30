@@ -121,12 +121,12 @@ public partial class ShellViewModel : ViewModelBase
             CurrentPage = selected.PageViewModel;
         }
 
-        NavItems.Add(new NavItemViewModel("Main", "⊹", new MainPageViewModel(() => StartRitual(), ShowPostSession, _sessionState, _monitor, _commandDispatcher, _plannerClock), Select));
+        NavItems.Add(new NavItemViewModel("Main", "⊹", new MainPageViewModel(() => StartRitual(), ShowPostSession, _sessionState, _monitor, _commandDispatcher, _clock), Select));
         var presetsPageViewModel = new PresetsPageViewModel(
             new BlockPresetPageViewModel(_queryDispatcher, _commandDispatcher),
             new ContractPresetPageViewModel(_queryDispatcher, _commandDispatcher));
         NavItems.Add(new NavItemViewModel("Presets", "◻", presetsPageViewModel, Select));
-        var plannerViewModel = new PlannerPageViewModel(_queryDispatcher, _commandDispatcher, _plannerClock, _sessionState);
+        var plannerViewModel = new PlannerPageViewModel(_queryDispatcher, _commandDispatcher, _plannerClock, _sessionState, _clock);
         plannerViewModel.ContractWizardOpened += OnContractWizardOpened;
         plannerViewModel.ContractWizardClosed += OnContractWizardClosed;
         plannerViewModel.PostContractReady += OnPostContractReadyLive;
@@ -395,7 +395,7 @@ public partial class ShellViewModel : ViewModelBase
         var context = await _queryDispatcher.QueryAsync(
             new GetFocusBlockRitualContextQuery { FocusBlockId = focusBlockId });
 
-        if (context is not null && context.Schedule.End <= _clock.UtcNow)
+        if (context is not null && context.Schedule.HasEnded(_clock.Now))
         {
             var postSession = await TryMarkBlockMissed(focusBlockId);
             if (postSession is not null)
@@ -490,7 +490,7 @@ public partial class ShellViewModel : ViewModelBase
 
     private void ShowPostSession(PostSessionDto data)
     {
-        PostSessionViewModel = new PostSessionViewModel(data, _commandDispatcher, ExitPostSession);
+        PostSessionViewModel = new PostSessionViewModel(data, _commandDispatcher, ExitPostSession, _clock.TimeZone);
         IsPostSessionActive = true;
     }
 

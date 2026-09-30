@@ -1,6 +1,4 @@
 using System;
-using System.Collections.Generic;
-using System.Linq;
 
 namespace NenFocus.ViewModels.Components;
 
@@ -108,28 +106,6 @@ internal static class PlannerDragMath
         if (candidateEnd < anchorStart + minDuration) candidateEnd = anchorStart + minDuration;
 
         return candidateEnd;
-    }
-
-    /// <summary>
-    /// Pre-flight UX collision check. Returns true if the candidate Focus block would overlap
-    /// any other Focus tile on the same day column. Uses half-open interval [start, end) so
-    /// touching edges are not counted as overlap.
-    /// Background blocks never cause a collision.
-    /// </summary>
-    internal static bool WouldCollide(
-        Guid movingBlockId,
-        bool candidateIsFocus,
-        DateTime candidateStartUtc,
-        DateTime candidateEndUtc,
-        IEnumerable<PlannedBlockTileViewModel> dayTiles)
-    {
-        if (!candidateIsFocus) return false;
-
-        return dayTiles.Any(t =>
-            t.Id != movingBlockId &&
-            t.IsFocus &&
-            candidateStartUtc < t.End.ToUniversalTime() &&
-            candidateEndUtc > t.Start.ToUniversalTime());
     }
 
     private static int SnapToQuarterHour(int totalMinutes)

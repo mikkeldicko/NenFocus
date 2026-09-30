@@ -80,11 +80,11 @@ public class SessionTests
         var session = CreateSpontaneousSession();
         var startedAt = new DateTime(2026, 1, 1, 10, 0, 0, DateTimeKind.Utc);
 
-        session.Start(startedAt);
+        session.Start(At.Utc(startedAt));
 
         session.Status.Should().Be(SessionStatus.Active);
-        session.StartedAt.Should().Be(startedAt);
-        session.EndAt.Should().Be(startedAt + session.Duration.Value);
+        session.StartedAt.Should().Be(At.Utc(startedAt));
+        session.EndAt.Should().Be(At.Utc(startedAt + session.Duration.Value));
         session.DomainEvents.Should().ContainSingle()
             .Which.Should().BeOfType<SessionStartedEvent>();
 
@@ -102,18 +102,18 @@ public class SessionTests
         var startedAt = new DateTime(2026, 1, 1, 10, 0, 0, DateTimeKind.Utc);
         var scheduledEnd = startedAt.AddMinutes(3);
 
-        session.Start(startedAt, scheduledEnd);
+        session.Start(At.Utc(startedAt), At.PlannedWindowEnding(scheduledEnd));
 
-        session.EndAt.Should().Be(scheduledEnd);
+        session.EndAt.Should().Be(At.Utc(scheduledEnd));
     }
 
     [Fact]
     public void Start_AlreadyStarted_Throws()
     {
         var session = CreateSpontaneousSession();
-        session.Start(DateTime.UtcNow);
+        session.Start(At.Utc(DateTime.UtcNow));
 
-        var act = () => session.Start(DateTime.UtcNow);
+        var act = () => session.Start(At.Utc(DateTime.UtcNow));
 
         act.Should().Throw<InvalidOperationException>();
     }
@@ -130,7 +130,7 @@ public class SessionTests
     {
         var session = Session.Create(Guid.NewGuid(), new SessionGoal("Write tests"),
             new SessionDuration(TimeSpan.FromHours(2)), Guid.NewGuid(), SessionOrigin.Spontaneous);
-        session.Start(T0, breakSchedule: schedule, breakPresetName: presetName);
+        session.Start(At.Utc(T0), breakSchedule: schedule, breakPresetName: presetName);
         return session;
     }
 
@@ -139,7 +139,7 @@ public class SessionTests
     {
         var session = CreateSpontaneousSession();
 
-        session.Start(T0);
+        session.Start(At.Utc(T0));
 
         session.BreakSchedule.Should().Be(BreakSchedule.None);
         session.BreakPresetName.Should().BeNull();
@@ -168,7 +168,7 @@ public class SessionTests
         // 30-minute session; a break ending at 30 leaves no work after it.
         var session = CreateSpontaneousSession();
 
-        var act = () => session.Start(T0, breakSchedule: OneShortBreak(25, 30));
+        var act = () => session.Start(At.Utc(T0), breakSchedule: OneShortBreak(25, 30));
 
         act.Should().Throw<ArgumentException>();
     }
@@ -180,7 +180,7 @@ public class SessionTests
         // only 20 minutes remain, so a 25-30 break cannot fit.
         var session = CreatePlannedSession(Guid.NewGuid());
 
-        var act = () => session.Start(T0, T0.AddMinutes(20), OneShortBreak(25, 30));
+        var act = () => session.Start(At.Utc(T0), At.PlannedWindowEnding(T0.AddMinutes(20)), OneShortBreak(25, 30));
 
         act.Should().Throw<ArgumentException>();
     }
@@ -190,8 +190,8 @@ public class SessionTests
     {
         var session = CreateSpontaneousSession(); // 30 minutes
 
-        session.RunLength(T0).Should().Be(TimeSpan.FromMinutes(30));
-        session.RunLength(T0, T0.AddMinutes(12)).Should().Be(TimeSpan.FromMinutes(12));
+        session.RunLength(At.Utc(T0)).Should().Be(TimeSpan.FromMinutes(30));
+        session.RunLength(At.Utc(T0), At.PlannedWindowEnding(T0.AddMinutes(12))).Should().Be(TimeSpan.FromMinutes(12));
     }
 
     [Theory]
@@ -203,7 +203,7 @@ public class SessionTests
     {
         var session = StartedTwoHourSession(OneShortBreak());
 
-        session.IsOnBreakAt(T0.AddMinutes(minute)).Should().Be(onBreak);
+        session.IsOnBreakAt(At.Utc(T0.AddMinutes(minute))).Should().Be(onBreak);
         session.Status.Should().Be(SessionStatus.Active, "a break never changes the session's status");
     }
 
@@ -211,9 +211,9 @@ public class SessionTests
     public void IsOnBreakAt_OnceCompleted_False()
     {
         var session = StartedTwoHourSession(OneShortBreak());
-        session.Complete(T0.AddMinutes(27));
+        session.Complete(At.Utc(T0.AddMinutes(27)));
 
-        session.IsOnBreakAt(T0.AddMinutes(27)).Should().BeFalse();
+        session.IsOnBreakAt(At.Utc(T0.AddMinutes(27))).Should().BeFalse();
     }
 
     [Fact]
@@ -222,7 +222,7 @@ public class SessionTests
         // Laptop closed before 17:25, opened at 17:27 — the break still ends at 17:30.
         var session = StartedTwoHourSession(OneShortBreak());
 
-        var current = session.CurrentBreakAt(T0.AddMinutes(27));
+        var current = session.CurrentBreakAt(At.Utc(T0.AddMinutes(27)));
 
         current!.End.Should().Be(TimeSpan.FromMinutes(30));
     }
@@ -232,7 +232,7 @@ public class SessionTests
     {
         var session = StartedTwoHourSession(OneShortBreak());
 
-        session.BreakTransitionsBetween(T0.AddMinutes(24), T0.AddMinutes(26))
+        session.BreakTransitionsBetween(At.Utc(T0.AddMinutes(24)), At.Utc(T0.AddMinutes(26)))
             .Should().ContainSingle().Which.Kind.Should().Be(BreakTransitionKind.Started);
     }
 
@@ -241,8 +241,8 @@ public class SessionTests
     {
         var session = StartedTwoHourSession(OneShortBreak());
 
-        session.BreaksTakenBy(T0.AddMinutes(10)).Should().Be(0);
-        session.BreaksTakenBy(T0.AddMinutes(40)).Should().Be(1);
+        session.BreaksTakenBy(At.Utc(T0.AddMinutes(10))).Should().Be(0);
+        session.BreaksTakenBy(At.Utc(T0.AddMinutes(40))).Should().Be(1);
     }
 
     // ── Keep blocking during breaks (Gap 64) ─────────────────────────────────
@@ -262,10 +262,10 @@ public class SessionTests
     {
         var session = Session.Create(Guid.NewGuid(), new SessionGoal("Write tests"),
             new SessionDuration(TimeSpan.FromHours(2)), Guid.NewGuid(), SessionOrigin.Spontaneous);
-        session.Start(T0, breakSchedule: OneShortBreak(), keepBlockingDuringBreaks: keepBlocking);
+        session.Start(At.Utc(T0), breakSchedule: OneShortBreak(), keepBlockingDuringBreaks: keepBlocking);
 
-        session.LiftsBlockingAt(T0.AddMinutes(minute)).Should().Be(lifts);
-        session.IsOnBreakAt(T0.AddMinutes(minute)).Should().Be(minute == 27,
+        session.LiftsBlockingAt(At.Utc(T0.AddMinutes(minute))).Should().Be(lifts);
+        session.IsOnBreakAt(At.Utc(T0.AddMinutes(minute))).Should().Be(minute == 27,
             "keeping blocking changes what a break does, not whether it is a break");
     }
 
@@ -273,9 +273,9 @@ public class SessionTests
     public void LiftsBlockingAt_OnceCompleted_False()
     {
         var session = StartedTwoHourSession(OneShortBreak());
-        session.Complete(T0.AddMinutes(27));
+        session.Complete(At.Utc(T0.AddMinutes(27)));
 
-        session.LiftsBlockingAt(T0.AddMinutes(27)).Should().BeFalse();
+        session.LiftsBlockingAt(At.Utc(T0.AddMinutes(27))).Should().BeFalse();
     }
 
     [Fact]
@@ -284,10 +284,10 @@ public class SessionTests
         // Regression: a session whose end was noticed late recorded 2h31m for a 2h plan.
         var session = StartedTwoHourSession(BreakSchedule.None);
 
-        session.Complete(T0.AddHours(2).AddMinutes(1));
+        session.Complete(At.Utc(T0.AddHours(2).AddMinutes(1)));
 
-        session.EndedAt.Should().Be(T0.AddHours(2));
-        session.DomainEvents.OfType<SessionEndedEvent>().Single().EndedAt.Should().Be(T0.AddHours(2));
+        session.EndedAt.Should().Be(At.Utc(T0.AddHours(2)));
+        session.DomainEvents.OfType<SessionEndedEvent>().Single().EndedAt.Should().Be(At.Utc(T0.AddHours(2)));
     }
 
     [Fact]
@@ -297,7 +297,7 @@ public class SessionTests
             new SessionBreak(SessionPhaseKind.ShortBreak, TimeSpan.FromMinutes(25), TimeSpan.FromMinutes(30)),
             new SessionBreak(SessionPhaseKind.ShortBreak, TimeSpan.FromMinutes(55), TimeSpan.FromMinutes(60))]));
 
-        session.Complete(T0.AddMinutes(27));
+        session.Complete(At.Utc(T0.AddMinutes(27)));
 
         session.BreakSchedule.Should().Be(OneShortBreak(25, 27));
         session.BreaksTaken.Should().Be(1);
@@ -307,13 +307,13 @@ public class SessionTests
     public void Complete_ActiveSession_CompletesAndRaisesEvent()
     {
         var session = CreateSpontaneousSession(); // 30 minutes
-        session.Start(T0);
+        session.Start(At.Utc(T0));
         var endedAt = T0.AddMinutes(20);
 
-        session.Complete(endedAt);
+        session.Complete(At.Utc(endedAt));
 
         session.Status.Should().Be(SessionStatus.Completed);
-        session.EndedAt.Should().Be(endedAt);
+        session.EndedAt.Should().Be(At.Utc(endedAt));
         session.DomainEvents.OfType<SessionEndedEvent>().Should().ContainSingle();
     }
 
@@ -321,10 +321,10 @@ public class SessionTests
     public void Complete_AlreadyCompleted_Throws()
     {
         var session = CreateSpontaneousSession();
-        session.Start(DateTime.UtcNow);
-        session.Complete(DateTime.UtcNow);
+        session.Start(At.Utc(DateTime.UtcNow));
+        session.Complete(At.Utc(DateTime.UtcNow));
 
-        var act = () => session.Complete(DateTime.UtcNow);
+        var act = () => session.Complete(At.Utc(DateTime.UtcNow));
 
         act.Should().Throw<InvalidOperationException>();
     }
@@ -333,8 +333,8 @@ public class SessionTests
     public void SetReflection_OnCompletedSession_TrimsAndStores()
     {
         var session = CreateSpontaneousSession();
-        session.Start(DateTime.UtcNow);
-        session.Complete(DateTime.UtcNow);
+        session.Start(At.Utc(DateTime.UtcNow));
+        session.Complete(At.Utc(DateTime.UtcNow));
 
         session.SetReflection("  Went well  ");
 
@@ -348,8 +348,8 @@ public class SessionTests
     public void SetReflection_BlankValue_ClearsReflection(string? blank)
     {
         var session = CreateSpontaneousSession();
-        session.Start(DateTime.UtcNow);
-        session.Complete(DateTime.UtcNow);
+        session.Start(At.Utc(DateTime.UtcNow));
+        session.Complete(At.Utc(DateTime.UtcNow));
 
         session.SetReflection(blank);
 
@@ -360,7 +360,7 @@ public class SessionTests
     public void SetReflection_NotCompleted_Throws()
     {
         var session = CreateSpontaneousSession();
-        session.Start(DateTime.UtcNow);
+        session.Start(At.Utc(DateTime.UtcNow));
 
         var act = () => session.SetReflection("Too soon");
 
@@ -373,7 +373,7 @@ public class SessionTests
         var blockId = Guid.NewGuid();
         var session = CreatePlannedSession(blockId);
         var scheduledStart = new DateTime(2026, 1, 1, 9, 0, 0, DateTimeKind.Utc);
-        session.Miss(scheduledStart, scheduledStart.AddHours(1));
+        session.Miss(new TimeSlot(At.Utc(scheduledStart), At.Utc(scheduledStart.AddHours(1))));
 
         session.SetReflection("Got distracted");
 
@@ -384,13 +384,13 @@ public class SessionTests
     public void MarkPostSessionAcknowledged_OnCompletedSession_StampsTimestamp()
     {
         var session = CreateSpontaneousSession();
-        session.Start(DateTime.UtcNow);
-        session.Complete(DateTime.UtcNow);
+        session.Start(At.Utc(DateTime.UtcNow));
+        session.Complete(At.Utc(DateTime.UtcNow));
         var acknowledgedAt = DateTime.UtcNow;
 
-        session.MarkPostSessionAcknowledged(acknowledgedAt);
+        session.MarkPostSessionAcknowledged(At.Utc(acknowledgedAt));
 
-        session.PostSessionAcknowledgedAt.Should().Be(acknowledgedAt);
+        session.PostSessionAcknowledgedAt.Should().Be(At.Utc(acknowledgedAt));
     }
 
     [Fact]
@@ -399,21 +399,21 @@ public class SessionTests
         var blockId = Guid.NewGuid();
         var session = CreatePlannedSession(blockId);
         var scheduledStart = new DateTime(2026, 1, 1, 9, 0, 0, DateTimeKind.Utc);
-        session.Miss(scheduledStart, scheduledStart.AddHours(1));
+        session.Miss(new TimeSlot(At.Utc(scheduledStart), At.Utc(scheduledStart.AddHours(1))));
         var acknowledgedAt = DateTime.UtcNow;
 
-        session.MarkPostSessionAcknowledged(acknowledgedAt);
+        session.MarkPostSessionAcknowledged(At.Utc(acknowledgedAt));
 
-        session.PostSessionAcknowledgedAt.Should().Be(acknowledgedAt);
+        session.PostSessionAcknowledgedAt.Should().Be(At.Utc(acknowledgedAt));
     }
 
     [Fact]
     public void MarkPostSessionAcknowledged_NotCompletedOrMissed_Throws()
     {
         var session = CreateSpontaneousSession();
-        session.Start(DateTime.UtcNow);
+        session.Start(At.Utc(DateTime.UtcNow));
 
-        var act = () => session.MarkPostSessionAcknowledged(DateTime.UtcNow);
+        var act = () => session.MarkPostSessionAcknowledged(At.Utc(DateTime.UtcNow));
 
         act.Should().Throw<InvalidOperationException>();
     }
@@ -426,15 +426,15 @@ public class SessionTests
         var scheduledStart = new DateTime(2026, 1, 1, 9, 0, 0, DateTimeKind.Utc);
         var scheduledEnd = scheduledStart.AddHours(1);
 
-        session.Miss(scheduledStart, scheduledEnd);
+        session.Miss(new TimeSlot(At.Utc(scheduledStart), At.Utc(scheduledEnd)));
 
         session.Status.Should().Be(SessionStatus.Missed);
-        session.StartedAt.Should().Be(scheduledStart);
-        session.EndedAt.Should().Be(scheduledEnd);
+        session.StartedAt.Should().Be(At.Utc(scheduledStart));
+        session.EndedAt.Should().Be(At.Utc(scheduledEnd));
         var raised = session.DomainEvents.OfType<SessionMissedEvent>().Single();
         raised.SessionId.Should().Be(session.Id);
-        raised.ScheduledStart.Should().Be(scheduledStart);
-        raised.ScheduledEnd.Should().Be(scheduledEnd);
+        raised.ScheduledStart.Should().Be(At.Utc(scheduledStart));
+        raised.ScheduledEnd.Should().Be(At.Utc(scheduledEnd));
     }
 
     [Fact]
@@ -442,7 +442,7 @@ public class SessionTests
     {
         var session = CreateSpontaneousSession();
 
-        var act = () => session.Miss(DateTime.UtcNow, DateTime.UtcNow.AddHours(1));
+        var act = () => session.Miss(new TimeSlot(At.Utc(DateTime.UtcNow), At.Utc(DateTime.UtcNow.AddHours(1))));
 
         act.Should().Throw<InvalidOperationException>();
     }
@@ -451,9 +451,9 @@ public class SessionTests
     public void Miss_WhenAlreadyActive_Throws()
     {
         var session = CreatePlannedSession(Guid.NewGuid());
-        session.Start(DateTime.UtcNow);
+        session.Start(At.Utc(DateTime.UtcNow));
 
-        var act = () => session.Miss(DateTime.UtcNow, DateTime.UtcNow.AddHours(1));
+        var act = () => session.Miss(new TimeSlot(At.Utc(DateTime.UtcNow), At.Utc(DateTime.UtcNow.AddHours(1))));
 
         act.Should().Throw<InvalidOperationException>();
     }
@@ -463,9 +463,9 @@ public class SessionTests
     {
         var session = CreatePlannedSession(Guid.NewGuid());
         var scheduledStart = DateTime.UtcNow;
-        session.Miss(scheduledStart, scheduledStart.AddHours(1));
+        session.Miss(new TimeSlot(At.Utc(scheduledStart), At.Utc(scheduledStart.AddHours(1))));
 
-        var act = () => session.Miss(scheduledStart, scheduledStart.AddHours(1));
+        var act = () => session.Miss(new TimeSlot(At.Utc(scheduledStart), At.Utc(scheduledStart.AddHours(1))));
 
         act.Should().Throw<InvalidOperationException>();
     }
@@ -475,9 +475,9 @@ public class SessionTests
     {
         var session = CreatePlannedSession(Guid.NewGuid());
         var scheduledStart = new DateTime(2026, 1, 1, 9, 0, 0, DateTimeKind.Utc);
-        session.Miss(scheduledStart, scheduledStart.AddHours(2));
+        session.Miss(new TimeSlot(At.Utc(scheduledStart), At.Utc(scheduledStart.AddHours(2))));
 
-        session.GetElapsedTime(scheduledStart.AddHours(10)).Should().Be(TimeSpan.Zero);
+        session.GetElapsedTime(At.Utc(scheduledStart.AddHours(10))).Should().Be(TimeSpan.Zero);
     }
 
     [Fact]
@@ -487,10 +487,10 @@ public class SessionTests
         // touch the Completed path's existing EndedAt-based calculation.
         var startedAt = new DateTime(2026, 1, 1, 10, 0, 0, DateTimeKind.Utc);
         var session = CreateSpontaneousSession();
-        session.Start(startedAt);
-        session.Complete(startedAt.AddMinutes(15));
+        session.Start(At.Utc(startedAt));
+        session.Complete(At.Utc(startedAt.AddMinutes(15)));
 
-        var elapsed = session.GetElapsedTime(startedAt.AddHours(5));
+        var elapsed = session.GetElapsedTime(At.Utc(startedAt.AddHours(5)));
 
         elapsed.Should().Be(TimeSpan.FromMinutes(15));
     }
@@ -500,7 +500,7 @@ public class SessionTests
     {
         var session = CreateSpontaneousSession();
 
-        session.GetElapsedTime(DateTime.UtcNow).Should().BeNull();
+        session.GetElapsedTime(At.Utc(DateTime.UtcNow)).Should().BeNull();
     }
 
     [Fact]
@@ -508,9 +508,9 @@ public class SessionTests
     {
         var startedAt = new DateTime(2026, 1, 1, 10, 0, 0, DateTimeKind.Utc);
         var session = CreateSpontaneousSession();
-        session.Start(startedAt);
+        session.Start(At.Utc(startedAt));
 
-        var elapsed = session.GetElapsedTime(startedAt.AddMinutes(10));
+        var elapsed = session.GetElapsedTime(At.Utc(startedAt.AddMinutes(10)));
 
         elapsed.Should().Be(TimeSpan.FromMinutes(10));
     }
@@ -520,10 +520,10 @@ public class SessionTests
     {
         var startedAt = new DateTime(2026, 1, 1, 10, 0, 0, DateTimeKind.Utc);
         var session = CreateSpontaneousSession();
-        session.Start(startedAt);
-        session.Complete(startedAt.AddMinutes(15));
+        session.Start(At.Utc(startedAt));
+        session.Complete(At.Utc(startedAt.AddMinutes(15)));
 
-        var elapsed = session.GetElapsedTime(startedAt.AddHours(5));
+        var elapsed = session.GetElapsedTime(At.Utc(startedAt.AddHours(5)));
 
         elapsed.Should().Be(TimeSpan.FromMinutes(15));
     }
@@ -533,7 +533,7 @@ public class SessionTests
     {
         var session = CreateSpontaneousSession();
 
-        session.GetRemainingTime(DateTime.UtcNow).Should().BeNull();
+        session.GetRemainingTime(At.Utc(DateTime.UtcNow)).Should().BeNull();
     }
 
     [Fact]
@@ -541,9 +541,9 @@ public class SessionTests
     {
         var startedAt = new DateTime(2026, 1, 1, 10, 0, 0, DateTimeKind.Utc);
         var session = CreateSpontaneousSession(); // 30 minute duration
-        session.Start(startedAt);
+        session.Start(At.Utc(startedAt));
 
-        var remaining = session.GetRemainingTime(startedAt.AddMinutes(10));
+        var remaining = session.GetRemainingTime(At.Utc(startedAt.AddMinutes(10)));
 
         remaining.Should().Be(TimeSpan.FromMinutes(20));
     }
@@ -553,9 +553,9 @@ public class SessionTests
     {
         var startedAt = new DateTime(2026, 1, 1, 10, 0, 0, DateTimeKind.Utc);
         var session = CreateSpontaneousSession(); // 30 minute duration
-        session.Start(startedAt);
+        session.Start(At.Utc(startedAt));
 
-        var remaining = session.GetRemainingTime(startedAt.AddHours(2));
+        var remaining = session.GetRemainingTime(At.Utc(startedAt.AddHours(2)));
 
         remaining.Should().Be(TimeSpan.Zero);
     }
@@ -569,9 +569,9 @@ public class SessionTests
         var blockId = Guid.NewGuid();
         var session = CreatePlannedSession(blockId); // 30 minute duration
         var startedAt = new DateTime(2026, 1, 1, 10, 0, 0, DateTimeKind.Utc);
-        session.Start(startedAt, startedAt.AddMinutes(3));
+        session.Start(At.Utc(startedAt), At.PlannedWindowEnding(startedAt.AddMinutes(3)));
 
-        var remaining = session.GetRemainingTime(startedAt.AddMinutes(1));
+        var remaining = session.GetRemainingTime(At.Utc(startedAt.AddMinutes(1)));
 
         remaining.Should().Be(TimeSpan.FromMinutes(2));
     }
@@ -580,10 +580,39 @@ public class SessionTests
     public void ClearDomainEvents_RemovesAllRaisedEvents()
     {
         var session = CreateSpontaneousSession();
-        session.Start(DateTime.UtcNow);
+        session.Start(At.Utc(DateTime.UtcNow));
 
         session.ClearDomainEvents();
 
         session.DomainEvents.Should().BeEmpty();
+    }
+
+    // Gap 88: the time a running session occupies — what Focus placement must keep clear.
+
+    [Fact]
+    public void ReservedSlot_NotStarted_IsNull()
+        => CreateSpontaneousSession().ReservedSlot.Should().BeNull();
+
+    [Fact]
+    public void ReservedSlot_Active_RunsFromStartToScheduledEnd()
+    {
+        var session = CreateSpontaneousSession();
+        var startedAt = new DateTime(2026, 9, 29, 10, 0, 0, DateTimeKind.Utc);
+
+        session.Start(At.Utc(startedAt));
+
+        session.ReservedSlot.Should().Be(new TimeSlot(At.Utc(2026, 9, 29, 10), At.Utc(2026, 9, 29, 10, 30)));
+    }
+
+    [Fact]
+    public void ReservedSlot_Completed_IsNull()
+    {
+        var session = CreateSpontaneousSession();
+        var startedAt = new DateTime(2026, 9, 29, 10, 0, 0, DateTimeKind.Utc);
+        session.Start(At.Utc(startedAt));
+
+        session.Complete(At.Utc(startedAt.AddMinutes(10)));
+
+        session.ReservedSlot.Should().BeNull("a finished session occupies nothing any more");
     }
 }

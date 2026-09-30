@@ -1,5 +1,6 @@
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
+using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Application.Queries.ComputeRedemptionAttribution;
 
@@ -30,8 +31,7 @@ namespace NenFocus.Application.Queries.ComputeRedemptionAttribution;
 public sealed record ComputeRedemptionAttributionQuery(
     Guid? ContractId,
     Guid PresetId,
-    DateTime BlockStart,
-    DateTime BlockEnd,
+    TimeSlot Block,
     Guid? ExcludeBlockId,
     IReadOnlyList<RedemptionEntryDto>? ExistingEntries = null) : IQuery<RedemptionAttributionResult>
 {

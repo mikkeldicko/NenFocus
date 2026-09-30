@@ -1013,21 +1013,11 @@ public partial class PlannerPageView : UserControl
             }
 
             var dayDate     = _vm.WeekStart.AddDays(_effectiveDragColumn).Date;
-            var newStartUtc = DateTime.SpecifyKind(dayDate.Add(newLocalStart), DateTimeKind.Local).ToUniversalTime();
-            var newEndUtc   = DateTime.SpecifyKind(dayDate.Add(newLocalEnd),   DateTimeKind.Local).ToUniversalTime();
-
-            var dayTiles = _vm.Tiles.Where(t => t.ColumnIndex == _effectiveDragColumn);
-            if (PlannerDragMath.WouldCollide(tile.Id, tile.IsFocus, newStartUtc, newEndUtc, dayTiles))
-            {
-                SnapTileBack();
-                ClearDragState();
-                _vm.DragError = "Focus blocks cannot overlap — move rejected.";
-                e.Handled = true;
-                return;
-            }
+            var newStartLocal = dayDate.Add(newLocalStart);
+            var newEndLocal   = dayDate.Add(newLocalEnd);
 
             ClearDragState();
-            _vm.MoveOrResizeBlockCommand.Execute(new DragMoveResult(tile.Id, newStartUtc, newEndUtc));
+            _vm.MoveOrResizeBlockCommand.Execute(new DragMoveResult(tile.Id, newStartLocal, newEndLocal));
             e.Handled = true;
             return;
         }
@@ -1298,12 +1288,6 @@ public partial class PlannerPageView : UserControl
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
-
-    private void SnapTileBack()
-    {
-        if (_dragButton is not null) _dragButton.Opacity = 1.0;
-        RemoveTileGhost();
-    }
 
     private void ClearDragState()
     {

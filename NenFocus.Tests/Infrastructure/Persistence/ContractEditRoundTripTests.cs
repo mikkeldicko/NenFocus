@@ -1,7 +1,6 @@
 using FluentAssertions;
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
-using NenFocus.Application.Queries.CheckFocusBlockBatchOverlap;
 using NenFocus.Application.Queries.GetNenContractForEdit;
 using NenFocus.Application.UseCases.NenContracts.Seal;
 using NenFocus.Domain.Enums;
@@ -23,23 +22,24 @@ public class ContractEditRoundTripTests : SqliteRepositoryTestBase
     [Fact]
     public async Task AdvancedContractWithPresetAndRestDay_ReopensWithAllOfThem()
     {
-        var clock = Substitute.For<ISystemClock>();
-        clock.UtcNow.Returns(Start.AddDays(-1).ToDateTime(new TimeOnly(16, 38)));
-        clock.ToLocal(Arg.Any<DateTime>()).Returns(ci => ci.Arg<DateTime>());
+        var clock = TestClock.Create();
+        clock.SetNow(Start.AddDays(-1).ToDateTime(new TimeOnly(16, 38)));
+        clock.SetTimeZoneOffset(TimeSpan.Zero);
+        clock.SetTimeZoneOffset(TimeSpan.Zero);
 
         var presetId = Guid.NewGuid();
         var restDay = Start.AddDays(2);
         var blocks = Enumerable.Range(0, 5)
             .Select(i => Start.AddDays(i))
             .Where(d => d != restDay)
-            .Select(d => new NenContractBlockSpec(Guid.NewGuid(), d.ToDateTime(new TimeOnly(10, 0)), d.ToDateTime(new TimeOnly(12, 0)), IsFocus: true))
+            .Select(d => new NenContractBlockSpec(Guid.NewGuid(), At.Slot(d.ToDateTime(new TimeOnly(10, 0)), d.ToDateTime(new TimeOnly(12, 0))), IsFocus: true))
             .ToList();
 
         var blockRepo = new PlannedBlockRepository(Context);
         var seal = new SealNenContractCommandHandler(
             new NenContractRepository(Context), blockRepo,
             new ContractBlockBatchPreparer(new PlannedFocusHoursCalculator()),
-            new CheckFocusBlockBatchOverlapQueryHandler(blockRepo, clock), clock);
+            new SessionRepository(Context), new BlockPlacementChecker(), clock);
 
         var sealed_ = await seal.HandleAsync(new SealNenContractCommand
         {

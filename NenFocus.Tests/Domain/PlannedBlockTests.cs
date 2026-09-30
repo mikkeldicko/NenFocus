@@ -12,15 +12,15 @@ public class PlannedBlockTests
     private static readonly DateTime End = new(2026, 1, 1, 11, 0, 0, DateTimeKind.Utc);
 
     private static FocusBlock CreateFocusBlock(DateTime? start = null, DateTime? end = null)
-        => FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), start ?? Start, end ?? End);
+        => FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(start ?? Start, end ?? End));
 
     private static BackgroundBlock CreateBackgroundBlock(DateTime? start = null, DateTime? end = null)
-        => BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(), start ?? Start, end ?? End);
+        => BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(start ?? Start, end ?? End));
 
     [Fact]
     public void FocusBlock_Create_EndBeforeStart_Throws()
     {
-        var act = () => FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), End, Start);
+        var act = () => FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(End, Start));
 
         act.Should().Throw<ArgumentException>();
     }
@@ -28,7 +28,7 @@ public class PlannedBlockTests
     [Fact]
     public void FocusBlock_Create_EndEqualsStart_Throws()
     {
-        var act = () => FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, Start);
+        var act = () => FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, Start));
 
         act.Should().Throw<ArgumentException>();
     }
@@ -47,18 +47,18 @@ public class PlannedBlockTests
         var block = CreateFocusBlock();
         var completedAt = DateTime.UtcNow;
 
-        block.MarkRitualCompleted(completedAt);
+        block.MarkRitualCompleted(At.Utc(completedAt));
 
-        block.RitualCompletedAt.Should().Be(completedAt);
+        block.RitualCompletedAt.Should().Be(At.Utc(completedAt));
     }
 
     [Fact]
     public void FocusBlock_MarkRitualCompleted_Twice_Throws()
     {
         var block = CreateFocusBlock();
-        block.MarkRitualCompleted(DateTime.UtcNow);
+        block.MarkRitualCompleted(At.Utc(DateTime.UtcNow));
 
-        var act = () => block.MarkRitualCompleted(DateTime.UtcNow);
+        var act = () => block.MarkRitualCompleted(At.Utc(DateTime.UtcNow));
 
         act.Should().Throw<InvalidOperationException>();
     }
@@ -75,18 +75,18 @@ public class PlannedBlockTests
         var block = CreateFocusBlock();
         var endedAt = Start.AddMinutes(20);
 
-        block.MarkSessionEnded(endedAt);
+        block.MarkSessionEnded(At.Utc(endedAt));
 
-        block.SessionEndedAt.Should().Be(endedAt);
+        block.SessionEndedAt.Should().Be(At.Utc(endedAt));
     }
 
     [Fact]
     public void FocusBlock_MarkSessionEnded_Twice_Throws()
     {
         var block = CreateFocusBlock();
-        block.MarkSessionEnded(Start.AddMinutes(20));
+        block.MarkSessionEnded(At.Utc(Start.AddMinutes(20)));
 
-        var act = () => block.MarkSessionEnded(Start.AddMinutes(30));
+        var act = () => block.MarkSessionEnded(At.Utc(Start.AddMinutes(30)));
 
         act.Should().Throw<InvalidOperationException>();
     }
@@ -96,74 +96,74 @@ public class PlannedBlockTests
     {
         var block = CreateFocusBlock();
 
-        block.MarkSessionEnded(Start.AddMinutes(20));
+        block.MarkSessionEnded(At.Utc(Start.AddMinutes(20)));
 
-        block.End.Should().Be(End);
+        block.Scheduled.Should().Be(At.Slot(Start, End));
     }
 
     [Fact]
     public void EffectiveEnd_PendingBlock_ReturnsEnd()
-        => CreateFocusBlock().EffectiveEnd(Start.AddMinutes(10)).Should().Be(End);
+        => CreateFocusBlock().EffectiveEnd(At.Utc(Start.AddMinutes(10))).Should().Be(At.Utc(End));
 
     [Fact]
     public void EffectiveEnd_RitualCompleted_StillRunning_ReturnsEnd()
     {
         var block = CreateFocusBlock();
-        block.MarkRitualCompleted(Start);
+        block.MarkRitualCompleted(At.Utc(Start));
 
-        block.EffectiveEnd(Start.AddMinutes(30)).Should().Be(End);
+        block.EffectiveEnd(At.Utc(Start.AddMinutes(30))).Should().Be(At.Utc(End));
     }
 
     [Fact]
     public void EffectiveEnd_SessionEndedEarly_ReturnsSessionEndedAt()
     {
         var block = CreateFocusBlock();
-        block.MarkRitualCompleted(Start);
+        block.MarkRitualCompleted(At.Utc(Start));
         var endedEarly = Start.AddMinutes(20);
-        block.MarkSessionEnded(endedEarly);
+        block.MarkSessionEnded(At.Utc(endedEarly));
 
-        block.EffectiveEnd(endedEarly.AddMinutes(5)).Should().Be(endedEarly);
+        block.EffectiveEnd(At.Utc(endedEarly.AddMinutes(5))).Should().Be(At.Utc(endedEarly));
     }
 
     [Fact]
     public void EffectiveEnd_RanFullDuration_NoSessionEndedStamp_ReturnsEnd()
     {
         var block = CreateFocusBlock();
-        block.MarkRitualCompleted(Start);
+        block.MarkRitualCompleted(At.Utc(Start));
 
-        block.EffectiveEnd(End.AddMinutes(5)).Should().Be(End);
+        block.EffectiveEnd(At.Utc(End.AddMinutes(5))).Should().Be(At.Utc(End));
     }
 
     [Fact]
     public void EffectiveEnd_FullyMissed_WindowAlreadyClosed_ReturnsStart_WholeWindowFreed()
-        => CreateFocusBlock().EffectiveEnd(End.AddMinutes(1)).Should().Be(Start);
+        => CreateFocusBlock().EffectiveEnd(At.Utc(End.AddMinutes(1))).Should().Be(At.Utc(Start));
 
     [Fact]
     public void EffectiveEnd_FullyMissed_ExactlyAtEnd_ReturnsStart()
-        => CreateFocusBlock().EffectiveEnd(End).Should().Be(Start);
+        => CreateFocusBlock().EffectiveEnd(At.Utc(End)).Should().Be(At.Utc(Start));
 
     [Fact]
     public void EffectiveEnd_NotYetMissed_RitualStillPending_ReturnsEnd()
-        => CreateFocusBlock().EffectiveEnd(End.AddMinutes(-1)).Should().Be(End);
+        => CreateFocusBlock().EffectiveEnd(At.Utc(End.AddMinutes(-1))).Should().Be(At.Utc(End));
 
     [Fact]
     public void EffectiveEnd_DoesNotMutateEnd()
     {
         var block = CreateFocusBlock();
 
-        block.EffectiveEnd(End.AddMinutes(1));
+        block.EffectiveEnd(At.Utc(End.AddMinutes(1)));
 
-        block.End.Should().Be(End);
+        block.Scheduled.Should().Be(At.Slot(Start, End));
     }
 
     [Fact]
     public void BackgroundBlock_EffectiveEnd_AlwaysReturnsEnd()
-        => CreateBackgroundBlock().EffectiveEnd(End.AddYears(1)).Should().Be(End);
+        => CreateBackgroundBlock().EffectiveEnd(At.Utc(End.AddYears(1))).Should().Be(At.Utc(End));
 
     [Fact]
     public void BackgroundBlock_Create_EndBeforeStart_Throws()
     {
-        var act = () => BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(), End, Start);
+        var act = () => BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(End, Start));
 
         act.Should().Throw<ArgumentException>();
     }
@@ -173,8 +173,7 @@ public class PlannedBlockTests
     {
         var block = CreateBackgroundBlock();
 
-        block.Start.Should().Be(Start);
-        block.End.Should().Be(End);
+        block.Scheduled.Should().Be(At.Slot(Start, End));
     }
 
     [Theory]
@@ -206,19 +205,19 @@ public class PlannedBlockTests
 
     [Fact]
     public void IsActive_AtStart_IsTrue()
-        => CreateFocusBlock().IsActive(Start).Should().BeTrue();
+        => CreateFocusBlock().IsActive(At.Utc(Start)).Should().BeTrue();
 
     [Fact]
     public void IsActive_AtEnd_IsFalse()
-        => CreateFocusBlock().IsActive(End).Should().BeFalse();
+        => CreateFocusBlock().IsActive(At.Utc(End)).Should().BeFalse();
 
     [Fact]
     public void IsActive_BeforeStart_IsFalse()
-        => CreateFocusBlock().IsActive(Start.AddMinutes(-1)).Should().BeFalse();
+        => CreateFocusBlock().IsActive(At.Utc(Start.AddMinutes(-1))).Should().BeFalse();
 
     [Fact]
     public void IsActive_MidWindow_IsTrue()
-        => CreateFocusBlock().IsActive(Start.AddMinutes(30)).Should().BeTrue();
+        => CreateFocusBlock().IsActive(At.Utc(Start.AddMinutes(30))).Should().BeTrue();
 
     [Fact]
     public void IsActive_SessionEndedEarly_AfterActualEnd_IsFalse()
@@ -229,56 +228,65 @@ public class PlannedBlockTests
         // new one scheduled into the freed tail, permanently suppressing the new block's
         // Ritual trigger.
         var block = CreateFocusBlock();
-        block.MarkSessionEnded(Start.AddMinutes(20));
+        block.MarkSessionEnded(At.Utc(Start.AddMinutes(20)));
 
-        block.IsActive(Start.AddMinutes(21)).Should().BeFalse();
+        block.IsActive(At.Utc(Start.AddMinutes(21))).Should().BeFalse();
     }
 
     [Fact]
     public void IsActive_SessionEndedEarly_BeforeActualEnd_IsStillTrue()
     {
         var block = CreateFocusBlock();
-        block.MarkSessionEnded(Start.AddMinutes(20));
+        block.MarkSessionEnded(At.Utc(Start.AddMinutes(20)));
 
-        block.IsActive(Start.AddMinutes(10)).Should().BeTrue();
+        block.IsActive(At.Utc(Start.AddMinutes(10))).Should().BeTrue();
     }
 
     [Fact]
     public void HasStarted_BeforeStart_IsFalse()
-        => CreateFocusBlock().HasStarted(Start.AddMinutes(-1)).Should().BeFalse();
+        => CreateFocusBlock().HasStarted(At.Utc(Start.AddMinutes(-1))).Should().BeFalse();
 
     [Fact]
     public void HasStarted_AtStart_IsTrue()
-        => CreateFocusBlock().HasStarted(Start).Should().BeTrue();
+        => CreateFocusBlock().HasStarted(At.Utc(Start)).Should().BeTrue();
 
     [Fact]
     public void HasStarted_AfterEnd_IsTrue()
-        => CreateBackgroundBlock().HasStarted(End.AddMinutes(1)).Should().BeTrue();
+        => CreateBackgroundBlock().HasStarted(At.Utc(End.AddMinutes(1))).Should().BeTrue();
 
     [Fact]
     public void HasEnded_BeforeEnd_IsFalse()
-        => CreateFocusBlock().HasEnded(End.AddMinutes(-1)).Should().BeFalse();
+        => CreateFocusBlock().HasEnded(At.Utc(End.AddMinutes(-1))).Should().BeFalse();
 
     [Fact]
-    public void HasEnded_AtEnd_IsFalse()
-        => CreateFocusBlock().HasEnded(End).Should().BeFalse();
+    public void HasEnded_AtEnd_IsTrue()
+        => CreateFocusBlock().HasEnded(At.Utc(End)).Should().BeTrue("half-open: at exactly End the block is over (Gap 88)");
+
+    [Fact]
+    public void AtTheExactEnd_IsActiveHasEndedAndMissedAgree()
+    {
+        // Gap 88 parity: these three used to disagree at the end instant (IsActive: not active,
+        // HasEnded: not ended, Classify: missed). One boundary rule — the slot's — now answers all three.
+        var block = CreateFocusBlock();
+
+        block.IsActive(At.Utc(End)).Should().BeFalse();
+        block.HasEnded(At.Utc(End)).Should().BeTrue();
+        new NenFocus.Domain.Services.FocusBlockOutcomeClassifier().Classify(block, At.Utc(End)).Should().Be(FocusBlockOutcome.Missed);
+        block.IsUnresolved(At.Utc(End)).Should().BeTrue();
+    }
 
     [Fact]
     public void HasEnded_AfterEnd_IsTrue()
-        => CreateFocusBlock().HasEnded(End.AddMinutes(1)).Should().BeTrue();
+        => CreateFocusBlock().HasEnded(At.Utc(End.AddMinutes(1))).Should().BeTrue();
 
     [Fact]
     public void GetDuration_ReturnsEndMinusStart()
         => CreateFocusBlock().GetDuration().Should().Be(TimeSpan.FromHours(1));
 
-    [Fact]
-    public void MinutesUntilStart_ReturnsWholeMinutesToStart()
-        => CreateFocusBlock().MinutesUntilStart(Start.AddMinutes(-15)).Should().Be(15);
-
     // Block 10:00–11:00; warning moment = Start − 5 min = 09:55.
 
     private static IEnumerable<BlockMarkerKind> Kinds(PlannedBlock block, DateTime from, DateTime to)
-        => block.MarkersPassedBetween(from, to).Select(t => t.Kind);
+        => block.MarkersPassedBetween(At.Utc(from), At.Utc(to)).Select(t => t.Kind);
 
     [Fact]
     public void MarkersPassedBetween_ClockCrossesWarningMoment_IsStartingSoon()
@@ -318,7 +326,7 @@ public class PlannedBlockTests
     {
         // Its session owns the ending and announces it (SessionEndedEvent).
         var block = CreateFocusBlock();
-        block.MarkRitualCompleted(Start);
+        block.MarkRitualCompleted(At.Utc(Start));
 
         Kinds(block, End.AddSeconds(-5), End).Should().BeEmpty();
     }
@@ -327,8 +335,8 @@ public class PlannedBlockTests
     public void MarkersPassedBetween_FocusBlockWhoseSessionEndedEarly_StaysQuietAtEitherEnd()
     {
         var block = CreateFocusBlock();
-        block.MarkRitualCompleted(Start);
-        block.MarkSessionEnded(Start.AddMinutes(40));
+        block.MarkRitualCompleted(At.Utc(Start));
+        block.MarkSessionEnded(At.Utc(Start.AddMinutes(40)));
 
         Kinds(block, Start.AddMinutes(39), Start.AddMinutes(41)).Should().BeEmpty();
         Kinds(block, End.AddSeconds(-5), End).Should().BeEmpty();
@@ -346,7 +354,7 @@ public class PlannedBlockTests
     public void MarkersPassedBetween_CancelledBlock_IsNothing()
     {
         var block = CreateBackgroundBlock();
-        block.MarkCancelled(Start.AddHours(-1));
+        block.MarkCancelled(At.Utc(Start.AddHours(-1)));
 
         Kinds(block, Start.AddMinutes(-6), Start.AddMinutes(1)).Should().BeEmpty();
     }
@@ -356,9 +364,9 @@ public class PlannedBlockTests
     {
         var block = CreateBackgroundBlock();
         var cancelledAt = Start.AddMinutes(30);
-        block.MarkCancelled(cancelledAt);
+        block.MarkCancelled(At.Utc(cancelledAt));
 
-        block.MarkersPassedBetween(cancelledAt.AddSeconds(-5), cancelledAt)
+        block.MarkersPassedBetween(At.Utc(cancelledAt.AddSeconds(-5)), At.Utc(cancelledAt))
             .Should().Equal(new BlockMarker(BlockMarkerKind.Ended, cancelledAt));
     }
 
@@ -369,11 +377,11 @@ public class PlannedBlockTests
     public void IsActive_CancelledBeforeStart_IsNeverActive()
     {
         var block = CreateBackgroundBlock();
-        block.MarkCancelled(Start.AddHours(-1));
+        block.MarkCancelled(At.Utc(Start.AddHours(-1)));
 
-        block.IsActive(Start).Should().BeFalse();
-        block.IsActive(Start.AddMinutes(30)).Should().BeFalse();
-        block.EffectiveEnd(Start.AddMinutes(30)).Should().Be(Start);
+        block.IsActive(At.Utc(Start)).Should().BeFalse();
+        block.IsActive(At.Utc(Start.AddMinutes(30))).Should().BeFalse();
+        block.EffectiveEnd(At.Utc(Start.AddMinutes(30))).Should().Be(At.Utc(Start));
     }
 
     [Fact]
@@ -381,28 +389,28 @@ public class PlannedBlockTests
     {
         var block = CreateBackgroundBlock();
         var cancelledAt = Start.AddMinutes(30);
-        block.MarkCancelled(cancelledAt);
+        block.MarkCancelled(At.Utc(cancelledAt));
 
-        block.IsActive(Start.AddMinutes(10)).Should().BeTrue();
-        block.IsActive(cancelledAt).Should().BeFalse();
-        block.EffectiveEnd(End).Should().Be(cancelledAt);
+        block.IsActive(At.Utc(Start.AddMinutes(10))).Should().BeTrue();
+        block.IsActive(At.Utc(cancelledAt)).Should().BeFalse();
+        block.EffectiveEnd(At.Utc(End)).Should().Be(At.Utc(cancelledAt));
     }
 
     [Fact]
     public void EffectiveEnd_FocusBlock_EarliestReasonWins()
     {
         var endedFirst = CreateFocusBlock();
-        endedFirst.MarkRitualCompleted(Start);
-        endedFirst.MarkSessionEnded(Start.AddMinutes(20));
-        endedFirst.MarkCancelled(Start.AddMinutes(40));
+        endedFirst.MarkRitualCompleted(At.Utc(Start));
+        endedFirst.MarkSessionEnded(At.Utc(Start.AddMinutes(20)));
+        endedFirst.MarkCancelled(At.Utc(Start.AddMinutes(40)));
 
         var cancelledFirst = CreateFocusBlock();
-        cancelledFirst.MarkRitualCompleted(Start);
-        cancelledFirst.MarkCancelled(Start.AddMinutes(20));
-        cancelledFirst.MarkSessionEnded(Start.AddMinutes(40));
+        cancelledFirst.MarkRitualCompleted(At.Utc(Start));
+        cancelledFirst.MarkCancelled(At.Utc(Start.AddMinutes(20)));
+        cancelledFirst.MarkSessionEnded(At.Utc(Start.AddMinutes(40)));
 
-        endedFirst.EffectiveEnd(End).Should().Be(Start.AddMinutes(20));
-        cancelledFirst.EffectiveEnd(End).Should().Be(Start.AddMinutes(20));
+        endedFirst.EffectiveEnd(At.Utc(End)).Should().Be(At.Utc(Start.AddMinutes(20)));
+        cancelledFirst.EffectiveEnd(At.Utc(End)).Should().Be(At.Utc(Start.AddMinutes(20)));
     }
 
     [Fact]
@@ -411,7 +419,7 @@ public class PlannedBlockTests
 
     [Fact]
     public void DisplayName_WithTitle_IsTheTitle()
-        => FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End, "Thesis")
+        => FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End), "Thesis")
             .DisplayName("Deep Work").Should().Be("Thesis");
 
     [Fact]
@@ -428,10 +436,9 @@ public class PlannedBlockTests
         var newStart = Start.AddHours(2);
         var newEnd = End.AddHours(2);
 
-        block.Reschedule(newStart, newEnd);
+        block.Reschedule(At.Slot(newStart, newEnd));
 
-        block.Start.Should().Be(newStart);
-        block.End.Should().Be(newEnd);
+        block.Scheduled.Should().Be(At.Slot(newStart, newEnd));
     }
 
     [Fact]
@@ -439,17 +446,16 @@ public class PlannedBlockTests
     {
         var block = CreateFocusBlock();
 
-        var act = () => block.Reschedule(End, Start);
+        var act = () => block.Reschedule(At.Slot(End, Start));
 
         act.Should().Throw<ArgumentException>();
-        block.Start.Should().Be(Start);
-        block.End.Should().Be(End);
+        block.Scheduled.Should().Be(At.Slot(Start, End));
     }
 
     [Fact]
     public void FocusBlock_Create_ExceedsMaxDuration_Throws()
     {
-        var act = () => FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, Start.AddHours(FocusBlock.MaxDurationHours).AddMinutes(1));
+        var act = () => FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, Start.AddHours(FocusBlock.MaxDurationHours).AddMinutes(1)));
 
         act.Should().Throw<ArgumentException>();
     }
@@ -457,7 +463,7 @@ public class PlannedBlockTests
     [Fact]
     public void FocusBlock_Create_AtExactlyMaxDuration_Succeeds()
     {
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, Start.AddHours(FocusBlock.MaxDurationHours));
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, Start.AddHours(FocusBlock.MaxDurationHours)));
 
         block.GetDuration().Should().Be(TimeSpan.FromHours(FocusBlock.MaxDurationHours));
     }
@@ -466,7 +472,7 @@ public class PlannedBlockTests
     public void BackgroundBlock_Create_ExceedsFocusMaxDuration_Succeeds()
     {
         // Background blocks have no duration cap at all — Focus-only by design.
-        var block = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, Start.AddHours(FocusBlock.MaxDurationHours).AddDays(3));
+        var block = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, Start.AddHours(FocusBlock.MaxDurationHours).AddDays(3)));
 
         block.GetDuration().Should().Be(TimeSpan.FromHours(FocusBlock.MaxDurationHours).Add(TimeSpan.FromDays(3)));
     }
@@ -476,11 +482,10 @@ public class PlannedBlockTests
     {
         var block = CreateFocusBlock();
 
-        var act = () => block.Reschedule(Start, Start.AddHours(FocusBlock.MaxDurationHours).AddMinutes(1));
+        var act = () => block.Reschedule(At.Slot(Start, Start.AddHours(FocusBlock.MaxDurationHours).AddMinutes(1)));
 
         act.Should().Throw<ArgumentException>();
-        block.Start.Should().Be(Start);
-        block.End.Should().Be(End);
+        block.Scheduled.Should().Be(At.Slot(Start, End));
     }
 
     [Fact]
@@ -489,9 +494,9 @@ public class PlannedBlockTests
         var block = CreateFocusBlock();
         var newEnd = Start.AddHours(FocusBlock.MaxDurationHours);
 
-        block.Reschedule(Start, newEnd);
+        block.Reschedule(At.Slot(Start, newEnd));
 
-        block.End.Should().Be(newEnd);
+        block.Scheduled.Should().Be(At.Slot(Start, newEnd));
     }
 
     [Fact]
@@ -500,9 +505,9 @@ public class PlannedBlockTests
         var block = CreateBackgroundBlock();
         var newEnd = Start.AddHours(FocusBlock.MaxDurationHours).AddDays(3);
 
-        block.Reschedule(Start, newEnd);
+        block.Reschedule(At.Slot(Start, newEnd));
 
-        block.End.Should().Be(newEnd);
+        block.Scheduled.Should().Be(At.Slot(Start, newEnd));
     }
 
     [Fact]
@@ -511,9 +516,9 @@ public class PlannedBlockTests
         var block = CreateFocusBlock();
         var newEnd = Start.AddMinutes(45);
 
-        block.TrimEnd(newEnd);
+        block.Reschedule(block.Scheduled.Until(At.Utc(newEnd)));
 
-        block.End.Should().Be(newEnd);
+        block.Scheduled.Should().Be(At.Slot(Start, newEnd));
     }
 
     [Fact]
@@ -521,7 +526,7 @@ public class PlannedBlockTests
     {
         var block = CreateFocusBlock();
 
-        var act = () => block.TrimEnd(Start);
+        var act = () => block.Reschedule(block.Scheduled.Until(At.Utc(Start)));
 
         act.Should().Throw<ArgumentException>();
     }
@@ -548,7 +553,7 @@ public class PlannedBlockTests
     {
         var contractId = Guid.NewGuid();
 
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End, contractId: contractId);
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End), contractId: contractId);
 
         block.ContractId.Should().Be(contractId);
     }
@@ -564,7 +569,7 @@ public class PlannedBlockTests
     {
         var contractId = Guid.NewGuid();
 
-        var block = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End, contractId: contractId);
+        var block = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End), contractId: contractId);
 
         block.ContractId.Should().Be(contractId);
     }
@@ -602,7 +607,7 @@ public class PlannedBlockTests
     {
         var entries = new[] { new RedemptionEntry(Guid.NewGuid(), 30) };
 
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End, redemptionEntries: entries);
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End), redemptionEntries: entries);
 
         block.RedemptionEntries.Should().BeEquivalentTo(entries);
     }
@@ -616,7 +621,7 @@ public class PlannedBlockTests
     [Fact]
     public void FocusBlock_AssignRedemptionEntries_ReplacesExisting()
     {
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End,
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End),
             redemptionEntries: [new RedemptionEntry(Guid.NewGuid(), 30)]);
         var newEntries = new[] { new RedemptionEntry(Guid.NewGuid(), 45), new RedemptionEntry(Guid.NewGuid(), 15) };
 
@@ -628,7 +633,7 @@ public class PlannedBlockTests
     [Fact]
     public void FocusBlock_AssignRedemptionEntries_Empty_ClearsExisting()
     {
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End,
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End),
             redemptionEntries: [new RedemptionEntry(Guid.NewGuid(), 30)]);
 
         block.AssignRedemptionEntries([]);
@@ -667,7 +672,7 @@ public class PlannedBlockTests
         // own, no matter how its own completion turned out — this is the exact bug the
         // "Cover Deficit" flow used to hit: a redemption block that ran a few minutes past
         // its own grace period would otherwise spawn a fresh, uncoverable deficit.
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End,
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End),
             redemptionEntries: [new RedemptionEntry(Guid.NewGuid(), 30)]);
 
         block.CanContributeOwnDeficit(outcome).Should().BeFalse();
@@ -685,18 +690,18 @@ public class PlannedBlockTests
         var block = CreateFocusBlock();
         var cancelledAt = DateTime.UtcNow;
 
-        block.MarkCancelled(cancelledAt);
+        block.MarkCancelled(At.Utc(cancelledAt));
 
-        block.CancelledAt.Should().Be(cancelledAt);
+        block.CancelledAt.Should().Be(At.Utc(cancelledAt));
     }
 
     [Fact]
     public void FocusBlock_MarkCancelled_Twice_Throws()
     {
         var block = CreateFocusBlock();
-        block.MarkCancelled(DateTime.UtcNow);
+        block.MarkCancelled(At.Utc(DateTime.UtcNow));
 
-        var act = () => block.MarkCancelled(DateTime.UtcNow);
+        var act = () => block.MarkCancelled(At.Utc(DateTime.UtcNow));
 
         act.Should().Throw<InvalidOperationException>();
     }
@@ -707,12 +712,12 @@ public class PlannedBlockTests
         var block = CreateFocusBlock();
         var cancelledAt = DateTime.UtcNow;
 
-        block.MarkCancelled(cancelledAt);
+        block.MarkCancelled(At.Utc(cancelledAt));
 
         block.DomainEvents.Should().ContainSingle()
             .Which.Should().BeOfType<PlannedBlockCancelledEvent>()
             .Which.Should().Match<PlannedBlockCancelledEvent>(e =>
-                e.PlannedBlockId == block.Id && e.OccurredAt == cancelledAt);
+                e.PlannedBlockId == block.Id && e.OccurredAt == At.Utc(cancelledAt));
     }
 
     [Fact]
@@ -727,18 +732,18 @@ public class PlannedBlockTests
         var block = CreateBackgroundBlock();
         var cancelledAt = DateTime.UtcNow;
 
-        block.MarkCancelled(cancelledAt);
+        block.MarkCancelled(At.Utc(cancelledAt));
 
-        block.CancelledAt.Should().Be(cancelledAt);
+        block.CancelledAt.Should().Be(At.Utc(cancelledAt));
     }
 
     [Fact]
     public void BackgroundBlock_MarkCancelled_Twice_Throws()
     {
         var block = CreateBackgroundBlock();
-        block.MarkCancelled(DateTime.UtcNow);
+        block.MarkCancelled(At.Utc(DateTime.UtcNow));
 
-        var act = () => block.MarkCancelled(DateTime.UtcNow);
+        var act = () => block.MarkCancelled(At.Utc(DateTime.UtcNow));
 
         act.Should().Throw<InvalidOperationException>();
     }
@@ -749,7 +754,7 @@ public class PlannedBlockTests
         var block = CreateBackgroundBlock();
         var cancelledAt = DateTime.UtcNow;
 
-        block.MarkCancelled(cancelledAt);
+        block.MarkCancelled(At.Utc(cancelledAt));
 
         block.DomainEvents.Should().ContainSingle()
             .Which.Should().BeOfType<PlannedBlockCancelledEvent>();

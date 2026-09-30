@@ -645,11 +645,11 @@
 						<TextBlock Text="{Binding SnapshotBlock.PresetName}" FontSize="18" FontWeight="SemiBold" Foreground="#1A1A2E"/>
 
 						<TextBlock FontSize="13" Foreground="#7A7A8C">
-							<Run Text="{Binding SnapshotBlock.Start, StringFormat='{}{0:MMMM d, yyyy}', Mode=OneWay}"/>
+							<Run Text="{Binding SnapshotStart, StringFormat='{}{0:MMMM d, yyyy}', Mode=OneWay}"/>
 							<Run Text=" · "/>
-							<Run Text="{Binding SnapshotBlock.Start, StringFormat='{}{0:h:mm tt}', Mode=OneWay}"/>
+							<Run Text="{Binding SnapshotStart, StringFormat='{}{0:h:mm tt}', Mode=OneWay}"/>
 							<Run Text=" – "/>
-							<Run Text="{Binding SnapshotBlock.End, StringFormat='{}{0:h:mm tt}', Mode=OneWay}"/>
+							<Run Text="{Binding SnapshotEnd, StringFormat='{}{0:h:mm tt}', Mode=OneWay}"/>
 							<Run Text=" ("/>
 							<Run Text="{Binding SnapshotBlock.Duration, Converter={StaticResource DurationConverter}, Mode=OneWay}"/>
 							<Run Text=")"/>

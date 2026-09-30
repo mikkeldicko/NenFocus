@@ -14,24 +14,25 @@ public sealed class ContractBlockBatchPreparer : IContractBlockBatchPreparer
     }
 
     public ContractBlockBatchPreparation Prepare(
-        IReadOnlyList<(Guid PresetId, DateTime Start, DateTime End, bool IsFocus, string? Title)> specs,
-        Guid? contractId)
+        IReadOnlyList<(Guid PresetId, TimeSlot Slot, bool IsFocus, string? Title)> specs,
+        Guid? contractId,
+        UserTimeZone timeZone)
     {
         var blocks = specs
             .Select(spec => spec.IsFocus
-                ? (PlannedBlock)FocusBlock.Create(Guid.NewGuid(), spec.PresetId, spec.Start, spec.End, spec.Title, contractId)
-                : BackgroundBlock.Create(Guid.NewGuid(), spec.PresetId, spec.Start, spec.End, spec.Title, contractId))
+                ? (PlannedBlock)FocusBlock.Create(Guid.NewGuid(), spec.PresetId, spec.Slot, spec.Title, contractId)
+                : BackgroundBlock.Create(Guid.NewGuid(), spec.PresetId, spec.Slot, spec.Title, contractId))
             .ToList();
 
-        var focusBlocks = blocks.OfType<FocusBlock>().OrderBy(b => b.Start).ToList();
+        var focusBlocks = blocks.OfType<FocusBlock>().OrderBy(b => b.Scheduled).ToList();
         for (var i = 1; i < focusBlocks.Count; i++)
         {
             if (focusBlocks[i].OverlapsWith(focusBlocks[i - 1]))
                 return ContractBlockBatchPreparation.Fail(ContractBlockBatchOutcome.OverlapsWithinBatch);
         }
 
-        var plannedFocusHoursByDay = _calculator.Calculate(focusBlocks.Select(b => (b.Start, b.End)));
+        var plannedFocusHoursByDay = _calculator.Calculate(focusBlocks.Select(b => b.Scheduled), timeZone);
 
-        return ContractBlockBatchPreparation.Ok(blocks, focusBlocks, plannedFocusHoursByDay);
+        return ContractBlockBatchPreparation.Ok(blocks, plannedFocusHoursByDay);
     }
 }

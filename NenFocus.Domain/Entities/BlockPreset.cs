@@ -26,7 +26,7 @@ public class BlockPreset : AggregateRoot
         string name,
         WebsiteFilterType websiteFilterType,
         BlockPresetType presetType,
-        DateTime createdAt,
+        Moment createdAt,
         IEnumerable<string>? tags = null)
     {
         if (string.IsNullOrWhiteSpace(name))
@@ -125,7 +125,7 @@ public class BlockPreset : AggregateRoot
             : currentSites.IsSubsetOf(proposedSites);
     }
 
-    public BlockPreset Duplicate(string newName, Guid newId, DateTime duplicatedAt)
+    public BlockPreset Duplicate(string newName, Guid newId, Moment duplicatedAt)
     {
         var copy = Create(newId, newName, WebsiteFilterType, PresetType, duplicatedAt, _tags);
         foreach (var app in _blockedApps)

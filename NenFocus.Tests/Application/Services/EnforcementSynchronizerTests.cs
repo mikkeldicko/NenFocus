@@ -27,7 +27,7 @@ public class EnforcementSynchronizerTests
         var slice = NonEmptySlice();
         SliceIs(slice);
 
-        await CreateSynchronizer().SyncAsync(DateTime.UtcNow);
+        await CreateSynchronizer().SyncAsync(At.Utc(DateTime.UtcNow));
 
         await _enforcement.Received(1).ApplyPolicyAsync(slice, Arg.Any<CancellationToken>());
         await _enforcement.DidNotReceive().RemoveEnforcementAsync(Arg.Any<CancellationToken>());
@@ -38,7 +38,7 @@ public class EnforcementSynchronizerTests
     {
         SliceIs(new ActivePolicySlice());
 
-        await CreateSynchronizer().SyncAsync(DateTime.UtcNow);
+        await CreateSynchronizer().SyncAsync(At.Utc(DateTime.UtcNow));
 
         await _enforcement.Received(1).RemoveEnforcementAsync(Arg.Any<CancellationToken>());
         await _enforcement.DidNotReceive().ApplyPolicyAsync(Arg.Any<ActivePolicySlice>(), Arg.Any<CancellationToken>());
@@ -50,10 +50,10 @@ public class EnforcementSynchronizerTests
         var at = new DateTime(2026, 9, 25, 10, 25, 0, DateTimeKind.Utc);
         SliceIs(new ActivePolicySlice());
 
-        await CreateSynchronizer().SyncAsync(at);
+        await CreateSynchronizer().SyncAsync(At.Utc(at));
 
         await _queries.Received(1).QueryAsync(
-            Arg.Is<ComputeActivePolicySliceQuery>(q => q.At == at), Arg.Any<CancellationToken>());
+            Arg.Is<ComputeActivePolicySliceQuery>(q => q.At == At.Utc(at)), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -62,7 +62,7 @@ public class EnforcementSynchronizerTests
         var slice = NonEmptySlice();
         SliceIs(slice);
 
-        var result = await CreateSynchronizer().SyncAsync(DateTime.UtcNow);
+        var result = await CreateSynchronizer().SyncAsync(At.Utc(DateTime.UtcNow));
 
         result.Should().BeSameAs(slice);
     }
@@ -80,8 +80,8 @@ public class EnforcementSynchronizerTests
         SliceIs(NonEmptySlice());
 
         var synchronizer = CreateSynchronizer();
-        var first = synchronizer.SyncAsync(DateTime.UtcNow);
-        var second = synchronizer.SyncAsync(DateTime.UtcNow);
+        var first = synchronizer.SyncAsync(At.Utc(DateTime.UtcNow));
+        var second = synchronizer.SyncAsync(At.Utc(DateTime.UtcNow));
 
         await _queries.Received(1).QueryAsync(Arg.Any<ComputeActivePolicySliceQuery>(), Arg.Any<CancellationToken>());
 
@@ -98,10 +98,10 @@ public class EnforcementSynchronizerTests
             .Returns<ActivePolicySlice>(_ => throw new InvalidOperationException("db down"), _ => new ActivePolicySlice());
 
         var synchronizer = CreateSynchronizer();
-        var failed = () => synchronizer.SyncAsync(DateTime.UtcNow);
+        var failed = () => synchronizer.SyncAsync(At.Utc(DateTime.UtcNow));
         await failed.Should().ThrowAsync<InvalidOperationException>();
 
-        var next = synchronizer.SyncAsync(DateTime.UtcNow);
+        var next = synchronizer.SyncAsync(At.Utc(DateTime.UtcNow));
         (await Task.WhenAny(next, Task.Delay(TimeSpan.FromSeconds(5)))).Should().BeSameAs(next);
     }
 }

@@ -26,13 +26,14 @@ public class GetNenContractRecapQueryHandlerTests
         Substitute.For<IQueryHandler<GetNenContractCompletedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>>>();
     private readonly IQueryHandler<GetNenContractBonusFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> _bonusHours =
         Substitute.For<IQueryHandler<GetNenContractBonusFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>>>();
-    private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
+    private readonly ISystemClock _clock = TestClock.Create();
 
     public GetNenContractRecapQueryHandlerTests()
     {
-        _clock.UtcNow.Returns(Now);
-        _clock.ToLocal(Arg.Any<DateTime>()).Returns(ci => ci.Arg<DateTime>());
-        _blocks.GetForRangeAsync(Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
+        _clock.SetNow(Now);
+        _clock.SetTimeZoneOffset(TimeSpan.Zero);
+        _clock.SetTimeZoneOffset(TimeSpan.Zero);
+        _blocks.GetForRangeAsync(Arg.Any<TimeSlot>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[]);
         _completedHours.HandleAsync(Arg.Any<GetNenContractCompletedFocusHoursQuery>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyDictionary<DateOnly, double>)new Dictionary<DateOnly, double>());
@@ -54,7 +55,7 @@ public class GetNenContractRecapQueryHandlerTests
             changeWindow: null,
             allowCancellation: true,
             plannedFocusHoursByDay: new Dictionary<DateOnly, double> { [StartDate] = committedHours },
-            localSealedAt: StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
+            sealedAt: At.Utc(StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)), timeZone: At.UtcZone);
 
     // StartDate..EndDate is a 7-day range (Jan 1-7). A fixed 4h/day floor everywhere by
     // default; individual tests mark specific days as rest days.
@@ -69,7 +70,7 @@ public class GetNenContractRecapQueryHandlerTests
             [StartDate] = 4, [StartDate.AddDays(1)] = 4, [StartDate.AddDays(2)] = 4, [StartDate.AddDays(3)] = 4,
             [StartDate.AddDays(4)] = 4, [StartDate.AddDays(5)] = 4, [EndDate] = 4
         },
-        localSealedAt: StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
+        sealedAt: At.Utc(StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)), timeZone: At.UtcZone);
 
     private void StubCompletedByDay(Dictionary<DateOnly, double> hoursByDay) =>
         _completedHours.HandleAsync(Arg.Any<GetNenContractCompletedFocusHoursQuery>(), Arg.Any<CancellationToken>())
@@ -163,26 +164,26 @@ public class GetNenContractRecapQueryHandlerTests
 
         // Distinct Start times — the classifier is stubbed by (Start, End), so identical
         // windows across blocks would collide and only the last stub would ever match.
-        var completedOnTime = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Now.AddHours(-10), Now.AddHours(-9), contractId: ContractId);
-        var startedLate = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Now.AddHours(-8), Now.AddHours(-7), contractId: ContractId);
-        var endedEarly = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Now.AddHours(-6), Now.AddHours(-5), contractId: ContractId);
-        var missed = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Now.AddHours(-4), Now.AddHours(-3), contractId: ContractId);
-        var redemption = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Now.AddHours(-2), Now.AddHours(-1), contractId: ContractId,
+        var completedOnTime = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now.AddHours(-10), Now.AddHours(-9)), contractId: ContractId);
+        var startedLate = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now.AddHours(-8), Now.AddHours(-7)), contractId: ContractId);
+        var endedEarly = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now.AddHours(-6), Now.AddHours(-5)), contractId: ContractId);
+        var missed = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now.AddHours(-4), Now.AddHours(-3)), contractId: ContractId);
+        var redemption = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now.AddHours(-2), Now.AddHours(-1)), contractId: ContractId,
             redemptionEntries: [new RedemptionEntry(Guid.NewGuid(), 30)]);
-        var background = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Now, Now.AddHours(1), contractId: ContractId);
+        var background = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now, Now.AddHours(1)), contractId: ContractId);
 
         _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[completedOnTime, startedLate, endedEarly, missed, redemption, background]);
 
-        _classifier.Classify(completedOnTime, Now)
+        _classifier.Classify(completedOnTime, At.Utc(Now))
             .Returns(FocusBlockOutcome.CompletedOnTime);
-        _classifier.Classify(startedLate, Now)
+        _classifier.Classify(startedLate, At.Utc(Now))
             .Returns(FocusBlockOutcome.StartedLate);
-        _classifier.Classify(endedEarly, Now)
+        _classifier.Classify(endedEarly, At.Utc(Now))
             .Returns(FocusBlockOutcome.EndedEarly);
-        _classifier.Classify(missed, Now)
+        _classifier.Classify(missed, At.Utc(Now))
             .Returns(FocusBlockOutcome.Missed);
-        _classifier.Classify(redemption, Now)
+        _classifier.Classify(redemption, At.Utc(Now))
             .Returns(FocusBlockOutcome.CompletedOnTime);
 
         var result = await CreateHandler().HandleAsync(new GetNenContractRecapQuery(ContractId), CancellationToken.None);
@@ -202,8 +203,8 @@ public class GetNenContractRecapQueryHandlerTests
         var contract = CompletedContract();
         _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(contract);
 
-        var cancelled = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Now, Now.AddHours(1), contractId: ContractId);
-        cancelled.MarkCancelled(Now);
+        var cancelled = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now, Now.AddHours(1)), contractId: ContractId);
+        cancelled.MarkCancelled(At.Utc(Now));
         _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[cancelled]);
 
         var result = await CreateHandler().HandleAsync(new GetNenContractRecapQuery(ContractId), CancellationToken.None);
@@ -224,11 +225,11 @@ public class GetNenContractRecapQueryHandlerTests
         _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[]);
 
         var inRangeDay = StartDate.AddDays(2).ToDateTime(new TimeOnly(9, 0), DateTimeKind.Utc);
-        var bonusInRange = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), inRangeDay, inRangeDay.AddHours(1)); // no ContractId
+        var bonusInRange = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(inRangeDay, inRangeDay.AddHours(1))); // no ContractId
         var outsideRangeDay = EndDate.AddDays(5).ToDateTime(new TimeOnly(9, 0), DateTimeKind.Utc);
-        var bonusOutsideRange = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), outsideRangeDay, outsideRangeDay.AddHours(1));
+        var bonusOutsideRange = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(outsideRangeDay, outsideRangeDay.AddHours(1)));
 
-        _blocks.GetForRangeAsync(Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
+        _blocks.GetForRangeAsync(Arg.Any<TimeSlot>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[bonusInRange, bonusOutsideRange]);
 
         var result = await CreateHandler().HandleAsync(new GetNenContractRecapQuery(ContractId), CancellationToken.None);
@@ -247,10 +248,10 @@ public class GetNenContractRecapQueryHandlerTests
         _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[]);
 
         var inRangeDay = StartDate.AddDays(2).ToDateTime(new TimeOnly(9, 0), DateTimeKind.Utc);
-        var focusBonus = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), inRangeDay, inRangeDay.AddHours(1));
-        var unlinkedBackground = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(), inRangeDay.AddHours(2), inRangeDay.AddHours(3));
+        var focusBonus = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(inRangeDay, inRangeDay.AddHours(1)));
+        var unlinkedBackground = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(inRangeDay.AddHours(2), inRangeDay.AddHours(3)));
 
-        _blocks.GetForRangeAsync(Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
+        _blocks.GetForRangeAsync(Arg.Any<TimeSlot>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[focusBonus, unlinkedBackground]);
 
         var result = await CreateHandler().HandleAsync(new GetNenContractRecapQuery(ContractId), CancellationToken.None);
@@ -291,7 +292,7 @@ public class GetNenContractRecapQueryHandlerTests
             changeWindow: null,
             allowCancellation: true,
             plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-            localSealedAt: StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
+            sealedAt: At.Utc(StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)), timeZone: At.UtcZone);
         _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(contract);
         _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[]);
 

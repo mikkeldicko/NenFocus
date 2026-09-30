@@ -152,6 +152,19 @@ sessionState.Received(1).SetActive(Arg.Any<SessionDto>());
 sessionState.Received(1).Clear();
 ```
 
+### Faking the clock
+
+Always `TestClock.Create()`, never `Substitute.For<ISystemClock>()` (`ClockRuleTests` fails otherwise). Its `Now` and `TimeZone` throw until set, so a forgotten setup fails loudly instead of running at year 0001:
+
+```csharp
+private readonly ISystemClock _clock = TestClock.Create();
+// in the constructor or test:
+_clock.SetNow(new DateTime(2026, 1, 5, 12, 0, 0, DateTimeKind.Utc)); // several values = a sequence
+_clock.SetTimeZoneOffset(TimeSpan.Zero);
+```
+
+Set a clock member directly only through `Configure()` (`clock.Configure().Now.Returns(…)`): a plain `.Returns` on a throwing member runs the throw. Why: an unconfigured clock hid an empty Work-Hours check for months, and a Planner view test ran in the wrong week (Gap 88 close-out).
+
 ### Theory tests (parameterised)
 
 ```csharp
@@ -215,6 +228,13 @@ public async Task HandleAsync_ValidDurations_AllSucceed(int durationMinutes)
 - **A gap makes a new rule true** (the Architecture box rule) — add its test here, and probe it: add a deliberate violation (a temporary `ZzProbe` file), watch it go red, remove it. A test never seen failing is not trusted.
 - **Generated code** (EF migrations, Avalonia's compiled XAML) is out of scope, matched narrowly so a change on their side fails red rather than passing silently.
 - **What these can't check** — whether a module is deep, whether a rule is in the right home — stays with the interface-first sign-off (`MODULE_STANDARDS.md` → Guard Hierarchy).
+- **Probe with the shapes people actually write.** A probe using a fully qualified name (`Substitute.For<NenFocus.Application.Interfaces.ISystemClock>()`) got past the first version of `TestsMakeFakeClocksOnlyThroughTestClock`; the pattern was widened. Try at least the short and the qualified form.
+- **Restore a probed file from a backup copy, never `git checkout`.** Checkout also throws away the file's uncommitted work (it nearly did during Gap 88's close-out).
+
+**Lessons from Gap 88 (for any test, not only architecture tests):**
+- **A test written after its fix proves nothing until probed:** break the code on purpose, watch the test fail, restore.
+- **An assertion can compile on the wrong type.** After a field became `Moment?`, `x.Should().Be(someDateTime)` still compiled (FluentAssertions' `Be(object)`) and failed only at runtime ("expected 12:00:00, found 12:00:00Z"). After a type change, compare with a value of the new type.
+- **Scripted edits:** match the file's line endings (`\r?\n`; a `\n`-only deletion left an orphan `\r` that shifted every later line number); anchor text replacements to a word boundary (replacing `At.X(` also hit `TestAt.X(`); and delete exactly the member a plan names, not its type (read it first).
 
 ---
 

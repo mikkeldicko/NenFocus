@@ -42,7 +42,7 @@ public partial class DebugClockViewModel : ViewModelBase
 
     private void Refresh()
     {
-        CurrentEffectiveTime = _clock.UtcNow.ToLocalTime();
+        CurrentEffectiveTime = _clock.TimeZone.ToCalendarTime(_clock.Now);
         IsOverridden = _controller.IsOverridden;
     }
 
@@ -51,7 +51,7 @@ public partial class DebugClockViewModel : ViewModelBase
     {
         if (!IsVisible)
         {
-            var now = _clock.UtcNow.ToLocalTime();
+            var now = _clock.TimeZone.ToCalendarTime(_clock.Now);
             SelectedDate = new DateTimeOffset(now.Date);
             SelectedTime = now.TimeOfDay;
         }

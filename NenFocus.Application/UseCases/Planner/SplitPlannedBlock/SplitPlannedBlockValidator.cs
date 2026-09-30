@@ -1,9 +1,11 @@
 using FluentValidation;
+using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.ComputePlannedFocusHours;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
 using NenFocus.Domain.Services;
+using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Application.UseCases.Planner.SplitPlannedBlock;
 
@@ -14,8 +16,27 @@ public sealed class SplitPlannedBlockValidator : AbstractValidator<SplitPlannedB
         ISessionRepository sessions,
         INenContractRepository contracts,
         ISystemClock clock,
-        IQueryHandler<ComputePlannedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> computePlannedFocusHours)
+        IQueryHandler<ComputePlannedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> computePlannedFocusHours,
+        IBlockPlacementChecker placement)
     {
+        // May this half go here? The one placement answer, BlockPlacementChecker.Check (Gap 88 phase
+        // 8): not in the past → inside the original's contract hours → free for Focus, against the
+        // calendar as it will be (without the original) and the running session. Asked directly
+        // rather than through GetBlockPlacementVerdictQuery, which would run redemption attribution
+        // per half on its own — Split divides the original's coverage across both (Gap 106). The
+        // wording is the query's (BlockPlacementVerdictDto.From), prefixed with which half.
+        async Task CheckHalfAsync(Guid originalId, TimeSlot slot, string property, string label, ValidationContext<SplitPlannedBlockCommand> context, CancellationToken ct)
+        {
+            var block = await blocks.GetByIdAsync(originalId, ct);
+            if (block is not FocusBlock) return; // reported by the "only a Focus block" rule
+            var contract = block.ContractId is { } contractId ? await contracts.GetByIdAsync(contractId, ct) : null;
+            var calendar = (await blocks.GetForRangeAsync(slot, ct)).Where(b => b.Id != originalId);
+            var running = await sessions.GetActiveSessionsAsync(ct);
+            var verdict = placement.Check(slot, BlockPresetType.Focus, contract, calendar, running, clock.Now, clock.TimeZone);
+            if (verdict.Outcome != PlacementOutcome.Allowed)
+                context.AddFailure(property, $"{label}: {BlockPlacementVerdictDto.From(verdict).Message}");
+        }
+
         // The local calendar day(s) the original block spans — null when the block can't
         // be resolved (reported by the "block to split could not be found" rule instead).
         // A cross-midnight original spans two days; Split lets its two pieces land on
@@ -24,33 +45,26 @@ public sealed class SplitPlannedBlockValidator : AbstractValidator<SplitPlannedB
         {
             var block = await blocks.GetByIdAsync(blockId, ct);
             if (block is null) return null;
-            var localStart = clock.ToLocal(block.Start);
-            var localEnd = clock.ToLocal(block.End);
-            return DayRangeSplitter.Split(localStart, localEnd).Select(s => s.Date).ToHashSet();
+            return clock.TimeZone.SplitByDay(block.Scheduled).Select(p => p.Date).ToHashSet();
         }
 
         // A resulting piece must land entirely on a single day (no recursive crossing —
         // Split's dialog has no date-rollover UI, so a piece spanning midnight itself has
         // nowhere to be entered), and that day must be one the original actually touched.
-        bool ResolvesToSingleDayIn(DateTime start, DateTime end, HashSet<DateOnly> allowedDays)
+        // SplitByDay is half-open: a piece ending exactly at midnight (e.g. ...-24:00) has
+        // no part on the next day.
+        bool ResolvesToSingleDayIn(TimeSlot slot, HashSet<DateOnly> allowedDays)
         {
-            var startDate = clock.ToLocalDate(start);
-            // Exact-midnight end (e.g. ...-24:00) has no presence on the next day — see
-            // UpdatePlannedBlockValidator's identical fix for the full rationale.
-            var endDate = DateOnly.FromDateTime(clock.ToLocal(end).AddTicks(-1));
-            return startDate == endDate && allowedDays.Contains(startDate);
+            var parts = clock.TimeZone.SplitByDay(slot).ToList();
+            return parts.Count == 1 && allowedDays.Contains(parts[0].Date);
         }
 
         RuleFor(x => x.OriginalBlockId)
             .NotEmpty().WithMessage("Original block ID is required.");
 
-        RuleFor(x => x.FirstBlockEnd)
-            .GreaterThan(x => x.FirstBlockStart)
-            .WithMessage("First block's end time must be after its start time.");
-
-        RuleFor(x => x.SecondBlockEnd)
-            .GreaterThan(x => x.SecondBlockStart)
-            .WithMessage("Second block's end time must be after its start time.");
+        // The slots are required (the compiler enforces it) and guarantee end after start
+        // (Gap 88) — the split dialog shows "First block's end time must be after its start
+        // time." itself when TimeSlot.TryCreate returns null, so there's no such rule here.
 
         RuleFor(x => x)
             .MustAsync(async (command, ct) =>
@@ -117,7 +131,7 @@ public sealed class SplitPlannedBlockValidator : AbstractValidator<SplitPlannedB
             .MustAsync(async (command, ct) =>
             {
                 var block = await blocks.GetByIdAsync(command.OriginalBlockId, ct);
-                return block is not null && !block.HasStarted(clock.UtcNow);
+                return block is not null && !block.HasStarted(clock.Now);
             })
             .WithMessage("Only a future block can be split.");
 
@@ -126,7 +140,7 @@ public sealed class SplitPlannedBlockValidator : AbstractValidator<SplitPlannedB
             {
                 var days = await OriginalBlockDaysAsync(command.OriginalBlockId, ct);
                 if (days is null) return true; // reported above
-                return ResolvesToSingleDayIn(command.FirstBlockStart, command.FirstBlockEnd, days);
+                return ResolvesToSingleDayIn(command.First, days);
             })
             .WithMessage("The first block must land entirely on one of the days the original block spans.");
 
@@ -135,75 +149,28 @@ public sealed class SplitPlannedBlockValidator : AbstractValidator<SplitPlannedB
             {
                 var days = await OriginalBlockDaysAsync(command.OriginalBlockId, ct);
                 if (days is null) return true; // reported above
-                return ResolvesToSingleDayIn(command.SecondBlockStart, command.SecondBlockEnd, days);
+                return ResolvesToSingleDayIn(command.Second, days);
             })
             .WithMessage("The second block must land entirely on one of the days the original block spans.");
 
         RuleFor(x => x)
-            .Must(command => command.FirstBlockStart >= command.SecondBlockEnd || command.SecondBlockStart >= command.FirstBlockEnd)
+            .Must(command => !command.First.Overlaps(command.Second))
             .WithMessage("The two resulting blocks cannot overlap each other.");
 
         RuleFor(x => x)
-            .MustAsync(async (command, ct) =>
-            {
-                var block = await blocks.GetByIdAsync(command.OriginalBlockId, ct);
-                if (block is null) return true; // reported above
-                var overlapping = await blocks.GetOverlappingAsync(
-                    command.FirstBlockStart, command.FirstBlockEnd, clock.UtcNow,
-                    ritualOnly: block is FocusBlock, excludeId: command.OriginalBlockId, cancellationToken: ct);
-                return overlapping.Count == 0;
-            })
-            .WithMessage("The first block overlaps another existing block.");
+            .CustomAsync((command, context, ct) => CheckHalfAsync(command.OriginalBlockId, command.First, nameof(SplitPlannedBlockCommand.First), "First block", context, ct));
+
+        RuleFor(x => x)
+            .CustomAsync((command, context, ct) => CheckHalfAsync(command.OriginalBlockId, command.Second, nameof(SplitPlannedBlockCommand.Second), "Second block", context, ct));
 
         RuleFor(x => x)
             .MustAsync(async (command, ct) =>
             {
                 var block = await blocks.GetByIdAsync(command.OriginalBlockId, ct);
                 if (block is null) return true; // reported above
-                var overlapping = await blocks.GetOverlappingAsync(
-                    command.SecondBlockStart, command.SecondBlockEnd, clock.UtcNow,
-                    ritualOnly: block is FocusBlock, excludeId: command.OriginalBlockId, cancellationToken: ct);
-                return overlapping.Count == 0;
-            })
-            .WithMessage("The second block overlaps another existing block.");
-
-        RuleFor(x => x)
-            .MustAsync(async (command, ct) =>
-            {
-                var block = await blocks.GetByIdAsync(command.OriginalBlockId, ct);
-                if (block is null) return true; // reported above
-                var originalDuration = block.GetDuration();
-                var splitDuration = (command.FirstBlockEnd - command.FirstBlockStart) + (command.SecondBlockEnd - command.SecondBlockStart);
-                return splitDuration == originalDuration;
+                return command.First.Length + command.Second.Length == block.Scheduled.Length;
             })
             .WithMessage("The two resulting blocks must add up to the original block's total duration.");
-
-        // Surfaced 2026-09-02: Split never checked Work Hours at all, unlike
-        // CreatePlannedBlockValidator/UpdatePlannedBlockValidator, which both call
-        // AllowsBlockPlacement — a real pre-existing gap, not new scope creep. Split is
-        // Focus-only (enforced above) and always belongs to a sealed contract (also
-        // enforced above), so this applies unconditionally to both resulting pieces,
-        // unlike Create's own version of this rule which only applies when
-        // BlockPresetType == Focus.
-        RuleFor(x => x)
-            .MustAsync(async (command, ct) =>
-            {
-                var block = await blocks.GetByIdAsync(command.OriginalBlockId, ct);
-                if (block?.ContractId is not { } contractId) return true; // reported above
-                var contract = await contracts.GetByIdAsync(contractId, ct);
-                return contract is null || contract.AllowsBlockPlacement(clock.ToLocal(command.FirstBlockStart), clock.ToLocal(command.FirstBlockEnd));
-            })
-            .WithMessage("The first block falls outside the contract's configured Work Hours for that day.");
-
-        RuleFor(x => x)
-            .MustAsync(async (command, ct) =>
-            {
-                var block = await blocks.GetByIdAsync(command.OriginalBlockId, ct);
-                if (block?.ContractId is not { } contractId) return true; // reported above
-                var contract = await contracts.GetByIdAsync(contractId, ct);
-                return contract is null || contract.AllowsBlockPlacement(clock.ToLocal(command.SecondBlockStart), clock.ToLocal(command.SecondBlockEnd));
-            })
-            .WithMessage("The second block falls outside the contract's configured Work Hours for that day.");
 
         // Floor-protection: unlike an ordinary same-preset shrink (which conserves the
         // day's total by construction), Split can freely reallocate hours across whichever
@@ -228,11 +195,7 @@ public sealed class SplitPlannedBlockValidator : AbstractValidator<SplitPlannedB
                 var plannedByDay = await computePlannedFocusHours.HandleAsync(
                     new ComputePlannedFocusHoursQuery(
                         contractId,
-                        DraftFocusBlockRanges:
-                        [
-                            (command.FirstBlockStart, command.FirstBlockEnd),
-                            (command.SecondBlockStart, command.SecondBlockEnd)
-                        ],
+                        DraftFocusBlockRanges: [command.First, command.Second],
                         ExcludeBlockId: command.OriginalBlockId),
                     ct);
 
@@ -241,7 +204,7 @@ public sealed class SplitPlannedBlockValidator : AbstractValidator<SplitPlannedB
                     var newPeriodTotal = plannedByDay.Values.Sum();
                     if (!contract.IsPeriodMet(newPeriodTotal))
                     {
-                        context.AddFailure(nameof(SplitPlannedBlockCommand.FirstBlockEnd),
+                        context.AddFailure(nameof(SplitPlannedBlockCommand.Second),
                             $"This would drop the contract's total planned hours below its {contract.ContractFloorHours:0.#}h target.");
                     }
                     return;
@@ -253,8 +216,8 @@ public sealed class SplitPlannedBlockValidator : AbstractValidator<SplitPlannedB
                 // its total can drop without either piece being there to trigger a check).
                 var originalDays = await OriginalBlockDaysAsync(command.OriginalBlockId, ct) ?? [];
                 var touchedDays = originalDays
-                    .Append(clock.ToLocalDate(command.FirstBlockStart))
-                    .Append(clock.ToLocalDate(command.SecondBlockStart))
+                    .Append(clock.TimeZone.SplitByDay(command.First).First().Date)
+                    .Append(clock.TimeZone.SplitByDay(command.Second).First().Date)
                     .Distinct();
 
                 foreach (var date in touchedDays)
@@ -263,11 +226,12 @@ public sealed class SplitPlannedBlockValidator : AbstractValidator<SplitPlannedB
                     if (!contract.IsDayMet(date, total))
                     {
                         var floorHours = contract.FloorHoursFor(date);
-                        context.AddFailure(nameof(SplitPlannedBlockCommand.FirstBlockEnd),
+                        context.AddFailure(nameof(SplitPlannedBlockCommand.Second),
                             $"This would drop {date:MMM d}'s total below its {floorHours:0.#}h daily floor.");
                         break;
                     }
                 }
             });
+
     }
 }

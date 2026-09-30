@@ -1,4 +1,4 @@
-﻿﻿using System;
+﻿using System;
 using CommunityToolkit.Mvvm.ComponentModel;
 using NenFocus.Application.DTOs;
 using NenFocus.Domain.Enums;
@@ -48,8 +48,12 @@ public partial class PlannedBlockTileViewModel : ViewModelBase
     /// </summary>
     public PlannedBlockContractBadge? ContractBadge { get; }
 
+    /// <param name="localStart">Where the tile starts on the user's clock — computed by the Planner
+    /// through the user's time zone (Gap 88), never read off the DTO's moments.</param>
     public PlannedBlockTileViewModel(
         PlannedBlockDto dto,
+        DateTime localStart,
+        DateTime localEnd,
         BlockPresetType blockPresetType,
         int columnIndex,
         double top,
@@ -59,8 +63,8 @@ public partial class PlannedBlockTileViewModel : ViewModelBase
         Id = dto.Id;
         PresetName = dto.PresetName;
         BlockPresetType = blockPresetType;
-        Start = dto.Start;
-        End = dto.End;
+        Start = localStart;
+        End = localEnd;
         WebsiteFilterType = dto.WebsiteFilterType;
         ColumnIndex = columnIndex;
         Top = top;

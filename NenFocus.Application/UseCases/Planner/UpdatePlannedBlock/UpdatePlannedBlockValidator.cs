@@ -1,8 +1,11 @@
 using FluentValidation;
+using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.ComputePlannedFocusHours;
+using NenFocus.Application.Queries.GetBlockPlacementVerdict;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
+using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Application.UseCases.Planner.UpdatePlannedBlock;
 
@@ -16,7 +19,8 @@ public sealed class UpdatePlannedBlockValidator : AbstractValidator<UpdatePlanne
         IBlockPresetRepository presets,
         INenContractRepository contracts,
         ISystemClock clock,
-        IQueryHandler<ComputePlannedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> computePlannedFocusHours)
+        IQueryHandler<ComputePlannedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> computePlannedFocusHours,
+        IQueryHandler<GetBlockPlacementVerdictQuery, BlockPlacementVerdictDto> placement)
     {
         _blocks = blocks;
         _clock = clock;
@@ -34,7 +38,7 @@ public sealed class UpdatePlannedBlockValidator : AbstractValidator<UpdatePlanne
             {
                 if (command.BlockId == Guid.Empty) return true;
                 var block = await _blocks.GetByIdAsync(command.BlockId, ct);
-                return block is null || !block.HasStarted(_clock.UtcNow);
+                return block is null || !block.HasStarted(_clock.Now);
             })
             .WithMessage("This block has already started — it cannot be edited.");
 
@@ -50,14 +54,6 @@ public sealed class UpdatePlannedBlockValidator : AbstractValidator<UpdatePlanne
             })
             .WithMessage("The selected preset type does not match this block preset type.");
 
-        RuleFor(x => x.Start)
-            .Must(start => start > _clock.UtcNow)
-            .WithMessage("Start time must be in the future.");
-
-        RuleFor(x => x.End)
-            .GreaterThan(x => x.Start)
-            .WithMessage("End time must be after start time.");
-
         // Mirrors FocusBlock.Reschedule's own cap — the entity is the real,
         // unbypassable invariant; this exists only to produce a friendly FormError
         // instead of an unhandled exception, same two-layer pattern already used for
@@ -68,20 +64,23 @@ public sealed class UpdatePlannedBlockValidator : AbstractValidator<UpdatePlanne
             .MustAsync(async (command, ct) =>
             {
                 var block = await _blocks.GetByIdAsync(command.BlockId, ct);
-                return block is not FocusBlock || (command.End - command.Start) <= TimeSpan.FromHours(FocusBlock.MaxDurationHours);
+                return block is not FocusBlock || command.Slot.Length <= TimeSpan.FromHours(FocusBlock.MaxDurationHours);
             })
             .WithMessage($"A Focus block cannot exceed {FocusBlock.MaxDurationHours} hours.");
 
+        // The one placement rule (Gap 88 phase 8): not in the past → inside the contract's
+        // window → free for Focus, resolved against the capped window attribution returns.
         RuleFor(x => x)
-            .MustAsync(async (command, ct) =>
+            .CustomAsync(async (command, context, ct) =>
             {
                 var block = await _blocks.GetByIdAsync(command.BlockId, ct);
-                if (block?.ContractId is not { } contractId) return true;
-                var contract = await contracts.GetByIdAsync(contractId, ct);
-                return contract is null
-                    || contract.AllowsBlockPlacement(_clock.ToLocal(command.Start), _clock.ToLocal(command.End));
-            })
-            .WithMessage("This block falls outside the contract's configured Work Hours for that day.");
+                if (block is null) return;
+                var verdict = await placement.HandleAsync(
+                    new GetBlockPlacementVerdictQuery(command.Slot, block.PresetType, command.PresetId, ExistingBlockId: command.BlockId),
+                    ct);
+                if (verdict.Outcome != PlacementOutcome.Allowed && verdict.Message is not null)
+                    context.AddFailure(nameof(UpdatePlannedBlockCommand.Slot), verdict.Message);
+            });
 
         // Sealed-contract enforcement guards. A block's ContractId only ever resolves to a
         // contract that has been Seal()-ed — NenContract has no other way into existence —
@@ -105,14 +104,12 @@ public sealed class UpdatePlannedBlockValidator : AbstractValidator<UpdatePlanne
                     return;
                 }
 
-                var originalDate = _clock.ToLocalDate(block.Start);
-                var newStartDate = _clock.ToLocalDate(command.Start);
-                // A block ending exactly at midnight (e.g. 22:00-24:00) has no actual
-                // presence on the next calendar day — resolve End's boundary to the day it
-                // closes out, mirroring the [start, end) exclusive-end semantics
-                // PlannedBlock.IsActive already uses everywhere else. Subtracting one tick
-                // only changes the resolved date when End lands exactly on a day boundary.
-                var newEndDate = DateOnly.FromDateTime(_clock.ToLocal(command.End).AddTicks(-1));
+                // The local days each slot touches, half-open — a block ending exactly at
+                // midnight (e.g. 22:00-24:00) has no presence on the next day (Gap 88).
+                var originalDate = _clock.TimeZone.SplitByDay(block.Scheduled).First().Date;
+                var newDays = _clock.TimeZone.SplitByDay(command.Slot).Select(p => p.Date).ToList();
+                var newStartDate = newDays.First();
+                var newEndDate = newDays.Last();
 
                 if (contract.AllowsBlockTimeChange(originalDate, newStartDate, newEndDate))
                 {
@@ -129,7 +126,7 @@ public sealed class UpdatePlannedBlockValidator : AbstractValidator<UpdatePlanne
                             var plannedByDay = await computePlannedFocusHours.HandleAsync(
                                 new ComputePlannedFocusHoursQuery(
                                     contractId,
-                                    DraftFocusBlockRanges: [(command.Start, command.End)],
+                                    DraftFocusBlockRanges: [command.Slot],
                                     ExcludeBlockId: command.BlockId),
                                 ct);
                             var newDayTotal = plannedByDay.GetValueOrDefault(originalDate);
@@ -137,7 +134,7 @@ public sealed class UpdatePlannedBlockValidator : AbstractValidator<UpdatePlanne
                             if (!contract.IsDayMet(originalDate, newDayTotal))
                             {
                                 var floorHours = contract.FloorHoursFor(originalDate);
-                                context.AddFailure(nameof(UpdatePlannedBlockCommand.End),
+                                context.AddFailure(nameof(UpdatePlannedBlockCommand.Slot),
                                     $"This would drop {originalDate:MMM d}'s total below its {floorHours:0.#}h daily floor.");
                             }
                         }
@@ -146,7 +143,7 @@ public sealed class UpdatePlannedBlockValidator : AbstractValidator<UpdatePlanne
                             var plannedByDay = await computePlannedFocusHours.HandleAsync(
                                 new ComputePlannedFocusHoursQuery(
                                     contractId,
-                                    DraftFocusBlockRanges: [(command.Start, command.End)],
+                                    DraftFocusBlockRanges: [command.Slot],
                                     ExcludeBlockId: command.BlockId),
                                 ct);
 
@@ -159,7 +156,7 @@ public sealed class UpdatePlannedBlockValidator : AbstractValidator<UpdatePlanne
                                 var newPeriodTotal = plannedByDay.Values.Sum();
                                 if (!contract.IsPeriodMet(newPeriodTotal))
                                 {
-                                    context.AddFailure(nameof(UpdatePlannedBlockCommand.End),
+                                    context.AddFailure(nameof(UpdatePlannedBlockCommand.Slot),
                                         $"This would drop the contract's total planned hours below its {contract.ContractFloorHours:0.#}h target.");
                                 }
                             }
@@ -176,7 +173,7 @@ public sealed class UpdatePlannedBlockValidator : AbstractValidator<UpdatePlanne
                                     if (!contract.IsDayMet(date, total))
                                     {
                                         var floorHours = contract.FloorHoursFor(date);
-                                        context.AddFailure(nameof(UpdatePlannedBlockCommand.End),
+                                        context.AddFailure(nameof(UpdatePlannedBlockCommand.Slot),
                                             $"This would drop {date:MMM d}'s total below its {floorHours:0.#}h daily floor.");
                                         break;
                                     }
@@ -193,7 +190,7 @@ public sealed class UpdatePlannedBlockValidator : AbstractValidator<UpdatePlanne
                     StrictnessRule.DailyFlexibility => "Daily Flex contracts only allow moving blocks within the same day.",
                     _ => "Cannot move block outside the contract period." // PeriodTimeBudget
                 };
-                context.AddFailure(nameof(UpdatePlannedBlockCommand.Start), message);
+                context.AddFailure(nameof(UpdatePlannedBlockCommand.Slot), message);
             });
     }
 }

@@ -28,4 +28,10 @@ public sealed record SessionBreak
     }
 
     public TimeSpan Length => End - Start;
+
+    /// <summary>Time left in the break at <paramref name="offset"/> (from the session's start).</summary>
+    public TimeSpan RemainingAt(TimeSpan offset) => End - offset;
+
+    /// <summary>How far through the break <paramref name="offset"/> is, from 0 to 1.</summary>
+    public double ProgressAt(TimeSpan offset) => Math.Clamp((offset - Start) / Length, 0.0, 1.0);
 }

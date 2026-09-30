@@ -18,8 +18,8 @@ public sealed class SweepNenContractLifecycleCommandHandler
         SweepNenContractLifecycleCommand command,
         CancellationToken ct = default)
     {
-        var now = _clock.UtcNow;
-        var localNow = _clock.ToLocal(now);
+        var now = _clock.Now;
+        var localNow = _clock.TimeZone.ToCalendarTime(now);
 
         // Only a handful of contracts are ever in effect — the entity decides which are due,
         // so the rule lives in exactly one place (IsDueForActivation / IsDueForCompletion).

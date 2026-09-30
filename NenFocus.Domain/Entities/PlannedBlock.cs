@@ -8,8 +8,12 @@ public abstract class PlannedBlock : AggregateRoot
 {
     public Guid Id { get; protected set; }
     public Guid BlockPresetId { get; protected set; }
-    public DateTime Start { get; protected set; }
-    public DateTime End { get; protected set; }
+    /// <summary>
+    /// The time this block was planned for — its one source of truth for when it is (Gap 88).
+    /// What it really occupies (early end, missed, cancelled) is <see cref="ReservedSlot"/>.
+    /// </summary>
+    public TimeSlot Scheduled { get; protected set; } = null!;
+
     public string? Title { get; protected set; }
 
     /// <summary>Null means an ordinary, uncommitted block; set means the block is under that Nen Contract.</summary>
@@ -17,7 +21,7 @@ public abstract class PlannedBlock : AggregateRoot
 
     /// <summary>Null means still scheduled/live; set means the owning Nen Contract was broken and this
     /// block was cut short before it ran. Applies uniformly to FocusBlock and BackgroundBlock.</summary>
-    public DateTime? CancelledAt { get; protected set; }
+    public Moment? CancelledAt { get; protected set; }
 
     /// <summary>
     /// Empty means an ordinary block. Populated means this is a redemption block covering
@@ -28,8 +32,9 @@ public abstract class PlannedBlock : AggregateRoot
 
     protected PlannedBlock() { }
 
+
     public bool OverlapsWith(PlannedBlock other)
-        => Start < other.End && End > other.Start;
+        => Scheduled.Overlaps(other.Scheduled);
 
     /// <summary>
     /// True when <paramref name="atTime"/> falls within this block's still-actually-reserved
@@ -41,44 +46,54 @@ public abstract class PlannedBlock : AggregateRoot
     /// freed tail, permanently suppressing the new block's Ritual trigger until the stale
     /// block's raw window finally closed.
     /// </summary>
-    public bool IsActive(DateTime atTime)
-        => atTime >= Start && atTime < EffectiveEnd(atTime);
+    public bool IsActive(Moment at)
+        => ReservedSlot(at)?.Contains(at) ?? false;
 
     /// <summary>
-    /// True once this block's window has fully closed. Canonical definition of "past" —
-    /// e.g. a broken Nen Contract's cleanup must only ever touch blocks this returns
-    /// false for; blocks it returns true for stay linked for historical accuracy.
+    /// The time this block really occupies as of <paramref name="asOf"/>: its scheduled slot cut
+    /// short by <see cref="EffectiveEnd"/> (early end, missed, cancelled); null when it occupies
+    /// nothing any more.
     /// </summary>
-    public bool HasEnded(DateTime asOf) => End < asOf;
-
-    /// <summary>
-    /// True from <see cref="Start"/> onward. Once started, a block is locked: no edit, no
-    /// split, and no delete until it has ended (Gap 88 phase 0).
-    /// </summary>
-    public bool HasStarted(DateTime asOf) => Start <= asOf;
-
-    /// <summary>
-    /// How much of this block's window is still actually reserved, as of <paramref name="asOf"/> —
-    /// the boundary overlap-checks use instead of <see cref="End"/>, so a block that no longer
-    /// occupies its full scheduled span (e.g. a Focus session that ended early) frees the rest
-    /// for new scheduling without ever mutating <see cref="End"/> itself (which stays the
-    /// historical record used by Daily Floor / deficit scoring). Every reason the window
-    /// shrinks lives here, so <see cref="IsActive"/>, overlap checks and markers never check
-    /// those reasons themselves. Base: cancellation — the window ends at the cancel moment, or
-    /// is empty if cancelled before it started. <see cref="FocusBlock"/> adds its own reasons.
-    /// </summary>
-    public virtual DateTime EffectiveEnd(DateTime asOf)
+    public TimeSlot? ReservedSlot(Moment asOf)
     {
-        if (CancelledAt is not { } cancelledAt) return End;
-        if (cancelledAt <= Start) return Start;
-        return cancelledAt < End ? cancelledAt : End;
+        var end = EffectiveEnd(asOf);
+        return end > Scheduled.Start ? new TimeSlot(Scheduled.Start, end) : null;
     }
 
-    public TimeSpan GetDuration() => End - Start;
+    /// <summary>
+    /// True once this block's window has fully closed — at exactly its end, since Gap 88's
+    /// half-open rule. Canonical definition of "past" — e.g. a broken Nen Contract's cleanup must
+    /// only ever touch blocks this returns false for; blocks it returns true for stay linked for
+    /// historical accuracy.
+    /// </summary>
+    public bool HasEnded(Moment asOf) => Scheduled.HasEnded(asOf);
 
-    public int MinutesUntilStart(DateTime asOf) => (int)(Start - asOf).TotalMinutes;
+    /// <summary>
+    /// True from its start onward. Once started, a block is locked: no edit, no split, and no
+    /// delete until it has ended (Gap 88 phase 0).
+    /// </summary>
+    public bool HasStarted(Moment asOf) => Scheduled.HasStarted(asOf);
 
-    /// <summary>How long before <see cref="Start"/> the user is warned that a block is coming.</summary>
+    /// <summary>
+    /// Where this block's reserved time ends, as of <paramref name="asOf"/> — the boundary
+    /// <see cref="ReservedSlot"/> is built on, so a block that no longer occupies its full
+    /// scheduled span (e.g. a Focus session that ended early) frees the rest for new scheduling
+    /// without ever changing <see cref="Scheduled"/> (which stays the historical record used by
+    /// Daily Floor / deficit scoring). Every reason the window shrinks lives here, so
+    /// <see cref="IsActive"/>, overlap checks and markers never check those reasons themselves.
+    /// Base: cancellation — the window ends at the cancel moment, or is empty if cancelled before
+    /// it started. <see cref="FocusBlock"/> adds its own reasons.
+    /// </summary>
+    public virtual Moment EffectiveEnd(Moment asOf)
+    {
+        if (CancelledAt is not { } cancelledAt) return Scheduled.End;
+        if (cancelledAt <= Scheduled.Start) return Scheduled.Start;
+        return cancelledAt < Scheduled.End ? cancelledAt : Scheduled.End;
+    }
+
+    public TimeSpan GetDuration() => Scheduled.Length;
+
+    /// <summary>How long before its start the user is warned that a block is coming.</summary>
     public static readonly TimeSpan UpcomingWarningLead = TimeSpan.FromMinutes(5);
 
     /// <summary>
@@ -102,47 +117,36 @@ public abstract class PlannedBlock : AggregateRoot
     /// The markers on this block's timeline the clock passed moving from <paramref name="from"/> to
     /// <paramref name="to"/>, half-open (from, to] — a caller that passes each tick's end as
     /// the next tick's start hears about every marker exactly once. StartingSoon: the
-    /// warning moment (<see cref="Start"/> − <see cref="UpcomingWarningLead"/>) was crossed
+    /// warning moment (start − <see cref="UpcomingWarningLead"/>) was crossed
     /// and the block hasn't started. Started/Ended: <see cref="IsActive"/> flipped — the same
     /// definition PolicyEngine enforces, so the user is told exactly when blocking changes.
     /// Ended only if <see cref="AnnouncesOwnEnd"/>. A clock that moved backwards, or jumped
     /// over the whole block, passed nothing worth telling. A block cancelled before it
     /// started reserves no time, so passes nothing; one cancelled mid-run ends then.
     /// </summary>
-    public IReadOnlyList<BlockMarker> MarkersPassedBetween(DateTime from, DateTime to)
+    public IReadOnlyList<BlockMarker> MarkersPassedBetween(Moment from, Moment to)
     {
         if (to <= from) return [];
 
         var markers = new List<BlockMarker>();
 
-        var warningMoment = Start - UpcomingWarningLead;
-        var stillReservesTime = EffectiveEnd(to) > Start;
-        if (stillReservesTime && warningMoment > from && warningMoment <= to && to < Start)
-            markers.Add(new BlockMarker(BlockMarkerKind.StartingSoon, warningMoment));
+        var warning = Scheduled.Start - UpcomingWarningLead;
+        if (ReservedSlot(to) is not null && from < warning && warning <= to && !Scheduled.HasStarted(to))
+            markers.Add(new BlockMarker(BlockMarkerKind.StartingSoon, warning.Utc));
 
         var wasActive = IsActive(from);
         var isActive = IsActive(to);
         if (!wasActive && isActive)
-            markers.Add(new BlockMarker(BlockMarkerKind.Started, Start));
+            markers.Add(new BlockMarker(BlockMarkerKind.Started, Scheduled.Start.Utc));
         else if (wasActive && !isActive && AnnouncesOwnEnd)
-            markers.Add(new BlockMarker(BlockMarkerKind.Ended, EffectiveEnd(from)));
+            markers.Add(new BlockMarker(BlockMarkerKind.Ended, EffectiveEnd(from).Utc));
 
         return markers;
     }
 
-    public virtual void Reschedule(DateTime start, DateTime end)
+    public virtual void Reschedule(TimeSlot scheduled)
     {
-        if (end <= start)
-            throw new ArgumentException("End time must be after start time.");
-        Start = start;
-        End = end;
-    }
-
-    public void TrimEnd(DateTime newEnd)
-    {
-        if (newEnd <= Start)
-            throw new ArgumentException("New end time must be after start time.");
-        End = newEnd;
+        Scheduled = scheduled;
     }
 
     public void AssignPreset(Guid presetId)
@@ -155,7 +159,7 @@ public abstract class PlannedBlock : AggregateRoot
         ContractId = contractId;
     }
 
-    public void MarkCancelled(DateTime cancelledAt)
+    public void MarkCancelled(Moment cancelledAt)
     {
         if (CancelledAt.HasValue)
             throw new InvalidOperationException(

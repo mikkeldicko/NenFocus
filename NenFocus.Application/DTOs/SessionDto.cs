@@ -1,3 +1,4 @@
+using NenFocus.Domain.ValueObjects;
 using NenFocus.Domain.Enums;
 
 namespace NenFocus.Application.DTOs;
@@ -12,9 +13,9 @@ public sealed record SessionDto
     public SessionOrigin Origin { get; init; }
     public Guid BlockPresetId { get; init; }
     public Guid? OriginatingBlockId { get; init; }
-    public DateTime StartedAt { get; init; }
-    public DateTime EndAt { get; init; }
-    public DateTime? EndedAt { get; init; }
+    public Moment StartedAt { get; init; }
+    public Moment EndAt { get; init; }
+    public Moment? EndedAt { get; init; }
 
     /// <summary>The session's break schedule (offsets from StartedAt) — empty for "No
     /// timer". Everything live about breaks is read off this against the clock.</summary>

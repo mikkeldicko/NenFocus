@@ -124,7 +124,7 @@ public class RitualStepViewTests
             .Returns(StartSessionResult.Ok(Guid.NewGuid()));
         var started = false;
         var presetId = Guid.NewGuid();
-        var vm = new HatsuPageViewModel(commands, queries, Substitute.For<ISystemClock>(),
+        var vm = new HatsuPageViewModel(commands, queries, TestClock.Create(),
             () => new HatsuData { Goal = "Write", PresetId = presetId }, () => started = true, () => { });
         var view = new HatsuPageView { DataContext = vm };
         var window = Show(view);
@@ -151,7 +151,7 @@ public class RitualStepViewTests
     public void Hatsu_ZeroDurationShowsTheErrorAndDisablesStart()
     {
         var vm = new HatsuPageViewModel(Substitute.For<ICommandDispatcher>(), new FakeQueryDispatcher(),
-            Substitute.For<ISystemClock>(), () => new HatsuData(), () => { }, () => { });
+            TestClock.Create(), () => new HatsuData(), () => { }, () => { });
         var view = new HatsuPageView { DataContext = vm };
         var window = Show(view);
 

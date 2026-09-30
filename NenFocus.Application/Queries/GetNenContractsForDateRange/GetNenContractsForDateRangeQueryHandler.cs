@@ -66,7 +66,7 @@ public sealed class GetNenContractsForDateRangeQueryHandler
 
     private async Task<NenContractRangeViewDto> BuildViewAsync(NenContract contract, CancellationToken cancellationToken)
     {
-        var today = _clock.ToLocalDate(_clock.UtcNow);
+        var today = _clock.TimeZone.DateOf(_clock.Now);
         var clampedToday = today < contract.StartDate ? contract.StartDate
             : today > contract.EndDate ? contract.EndDate
             : today;
@@ -242,12 +242,12 @@ public sealed class GetNenContractsForDateRangeQueryHandler
             .OfType<FocusBlock>()
             .ToList();
         var blocksById = focusBlocks.ToDictionary(b => b.Id);
-        var now = _clock.UtcNow;
+        var now = _clock.Now;
 
         var groups = focusBlocks
             .Where(b => b.IsRedemption)
             .SelectMany(b => b.RedemptionEntries.Select(e =>
-                (Date: DateOnly.FromDateTime(_clock.ToLocal(b.Start)), e.MissedBlockId, e.MinutesCovered)))
+                (Date: DateOnly.FromDateTime(_clock.TimeZone.ToCalendarTimes(b.Scheduled).Start), e.MissedBlockId, e.MinutesCovered)))
             .GroupBy(x => (x.Date, x.MissedBlockId));
 
         var rawMinutesByDay = new Dictionary<DateOnly, double>();
@@ -277,7 +277,7 @@ public sealed class GetNenContractsForDateRangeQueryHandler
     }
 
     private async Task<double?> ResolveMissedBlockRawDeficitMinutesAsync(
-        Guid missedBlockId, Dictionary<Guid, FocusBlock> blocksById, DateTime now, CancellationToken cancellationToken)
+        Guid missedBlockId, Dictionary<Guid, FocusBlock> blocksById, Moment now, CancellationToken cancellationToken)
     {
         if (!blocksById.TryGetValue(missedBlockId, out var missedBlock))
             return null;
@@ -285,7 +285,7 @@ public sealed class GetNenContractsForDateRangeQueryHandler
         var session = await _sessions.GetByOriginatingBlockIdAsync(missedBlockId, cancellationToken);
         var actualElapsedMinutes = session?.GetElapsedTime(now)?.TotalMinutes ?? 0;
         var creditedMinutes = _classifier.CreditedFocusMinutes(
-            missedBlock.Start, missedBlock.End, missedBlock.RitualCompletedAt, session?.EndedAt, actualElapsedMinutes);
+            missedBlock.Scheduled, missedBlock.RitualCompletedAt, session?.EndedAt, actualElapsedMinutes);
 
         return missedBlock.RawDeficitMinutes(creditedMinutes);
     }

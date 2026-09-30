@@ -1,4 +1,5 @@
 using NenFocus.Domain.Enums;
+using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Domain.Entities;
 
@@ -11,20 +12,15 @@ public sealed class BackgroundBlock : PlannedBlock
     public static BackgroundBlock Create(
         Guid id,
         Guid blockPresetId,
-        DateTime start,
-        DateTime end,
+        TimeSlot scheduled,
         string? title = null,
         Guid? contractId = null)
     {
-        if (end <= start)
-            throw new ArgumentException("End time must be after start time.");
-
         return new BackgroundBlock
         {
             Id = id,
             BlockPresetId = blockPresetId,
-            Start = start,
-            End = end,
+            Scheduled = scheduled,
             Title = title,
             ContractId = contractId
         };

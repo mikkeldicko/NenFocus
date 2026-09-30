@@ -1,4 +1,5 @@
 using FluentAssertions;
+using NenFocus.Domain.ValueObjects;
 using Microsoft.Extensions.DependencyInjection;
 using NenFocus.Application.Interfaces;
 using NenFocus.Domain.Events;
@@ -29,7 +30,7 @@ public class InProcessDomainEventPublisherTests
         var services = new ServiceCollection();
         services.AddSingleton<IDomainEventHandler<SessionStartedEvent>>(handler);
 
-        var domainEvent = new SessionStartedEvent(Guid.NewGuid(), Guid.NewGuid(), "Goal", DateTime.UtcNow);
+        var domainEvent = new SessionStartedEvent(Guid.NewGuid(), Guid.NewGuid(), "Goal", At.Utc(DateTime.UtcNow));
         await CreatePublisher(services).PublishAsync(domainEvent);
 
         handler.Received.Should().ContainSingle().Which.Should().BeSameAs(domainEvent);
@@ -41,7 +42,7 @@ public class InProcessDomainEventPublisherTests
         var services = new ServiceCollection();
 
         var act = async () => await CreatePublisher(services).PublishAsync(
-            new SessionStartedEvent(Guid.NewGuid(), Guid.NewGuid(), "Goal", DateTime.UtcNow));
+            new SessionStartedEvent(Guid.NewGuid(), Guid.NewGuid(), "Goal", At.Utc(DateTime.UtcNow)));
 
         await act.Should().NotThrowAsync();
     }
@@ -55,8 +56,8 @@ public class InProcessDomainEventPublisherTests
         services.AddSingleton<IDomainEventHandler<SessionStartedEvent>>(startedHandler);
         services.AddSingleton<IDomainEventHandler<SessionEndedEvent>>(endedHandler);
 
-        var started = new SessionStartedEvent(Guid.NewGuid(), Guid.NewGuid(), "Goal", DateTime.UtcNow);
-        var ended = new SessionEndedEvent(Guid.NewGuid(), DateTime.UtcNow);
+        var started = new SessionStartedEvent(Guid.NewGuid(), Guid.NewGuid(), "Goal", At.Utc(DateTime.UtcNow));
+        var ended = new SessionEndedEvent(Guid.NewGuid(), At.Utc(DateTime.UtcNow));
 
         await CreatePublisher(services).PublishAllAsync([started, ended]);
 
@@ -74,7 +75,7 @@ public class InProcessDomainEventPublisherTests
         cts.Cancel();
 
         var act = async () => await CreatePublisher(services).PublishAllAsync(
-            [new SessionStartedEvent(Guid.NewGuid(), Guid.NewGuid(), "Goal", DateTime.UtcNow)], cts.Token);
+            [new SessionStartedEvent(Guid.NewGuid(), Guid.NewGuid(), "Goal", At.Utc(DateTime.UtcNow))], cts.Token);
 
         await act.Should().ThrowAsync<OperationCanceledException>();
         handler.Received.Should().BeEmpty();

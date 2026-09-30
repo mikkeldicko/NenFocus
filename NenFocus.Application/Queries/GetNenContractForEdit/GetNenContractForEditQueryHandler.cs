@@ -47,13 +47,12 @@ public sealed class GetNenContractForEditQueryHandler
         }
 
         var blockDtos = linkedBlocks
-            .OrderBy(b => b.Start)
+            .OrderBy(b => b.Scheduled)
             .Select(b => new NenContractEditBlockDto
             {
                 PresetId = b.BlockPresetId,
                 PresetName = presetNames.GetValueOrDefault(b.BlockPresetId, "Unknown"),
-                Start = b.Start,
-                End = b.End,
+                Slot = b.Scheduled,
                 IsFocus = b is FocusBlock,
                 Title = b.Title
             })

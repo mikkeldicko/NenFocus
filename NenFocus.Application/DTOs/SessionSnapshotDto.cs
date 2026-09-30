@@ -1,3 +1,4 @@
+using NenFocus.Domain.ValueObjects;
 using NenFocus.Domain.Enums;
 
 namespace NenFocus.Application.DTOs;
@@ -20,7 +21,7 @@ public sealed record BlockedAttemptSnapshotDto
 {
     public string ResourceName { get; init; } = string.Empty;
     public BlockedAttemptType AttemptType { get; init; }
-    public DateTime OccurredAt { get; init; }
+    public Moment OccurredAt { get; init; }
 }
 
 public sealed record RedemptionCoverageDto

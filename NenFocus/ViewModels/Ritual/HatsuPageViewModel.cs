@@ -26,11 +26,11 @@ public partial class HatsuPageViewModel : ViewModelBase
 
     // Raw local-time values only — actual "HH:mm"/"1h 30m" string formatting happens in
     // DateTimeToStringConverter/MinutesToStringConverter in the View, not here (ViewModel
-    // Forbidden Zone — no display formatting in a ViewModel). ToLocalTime() is a data
-    // conversion, not formatting, mirroring the same precedent RitualShellViewModel already
-    // uses for its own late-block Start/End.
-    public DateTime? PlannedRangeStartLocal => PlannedSchedule?.Start.ToLocalTime();
-    public DateTime? PlannedRangeEndLocal => PlannedSchedule?.End.ToLocalTime();
+    // Forbidden Zone — no display formatting in a ViewModel). Converting through the user's time
+    // zone is a data conversion, not formatting (Gap 88), as RitualShellViewModel does for its
+    // late-block Start/End.
+    public DateTime? PlannedRangeStartLocal => PlannedSchedule is { } s ? _clock.TimeZone.ToCalendarTimes(s.Slot).Start : null;
+    public DateTime? PlannedRangeEndLocal => PlannedSchedule is { } s ? _clock.TimeZone.ToCalendarTimes(s.Slot).End : null;
 
     public static int[] HourOptions { get; } = { 0, 1, 2, 3, 4, 5, 6, 7, 8 };
     public static int[] MinuteOptions { get; } = { 0, 5, 10, 15, 20, 30, 45 };
@@ -47,7 +47,7 @@ public partial class HatsuPageViewModel : ViewModelBase
 
     // In planned mode this is evaluated fresh at the moment Start is clicked.
     public int TotalMinutes => IsPlannedMode
-        ? PlannedSchedule!.RemainingMinutes(_clock.UtcNow)
+        ? PlannedSchedule!.RemainingMinutes(_clock.Now)
         : SelectedHours * 60 + SelectedMinutes;
     public bool ShowZeroError => !IsPlannedMode && TotalMinutes == 0;
 
@@ -88,7 +88,7 @@ public partial class HatsuPageViewModel : ViewModelBase
     private string? _errorMessage;
 
     public bool CanStart => IsPlannedMode
-        ? PlannedSchedule!.End > _clock.UtcNow && !IsStarting
+        ? !PlannedSchedule!.HasEnded(_clock.Now) && !IsStarting
         : TotalMinutes > 0 && TotalMinutes <= 480 && !IsStarting;
 
     public HatsuPageViewModel(

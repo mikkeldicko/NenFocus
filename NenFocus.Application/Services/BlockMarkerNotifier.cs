@@ -2,6 +2,7 @@ using NenFocus.Application.Interfaces;
 using NenFocus.Application.Notifications;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
+using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Application.Services;
 
@@ -24,11 +25,11 @@ public sealed class BlockMarkerNotifier : IBlockMarkerNotifier
         _notifier = notifier;
     }
 
-    public async Task NotifyPassedAsync(DateTime from, DateTime to, CancellationToken ct = default)
+    public async Task NotifyPassedAsync(Moment from, Moment to, CancellationToken ct = default)
     {
         if (to <= from) return;
 
-        var candidates = await _blocks.GetForRangeAsync(from, to + PlannedBlock.UpcomingWarningLead, ct);
+        var candidates = await _blocks.GetForRangeAsync(new TimeSlot(from, to + PlannedBlock.UpcomingWarningLead), ct);
 
         var crossed = candidates
             .SelectMany(block => block.MarkersPassedBetween(from, to).Select(t => (Block: block, Marker: t)))
@@ -50,7 +51,7 @@ public sealed class BlockMarkerNotifier : IBlockMarkerNotifier
             NenNotification fact = marker.Kind switch
             {
                 BlockMarkerKind.StartingSoon => new BlockStartingSoon(
-                    block.PresetType, name, (int)Math.Ceiling((block.Start - to).TotalMinutes)),
+                    block.PresetType, name, (int)Math.Ceiling(block.Scheduled.StartsIn(to).TotalMinutes)),
                 BlockMarkerKind.Started => new BlockStarted(block.PresetType, name),
                 _ => new BlockEnded(block.PresetType, name)
             };

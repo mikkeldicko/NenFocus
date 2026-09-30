@@ -25,7 +25,7 @@ public class BlockedAttemptTrackerTests : IDisposable
 
     private readonly SqliteConnection _connection;
     private readonly FakeDbContextFactory _dbFactory;
-    private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
+    private readonly ISystemClock _clock = TestClock.Create();
 
     public BlockedAttemptTrackerTests()
     {
@@ -45,7 +45,7 @@ public class BlockedAttemptTrackerTests : IDisposable
     public async Task RecordAppBlockedAsync_PersistsAttempt()
     {
         var sessionId = Guid.NewGuid();
-        _clock.UtcNow.Returns(DateTime.UtcNow);
+        _clock.SetNow(DateTime.UtcNow);
 
         await CreateTracker().RecordAppBlockedAsync(sessionId, "chrome");
 
@@ -57,7 +57,7 @@ public class BlockedAttemptTrackerTests : IDisposable
     public async Task RecordWebBlockedAsync_PersistsAttempt()
     {
         var sessionId = Guid.NewGuid();
-        _clock.UtcNow.Returns(DateTime.UtcNow);
+        _clock.SetNow(DateTime.UtcNow);
 
         await CreateTracker().RecordWebBlockedAsync(sessionId, "facebook.com");
 
@@ -70,7 +70,7 @@ public class BlockedAttemptTrackerTests : IDisposable
     {
         var sessionId = Guid.NewGuid();
         var now = DateTime.UtcNow;
-        _clock.UtcNow.Returns(now, now.AddSeconds(1));
+        _clock.SetNow(now, now.AddSeconds(1));
 
         await CreateTracker().RecordAppBlockedAsync(sessionId, "chrome");
         await CreateTracker().RecordAppBlockedAsync(sessionId, "chrome");
@@ -87,7 +87,7 @@ public class BlockedAttemptTrackerTests : IDisposable
         // calls must go through the same tracker instance (as they would via the
         // singleton registration in DI) for the internal SemaphoreSlim to serialize them.
         var sessionId = Guid.NewGuid();
-        _clock.UtcNow.Returns(DateTime.UtcNow);
+        _clock.SetNow(DateTime.UtcNow);
         var tracker = CreateTracker();
 
         await Task.WhenAll(
@@ -103,7 +103,7 @@ public class BlockedAttemptTrackerTests : IDisposable
     {
         var sessionId = Guid.NewGuid();
         var now = DateTime.UtcNow;
-        _clock.UtcNow.Returns(now, now.AddSeconds(3));
+        _clock.SetNow(now, now.AddSeconds(3));
 
         await CreateTracker().RecordAppBlockedAsync(sessionId, "chrome");
         await CreateTracker().RecordAppBlockedAsync(sessionId, "chrome");
@@ -118,7 +118,7 @@ public class BlockedAttemptTrackerTests : IDisposable
         var sessionId = Guid.NewGuid();
         var otherSessionId = Guid.NewGuid();
         var now = DateTime.UtcNow;
-        _clock.UtcNow.Returns(now, now.AddSeconds(10), now.AddSeconds(20));
+        _clock.SetNow(now, now.AddSeconds(10), now.AddSeconds(20));
 
         await CreateTracker().RecordAppBlockedAsync(sessionId, "chrome");
         await CreateTracker().RecordAppBlockedAsync(otherSessionId, "spotify");

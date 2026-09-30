@@ -3,6 +3,7 @@ using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.GetNenContractDeficits;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
+using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Application.Queries.ComputeRedemptionAttribution;
 
@@ -27,9 +28,9 @@ public sealed class ComputeRedemptionAttributionQueryHandler
         ComputeRedemptionAttributionQuery query,
         CancellationToken ct = default)
     {
-        var proposedDate = _clock.ToLocalDate(query.BlockStart);
-        var today = _clock.ToLocalDate(_clock.UtcNow);
-        var remainingDuration = (query.BlockEnd - query.BlockStart).TotalMinutes;
+        var proposedDate = DateOnly.FromDateTime(_clock.TimeZone.ToCalendarTimes(query.Block).Start);
+        var today = _clock.TimeZone.DateOf(_clock.Now);
+        var remainingDuration = query.Block.Length.TotalMinutes;
         var entries = new List<RedemptionEntryDto>();
         var carriedMissedBlockIds = new HashSet<Guid>();
 
@@ -94,10 +95,10 @@ public sealed class ComputeRedemptionAttributionQueryHandler
                 // across every candidate decides which contract a new claim attaches to;
                 // only that contract's deficits are considered for the spillover walk below.
                 var resolvedContractId = query.ContractId
-                    ?? eligible.OrderBy(e => e.Deficit.ScheduledStart).First().Contract.Id;
+                    ?? eligible.OrderBy(e => e.Deficit.Scheduled).First().Contract.Id;
                 var ordered = eligible
                     .Where(e => e.Contract.Id == resolvedContractId)
-                    .OrderBy(e => e.Deficit.ScheduledStart)
+                    .OrderBy(e => e.Deficit.Scheduled)
                     .ToList();
 
                 foreach (var (_, deficit) in ordered)
@@ -115,14 +116,21 @@ public sealed class ComputeRedemptionAttributionQueryHandler
             }
         }
 
+        // The final window: capped to what the entries actually cover (Gap 88 phase 8 — the
+        // one place the cap is computed, so the validator and the handler can never disagree).
+        // Empty entries cap to the requested slot unchanged.
+        var redemptionEntries = entries.Select(e => new RedemptionEntry(e.MissedBlockId, e.MinutesCovered)).ToList();
+        var capped = FocusBlock.CapEndToRedemptionCoverage(query.Block, redemptionEntries);
+        var wasCapped = FocusBlock.WasRedemptionCoverageMeaningfullyCapped(query.Block, capped);
+
         // No entries at all (neither carried forward nor newly claimed): an explicit
         // query.ContractId is echoed back as-is (this block still belongs to that
         // contract, it just doesn't happen to cover anything right now); auto-discovery
         // (null) stays null, since there's no reason to attach an ordinary new block to
         // any contract at all.
         if (entries.Count == 0)
-            return new RedemptionAttributionResult(query.ContractId, []);
+            return new RedemptionAttributionResult(query.ContractId, [], capped, wasCapped);
 
-        return new RedemptionAttributionResult(query.ContractId ?? newClaimContractId, entries);
+        return new RedemptionAttributionResult(query.ContractId ?? newClaimContractId, entries, capped, wasCapped);
     }
 }

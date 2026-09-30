@@ -38,7 +38,7 @@ public class NenContractRepositoryTests : SqliteRepositoryTestBase
             changeWindow: null,
             allowCancellation: allowCancellation,
             plannedFocusHoursByDay: plan,
-            localSealedAt: sealedAt ?? SealedOnStart,
+            sealedAt: At.Utc(sealedAt ?? SealedOnStart), timeZone: At.UtcZone,
             contractPresetId: contractPresetId);
     }
 
@@ -172,7 +172,7 @@ public class NenContractRepositoryTests : SqliteRepositoryTestBase
         await repo.AddAsync(contract);
         await Context.SaveChangesAsync();
 
-        contract.Break(StartDate.AddDays(2).ToDateTime(new TimeOnly(10, 0)));
+        contract.Break(At.Utc(StartDate.AddDays(2).ToDateTime(new TimeOnly(10, 0))), At.UtcZone);
         await repo.SaveAsync(contract);
         await Context.SaveChangesAsync();
 
@@ -223,7 +223,7 @@ public class NenContractRepositoryTests : SqliteRepositoryTestBase
         var repo = CreateRepository();
         var presetId = Guid.NewGuid();
         var contract = Seal(contractPresetId: presetId, sealedAt: SealedOnStart, allowCancellation: true);
-        contract.Complete(SealedOnStart.AddDays(7));
+        contract.Complete(At.Utc(SealedOnStart.AddDays(7)));
         await repo.AddAsync(contract);
         await Context.SaveChangesAsync();
 
@@ -253,7 +253,7 @@ public class NenContractRepositoryTests : SqliteRepositoryTestBase
         await Context.SaveChangesAsync();
 
         var tracked = await repo.GetByIdAsync(contract.Id);
-        tracked!.Activate(SealedOnStart);
+        tracked!.Activate(At.Utc(SealedOnStart));
         await repo.SaveAsync(tracked);
         await Context.SaveChangesAsync();
 
@@ -300,7 +300,7 @@ public class NenContractRepositoryTests : SqliteRepositoryTestBase
     {
         var repo = CreateRepository();
         var contract = Seal(sealedAt: SealedOnStart);
-        contract.Complete(SealedOnStart.AddDays(7));
+        contract.Complete(At.Utc(SealedOnStart.AddDays(7)));
         await repo.AddAsync(contract);
         await Context.SaveChangesAsync();
 
@@ -324,7 +324,7 @@ public class NenContractRepositoryTests : SqliteRepositoryTestBase
             changeWindow: null,
             allowCancellation: false,
             plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-            localSealedAt: StartDate.AddDays(30).ToDateTime(TimeOnly.MinValue)); // Active
+            sealedAt: At.Utc(StartDate.AddDays(30).ToDateTime(TimeOnly.MinValue)), timeZone: At.UtcZone); // Active
         await repo.AddAsync(scheduled);
         await repo.AddAsync(active);
         await Context.SaveChangesAsync();
@@ -362,7 +362,7 @@ public class NenContractRepositoryTests : SqliteRepositoryTestBase
     {
         var repo = CreateRepository();
         var contract = Seal(sealedAt: SealedOnStart);
-        contract.Complete(SealedOnStart.AddDays(7));
+        contract.Complete(At.Utc(SealedOnStart.AddDays(7)));
         await repo.AddAsync(contract);
         await Context.SaveChangesAsync();
 
@@ -376,7 +376,7 @@ public class NenContractRepositoryTests : SqliteRepositoryTestBase
     {
         var repo = CreateRepository();
         var contract = Seal(sealedAt: SealedOnStart, allowCancellation: true);
-        contract.Break(SealedOnStart.AddDays(2));
+        contract.Break(At.Utc(SealedOnStart.AddDays(2)), At.UtcZone);
         await repo.AddAsync(contract);
         await Context.SaveChangesAsync();
 
@@ -400,9 +400,9 @@ public class NenContractRepositoryTests : SqliteRepositoryTestBase
             changeWindow: null,
             allowCancellation: false,
             plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-            localSealedAt: StartDate.AddDays(30).ToDateTime(TimeOnly.MinValue)); // Active
+            sealedAt: At.Utc(StartDate.AddDays(30).ToDateTime(TimeOnly.MinValue)), timeZone: At.UtcZone); // Active
         var completed = Seal(sealedAt: SealedOnStart);
-        completed.Complete(SealedOnStart.AddDays(7));
+        completed.Complete(At.Utc(SealedOnStart.AddDays(7)));
         await repo.AddAsync(scheduled);
         await repo.AddAsync(active);
         await repo.AddAsync(completed);

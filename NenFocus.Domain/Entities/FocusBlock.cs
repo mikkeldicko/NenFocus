@@ -16,14 +16,14 @@ public sealed class FocusBlock : PlannedBlock
     public const int MaxDurationHours = 12;
 
     /// <summary>Null means the Ritual was never completed for this block.</summary>
-    public DateTime? RitualCompletedAt { get; private set; }
+    public Moment? RitualCompletedAt { get; private set; }
 
     /// <summary>
     /// When this block's session ended, early or on time — a faithful copy of the session's
     /// own EndedAt, written in the same save; null while no session has ended (Gap 86). An
     /// early end is simply one before End: every reader compares it to End itself.
     /// </summary>
-    public DateTime? SessionEndedAt { get; private set; }
+    public Moment? SessionEndedAt { get; private set; }
 
     private FocusBlock() { }
 
@@ -37,7 +37,7 @@ public sealed class FocusBlock : PlannedBlock
     /// for. <c>IPlannedBlockRepository.GetUnresolvedFocusBlocksAsync</c> mirrors this in SQL for
     /// speed; a repository test checks the two agree.
     /// </summary>
-    public bool IsUnresolved(DateTime asOf)
+    public bool IsUnresolved(Moment asOf)
         => HasEnded(asOf) && RitualCompletedAt is null && CancelledAt is null;
 
     /// <summary>Once the Ritual is done, a session owns this block's ending and announces it.</summary>
@@ -46,41 +46,37 @@ public sealed class FocusBlock : PlannedBlock
     public static FocusBlock Create(
         Guid id,
         Guid blockPresetId,
-        DateTime start,
-        DateTime end,
+        TimeSlot scheduled,
         string? title = null,
         Guid? contractId = null,
         IReadOnlyList<RedemptionEntry>? redemptionEntries = null)
     {
-        if (end <= start)
-            throw new ArgumentException("End time must be after start time.");
-        ValidateDuration(start, end);
+        ValidateDuration(scheduled);
 
         return new FocusBlock
         {
             Id = id,
             BlockPresetId = blockPresetId,
-            Start = start,
-            End = end,
+            Scheduled = scheduled,
             Title = title,
             ContractId = contractId,
             RedemptionEntries = redemptionEntries ?? Array.Empty<RedemptionEntry>()
         };
     }
 
-    public override void Reschedule(DateTime start, DateTime end)
+    public override void Reschedule(TimeSlot scheduled)
     {
-        ValidateDuration(start, end);
-        base.Reschedule(start, end);
+        ValidateDuration(scheduled);
+        base.Reschedule(scheduled);
     }
 
-    private static void ValidateDuration(DateTime start, DateTime end)
+    private static void ValidateDuration(TimeSlot slot)
     {
-        if (end - start > TimeSpan.FromHours(MaxDurationHours))
+        if (slot.Length > TimeSpan.FromHours(MaxDurationHours))
             throw new ArgumentException($"A Focus block cannot exceed {MaxDurationHours} hours.");
     }
 
-    public void MarkRitualCompleted(DateTime completedAt)
+    public void MarkRitualCompleted(Moment completedAt)
     {
         if (RitualCompletedAt.HasValue)
             throw new InvalidOperationException(
@@ -89,7 +85,7 @@ public sealed class FocusBlock : PlannedBlock
         RitualCompletedAt = completedAt;
     }
 
-    public void MarkSessionEnded(DateTime endedAt)
+    public void MarkSessionEnded(Moment endedAt)
     {
         if (SessionEndedAt.HasValue)
             throw new InvalidOperationException(
@@ -104,7 +100,7 @@ public sealed class FocusBlock : PlannedBlock
     /// for this block." Replaces ActivePolicySlice.FocusSessionCompleted, which answered
     /// the same question indirectly (Gap 62).
     /// </summary>
-    public bool IsAwaitingRitual(DateTime at)
+    public bool IsAwaitingRitual(Moment at)
         => RitualCompletedAt is null && IsActive(at);
 
     /// <summary>
@@ -115,9 +111,9 @@ public sealed class FocusBlock : PlannedBlock
     /// fully-used blocks keep the whole window reserved. Adds to the base reasons
     /// (cancellation): whichever reason came first wins.
     /// </summary>
-    public override DateTime EffectiveEnd(DateTime asOf)
+    public override Moment EffectiveEnd(Moment asOf)
     {
-        if (RitualCompletedAt is null && asOf >= End) return Start;
+        if (RitualCompletedAt is null && Scheduled.HasEnded(asOf)) return Scheduled.Start;
 
         var end = base.EffectiveEnd(asOf);
         return SessionEndedAt is { } endedEarly && endedEarly < end ? endedEarly : end;
@@ -157,15 +153,14 @@ public sealed class FocusBlock : PlannedBlock
     /// arithmetic can never do that: a RedemptionEntry can never be zero or negative, so
     /// AddMinutes(coveredMinutes) can never equal `start`.
     /// </summary>
-    public static DateTime CapEndToRedemptionCoverage(DateTime start, DateTime requestedEnd, IReadOnlyList<RedemptionEntry> entries)
+    public static TimeSlot CapEndToRedemptionCoverage(TimeSlot requested, IReadOnlyList<RedemptionEntry> entries)
     {
-        if (entries.Count == 0) return requestedEnd;
+        if (entries.Count == 0) return requested;
 
         var coveredMinutes = entries.Sum(e => e.MinutesCovered);
-        var requestedMinutes = (requestedEnd - start).TotalMinutes;
-        if (coveredMinutes >= requestedMinutes) return requestedEnd;
+        if (coveredMinutes >= requested.Length.TotalMinutes) return requested;
 
-        return start.AddMinutes(coveredMinutes);
+        return requested.Until(requested.Start + TimeSpan.FromMinutes(coveredMinutes));
     }
 
     /// <summary>
@@ -181,8 +176,8 @@ public sealed class FocusBlock : PlannedBlock
     /// (Gap 44/45): every deficit is now whole minutes and fully recoverable, no write-off
     /// anywhere. This is the one remaining consumer of the constant.
     /// </summary>
-    public static bool WasRedemptionCoverageMeaningfullyCapped(DateTime requestedEnd, DateTime cappedEnd)
-        => (requestedEnd - cappedEnd).TotalMinutes >= FocusBlockOutcomeClassifier.MinimumMeaningfulDeficitMinutes;
+    public static bool WasRedemptionCoverageMeaningfullyCapped(TimeSlot requested, TimeSlot capped)
+        => (requested.Length - capped.Length).TotalMinutes >= FocusBlockOutcomeClassifier.MinimumMeaningfulDeficitMinutes;
 
     /// <summary>
     /// True when this block's own outcome represents an unredeemed shortfall of its own —

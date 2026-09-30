@@ -1,7 +1,6 @@
 using FluentAssertions;
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
-using NenFocus.Application.Queries.CheckFocusBlockBatchOverlap;
 using NenFocus.Application.UseCases.NenContracts.Edit;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
@@ -20,23 +19,23 @@ public class EditNenContractCommandHandlerTests
     private readonly INenContractRepository _contracts = Substitute.For<INenContractRepository>();
     private readonly IPlannedBlockRepository _blocks = Substitute.For<IPlannedBlockRepository>();
     private readonly IPlannedFocusHoursCalculator _calculator = Substitute.For<IPlannedFocusHoursCalculator>();
-    private readonly IQueryHandler<CheckFocusBlockBatchOverlapQuery, bool> _checkOverlap =
-        Substitute.For<IQueryHandler<CheckFocusBlockBatchOverlapQuery, bool>>();
-    private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
+    private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
+    private readonly ISystemClock _clock = TestClock.Create();
 
     public EditNenContractCommandHandlerTests()
     {
-        _clock.UtcNow.Returns(Now);
-        _checkOverlap.HandleAsync(Arg.Any<CheckFocusBlockBatchOverlapQuery>(), Arg.Any<CancellationToken>())
-            .Returns(false);
+        _clock.SetNow(Now);
+        _clock.SetTimeZoneOffset(TimeSpan.Zero);
+        _sessions.GetActiveSessionsAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<Session>)[]);
+        _blocks.GetForRangeAsync(Arg.Any<TimeSlot>(), Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[]);
         _blocks.GetForContractAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[]);
-        _calculator.Calculate(Arg.Any<IEnumerable<(DateTime, DateTime)>>())
+        _calculator.Calculate(Arg.Any<IEnumerable<TimeSlot>>(), Arg.Any<UserTimeZone>())
             .Returns(new Dictionary<DateOnly, double>());
     }
 
     private EditNenContractCommandHandler CreateHandler() =>
-        new(_contracts, _blocks, new ContractBlockBatchPreparer(_calculator), _checkOverlap, _clock);
+        new(_contracts, _blocks, new ContractBlockBatchPreparer(_calculator), _sessions, new BlockPlacementChecker(), _clock);
 
     private static NenContract ScheduledContract(Guid id) => NenContract.Seal(
         id: id,
@@ -48,7 +47,7 @@ public class EditNenContractCommandHandlerTests
         changeWindow: null,
         allowCancellation: true,
         plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-        localSealedAt: StartDate.AddDays(-10).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
+        sealedAt: At.Utc(StartDate.AddDays(-10).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)), timeZone: At.UtcZone);
 
     private static EditNenContractCommand BaseCommand(
         Guid contractId,
@@ -82,7 +81,7 @@ public class EditNenContractCommandHandlerTests
     public async Task HandleAsync_ActiveContract_FailsWithoutMutating()
     {
         var contract = ScheduledContract(Guid.NewGuid());
-        contract.Activate(StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
+        contract.Activate(At.Utc(StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)));
         _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
 
         var result = await CreateHandler().HandleAsync(BaseCommand(contract.Id), CancellationToken.None);
@@ -113,10 +112,8 @@ public class EditNenContractCommandHandlerTests
         var contract = ScheduledContract(Guid.NewGuid());
         _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
 
-        var oldBlock1 = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),
-            StartDate.ToDateTime(new TimeOnly(9, 0)), StartDate.ToDateTime(new TimeOnly(10, 0)), contractId: contract.Id);
-        var oldBlock2 = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(),
-            StartDate.ToDateTime(new TimeOnly(11, 0)), StartDate.ToDateTime(new TimeOnly(12, 0)), contractId: contract.Id);
+        var oldBlock1 = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(StartDate.ToDateTime(new TimeOnly(9, 0)), StartDate.ToDateTime(new TimeOnly(10, 0))), contractId: contract.Id);
+        var oldBlock2 = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(StartDate.ToDateTime(new TimeOnly(11, 0)), StartDate.ToDateTime(new TimeOnly(12, 0))), contractId: contract.Id);
         _blocks.GetForContractAsync(contract.Id, Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[oldBlock1, oldBlock2]);
 
@@ -132,9 +129,8 @@ public class EditNenContractCommandHandlerTests
         var contract = ScheduledContract(Guid.NewGuid());
         _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
 
-        var newBlockSpec = new NenContractBlockSpec(Guid.NewGuid(),
-            StartDate.ToDateTime(new TimeOnly(9, 0)), StartDate.ToDateTime(new TimeOnly(10, 0)), IsFocus: true);
-        _calculator.Calculate(Arg.Any<IEnumerable<(DateTime, DateTime)>>())
+        var newBlockSpec = new NenContractBlockSpec(Guid.NewGuid(), At.Slot(StartDate.ToDateTime(new TimeOnly(9, 0)), StartDate.ToDateTime(new TimeOnly(10, 0))), IsFocus: true);
+        _calculator.Calculate(Arg.Any<IEnumerable<TimeSlot>>(), Arg.Any<UserTimeZone>())
             .Returns(new Dictionary<DateOnly, double> { [StartDate] = 1 });
 
         PlannedBlock? savedBlock = null;
@@ -156,18 +152,15 @@ public class EditNenContractCommandHandlerTests
         var contract = ScheduledContract(Guid.NewGuid());
         _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
 
-        var sameSlotSpec = new NenContractBlockSpec(Guid.NewGuid(),
-            StartDate.ToDateTime(new TimeOnly(9, 0)), StartDate.ToDateTime(new TimeOnly(10, 0)), IsFocus: true);
+        var sameSlotSpec = new NenContractBlockSpec(Guid.NewGuid(), At.Slot(StartDate.ToDateTime(new TimeOnly(9, 0)), StartDate.ToDateTime(new TimeOnly(10, 0))), IsFocus: true);
 
-        // CheckFocusBlockBatchOverlapQueryHandler's own ExcludeContractId filtering is
-        // covered by its own test file — here we just confirm EditNenContractCommandHandler
-        // actually passes ExcludeContractId through to the query.
+        // The old block, still in the database while the edit runs, is left out of the calendar.
+        _blocks.GetForRangeAsync(Arg.Any<TimeSlot>(), Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)
+            [FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(StartDate.ToDateTime(new TimeOnly(9, 0)), StartDate.ToDateTime(new TimeOnly(10, 0))), contractId: contract.Id)]);
+
         var result = await CreateHandler().HandleAsync(
             BaseCommand(contract.Id, blocks: [sameSlotSpec]), CancellationToken.None);
 
-        await _checkOverlap.Received(1).HandleAsync(
-            Arg.Is<CheckFocusBlockBatchOverlapQuery>(q => q.ExcludeContractId == contract.Id),
-            Arg.Any<CancellationToken>());
         result.Success.Should().BeTrue();
     }
 
@@ -177,10 +170,8 @@ public class EditNenContractCommandHandlerTests
         var contract = ScheduledContract(Guid.NewGuid());
         _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
 
-        var first = new NenContractBlockSpec(Guid.NewGuid(),
-            StartDate.ToDateTime(new TimeOnly(9, 0)), StartDate.ToDateTime(new TimeOnly(11, 0)), IsFocus: true);
-        var overlapping = new NenContractBlockSpec(Guid.NewGuid(),
-            StartDate.ToDateTime(new TimeOnly(10, 0)), StartDate.ToDateTime(new TimeOnly(12, 0)), IsFocus: true);
+        var first = new NenContractBlockSpec(Guid.NewGuid(), At.Slot(StartDate.ToDateTime(new TimeOnly(9, 0)), StartDate.ToDateTime(new TimeOnly(11, 0))), IsFocus: true);
+        var overlapping = new NenContractBlockSpec(Guid.NewGuid(), At.Slot(StartDate.ToDateTime(new TimeOnly(10, 0)), StartDate.ToDateTime(new TimeOnly(12, 0))), IsFocus: true);
 
         var result = await CreateHandler().HandleAsync(
             BaseCommand(contract.Id, blocks: [first, overlapping]), CancellationToken.None);
@@ -196,11 +187,10 @@ public class EditNenContractCommandHandlerTests
     {
         var contract = ScheduledContract(Guid.NewGuid());
         _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
-        _checkOverlap.HandleAsync(Arg.Any<CheckFocusBlockBatchOverlapQuery>(), Arg.Any<CancellationToken>())
-            .Returns(true);
+        _blocks.GetForRangeAsync(Arg.Any<TimeSlot>(), Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)
+            [FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(StartDate.ToDateTime(new TimeOnly(9, 30)), StartDate.ToDateTime(new TimeOnly(10, 30))), contractId: Guid.NewGuid())]);
 
-        var block = new NenContractBlockSpec(Guid.NewGuid(),
-            StartDate.ToDateTime(new TimeOnly(9, 0)), StartDate.ToDateTime(new TimeOnly(10, 0)), IsFocus: true);
+        var block = new NenContractBlockSpec(Guid.NewGuid(), At.Slot(StartDate.ToDateTime(new TimeOnly(9, 0)), StartDate.ToDateTime(new TimeOnly(10, 0))), IsFocus: true);
 
         var result = await CreateHandler().HandleAsync(
             BaseCommand(contract.Id, blocks: [block]), CancellationToken.None);
@@ -216,9 +206,8 @@ public class EditNenContractCommandHandlerTests
         var contract = ScheduledContract(Guid.NewGuid());
         _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
         _blocks.GetForContractAsync(contract.Id, Arg.Any<CancellationToken>())
-            .Returns((IReadOnlyList<PlannedBlock>)[FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),
-                StartDate.ToDateTime(new TimeOnly(9, 0)), StartDate.ToDateTime(new TimeOnly(10, 0)), contractId: contract.Id)]);
-        _calculator.Calculate(Arg.Any<IEnumerable<(DateTime, DateTime)>>())
+            .Returns((IReadOnlyList<PlannedBlock>)[FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(StartDate.ToDateTime(new TimeOnly(9, 0)), StartDate.ToDateTime(new TimeOnly(10, 0))), contractId: contract.Id)]);
+        _calculator.Calculate(Arg.Any<IEnumerable<TimeSlot>>(), Arg.Any<UserTimeZone>())
             .Returns(new Dictionary<DateOnly, double> { [StartDate] = 1 });
 
         var result = await CreateHandler().HandleAsync(
@@ -250,9 +239,8 @@ public class EditNenContractCommandHandlerTests
     {
         var contract = ScheduledContract(Guid.NewGuid());
         _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
-        var block = new NenContractBlockSpec(Guid.NewGuid(),
-            StartDate.ToDateTime(new TimeOnly(9, 0)), StartDate.ToDateTime(new TimeOnly(11, 0)), IsFocus: true);
-        _calculator.Calculate(Arg.Any<IEnumerable<(DateTime, DateTime)>>())
+        var block = new NenContractBlockSpec(Guid.NewGuid(), At.Slot(StartDate.ToDateTime(new TimeOnly(9, 0)), StartDate.ToDateTime(new TimeOnly(11, 0))), IsFocus: true);
+        _calculator.Calculate(Arg.Any<IEnumerable<TimeSlot>>(), Arg.Any<UserTimeZone>())
             .Returns(new Dictionary<DateOnly, double> { [StartDate] = 3, [StartDate.AddDays(1)] = 4, [StartDate.AddDays(2)] = 2 });
         NenContract? saved = null;
         await _contracts.AddAsync(Arg.Do<NenContract>(c => saved = c), Arg.Any<CancellationToken>());

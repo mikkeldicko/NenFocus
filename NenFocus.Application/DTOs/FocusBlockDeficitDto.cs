@@ -1,3 +1,4 @@
+using NenFocus.Domain.ValueObjects;
 using NenFocus.Domain.Enums;
 
 namespace NenFocus.Application.DTOs;
@@ -11,8 +12,7 @@ public sealed record FocusBlockDeficitDto
 {
     public Guid FocusBlockId { get; init; }
     public Guid BlockPresetId { get; init; }
-    public DateTime ScheduledStart { get; init; }
-    public DateTime ScheduledEnd { get; init; }
+    public TimeSlot Scheduled { get; init; } = null!;
     public FocusBlockOutcome Outcome { get; init; }
     public double RemainingDeficitMinutes { get; init; }
     public double PlannedMinutes { get; init; }

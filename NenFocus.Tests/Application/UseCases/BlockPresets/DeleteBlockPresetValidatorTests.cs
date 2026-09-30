@@ -12,13 +12,13 @@ public class DeleteBlockPresetValidatorTests
 {
     private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
     private readonly IPlannedBlockRepository _plannedBlocks = Substitute.For<IPlannedBlockRepository>();
-    private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
+    private readonly ISystemClock _clock = TestClock.Create();
 
     public DeleteBlockPresetValidatorTests()
     {
-        _clock.UtcNow.Returns(DateTime.UtcNow);
+        _clock.SetNow(DateTime.UtcNow);
         _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns((Session?)null);
-        _plannedBlocks.HasFutureBlocksForPresetAsync(Arg.Any<Guid>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
+        _plannedBlocks.HasFutureBlocksForPresetAsync(Arg.Any<Guid>(), Arg.Any<Moment>(), Arg.Any<CancellationToken>())
             .Returns(false);
     }
 
@@ -50,7 +50,7 @@ public class DeleteBlockPresetValidatorTests
     public async Task Validate_HasFutureBlocks_IsInvalid()
     {
         var presetId = Guid.NewGuid();
-        _plannedBlocks.HasFutureBlocksForPresetAsync(presetId, Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
+        _plannedBlocks.HasFutureBlocksForPresetAsync(presetId, Arg.Any<Moment>(), Arg.Any<CancellationToken>())
             .Returns(true);
 
         var result = await CreateValidator().ValidateAsync(new DeleteBlockPresetCommand { PresetId = presetId });

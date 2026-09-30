@@ -9,41 +9,45 @@ using NSubstitute;
 
 namespace NenFocus.Tests.Application.UseCases.Planner;
 
+// Placement ("is this time free", "in the past", "inside the contract's hours") is the
+// validator's job via GetBlockPlacementVerdictQuery since Gap 88 phase 8 — tested in
+// GetBlockPlacementVerdictQueryHandlerTests. The cap is attribution's (its own tests).
+// The handler only saves what attribution returns.
 public class CreatePlannedBlockCommandHandlerTests
 {
     private static readonly DateTime Start = new(2026, 1, 2, 10, 0, 0, DateTimeKind.Utc);
     private static readonly DateTime End = new(2026, 1, 2, 11, 0, 0, DateTimeKind.Utc);
-    private static readonly DateTime Now = new(2026, 1, 2, 9, 0, 0, DateTimeKind.Utc);
 
     private readonly IPlannedBlockRepository _blocks = Substitute.For<IPlannedBlockRepository>();
     private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
-    private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
-    private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
     private readonly IQueryHandler<ComputeRedemptionAttributionQuery, RedemptionAttributionResult> _computeRedemptionAttribution =
         Substitute.For<IQueryHandler<ComputeRedemptionAttributionQuery, RedemptionAttributionResult>>();
 
     public CreatePlannedBlockCommandHandlerTests()
     {
-        _clock.UtcNow.Returns(Now);
-        _blocks.GetOverlappingAsync(Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<bool>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>())
-            .Returns((IReadOnlyList<PlannedBlock>)[]);
-        _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns((Session?)null);
-        // Default: echoes back whatever ContractId was passed in, no redemption entries —
-        // matches the real handler's behavior when nothing is eligible to cover.
+        // Default: echoes back whatever ContractId was passed in, no redemption entries, the
+        // requested slot unchanged — the real query's answer when nothing is eligible to cover.
         _computeRedemptionAttribution
             .HandleAsync(Arg.Any<ComputeRedemptionAttributionQuery>(), Arg.Any<CancellationToken>())
-            .Returns(ci => new RedemptionAttributionResult(((ComputeRedemptionAttributionQuery)ci[0]).ContractId, []));
+            .Returns(ci =>
+            {
+                var query = (ComputeRedemptionAttributionQuery)ci[0];
+                return new RedemptionAttributionResult(query.ContractId, [], query.Block);
+            });
     }
 
-    private CreatePlannedBlockCommandHandler CreateHandler() => new(_blocks, _presets, _sessions, _clock, _computeRedemptionAttribution);
+    private CreatePlannedBlockCommandHandler CreateHandler() => new(_blocks, _presets, _computeRedemptionAttribution);
 
     private static CreatePlannedBlockCommand FocusCommand(Guid presetId) => new()
     {
         PresetId = presetId,
         BlockPresetType = BlockPresetType.Focus,
-        Start = Start,
-        End = End
+        Slot = At.Slot(Start, End)
     };
+
+    private void SetUpPreset(Guid presetId, BlockPresetType type) =>
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
+            .Returns(BlockPreset.Create(presetId, "Preset", WebsiteFilterType.Blocklist, type, At.Utc(Start.AddDays(-1))));
 
     [Fact]
     public async Task HandleAsync_PresetNotFound_Fails()
@@ -57,80 +61,10 @@ public class CreatePlannedBlockCommandHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_Focus_OverlappingFocusBlockExists_Fails()
-    {
-        var presetId = Guid.NewGuid();
-        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, DateTime.UtcNow));
-        _blocks.GetOverlappingAsync(Start.ToUniversalTime(), End.ToUniversalTime(), Now, true, null, Arg.Any<CancellationToken>())
-            .Returns((IReadOnlyList<PlannedBlock>)[FocusBlock.Create(Guid.NewGuid(), presetId, Start, End)]);
-
-        var result = await CreateHandler().HandleAsync(FocusCommand(presetId));
-
-        result.Success.Should().BeFalse();
-        await _blocks.DidNotReceive().AddAsync(Arg.Any<PlannedBlock>(), Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
-    public async Task HandleAsync_Focus_PassesCurrentTimeAsOfToOverlapCheck()
-    {
-        var presetId = Guid.NewGuid();
-        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, DateTime.UtcNow));
-
-        await CreateHandler().HandleAsync(FocusCommand(presetId));
-
-        await _blocks.Received(1).GetOverlappingAsync(
-            Start.ToUniversalTime(), End.ToUniversalTime(), Now, true, null, Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
-    public async Task HandleAsync_Focus_OverlapsActiveSession_Fails()
-    {
-        var presetId = Guid.NewGuid();
-        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, DateTime.UtcNow));
-        var activeSession = Session.Create(
-            Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromHours(2)),
-            Guid.NewGuid(), SessionOrigin.Spontaneous);
-        activeSession.Start(Start.AddMinutes(-30));
-        _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns(activeSession);
-
-        var result = await CreateHandler().HandleAsync(FocusCommand(presetId));
-
-        result.Success.Should().BeFalse();
-        result.ErrorMessage.Should().Contain("already an active focus session");
-    }
-
-    [Fact]
-    public async Task HandleAsync_ActiveSessionStartedLate_UsesEndAtNotStartedAtPlusDuration()
-    {
-        // A Planned session's EndAt is pinned to its originating block's own scheduled end
-        // (Session.Start), while Duration is the block's full nominal length regardless of
-        // exactly when the Ritual completed. Starting 5 minutes late makes
-        // StartedAt + Duration overshoot the session's real EndAt by 5 minutes — the new
-        // block below fits cleanly right after the session's real end, and must not be
-        // rejected by a recomputed window that overshoots it.
-        var presetId = Guid.NewGuid();
-        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, DateTime.UtcNow));
-        var activeSession = Session.Create(
-            Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromHours(1)),
-            Guid.NewGuid(), SessionOrigin.Planned, originatingBlockId: Guid.NewGuid());
-        activeSession.Start(Start.AddMinutes(-55), scheduledEnd: Start); // started 5 min "late", EndAt pinned to Start
-        _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns(activeSession);
-
-        var result = await CreateHandler().HandleAsync(FocusCommand(presetId)); // new block: Start–End
-
-        result.Success.Should().BeTrue();
-    }
-
-    [Fact]
     public async Task HandleAsync_Focus_HappyPath_CreatesFocusBlock()
     {
         var presetId = Guid.NewGuid();
-        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, DateTime.UtcNow));
+        SetUpPreset(presetId, BlockPresetType.Focus);
 
         var result = await CreateHandler().HandleAsync(FocusCommand(presetId));
 
@@ -140,27 +74,23 @@ public class CreatePlannedBlockCommandHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_Background_SkipsOverlapAndActiveSessionChecks()
+    public async Task HandleAsync_Background_CreatesBackgroundBlock()
     {
         var presetId = Guid.NewGuid();
-        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Background", WebsiteFilterType.Blocklist, BlockPresetType.Background, DateTime.UtcNow));
+        SetUpPreset(presetId, BlockPresetType.Background);
         var command = FocusCommand(presetId) with { BlockPresetType = BlockPresetType.Background };
 
         var result = await CreateHandler().HandleAsync(command);
 
         result.Success.Should().BeTrue();
         await _blocks.Received(1).AddAsync(Arg.Is<PlannedBlock>(b => b is BackgroundBlock), Arg.Any<CancellationToken>());
-        await _blocks.DidNotReceive().GetOverlappingAsync(
-            Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<bool>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task HandleAsync_WithContractId_LinksTheCreatedBlock()
     {
         var presetId = Guid.NewGuid();
-        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, DateTime.UtcNow));
+        SetUpPreset(presetId, BlockPresetType.Focus);
         var contractId = Guid.NewGuid();
 
         PlannedBlock? saved = null;
@@ -175,13 +105,12 @@ public class CreatePlannedBlockCommandHandlerTests
     public async Task HandleAsync_Focus_AttributionFindsADeficit_SetsRedemptionEntriesAndContractId()
     {
         var presetId = Guid.NewGuid();
-        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, DateTime.UtcNow));
+        SetUpPreset(presetId, BlockPresetType.Focus);
         var missedBlockId = Guid.NewGuid();
         var discoveredContractId = Guid.NewGuid();
         _computeRedemptionAttribution
             .HandleAsync(Arg.Any<ComputeRedemptionAttributionQuery>(), Arg.Any<CancellationToken>())
-            .Returns(new RedemptionAttributionResult(discoveredContractId, [new(missedBlockId, 45)]));
+            .Returns(new RedemptionAttributionResult(discoveredContractId, [new(missedBlockId, 60)], At.Slot(Start, End)));
 
         PlannedBlock? saved = null;
         await _blocks.AddAsync(Arg.Do<PlannedBlock>(b => saved = b), Arg.Any<CancellationToken>());
@@ -190,15 +119,14 @@ public class CreatePlannedBlockCommandHandlerTests
 
         var focusBlock = saved.Should().BeOfType<FocusBlock>().Subject;
         focusBlock.ContractId.Should().Be(discoveredContractId);
-        focusBlock.RedemptionEntries.Should().ContainSingle(e => e.MissedBlockId == missedBlockId && e.MinutesCovered == 45);
+        focusBlock.RedemptionEntries.Should().ContainSingle(e => e.MissedBlockId == missedBlockId && e.MinutesCovered == 60);
     }
 
     [Fact]
     public async Task HandleAsync_Background_NeverConsultsRedemptionAttribution()
     {
         var presetId = Guid.NewGuid();
-        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Background", WebsiteFilterType.Blocklist, BlockPresetType.Background, DateTime.UtcNow));
+        SetUpPreset(presetId, BlockPresetType.Background);
         var command = FocusCommand(presetId) with { BlockPresetType = BlockPresetType.Background };
 
         await CreateHandler().HandleAsync(command);
@@ -211,13 +139,12 @@ public class CreatePlannedBlockCommandHandlerTests
     public async Task HandleAsync_Focus_DeclineRedemptionTrue_SkipsAttributionAndCreatesUnlinkedBlock()
     {
         var presetId = Guid.NewGuid();
-        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, DateTime.UtcNow));
+        SetUpPreset(presetId, BlockPresetType.Focus);
         // A real match exists — proves DeclineRedemption skips it rather than the match
         // simply not being found.
         _computeRedemptionAttribution
             .HandleAsync(Arg.Any<ComputeRedemptionAttributionQuery>(), Arg.Any<CancellationToken>())
-            .Returns(new RedemptionAttributionResult(Guid.NewGuid(), [new(Guid.NewGuid(), 45)]));
+            .Returns(new RedemptionAttributionResult(Guid.NewGuid(), [new(Guid.NewGuid(), 45)], At.Slot(Start, Start.AddMinutes(45)), true));
 
         PlannedBlock? saved = null;
         await _blocks.AddAsync(Arg.Do<PlannedBlock>(b => saved = b), Arg.Any<CancellationToken>());
@@ -230,41 +157,37 @@ public class CreatePlannedBlockCommandHandlerTests
         var focusBlock = saved.Should().BeOfType<FocusBlock>().Subject;
         focusBlock.ContractId.Should().BeNull();
         focusBlock.RedemptionEntries.Should().BeEmpty();
+        focusBlock.Scheduled.Should().Be(At.Slot(Start, End));
     }
 
     [Fact]
-    public async Task HandleAsync_Focus_RequestedDurationExceedsRedemptionCoverage_CapsEndAndReportsCapped()
+    public async Task HandleAsync_Focus_AttributionReturnsACappedSlot_SavesItAndReportsCapped()
     {
         var presetId = Guid.NewGuid();
-        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, DateTime.UtcNow));
+        SetUpPreset(presetId, BlockPresetType.Focus);
         _computeRedemptionAttribution
             .HandleAsync(Arg.Any<ComputeRedemptionAttributionQuery>(), Arg.Any<CancellationToken>())
-            .Returns(new RedemptionAttributionResult(Guid.NewGuid(), [new(Guid.NewGuid(), 45)]));
+            .Returns(new RedemptionAttributionResult(Guid.NewGuid(), [new(Guid.NewGuid(), 45)], At.Slot(Start, Start.AddMinutes(45)), true));
 
         PlannedBlock? saved = null;
         await _blocks.AddAsync(Arg.Do<PlannedBlock>(b => saved = b), Arg.Any<CancellationToken>());
 
-        // Requested a 2h block (Start..Start+2h) — only 45 min of deficit exists.
-        var command = FocusCommand(presetId) with { End = Start.AddHours(2) };
+        var command = FocusCommand(presetId) with { Slot = At.Slot(Start, Start.AddHours(2)) };
         var result = await CreateHandler().HandleAsync(command);
 
         result.Success.Should().BeTrue();
         result.RedemptionCapped.Should().BeTrue();
-        var focusBlock = saved.Should().BeOfType<FocusBlock>().Subject;
-        focusBlock.End.Should().Be(Start.AddMinutes(45));
+        saved!.Scheduled.Should().Be(At.Slot(Start, Start.AddMinutes(45)));
     }
 
     [Fact]
-    public async Task HandleAsync_Focus_RedemptionCoverageMeetsRequestedDuration_DoesNotCap()
+    public async Task HandleAsync_Focus_AttributionReturnsTheRequestedSlot_DoesNotReportCapped()
     {
         var presetId = Guid.NewGuid();
-        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, DateTime.UtcNow));
-        // FocusCommand's default window is exactly 60 minutes (Start..End).
+        SetUpPreset(presetId, BlockPresetType.Focus);
         _computeRedemptionAttribution
             .HandleAsync(Arg.Any<ComputeRedemptionAttributionQuery>(), Arg.Any<CancellationToken>())
-            .Returns(new RedemptionAttributionResult(Guid.NewGuid(), [new(Guid.NewGuid(), 60)]));
+            .Returns(new RedemptionAttributionResult(Guid.NewGuid(), [new(Guid.NewGuid(), 60)], At.Slot(Start, End)));
 
         PlannedBlock? saved = null;
         await _blocks.AddAsync(Arg.Do<PlannedBlock>(b => saved = b), Arg.Any<CancellationToken>());
@@ -272,26 +195,6 @@ public class CreatePlannedBlockCommandHandlerTests
         var result = await CreateHandler().HandleAsync(FocusCommand(presetId));
 
         result.RedemptionCapped.Should().BeFalse();
-        saved!.End.Should().Be(End);
-    }
-
-    [Fact]
-    public async Task HandleAsync_Focus_RequestedDurationExceedsCoverage_OverlapCheckUsesTheCappedWindowNotTheRequestedOne()
-    {
-        var presetId = Guid.NewGuid();
-        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, DateTime.UtcNow));
-        _computeRedemptionAttribution
-            .HandleAsync(Arg.Any<ComputeRedemptionAttributionQuery>(), Arg.Any<CancellationToken>())
-            .Returns(new RedemptionAttributionResult(Guid.NewGuid(), [new(Guid.NewGuid(), 45)]));
-
-        var command = FocusCommand(presetId) with { End = Start.AddHours(2) };
-        await CreateHandler().HandleAsync(command);
-
-        // Only 45 min will actually be persisted — the overlap check must reflect that,
-        // not the originally-requested 2h window, or it could reject a placement that
-        // never actually conflicts with anything.
-        await _blocks.Received(1).GetOverlappingAsync(
-            Start, Start.AddMinutes(45), Now, true, null, Arg.Any<CancellationToken>());
+        saved!.Scheduled.Should().Be(At.Slot(Start, End));
     }
 }

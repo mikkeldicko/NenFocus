@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using NenFocus.Application.DTOs;
+using NenFocus.Domain.ValueObjects;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.UseCases.Sessions.AcknowledgePostSession;
 using NenFocus.Application.UseCases.Sessions.SaveReflection;
@@ -50,7 +51,8 @@ public partial class PostSessionViewModel : ViewModelBase
     public PostSessionViewModel(
         PostSessionDto data,
         ICommandDispatcher commandDispatcher,
-        Action onDone)
+        Action onDone,
+        UserTimeZone timeZone)
     {
         _data = data;
         _commandDispatcher = commandDispatcher;
@@ -62,8 +64,8 @@ public partial class PostSessionViewModel : ViewModelBase
             ? "What got in the way?"
             : "How did the session go? What did you accomplish?";
         PresetName = data.PresetName;
-        StartedAt = data.StartedAt.ToLocalTime();
-        EndedAt = data.EndedAt.ToLocalTime();
+        StartedAt = timeZone.ToCalendarTime(data.StartedAt);
+        EndedAt = timeZone.ToCalendarTime(data.EndedAt);
         Duration = data.ActualDuration;
         PlannedDuration = data.PlannedDuration;
         BreaksTaken = data.BreaksTaken;

@@ -3,6 +3,7 @@ using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.GetNenContractRecap;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Services;
+using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Application.UseCases.NenContracts.Break;
 
@@ -37,8 +38,8 @@ public sealed class BreakNenContractCommandHandler : ICommandHandler<BreakNenCon
         if (contract is null)
             return BreakNenContractResult.Fail("Contract not found.");
 
-        var now = _clock.UtcNow;
-        contract.Break(_clock.ToLocal(now));
+        var now = _clock.Now;
+        contract.Break(now, _clock.TimeZone);
         await _contracts.SaveAsync(contract, ct);
 
         var linkedBlocks = await _blocks.GetForContractAsync(command.ContractId, ct);

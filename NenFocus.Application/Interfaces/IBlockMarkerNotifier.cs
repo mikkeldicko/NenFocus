@@ -1,3 +1,5 @@
+using NenFocus.Domain.ValueObjects;
+
 namespace NenFocus.Application.Interfaces;
 
 /// <summary>
@@ -8,5 +10,5 @@ namespace NenFocus.Application.Interfaces;
 /// </summary>
 public interface IBlockMarkerNotifier
 {
-    Task NotifyPassedAsync(DateTime from, DateTime to, CancellationToken ct = default);
+    Task NotifyPassedAsync(Moment from, Moment to, CancellationToken ct = default);
 }

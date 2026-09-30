@@ -33,7 +33,7 @@ public sealed class DeletePlannedBlockValidator : AbstractValidator<DeletePlanne
             {
                 if (command.BlockId == Guid.Empty) return true;
                 var block = await blocks.GetByIdAsync(command.BlockId, ct);
-                var now = clock.UtcNow;
+                var now = clock.Now;
                 return block is null || !block.HasStarted(now) || block.HasEnded(now);
             })
             .WithMessage("This block is running and cannot be deleted until it ends.");

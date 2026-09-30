@@ -15,28 +15,11 @@ public class LocalTimeRuleTests
 
     private static readonly string[] Exceptions =
     [
-        // Gap 99: EF's storage converter silently converts a non-UTC value on save — a hidden second
-        // copy of the rule. Once stored times are UTC by type, it throws instead of converting.
-        "NenFocus.Infrastructure/Persistence/NenFocusDbContext.cs",
-
-        // Gap 88 phase 8: their session-clash messages move into the placement verdict.
-        "NenFocus.Application/UseCases/Planner/CreatePlannedBlock/CreatePlannedBlockCommandHandler.cs",
-        "NenFocus.Application/UseCases/Planner/UpdatePlannedBlock/UpdatePlannedBlockCommandHandler.cs",
-
         // Gap 97: "which UTC window is this local day" re-derived in the repository (the UTC-days trap).
         "NenFocus.Infrastructure/Persistence/Repositories/PlannedBlockRepository.cs",
 
-        // Gap 89 area 3 (three clock abstractions, Gap 92 A7): LocalNow bypasses _clock.ToLocal.
-        "NenFocus.Infrastructure/Services/PlannerClockService.cs",
-
-        // Gap 89: ViewModels converting times themselves.
-        "NenFocus/ViewModels/Components/PlannerDragMath.cs",
+        // Gap 89: the debug clock converts a user-typed time to UTC for SetTo.
         "NenFocus/ViewModels/DevTools/DebugClockViewModel.cs",
-        "NenFocus/ViewModels/Pages/PlannerPageViewModel.cs",
-        "NenFocus/ViewModels/Pages/PostSessionViewModel.cs",
-        "NenFocus/ViewModels/Ritual/HatsuPageViewModel.cs",
-        "NenFocus/ViewModels/Ritual/RitualShellViewModel.cs",
-        "NenFocus/Views/PlannerPageView.axaml.cs",
     ];
 
     [Fact]

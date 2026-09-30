@@ -1,4 +1,5 @@
 using FluentAssertions;
+using NenFocus.Domain.ValueObjects;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.UseCases.BlockPresets.DuplicateBlockPreset;
 using NenFocus.Domain.Entities;
@@ -10,17 +11,17 @@ namespace NenFocus.Tests.Application.UseCases.BlockPresets;
 public class DuplicateBlockPresetCommandHandlerTests
 {
     private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
-    private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
+    private readonly ISystemClock _clock = TestClock.Create();
 
     public DuplicateBlockPresetCommandHandlerTests()
     {
-        _clock.UtcNow.Returns(DateTime.UtcNow);
+        _clock.SetNow(DateTime.UtcNow);
     }
 
     private DuplicateBlockPresetCommandHandler CreateHandler() => new(_presets, _clock);
 
     private static BlockPreset CreateSourcePreset(Guid id)
-        => BlockPreset.Create(id, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, DateTime.UtcNow);
+        => BlockPreset.Create(id, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(DateTime.UtcNow));
 
     [Fact]
     public async Task HandleAsync_SourceNotFound_Fails()

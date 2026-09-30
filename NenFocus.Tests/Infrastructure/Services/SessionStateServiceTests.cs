@@ -17,13 +17,13 @@ public class SessionStateServiceTests
     private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
     private readonly ICommandHandler<SweepMissedFocusBlocksCommand, SweepMissedFocusBlocksResult> _sweep =
         Substitute.For<ICommandHandler<SweepMissedFocusBlocksCommand, SweepMissedFocusBlocksResult>>();
-    private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
+    private readonly ISystemClock _clock = TestClock.Create();
 
     public SessionStateServiceTests()
     {
         _sweep.HandleAsync(Arg.Any<SweepMissedFocusBlocksCommand>(), Arg.Any<CancellationToken>())
             .Returns(new SweepMissedFocusBlocksResult());
-        _clock.UtcNow.Returns(DateTime.UtcNow);
+        _clock.SetNow(DateTime.UtcNow);
     }
 
     // SessionStateService now takes IServiceScopeFactory, not the scoped dependencies
@@ -45,7 +45,7 @@ public class SessionStateServiceTests
         var session = Session.Create(
             Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(30)),
             presetId, SessionOrigin.Spontaneous);
-        session.Start(DateTime.UtcNow);
+        session.Start(At.Utc(DateTime.UtcNow));
         return session;
     }
 
@@ -70,7 +70,7 @@ public class SessionStateServiceTests
         var session = CreateActiveSession(presetId);
         _sessions.GetActiveAsync().Returns(session);
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, DateTime.UtcNow));
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(DateTime.UtcNow)));
         var service = CreateService();
         SessionDto? raisedWith = null;
         service.SessionChanged += (_, dto) => raisedWith = dto;

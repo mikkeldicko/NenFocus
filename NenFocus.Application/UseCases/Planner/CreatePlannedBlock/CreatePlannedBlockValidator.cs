@@ -1,6 +1,7 @@
 using FluentValidation;
+using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
-using NenFocus.Application.Queries.ComputeRedemptionAttribution;
+using NenFocus.Application.Queries.GetBlockPlacementVerdict;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
 
@@ -10,9 +11,7 @@ public sealed class CreatePlannedBlockValidator : AbstractValidator<CreatePlanne
 {
     public CreatePlannedBlockValidator(
         IBlockPresetRepository presets,
-        INenContractRepository contracts,
-        ISystemClock clock,
-        IQueryHandler<ComputeRedemptionAttributionQuery, RedemptionAttributionResult> computeRedemptionAttribution)
+        IQueryHandler<GetBlockPlacementVerdictQuery, BlockPlacementVerdictDto> placement)
     {
         RuleFor(x => x.PresetId)
             .NotEmpty().WithMessage("Preset ID is required.");
@@ -27,42 +26,30 @@ public sealed class CreatePlannedBlockValidator : AbstractValidator<CreatePlanne
             .WithMessage(x =>
                 $"A {x.BlockPresetType.ToString().ToLowerInvariant()} block requires a {x.BlockPresetType.ToString().ToLowerInvariant()} preset.");
 
-        RuleFor(x => x.Start)
-            .Must(start => start > clock.UtcNow)
-            .WithMessage("Start time must be in the future.");
-
-        RuleFor(x => x.End)
-            .GreaterThan(x => x.Start)
-            .WithMessage("End time must be after start time.")
-            .Must((command, end) => (end - command.Start).TotalMinutes >= 1)
+        // The slot is required (the compiler enforces it) and guarantees end after start
+        // (Gap 88) — so there's no "missing" or "end before start" rule here. "Not in the
+        // past" and "inside the contract's hours" are the placement query's job below.
+        RuleFor(x => x.Slot)
+            .Must(slot => slot.Length >= TimeSpan.FromMinutes(1))
             .WithMessage("Block must be at least 1 minute long.")
             // Mirrors FocusBlock.Create's own cap — the entity is the real, unbypassable
             // invariant; this exists only to produce a friendly FormError instead of an
-            // unhandled exception, same two-layer pattern already used for end <= start.
-            .Must((command, end) => command.BlockPresetType != BlockPresetType.Focus
-                || (end - command.Start) <= TimeSpan.FromHours(FocusBlock.MaxDurationHours))
+            // unhandled exception.
+            .Must((command, slot) => command.BlockPresetType != BlockPresetType.Focus
+                || slot.Length <= TimeSpan.FromHours(FocusBlock.MaxDurationHours))
             .WithMessage($"A Focus block cannot exceed {FocusBlock.MaxDurationHours} hours.");
 
-        // Focus blocks: the contract that actually applies may not be command.ContractId
-        // itself — a null ContractId still auto-discovers a contract via
-        // ComputeRedemptionAttributionQuery when the block turns out to cover a deficit.
-        // Resolving through the same query the handler uses (rather than checking
-        // command.ContractId directly) keeps Work Hours validation in sync with whichever
-        // contract the block actually ends up attached to.
+        // The one placement rule (Gap 88 phase 8): not in the past → inside the contract's
+        // window → free for Focus. The query resolves the contract (through attribution for
+        // a Focus block) and owns the wording, so preview and save agree.
         RuleFor(x => x)
-            .MustAsync(async (command, ct) =>
+            .CustomAsync(async (command, context, ct) =>
             {
-                var contractId = command.BlockPresetType == BlockPresetType.Focus
-                    ? (await computeRedemptionAttribution.HandleAsync(
-                        new ComputeRedemptionAttributionQuery(command.ContractId, command.PresetId, command.Start, command.End, ExcludeBlockId: null),
-                        ct)).ContractId
-                    : command.ContractId;
-
-                if (contractId is not { } resolvedContractId) return true;
-                var contract = await contracts.GetByIdAsync(resolvedContractId, ct);
-                return contract is null
-                    || contract.AllowsBlockPlacement(clock.ToLocal(command.Start), clock.ToLocal(command.End));
-            })
-            .WithMessage("This block falls outside the contract's configured Work Hours for that day.");
+                var verdict = await placement.HandleAsync(
+                    new GetBlockPlacementVerdictQuery(command.Slot, command.BlockPresetType, command.PresetId, command.ContractId),
+                    ct);
+                if (verdict.Outcome != PlacementOutcome.Allowed && verdict.Message is not null)
+                    context.AddFailure(nameof(CreatePlannedBlockCommand.Slot), verdict.Message);
+            });
     }
 }

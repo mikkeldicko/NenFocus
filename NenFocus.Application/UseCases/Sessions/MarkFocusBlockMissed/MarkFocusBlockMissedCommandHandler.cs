@@ -39,7 +39,7 @@ public sealed class MarkFocusBlockMissedCommandHandler
             origin: SessionOrigin.Planned,
             originatingBlockId: block.Id);
 
-        session.Miss(block.Start, block.End);
+        session.Miss(block.Scheduled);
 
         await _sessions.SaveAsync(session, ct);
 

@@ -1,11 +1,12 @@
-﻿namespace NenFocus.Domain.Events;
+﻿using NenFocus.Domain.ValueObjects;
+namespace NenFocus.Domain.Events;
 
 public abstract class DomainEvent
 {
     public Guid Id { get; } = Guid.NewGuid();
-    public DateTime OccurredAt { get; }
+    public Moment OccurredAt { get; }
 
-    protected DomainEvent(DateTime occurredAt)
+    protected DomainEvent(Moment occurredAt)
     {
         OccurredAt = occurredAt;
     }

@@ -53,8 +53,7 @@ public class PlannerBlockLockViewTests
         PresetId = Guid.NewGuid(),
         PresetName = "Background",
         BlockPresetType = BlockPresetType.Background,
-        Start = new DateTime(2026, 9, 29, 10, 0, 0, DateTimeKind.Utc),
-        End = new DateTime(2026, 9, 29, 11, 0, 0, DateTimeKind.Utc),
+        Shown = At.Slot(new DateTime(2026, 9, 29, 10, 0, 0, DateTimeKind.Utc), new DateTime(2026, 9, 29, 11, 0, 0, DateTimeKind.Utc)),
         HasStarted = hasStarted,
     };
 
@@ -63,7 +62,9 @@ public class PlannerBlockLockViewTests
         var queries = new FakeQueryDispatcher().Answer<GetPlannedBlocksForDayQuery, IReadOnlyList<PlannedBlockDto>>(q =>
             q.Date == Today ? [block] : []);
         var clock = Substitute.For<IPlannerClockService>();
-        clock.LocalNow.Returns(new DateTime(2026, 9, 29, 7, 0, 0, DateTimeKind.Local));
-        return new PlannerPageViewModel(queries, Substitute.For<ICommandDispatcher>(), clock, Substitute.For<ISessionStateService>());
+        var systemClock = TestClock.Create();
+        systemClock.SetTimeZoneOffset(TimeSpan.Zero);
+        systemClock.SetNow(new DateTime(2026, 9, 29, 7, 0, 0, DateTimeKind.Utc));
+        return new PlannerPageViewModel(queries, Substitute.For<ICommandDispatcher>(), clock, Substitute.For<ISessionStateService>(), systemClock);
     }
 }

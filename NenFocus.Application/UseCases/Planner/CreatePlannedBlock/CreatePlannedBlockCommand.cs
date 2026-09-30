@@ -1,4 +1,5 @@
 using NenFocus.Application.Interfaces;
+using NenFocus.Domain.ValueObjects;
 using NenFocus.Domain.Enums;
 
 namespace NenFocus.Application.UseCases.Planner.CreatePlannedBlock;
@@ -7,8 +8,7 @@ public sealed record CreatePlannedBlockCommand : ICommand<CreatePlannedBlockResu
 {
     public Guid PresetId { get; init; }
     public BlockPresetType BlockPresetType { get; init; }
-    public DateTime Start { get; init; }
-    public DateTime End { get; init; }
+    public required TimeSlot Slot { get; init; }
 
     /// <summary>
     /// Set when this block is created directly under an already-known contract (e.g. the

@@ -40,7 +40,7 @@ public sealed class DuplicateBlockPresetCommandHandler
         BlockPreset duplicate;
         try
         {
-            duplicate = source.Duplicate(newName, Guid.NewGuid(), _clock.UtcNow);
+            duplicate = source.Duplicate(newName, Guid.NewGuid(), _clock.Now);
         }
         catch (ArgumentException ex)
         {

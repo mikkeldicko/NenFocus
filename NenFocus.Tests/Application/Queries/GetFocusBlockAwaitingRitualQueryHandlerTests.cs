@@ -1,4 +1,6 @@
 using FluentAssertions;
+using TestAt = NenFocus.Tests.At;
+using NenFocus.Domain.ValueObjects;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.GetFocusBlockAwaitingRitual;
 using NenFocus.Domain.Entities;
@@ -16,14 +18,14 @@ public class GetFocusBlockAwaitingRitualQueryHandlerTests
     private GetFocusBlockAwaitingRitualQueryHandler CreateHandler() => new(_blocks, _sessions);
 
     private void BlocksAre(params PlannedBlock[] blocks) =>
-        _blocks.GetForRangeAsync(Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
+        _blocks.GetForRangeAsync(Arg.Any<TimeSlot>(), Arg.Any<CancellationToken>())
             .Returns(blocks);
 
     private void SessionRunning(bool running) =>
         _sessions.HasActiveSessionAsync(Arg.Any<CancellationToken>()).Returns(running);
 
     private static FocusBlock ActiveFocusBlock() =>
-        FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.AddMinutes(-5), At.AddHours(1));
+        FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),TestAt.Slot(At.AddMinutes(-5), At.AddHours(1)));
 
     [Fact]
     public async Task HandleAsync_NoBlocks_ReturnsNull()
@@ -31,7 +33,7 @@ public class GetFocusBlockAwaitingRitualQueryHandlerTests
         BlocksAre();
         SessionRunning(false);
 
-        var result = await CreateHandler().HandleAsync(new GetFocusBlockAwaitingRitualQuery(At));
+        var result = await CreateHandler().HandleAsync(new GetFocusBlockAwaitingRitualQuery(TestAt.Utc(At)));
 
         result.Should().BeNull();
     }
@@ -43,7 +45,7 @@ public class GetFocusBlockAwaitingRitualQueryHandlerTests
         BlocksAre(block);
         SessionRunning(false);
 
-        var result = await CreateHandler().HandleAsync(new GetFocusBlockAwaitingRitualQuery(At));
+        var result = await CreateHandler().HandleAsync(new GetFocusBlockAwaitingRitualQuery(TestAt.Utc(At)));
 
         result.Should().Be(block.Id);
     }
@@ -54,7 +56,7 @@ public class GetFocusBlockAwaitingRitualQueryHandlerTests
         BlocksAre(ActiveFocusBlock());
         SessionRunning(true);
 
-        var result = await CreateHandler().HandleAsync(new GetFocusBlockAwaitingRitualQuery(At));
+        var result = await CreateHandler().HandleAsync(new GetFocusBlockAwaitingRitualQuery(TestAt.Utc(At)));
 
         result.Should().BeNull();
     }
@@ -65,11 +67,11 @@ public class GetFocusBlockAwaitingRitualQueryHandlerTests
         // The end-of-block race: still inside the window at `At`, session just completed,
         // nothing running — must not re-prompt the Ritual for a block that already had one.
         var block = ActiveFocusBlock();
-        block.MarkRitualCompleted(At.AddMinutes(-5));
+        block.MarkRitualCompleted(TestAt.Utc(At.AddMinutes(-5)));
         BlocksAre(block);
         SessionRunning(false);
 
-        var result = await CreateHandler().HandleAsync(new GetFocusBlockAwaitingRitualQuery(At));
+        var result = await CreateHandler().HandleAsync(new GetFocusBlockAwaitingRitualQuery(TestAt.Utc(At)));
 
         result.Should().BeNull();
     }
@@ -77,10 +79,10 @@ public class GetFocusBlockAwaitingRitualQueryHandlerTests
     [Fact]
     public async Task HandleAsync_OnlyBackgroundBlockActive_ReturnsNull()
     {
-        BlocksAre(BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.AddMinutes(-5), At.AddHours(1)));
+        BlocksAre(BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(),TestAt.Slot(At.AddMinutes(-5), At.AddHours(1))));
         SessionRunning(false);
 
-        var result = await CreateHandler().HandleAsync(new GetFocusBlockAwaitingRitualQuery(At));
+        var result = await CreateHandler().HandleAsync(new GetFocusBlockAwaitingRitualQuery(TestAt.Utc(At)));
 
         result.Should().BeNull();
     }
@@ -90,10 +92,10 @@ public class GetFocusBlockAwaitingRitualQueryHandlerTests
     {
         // The repository fetch is buffered by ±1s (SQLite datetime slop); the entity is the
         // precise authority, so a block that ended a moment before `At` must not qualify.
-        BlocksAre(FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.AddHours(-1), At.AddSeconds(-1)));
+        BlocksAre(FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),TestAt.Slot(At.AddHours(-1), At.AddSeconds(-1))));
         SessionRunning(false);
 
-        var result = await CreateHandler().HandleAsync(new GetFocusBlockAwaitingRitualQuery(At));
+        var result = await CreateHandler().HandleAsync(new GetFocusBlockAwaitingRitualQuery(TestAt.Utc(At)));
 
         result.Should().BeNull();
     }
@@ -104,14 +106,14 @@ public class GetFocusBlockAwaitingRitualQueryHandlerTests
         // Moved from PolicyEngineTests (Gap 32's live bug, Gap 62's move): a block whose
         // session ended early frees the rest of its window; a redemption block scheduled
         // into that freed tail must get its Ritual, not be hidden behind the stale block.
-        var staleBlock = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.AddHours(-1), At.AddHours(1));
-        staleBlock.MarkRitualCompleted(At.AddHours(-1));
-        staleBlock.MarkSessionEnded(At.AddMinutes(-2));
-        var newBlock = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.AddMinutes(-1), At.AddMinutes(30));
+        var staleBlock = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),TestAt.Slot(At.AddHours(-1), At.AddHours(1)));
+        staleBlock.MarkRitualCompleted(TestAt.Utc(At.AddHours(-1)));
+        staleBlock.MarkSessionEnded(TestAt.Utc(At.AddMinutes(-2)));
+        var newBlock = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),TestAt.Slot(At.AddMinutes(-1), At.AddMinutes(30)));
         BlocksAre(staleBlock, newBlock);
         SessionRunning(false);
 
-        var result = await CreateHandler().HandleAsync(new GetFocusBlockAwaitingRitualQuery(At));
+        var result = await CreateHandler().HandleAsync(new GetFocusBlockAwaitingRitualQuery(TestAt.Utc(At)));
 
         result.Should().Be(newBlock.Id);
     }
@@ -121,11 +123,11 @@ public class GetFocusBlockAwaitingRitualQueryHandlerTests
     {
         var focusBlock = ActiveFocusBlock();
         BlocksAre(
-            BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.AddMinutes(-5), At.AddHours(1)),
+            BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(),TestAt.Slot(At.AddMinutes(-5), At.AddHours(1))),
             focusBlock);
         SessionRunning(false);
 
-        var result = await CreateHandler().HandleAsync(new GetFocusBlockAwaitingRitualQuery(At));
+        var result = await CreateHandler().HandleAsync(new GetFocusBlockAwaitingRitualQuery(TestAt.Utc(At)));
 
         result.Should().Be(focusBlock.Id);
     }
@@ -136,8 +138,8 @@ public class GetFocusBlockAwaitingRitualQueryHandlerTests
         BlocksAre();
         SessionRunning(false);
 
-        await CreateHandler().HandleAsync(new GetFocusBlockAwaitingRitualQuery(At));
+        await CreateHandler().HandleAsync(new GetFocusBlockAwaitingRitualQuery(TestAt.Utc(At)));
 
-        await _blocks.Received(1).GetForRangeAsync(At.AddSeconds(-1), At.AddSeconds(1), Arg.Any<CancellationToken>());
+        await _blocks.Received(1).GetForRangeAsync(new TimeSlot(TestAt.Utc(At.AddSeconds(-1)), TestAt.Utc(At.AddSeconds(1))), Arg.Any<CancellationToken>());
     }
 }

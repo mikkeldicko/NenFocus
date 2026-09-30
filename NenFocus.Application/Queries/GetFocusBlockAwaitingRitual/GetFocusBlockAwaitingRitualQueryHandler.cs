@@ -1,4 +1,5 @@
 using NenFocus.Application.Interfaces;
+using NenFocus.Domain.ValueObjects;
 using NenFocus.Domain.Entities;
 
 namespace NenFocus.Application.Queries.GetFocusBlockAwaitingRitual;
@@ -23,7 +24,7 @@ public sealed class GetFocusBlockAwaitingRitualQueryHandler
     {
         // Same ±1s buffered fetch as ComputeActivePolicySliceQueryHandler (SQLite datetime
         // slop); FocusBlock.IsAwaitingRitual is the precise authority on what qualifies.
-        var blocks = await _blocks.GetForRangeAsync(query.At.AddSeconds(-1), query.At.AddSeconds(1), ct);
+        var blocks = await _blocks.GetForRangeAsync(new TimeSlot(query.At - TimeSpan.FromSeconds(1), query.At + TimeSpan.FromSeconds(1)), ct);
 
         var awaiting = blocks.OfType<FocusBlock>().FirstOrDefault(b => b.IsAwaitingRitual(query.At));
         if (awaiting is null)

@@ -52,7 +52,7 @@ public sealed class GetSessionSnapshotForBlockQueryHandler
                     MissedBlockId = entry.MissedBlockId,
                     MissedBlockPresetName = missedPreset?.Name ?? "Unknown",
                     MissedBlockDate = missedBlock is not null
-                        ? _clock.ToLocalDate(missedBlock.Start)
+                        ? DateOnly.FromDateTime(_clock.TimeZone.ToCalendarTimes(missedBlock.Scheduled).Start)
                         : default,
                     MinutesCovered = entry.MinutesCovered
                 });

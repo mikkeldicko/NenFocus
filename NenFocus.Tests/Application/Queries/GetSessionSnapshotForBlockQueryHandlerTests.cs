@@ -17,11 +17,12 @@ public class GetSessionSnapshotForBlockQueryHandlerTests
     private readonly IBlockedAttemptTracker _attempts = Substitute.For<IBlockedAttemptTracker>();
     private readonly IPlannedBlockRepository _blocks = Substitute.For<IPlannedBlockRepository>();
     private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
-    private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
+    private readonly ISystemClock _clock = TestClock.Create();
 
     public GetSessionSnapshotForBlockQueryHandlerTests()
     {
-        _clock.ToLocal(Arg.Any<DateTime>()).Returns(ci => ci.Arg<DateTime>());
+        _clock.SetTimeZoneOffset(TimeSpan.Zero);
+        _clock.SetTimeZoneOffset(TimeSpan.Zero);
     }
 
     private GetSessionSnapshotForBlockQueryHandler CreateHandler() => new(_sessions, _attempts, _blocks, _presets, _clock);
@@ -35,8 +36,8 @@ public class GetSessionSnapshotForBlockQueryHandlerTests
             Guid.NewGuid(),
             SessionOrigin.Planned,
             originatingBlockId);
-        session.Start(Start);
-        session.Complete(End);
+        session.Start(At.Utc(Start));
+        session.Complete(At.Utc(End));
         if (reflection is not null) session.SetReflection(reflection);
         return session;
     }
@@ -60,7 +61,7 @@ public class GetSessionSnapshotForBlockQueryHandlerTests
         _sessions.GetByOriginatingBlockIdAsync(blockId, Arg.Any<CancellationToken>()).Returns(session);
         _attempts.GetAttemptsForSessionAsync(session.Id).Returns(
         [
-            BlockedAttempt.Record(Guid.NewGuid(), session.Id, "chrome", BlockedAttemptType.App, Start.AddMinutes(5))
+            BlockedAttempt.Record(Guid.NewGuid(), session.Id, "chrome", BlockedAttemptType.App, At.Utc(Start.AddMinutes(5)))
         ]);
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns((PlannedBlock?)null);
 
@@ -79,11 +80,11 @@ public class GetSessionSnapshotForBlockQueryHandlerTests
         var missedBlockId = Guid.NewGuid();
         var missedPresetId = Guid.NewGuid();
         var missedStart = new DateTime(2026, 1, 1, 9, 0, 0, DateTimeKind.Utc);
-        var missedBlock = FocusBlock.Create(missedBlockId, missedPresetId, missedStart, missedStart.AddHours(1));
+        var missedBlock = FocusBlock.Create(missedBlockId, missedPresetId,At.Slot(missedStart, missedStart.AddHours(1)));
 
         var coveringBlockId = Guid.NewGuid();
         var coveringPresetId = Guid.NewGuid();
-        var coveringBlock = FocusBlock.Create(coveringBlockId, coveringPresetId, Start, End,
+        var coveringBlock = FocusBlock.Create(coveringBlockId, coveringPresetId,At.Slot(Start, End),
             redemptionEntries: [new RedemptionEntry(missedBlockId, 30)]);
 
         var session = CreateCompletedSession(coveringBlockId);
@@ -92,7 +93,7 @@ public class GetSessionSnapshotForBlockQueryHandlerTests
         _blocks.GetByIdAsync(coveringBlockId, Arg.Any<CancellationToken>()).Returns(coveringBlock);
         _blocks.GetByIdAsync(missedBlockId, Arg.Any<CancellationToken>()).Returns(missedBlock);
         _presets.GetByIdAsync(missedPresetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(missedPresetId, "Deep Work", WebsiteFilterType.Allowlist, BlockPresetType.Focus, missedStart));
+            .Returns(BlockPreset.Create(missedPresetId, "Deep Work", WebsiteFilterType.Allowlist, BlockPresetType.Focus, At.Utc(missedStart)));
 
         var result = await CreateHandler().HandleAsync(new GetSessionSnapshotForBlockQuery { PlannedBlockId = coveringBlockId });
 
@@ -110,10 +111,10 @@ public class GetSessionSnapshotForBlockQueryHandlerTests
         var missedPresetId = Guid.NewGuid();
         // 1:00 AM UTC Jan 2 — but 8:00 PM local (UTC-5) on Jan 1.
         var missedStart = new DateTime(2026, 1, 2, 1, 0, 0, DateTimeKind.Utc);
-        var missedBlock = FocusBlock.Create(missedBlockId, missedPresetId, missedStart, missedStart.AddHours(1));
+        var missedBlock = FocusBlock.Create(missedBlockId, missedPresetId,At.Slot(missedStart, missedStart.AddHours(1)));
 
         var coveringBlockId = Guid.NewGuid();
-        var coveringBlock = FocusBlock.Create(coveringBlockId, Guid.NewGuid(), Start, End,
+        var coveringBlock = FocusBlock.Create(coveringBlockId, Guid.NewGuid(),At.Slot(Start, End),
             redemptionEntries: [new RedemptionEntry(missedBlockId, 30)]);
 
         var session = CreateCompletedSession(coveringBlockId);
@@ -122,8 +123,9 @@ public class GetSessionSnapshotForBlockQueryHandlerTests
         _blocks.GetByIdAsync(coveringBlockId, Arg.Any<CancellationToken>()).Returns(coveringBlock);
         _blocks.GetByIdAsync(missedBlockId, Arg.Any<CancellationToken>()).Returns(missedBlock);
         _presets.GetByIdAsync(missedPresetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(missedPresetId, "Deep Work", WebsiteFilterType.Allowlist, BlockPresetType.Focus, missedStart));
-        _clock.ToLocal(Arg.Any<DateTime>()).Returns(ci => ci.Arg<DateTime>().AddHours(-5));
+            .Returns(BlockPreset.Create(missedPresetId, "Deep Work", WebsiteFilterType.Allowlist, BlockPresetType.Focus, At.Utc(missedStart)));
+        _clock.SetTimeZoneOffset(TimeSpan.FromHours(-5));
+        _clock.SetTimeZoneOffset(TimeSpan.FromHours(-5));
 
         var result = await CreateHandler().HandleAsync(new GetSessionSnapshotForBlockQuery { PlannedBlockId = coveringBlockId });
 

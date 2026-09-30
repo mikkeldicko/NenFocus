@@ -13,14 +13,14 @@ public class UpdateBlockPresetValidatorTests
     private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
     private readonly IPlannedBlockRepository _plannedBlocks = Substitute.For<IPlannedBlockRepository>();
     private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
-    private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
+    private readonly ISystemClock _clock = TestClock.Create();
 
     public UpdateBlockPresetValidatorTests()
     {
         _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns((Session?)null);
-        _plannedBlocks.HasFutureBlocksForPresetAsync(Arg.Any<Guid>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
+        _plannedBlocks.HasFutureBlocksForPresetAsync(Arg.Any<Guid>(), Arg.Any<Moment>(), Arg.Any<CancellationToken>())
             .Returns(false);
-        _clock.UtcNow.Returns(DateTime.UtcNow);
+        _clock.SetNow(DateTime.UtcNow);
     }
 
     private UpdateBlockPresetValidator CreateValidator() => new(_sessions, _plannedBlocks, _presets, _clock);
@@ -29,7 +29,7 @@ public class UpdateBlockPresetValidatorTests
         Guid presetId, IEnumerable<string>? apps = null, IEnumerable<string>? sites = null,
         WebsiteFilterType filterType = WebsiteFilterType.Blocklist)
     {
-        var preset = BlockPreset.Create(presetId, "Deep Work", filterType, BlockPresetType.Focus, DateTime.UtcNow);
+        var preset = BlockPreset.Create(presetId, "Deep Work", filterType, BlockPresetType.Focus, At.Utc(DateTime.UtcNow));
         foreach (var app in apps ?? []) preset.AddBlockedApp(new BlockedApp(app));
         foreach (var site in sites ?? []) preset.AddWebsite(new BlockedSite(site));
         return preset;
@@ -53,7 +53,7 @@ public class UpdateBlockPresetValidatorTests
     }
 
     private void LockByFutureBlock(Guid presetId)
-        => _plannedBlocks.HasFutureBlocksForPresetAsync(presetId, Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
+        => _plannedBlocks.HasFutureBlocksForPresetAsync(presetId, Arg.Any<Moment>(), Arg.Any<CancellationToken>())
             .Returns(true);
 
     [Fact]

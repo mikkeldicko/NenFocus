@@ -1,18 +1,17 @@
+using NenFocus.Domain.ValueObjects;
+
 namespace NenFocus.Domain.Services;
 
 public sealed class PlannedFocusHoursCalculator : IPlannedFocusHoursCalculator
 {
-    public IReadOnlyDictionary<DateOnly, double> Calculate(IEnumerable<(DateTime Start, DateTime End)> focusBlockRanges)
+    public IReadOnlyDictionary<DateOnly, double> Calculate(IEnumerable<TimeSlot> focusTime, UserTimeZone timeZone)
     {
         var hoursByDay = new Dictionary<DateOnly, double>();
 
-        foreach (var (start, end) in focusBlockRanges)
+        foreach (var slot in focusTime)
         {
-            foreach (var (date, segmentStart, segmentEnd) in DayRangeSplitter.Split(start, end))
-            {
-                var hours = (segmentEnd - segmentStart).TotalHours;
-                hoursByDay[date] = hoursByDay.GetValueOrDefault(date) + hours;
-            }
+            foreach (var (date, part) in timeZone.SplitByDay(slot))
+                hoursByDay[date] = hoursByDay.GetValueOrDefault(date) + part.Length.TotalHours;
         }
 
         return hoursByDay;

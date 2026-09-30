@@ -12,9 +12,9 @@ public class CreateBlockPresetCommandHandlerTests
     private static readonly DateTime Now = new(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
 
     private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
-    private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
+    private readonly ISystemClock _clock = TestClock.Create();
 
-    public CreateBlockPresetCommandHandlerTests() => _clock.UtcNow.Returns(Now);
+    public CreateBlockPresetCommandHandlerTests() => _clock.SetNow(Now);
 
     private CreateBlockPresetCommandHandler CreateHandler() => new(_presets, _clock);
 

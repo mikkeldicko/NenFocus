@@ -12,7 +12,7 @@ public interface IPolicyEngine
     /// to be passed in or looked up here.
     /// </summary>
     ActivePolicySlice ComputeSlice(
-        DateTime at,
+        Moment at,
         IEnumerable<BlockPreset> presets,
         IEnumerable<Session> sessions,
         IEnumerable<PlannedBlock> blocks);

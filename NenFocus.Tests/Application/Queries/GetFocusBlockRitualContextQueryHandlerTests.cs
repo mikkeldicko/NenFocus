@@ -1,4 +1,5 @@
 using FluentAssertions;
+using NenFocus.Domain.ValueObjects;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.GetFocusBlockRitualContext;
 using NenFocus.Domain.Entities;
@@ -16,7 +17,7 @@ public class GetFocusBlockRitualContextQueryHandlerTests
     private readonly IPlannedBlockRepository _blocks = Substitute.For<IPlannedBlockRepository>();
     private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
     private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
-    private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
+    private readonly ISystemClock _clock = TestClock.Create();
     private readonly IFocusBlockOutcomeClassifier _classifier = new FocusBlockOutcomeClassifier();
 
     private GetFocusBlockRitualContextQueryHandler CreateHandler() => new(_blocks, _presets, _sessions, _clock, _classifier);
@@ -37,7 +38,7 @@ public class GetFocusBlockRitualContextQueryHandlerTests
     {
         var blockId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(BackgroundBlock.Create(blockId, Guid.NewGuid(), Start, End));
+            .Returns(BackgroundBlock.Create(blockId, Guid.NewGuid(),At.Slot(Start, End)));
 
         var result = await CreateHandler().HandleAsync(
             new GetFocusBlockRitualContextQuery { FocusBlockId = blockId }, CancellationToken.None);
@@ -51,7 +52,7 @@ public class GetFocusBlockRitualContextQueryHandlerTests
         var blockId = Guid.NewGuid();
         var presetId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId, Start, End));
+            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Start, End)));
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>()).Returns((BlockPreset?)null);
 
         var result = await CreateHandler().HandleAsync(
@@ -66,18 +67,17 @@ public class GetFocusBlockRitualContextQueryHandlerTests
         var blockId = Guid.NewGuid();
         var presetId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId, Start, End));
+            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Start, End)));
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Start));
-        _clock.UtcNow.Returns(Start);
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Start)));
+        _clock.SetNow(Start);
 
         var result = await CreateHandler().HandleAsync(
             new GetFocusBlockRitualContextQuery { FocusBlockId = blockId }, CancellationToken.None);
 
         result.Should().NotBeNull();
         result!.Preset.Name.Should().Be("Deep Work");
-        result.Schedule.Start.Should().Be(Start);
-        result.Schedule.End.Should().Be(End);
+        result.Schedule.Slot.Should().Be(At.Slot(Start, End));
         result.AlreadyHasSession.Should().BeFalse();
     }
 
@@ -92,11 +92,11 @@ public class GetFocusBlockRitualContextQueryHandlerTests
         var blockId = Guid.NewGuid();
         var presetId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId, Start, End));
+            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Start, End)));
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Start));
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Start)));
         _sessions.ExistsForOriginatingBlockAsync(blockId, Arg.Any<CancellationToken>()).Returns(true);
-        _clock.UtcNow.Returns(Start);
+        _clock.SetNow(Start);
 
         var result = await CreateHandler().HandleAsync(
             new GetFocusBlockRitualContextQuery { FocusBlockId = blockId }, CancellationToken.None);
@@ -115,10 +115,10 @@ public class GetFocusBlockRitualContextQueryHandlerTests
         var blockId = Guid.NewGuid();
         var presetId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId, Start, End));
+            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Start, End)));
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Start));
-        _clock.UtcNow.Returns(Start.AddMinutes(minutesAfterStart));
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Start)));
+        _clock.SetNow(Start.AddMinutes(minutesAfterStart));
 
         var result = await CreateHandler().HandleAsync(
             new GetFocusBlockRitualContextQuery { FocusBlockId = blockId }, CancellationToken.None);
@@ -135,10 +135,10 @@ public class GetFocusBlockRitualContextQueryHandlerTests
         var blockId = Guid.NewGuid();
         var presetId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId, Start, End));
+            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Start, End)));
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Start));
-        _clock.UtcNow.Returns(Start.AddMinutes(FocusBlockOutcomeClassifier.GracePeriodMinutes + 1));
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Start)));
+        _clock.SetNow(Start.AddMinutes(FocusBlockOutcomeClassifier.GracePeriodMinutes + 1));
 
         var result = await CreateHandler().HandleAsync(
             new GetFocusBlockRitualContextQuery { FocusBlockId = blockId }, CancellationToken.None);

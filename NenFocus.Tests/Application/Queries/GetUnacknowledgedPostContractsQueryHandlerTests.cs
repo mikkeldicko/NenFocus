@@ -31,7 +31,7 @@ public class GetUnacknowledgedPostContractsQueryHandlerTests
         changeWindow: null,
         allowCancellation: true,
         plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-        localSealedAt: StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
+        sealedAt: At.Utc(StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)), timeZone: At.UtcZone);
 
     [Fact]
     public async Task HandleAsync_NoUnacknowledgedContracts_ReturnsEmpty()

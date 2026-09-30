@@ -1,3 +1,5 @@
+using NenFocus.Domain.ValueObjects;
+
 namespace NenFocus.Domain.Services;
 
 /// <summary>
@@ -10,8 +12,8 @@ namespace NenFocus.Domain.Services;
 public interface IPlannedFocusHoursCalculator
 {
     /// <summary>
-    /// A range that crosses midnight has its duration split proportionally between
-    /// every calendar day it touches — e.g. 23:00-01:00 credits 1 hour to each day.
+    /// Hours per the user's local calendar day, in real time (UserTimeZone.SplitByDay) — so a
+    /// range crossing midnight credits each day its share (23:00-01:00: 1 hour each), and a DST night counts real hours.
     /// </summary>
-    IReadOnlyDictionary<DateOnly, double> Calculate(IEnumerable<(DateTime Start, DateTime End)> focusBlockRanges);
+    IReadOnlyDictionary<DateOnly, double> Calculate(IEnumerable<TimeSlot> focusTime, UserTimeZone timeZone);
 }

@@ -22,6 +22,11 @@ public class MomentRuleTests
         "NenFocus.Infrastructure/Persistence/NenFocusDbContext.cs",
         // Permanent: the machine clock (DateTime.UtcNow + debug offset) is where "now" enters.
         "NenFocus.Infrastructure/Services/SystemClock.cs",
+
+        // Gap 97: GetForDayAsync still takes a local date and derives UTC instants itself (the UTC-days trap).
+        "NenFocus.Infrastructure/Persistence/Repositories/PlannedBlockRepository.cs",
+        // Gap 97: GetHistoryAsync reads its dates as UTC days; Gap 97 gives it the user's days.
+        "NenFocus.Infrastructure/Persistence/Repositories/SessionRepository.cs",
     ];
 
     [Fact]

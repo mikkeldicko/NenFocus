@@ -14,7 +14,6 @@ using NenFocus.Application.Queries.ComputePlannedFocusHours;
 using NenFocus.Application.Queries.GetNenContractsForDateRange;
 using NenFocus.Application.Queries.GetAllBlockPresets;
 using NenFocus.Application.Queries.GetAllContractPresets;
-using NenFocus.Application.Queries.GetContractWorkHoursForDate;
 using NenFocus.Application.Queries.GetNenContractCompletionReadiness;
 using NenFocus.Application.Queries.GetNenContractForEdit;
 using NenFocus.Application.Queries.GetPlannedBlocksForDay;
@@ -55,6 +54,10 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     private readonly IQueryDispatcher _queryDispatcher;
     private readonly ICommandDispatcher _commandDispatcher;
     private readonly IPlannerClockService _clockService;
+    private readonly ISystemClock _clock;
+
+    /// <summary>What the user's clock shows now — through the user's time zone (Gap 88).</summary>
+    private DateTime LocalNow => _clock.TimeZone.ToCalendarTime(_clock.Now);
     private readonly ISessionStateService _sessionState;
 
     private readonly Dictionary<Guid, PlannedBlockDto> _blocksInWeek = new();
@@ -84,7 +87,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     {
         get
         {
-            int day = (int)_clockService.LocalNow.DayOfWeek;
+            int day = (int)LocalNow.DayOfWeek;
             int mondayBasedIndex = (day == 0) ? 6 : day - 1;
             return mondayBasedIndex + 1;
         }
@@ -264,24 +267,14 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     [ObservableProperty] private bool _isSplitTotalMismatched;
 
     // Live, non-blocking — informational only, the same way FormError/SplitError already
-    // are elsewhere in this ViewModel. Confirm's own server-side validation stays the real
-    // backstop; this exists purely so a real scheduling conflict is visible before the user
-    // even tries to confirm, instead of only surfacing after a round trip. Deliberately
-    // does NOT check First's End against Second's Start — a prior version did, and the
-    // architect explicitly rejected it: Split's whole point is placing each piece anywhere
-    // in the day, not necessarily adjacent to each other. Only two things are checked here:
-    // do the two pieces (or a piece and any other already-scheduled block) overlap, and does
-    // either piece fall outside the governing contract's Work Hours for that day. The
-    // total-duration check lives separately now, via IsSplitTotalMismatched above.
+    // are elsewhere in this ViewModel. Only one thing is checked live: do the two pieces
+    // overlap each other (TimeSlot.Overlaps — the rule SplitPlannedBlockValidator asks too,
+    // no database). Whether a piece clashes with another block, is in the past or falls
+    // outside the contract's hours is answered on Confirm by the validator's placement
+    // check (Gap 88 phase 8) — the ViewModel keeps no copy of those rules. Deliberately
+    // does NOT check First's End against Second's Start: Split's whole point is placing
+    // each piece anywhere in the day. The total-duration check is IsSplitTotalMismatched above.
     [ObservableProperty] private string? _splitWarningMessage;
-
-    // Resolved once when the dialog opens (the block's own ContractId, and that contract's
-    // Work Hours window for FormDate, via GetContractWorkHoursForDateQuery) — reused on every
-    // keystroke by RecomputeSplitSummary rather than re-queried live, since neither the
-    // contract nor the date can change while this dialog is open. Null WorkHours means no
-    // constraint that day (matches AllowsBlockPlacement's own "no policy = no restriction").
-    private Guid? _splitContractId;
-    private ContractWorkHoursDto? _splitWorkHours;
 
     // Duration-preserving shift, mirroring the main form's own PlannerTimeShiftMath
     // wiring — independently per piece, since First and Second never affect each other.
@@ -558,7 +551,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         if (SelectedContract is { } contract)
         {
             var suggestions = await _queryDispatcher.QueryAsync(
-                new GetSuggestedRedemptionPlacementsQuery(contract.Id, _clockService.LocalNow.ToUniversalTime()));
+                new GetSuggestedRedemptionPlacementsQuery(contract.Id, _clock.Now));
             foreach (var suggestion in suggestions)
                 CoverDeficitOptions.Add(suggestion);
         }
@@ -605,7 +598,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         _isCreatingRedemption = true;
         if (SelectedContract?.RedemptionPlacementPolicy == RedemptionPlacementPolicy.CurrentDayOnly)
         {
-            var today = DateOnly.FromDateTime(_clockService.LocalNow.Date);
+            var today = DateOnly.FromDateTime(LocalNow.Date);
             _redemptionContractStartDate = today;
             _redemptionContractEndDate = today;
         }
@@ -621,8 +614,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         IsFocusBlock = true; // redemption is Focus-only
         SelectedPreset = AvailablePresets.FirstOrDefault(p => p.Id == option.PresetId);
 
-        var localStart = option.SuggestedStart.ToLocalTime();
-        var localEnd = option.SuggestedEnd.ToLocalTime();
+        var (localStart, localEnd) = _clock.TimeZone.ToCalendarTimes(option.Suggested);
         var blockDate = DateTime.SpecifyKind(localStart.Date, DateTimeKind.Utc);
         FormDate = new DateTimeOffset(blockDate, TimeSpan.Zero);
         SetFormTimes(localStart.TimeOfDay, localEnd.TimeOfDay);
@@ -690,6 +682,12 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     // Cancelled blocks never reach the Planner tile list at all).
     public bool ShowSnapshotNoSessionMessage =>
         SnapshotBlock is not null && SnapshotBlock.BlockPresetType == BlockPresetType.Focus && SnapshotSession is null;
+
+    // The snapshot header's block times as the user's calendar shows them — the ViewModel
+    // asks the clock (the ViewModel Forbidden Zone: no time math here), while the DTO's
+    // Shown stays a TimeSlot.
+    public DateTime SnapshotStart => SnapshotBlock is null ? default : _clock.TimeZone.ToCalendarTimes(SnapshotBlock.Shown).Start;
+    public DateTime SnapshotEnd => SnapshotBlock is null ? default : _clock.TimeZone.ToCalendarTimes(SnapshotBlock.Shown).End;
 
     // Mirrors SplitPlannedBlockValidator's gating conditions exactly — sourced from
     // dto.IsUnderInEffectContract + dto.ContractStrictnessRule (Application-computed),
@@ -775,11 +773,13 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         IQueryDispatcher queryDispatcher,
         ICommandDispatcher commandDispatcher,
         IPlannerClockService clockService,
-        ISessionStateService sessionState)
+        ISessionStateService sessionState,
+        ISystemClock clock)
     {
         _queryDispatcher = queryDispatcher;
         _commandDispatcher = commandDispatcher;
         _clockService = clockService;
+        _clock = clock;
         _sessionState = sessionState;
         _sessionState.SessionChanged += OnSessionChanged;
         _sessionState.PostSessionAcknowledged += OnPostSessionAcknowledged;
@@ -789,7 +789,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
         GenerateTimeOptions();
 
-        WeekStart = StartOfWeek(_clockService.LocalNow.Date);
+        WeekStart = StartOfWeek(LocalNow.Date);
         BuildDayHeaders();
 
         _clockService.Tick += OnClockTick;
@@ -839,7 +839,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
     private void UpdateCurrentTimePosition()
     {
-        var now = _clockService.LocalNow;
+        var now = LocalNow;
         var weekEnd = WeekStart.AddDays(7);
         IsTodayInView = now.Date >= WeekStart.Date && now.Date < weekEnd.Date;
 
@@ -881,7 +881,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private async Task GoToTodayAsync()
     {
-        var today = StartOfWeek(_clockService.LocalNow.Date);
+        var today = StartOfWeek(LocalNow.Date);
         if (today == WeekStart) return;
         await NavigateWeekAsync(today);
     }
@@ -910,7 +910,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
     private void BuildDayHeaders()
     {
-        var today = _clockService.LocalNow.Date;
+        var today = LocalNow.Date;
         DayHeaders.Clear();
         for (int i = 0; i < 7; i++)
             DayHeaders.Add(new WeekDayHeaderViewModel(WeekStart.AddDays(i), today));
@@ -1234,7 +1234,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     /// Recomputes the always-visible First/Second/Total duration summary,
     /// IsSplitTotalMismatched, and the non-blocking SplitWarningMessage — called
     /// unconditionally (before any _isPopulatingSplitTimes early-return) from all four
-    /// Split OnXChanged handlers and once from OpenSplitDialogAsync, so it reflects
+    /// Split OnXChanged handlers and once from OpenSplitDialog, so it reflects
     /// whatever's currently in the four fields regardless of whether the last change was
     /// typed or a programmatic shift-preserve.
     /// </summary>
@@ -1259,65 +1259,14 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        SplitWarningMessage = FindSplitOverlap(firstStart, firstEnd, secondStart, secondEnd)
-            ?? FindSplitWorkHoursViolation(firstStart, firstEnd, secondStart, secondEnd);
-    }
-
-    /// <summary>
-    /// Checks the two resulting pieces against each other, then each against every other
-    /// already-scheduled block that day (excluding the original block being split itself —
-    /// its own footprint would otherwise trivially "conflict" with both pieces). Both
-    /// pieces are assumed to land on FormDate — the dialog has no per-piece date picker, so
-    /// this matches the only placement it can actually produce (mirrors
-    /// SplitPlannedBlockValidator's own "no recursive crossing" assumption).
-    /// </summary>
-    private string? FindSplitOverlap(TimeSpan firstStart, TimeSpan firstEnd, TimeSpan secondStart, TimeSpan secondEnd)
-    {
-        if (firstStart < secondEnd && secondStart < firstEnd)
-            return "First Block and Second Block overlap each other.";
-
+        // Both pieces land on FormDate — the dialog has no per-piece date picker. An empty or
+        // inverted piece has no slot and is reported by the form's own time checks instead.
         var dayDate = FormDate.Date;
-        DateTime ToUtc(TimeSpan t) => DateTime.SpecifyKind(dayDate.Add(t), DateTimeKind.Local).ToUniversalTime();
-
-        string? CheckAgainstOthers(string label, TimeSpan start, TimeSpan end)
-        {
-            var startUtc = ToUtc(start);
-            var endUtc = ToUtc(end);
-            foreach (var other in _blocksInWeek.Values)
-            {
-                if (other.Id == _editingBlockId) continue;
-                if (other.Start < endUtc && startUtc < other.End)
-                {
-                    var otherStart = other.Start.ToLocalTime();
-                    var otherEnd = other.End.ToLocalTime();
-                    return $"{label} overlaps an existing block ({DateTimeRangeToLabelConverter.FormatRange24Hour(otherStart, otherEnd)}).";
-                }
-            }
-            return null;
-        }
-
-        return CheckAgainstOthers("First Block", firstStart, firstEnd) ?? CheckAgainstOthers("Second Block", secondStart, secondEnd);
-    }
-
-    /// <summary>
-    /// Uses the SAME ContractDay.Contains rule AllowsBlockPlacement checks internally, against
-    /// the window GetContractWorkHoursForDateQuery already resolved once in
-    /// OpenSplitDialogAsync — not re-deriving the rule, just applying it locally to avoid a
-    /// query per keystroke.
-    /// </summary>
-    private string? FindSplitWorkHoursViolation(TimeSpan firstStart, TimeSpan firstEnd, TimeSpan secondStart, TimeSpan secondEnd)
-    {
-        if (_splitWorkHours is not { } wh) return null;
-
-        var window = new ContractDay(DateOnly.FromDateTime(wh.Start), wh.Start, wh.End, floor: null);
-        var dayDate = FormDate.Date;
-        var windowText = WorkHoursRangeToLabelConverter.FormatKnownWindow12Hour(TimeOnly.FromDateTime(wh.Start), TimeOnly.FromDateTime(wh.End));
-
-        if (!window.Contains(dayDate.Add(firstStart), dayDate.Add(firstEnd)))
-            return $"First Block falls outside the contract's hours ({windowText}).";
-        if (!window.Contains(dayDate.Add(secondStart), dayDate.Add(secondEnd)))
-            return $"Second Block falls outside the contract's hours ({windowText}).";
-        return null;
+        var first = TimeSlot.TryCreate(_clock.TimeZone.ToMoment(dayDate.Add(firstStart)), _clock.TimeZone.ToMoment(dayDate.Add(firstEnd)));
+        var second = TimeSlot.TryCreate(_clock.TimeZone.ToMoment(dayDate.Add(secondStart)), _clock.TimeZone.ToMoment(dayDate.Add(secondEnd)));
+        SplitWarningMessage = first is not null && second is not null && first.Overlaps(second)
+            ? "First Block and Second Block overlap each other."
+            : null;
     }
 
     /// <summary>
@@ -1343,18 +1292,19 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// Resolves FormDate + a Start/End time-of-day pair into actual UTC instants, rolling
-    /// End onto the day after FormDate when it's at or before Start — the non-draft form's
-    /// single source of truth for "what does this range actually mean," shared by the
-    /// redemption preview and Save so they can never resolve it differently.
+    /// Resolves FormDate + a Start/End time-of-day pair into a TimeSlot, rolling End onto
+    /// the day after FormDate when it's at or before Start — the non-draft form's single
+    /// source of truth for "what does this range actually mean," shared by the redemption
+    /// preview and Save so they can never resolve it differently. Null only if the pair is
+    /// empty even after rollover (can't happen — rollover always yields end after start).
     /// </summary>
-    private (DateTime StartUtc, DateTime EndUtc) ResolveFormRangeUtc(TimeSpan startTime, TimeSpan endTime)
+    private TimeSlot? ResolveFormRangeSlot(TimeSpan startTime, TimeSpan endTime)
     {
         var dayDate = FormDate.Date;
         var endDate = PlannerTimeShiftMath.EndRollsToNextDay(startTime, endTime) ? dayDate.AddDays(1) : dayDate;
-        var startUtc = DateTime.SpecifyKind(dayDate.Add(startTime), DateTimeKind.Local).ToUniversalTime();
-        var endUtc = DateTime.SpecifyKind(endDate.Add(endTime), DateTimeKind.Local).ToUniversalTime();
-        return (startUtc, endUtc);
+        return TimeSlot.TryCreate(
+            _clock.TimeZone.ToMoment(dayDate.Add(startTime)),
+            _clock.TimeZone.ToMoment(endDate.Add(endTime)));
     }
 
     private async Task LoadWeekAsync()
@@ -1395,8 +1345,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
     private PlannedBlockTileViewModel? BuildTile(PlannedBlockDto dto, int columnIndex)
     {
-        var localStart = dto.Start.ToLocalTime();
-        var localEnd = dto.End.ToLocalTime();
+        var (localStart, localEnd) = _clock.TimeZone.ToCalendarTimes(dto.Shown);
 
         var dayStart = WeekStart.AddDays(columnIndex);
         var visibleStart = dayStart.AddHours(FirstHour);
@@ -1405,8 +1354,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         var position = PlannerLayout.GetTilePosition(localStart, localEnd, visibleStart, visibleEnd, HourRowHeight);
         if (position is null) return null;
 
-        var localDto = dto with { Start = localStart, End = localEnd };
-        return new PlannedBlockTileViewModel(localDto, dto.BlockPresetType, columnIndex, position.Value.Top, position.Value.Height);
+        return new PlannedBlockTileViewModel(dto, localStart, localEnd, dto.BlockPresetType, columnIndex, position.Value.Top, position.Value.Height);
     }
 
     [RelayCommand]
@@ -1445,8 +1393,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
             FormTitle = "Edit Draft Block";
             ResetForm();
 
-            var draftLocalStart = draft.Start.ToLocalTime();
-            var draftLocalEnd = draft.End.ToLocalTime();
+            var (draftLocalStart, draftLocalEnd) = _clock.TimeZone.ToCalendarTimes(draft.Slot);
             var draftBlockDate = DateTime.SpecifyKind(draftLocalStart.Date, DateTimeKind.Utc);
             FormDate = new DateTimeOffset(draftBlockDate, TimeSpan.Zero);
 
@@ -1481,8 +1428,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         FormTitle = "Edit Block";
         ResetForm();
 
-        var localStart = dto.Start.ToLocalTime();
-        var localEnd = dto.End.ToLocalTime();
+        var (localStart, localEnd) = _clock.TimeZone.ToCalendarTimes(dto.Shown);
         var blockDate = DateTime.SpecifyKind(localStart.Date, DateTimeKind.Utc);
         FormDate = new DateTimeOffset(blockDate, TimeSpan.Zero);
 
@@ -1544,6 +1490,8 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     {
         OnPropertyChanged(nameof(CanDeleteSnapshotBlock));
         OnPropertyChanged(nameof(ShowSnapshotNoSessionMessage));
+        OnPropertyChanged(nameof(SnapshotStart));
+        OnPropertyChanged(nameof(SnapshotEnd));
     }
 
     partial void OnSnapshotSessionChanged(SessionSnapshotDto? value)
@@ -1592,7 +1540,8 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
             FormError = "Invalid time format. Use HH:mm.";
             return;
         }
-        var (startUtc, endUtc) = ResolveFormRangeUtc(startTime, endTime);
+        var slot = ResolveFormRangeSlot(startTime, endTime);
+        if (slot is null) { FormError = "End time must be after start time."; return; }
 
         var blockPresetType = IsFocusBlock ? BlockPresetType.Focus : BlockPresetType.Background;
 
@@ -1624,8 +1573,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
                 {
                     PresetId = SelectedPreset.Id,
                     BlockPresetType = blockPresetType,
-                    Start = startUtc,
-                    End = endUtc,
+                    Slot = slot,
                     ContractId = originalDto!.ContractId,
                     // A type change is still an edit, not a new manual placement — only an
                     // already-redemption-linked block (non-null ContractId) gets its
@@ -1643,8 +1591,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
                 {
                     BlockId = _editingBlockId.Value,
                     PresetId = SelectedPreset.Id,
-                    Start = startUtc,
-                    End = endUtc
+                    Slot = slot
                 });
                 if (!result.Success) { FormError = result.ErrorMessage; return; }
                 if (result.RedemptionCapped) DragError = RedemptionCapMessage;
@@ -1662,8 +1609,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
             {
                 PresetId = SelectedPreset.Id,
                 BlockPresetType = blockPresetType,
-                Start = startUtc,
-                End = endUtc,
+                Slot = slot,
                 DeclineRedemption = !_isCreatingRedemption
             });
             if (!result.Success) { FormError = result.ErrorMessage; return; }
@@ -1698,37 +1644,28 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         if (endTime <= startTime) { FormError = "End time must be after start time."; return false; }
 
         var dayDate = FormDate.Date;
-        var localStart = DateTime.SpecifyKind(dayDate.Add(startTime), DateTimeKind.Local);
-        var localEnd = DateTime.SpecifyKind(dayDate.Add(endTime), DateTimeKind.Local);
+        var localStart = dayDate.Add(startTime);
+        var localEnd = dayDate.Add(endTime);
 
         bool isFocus = IsFocusBlock;
         var placementError = ValidateDraftPlacement(localStart, localEnd, isFocus);
         if (placementError is not null) { FormError = placementError; return false; }
 
-        var startUtc = localStart.ToUniversalTime();
-        var endUtc = localEnd.ToUniversalTime();
+        var slot = TimeSlot.TryCreate(_clock.TimeZone.ToMoment(localStart), _clock.TimeZone.ToMoment(localEnd));
+        if (slot is null) { FormError = "End time must be after start time."; return false; }
 
-        var columnIndex = (dayDate - WeekStart.Date).Days;
-        if (columnIndex is >= 0 and <= 6)
-        {
-            var excludeId = _editingIsDraft ? _editingBlockId ?? Guid.Empty : Guid.Empty;
-            var dayTiles = Tiles.Where(t => t.ColumnIndex == columnIndex);
-            if (PlannerDragMath.WouldCollide(excludeId, isFocus, startUtc, endUtc, dayTiles))
-            {
-                FormError = "Focus blocks cannot overlap — choose a different time.";
-                return false;
-            }
-        }
+        // No overlap check here: drafts aren't blocks yet, so "is this Focus time taken" is
+        // answered once, at Seal, by BlockPlacementChecker on the whole calendar (Gap 88 phase 8).
 
         if (_editingIsDraft && _editingBlockId.HasValue)
         {
             var idx = _draftBlocks.FindIndex(d => d.Id == _editingBlockId.Value);
             if (idx >= 0)
-                _draftBlocks[idx] = new ContractDraftBlock(_editingBlockId.Value, SelectedPreset.Id, SelectedPreset.Name, startUtc, endUtc, isFocus);
+                _draftBlocks[idx] = new ContractDraftBlock(_editingBlockId.Value, SelectedPreset.Id, SelectedPreset.Name, slot, isFocus);
         }
         else
         {
-            _draftBlocks.Add(new ContractDraftBlock(Guid.NewGuid(), SelectedPreset.Id, SelectedPreset.Name, startUtc, endUtc, isFocus));
+            _draftBlocks.Add(new ContractDraftBlock(Guid.NewGuid(), SelectedPreset.Id, SelectedPreset.Name, slot, isFocus));
         }
 
         RebuildDraftTilesInPlace();
@@ -1760,33 +1697,26 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     // resulting ranges are placed back-to-back; repositioning either half afterward is a
     // separate, ordinary drag/move operation, not part of this command.
     [RelayCommand]
-    private async Task OpenSplitDialogAsync()
+    private void OpenSplitDialog()
     {
         if (!CanSplitBlock) return;
 
         DateTime localStart, localEnd;
-        Guid? contractId;
         if (_isCreatingRedemption)
         {
             // Nothing persisted yet — bisect whatever the form currently holds, using the
             // same day-rollover resolution Save itself uses so a redemption placement that
-            // crosses midnight splits correctly too. No _blocksInWeek entry exists yet
-            // either, so the contract comes from SelectedContract instead (the same source
-            // _redemptionContractStartDate/EndDate were populated from when redemption mode
-            // began — see OpenRedemptionCreateFormAsync).
+            // crosses midnight splits correctly too.
             if (!TryParseFormTime(FormStartTime, out var formStart) || !TryParseFormTime(FormEndTime, out var formEnd)) return;
-            var (startUtc, endUtc) = ResolveFormRangeUtc(formStart, formEnd);
-            localStart = startUtc.ToLocalTime();
-            localEnd = endUtc.ToLocalTime();
-            contractId = SelectedContract?.Id;
+            var slot = ResolveFormRangeSlot(formStart, formEnd);
+            if (slot is null) return;
+            (localStart, localEnd) = _clock.TimeZone.ToCalendarTimes(slot);
         }
         else
         {
             if (!_editingBlockId.HasValue) return;
             if (!_blocksInWeek.TryGetValue(_editingBlockId.Value, out var dto)) return;
-            localStart = dto.Start.ToLocalTime();
-            localEnd = dto.End.ToLocalTime();
-            contractId = dto.ContractId;
+            (localStart, localEnd) = _clock.TimeZone.ToCalendarTimes(dto.Shown);
         }
 
         SplitError = null;
@@ -1802,14 +1732,6 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         _preservedSplitFirstDuration = midpoint - localStart;
         _preservedSplitSecondDuration = localEnd - midpoint;
         SplitOriginalDuration = localEnd - localStart;
-
-        // Resolved once here rather than per-keystroke: neither the contract nor the split's
-        // date can change while this dialog is open, so RecomputeSplitSummary (called on
-        // every field edit) just reuses this cached window instead of re-querying live.
-        _splitContractId = contractId;
-        _splitWorkHours = contractId is { } id
-            ? await _queryDispatcher.QueryAsync(new GetContractWorkHoursForDateQuery(id, DateOnly.FromDateTime(localStart)))
-            : null;
 
         RegenerateSplitEndTimeOptions(SplitFirstStartTime, SplitFirstEndTimeOptions);
         RegenerateSplitEndTimeOptions(SplitSecondStartTime, SplitSecondEndTimeOptions);
@@ -1889,10 +1811,10 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         }
 
         var dayDate = FormDate.Date;
-        var firstStartUtc = DateTime.SpecifyKind(dayDate.Add(firstStart), DateTimeKind.Local).ToUniversalTime();
-        var firstEndUtc = DateTime.SpecifyKind(dayDate.Add(firstEnd), DateTimeKind.Local).ToUniversalTime();
-        var secondStartUtc = DateTime.SpecifyKind(dayDate.Add(secondStart), DateTimeKind.Local).ToUniversalTime();
-        var secondEndUtc = DateTime.SpecifyKind(dayDate.Add(secondEnd), DateTimeKind.Local).ToUniversalTime();
+        var firstSlot = TimeSlot.TryCreate(_clock.TimeZone.ToMoment(dayDate.Add(firstStart)), _clock.TimeZone.ToMoment(dayDate.Add(firstEnd)));
+        if (firstSlot is null) { SplitError = "First block's end time must be after its start time."; return; }
+        var secondSlot = TimeSlot.TryCreate(_clock.TimeZone.ToMoment(dayDate.Add(secondStart)), _clock.TimeZone.ToMoment(dayDate.Add(secondEnd)));
+        if (secondSlot is null) { SplitError = "Second block's end time must be after its start time."; return; }
 
         if (_isCreatingRedemption)
         {
@@ -1909,8 +1831,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
             {
                 PresetId = SelectedPreset.Id,
                 BlockPresetType = BlockPresetType.Focus,
-                Start = firstStartUtc,
-                End = firstEndUtc
+                Slot = firstSlot
             });
             if (!firstResult.Success) { SplitError = firstResult.ErrorMessage; return; }
 
@@ -1918,8 +1839,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
             {
                 PresetId = SelectedPreset.Id,
                 BlockPresetType = BlockPresetType.Focus,
-                Start = secondStartUtc,
-                End = secondEndUtc
+                Slot = secondSlot
             });
             if (!secondResult.Success)
             {
@@ -1935,10 +1855,8 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         var result = await _commandDispatcher.DispatchAsync(new SplitPlannedBlockCommand
         {
             OriginalBlockId = _editingBlockId!.Value,
-            FirstBlockStart = firstStartUtc,
-            FirstBlockEnd = firstEndUtc,
-            SecondBlockStart = secondStartUtc,
-            SecondBlockEnd = secondEndUtc
+            First = firstSlot,
+            Second = secondSlot
         });
 
         if (!result.Success)
@@ -2028,7 +1946,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         if (draftIndex >= 0)
         {
             var placementError = ValidateDraftPlacement(
-                result.NewStartUtc.ToLocalTime(), result.NewEndUtc.ToLocalTime(), _draftBlocks[draftIndex].IsFocus);
+                result.NewLocalStart, result.NewLocalEnd, _draftBlocks[draftIndex].IsFocus);
             if (placementError is not null)
             {
                 // No rebuild needed: _draftBlocks is untouched, and the code-behind's
@@ -2039,7 +1957,9 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
                 return;
             }
 
-            _draftBlocks[draftIndex] = _draftBlocks[draftIndex] with { Start = result.NewStartUtc, End = result.NewEndUtc };
+            var draftSlot = TimeSlot.TryCreate(_clock.TimeZone.ToMoment(result.NewLocalStart), _clock.TimeZone.ToMoment(result.NewLocalEnd));
+            if (draftSlot is null) { DragError = "End time must be after start time."; return; }
+            _draftBlocks[draftIndex] = _draftBlocks[draftIndex] with { Slot = draftSlot };
             RebuildDraftTilesInPlace();
             await RefreshDayFloorPreviewsAsync();
             return;
@@ -2057,12 +1977,13 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
             return;
         }
 
+        var slot = TimeSlot.TryCreate(_clock.TimeZone.ToMoment(result.NewLocalStart), _clock.TimeZone.ToMoment(result.NewLocalEnd));
+        if (slot is null) { DragError = "End time must be after start time."; return; }
         var updateResult = await _commandDispatcher.DispatchAsync(new UpdatePlannedBlockCommand
         {
             BlockId   = result.BlockId,
             PresetId = dto.PresetId,
-            Start     = result.NewStartUtc,
-            End       = result.NewEndUtc
+            Slot      = slot
         });
 
         if (!updateResult.Success)
@@ -2090,7 +2011,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         IsNenContractPopoverVisible = false;
         WizardViewModel = new ContractWizardViewModel(
             queryDispatcher: _queryDispatcher,
-            initialStartDate: DateOnly.FromDateTime(_clockService.LocalNow.Date),
+            initialStartDate: DateOnly.FromDateTime(LocalNow.Date),
             onReadyToSchedule: BeginDrafting,
             onCancel: CloseWizard);
         IsWizardVisible = true;
@@ -2138,7 +2059,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
             foreach (var block in _editingContractPayload.Blocks)
             {
                 _draftBlocks.Add(new ContractDraftBlock(
-                    Guid.NewGuid(), block.PresetId, block.PresetName, block.Start, block.End, block.IsFocus));
+                    Guid.NewGuid(), block.PresetId, block.PresetName, block.Slot, block.IsFocus));
             }
         }
 
@@ -2157,8 +2078,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     {
         foreach (var draft in _draftBlocks)
         {
-            var localStart = draft.Start.ToLocalTime();
-            var localEnd = draft.End.ToLocalTime();
+            var (localStart, localEnd) = _clock.TimeZone.ToCalendarTimes(draft.Slot);
             var dayIndex = (localStart.Date - WeekStart.Date).Days;
             if (dayIndex < 0 || dayIndex > 6) continue;
 
@@ -2175,14 +2095,13 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
                 PresetId = draft.PresetId,
                 PresetName = draft.PresetName,
                 BlockPresetType = blockPresetType,
-                Start = localStart,
-                End = localEnd,
+                Shown = draft.Slot,
                 IsCompleted = false,
                 HasEnded = false
             };
 
             Tiles.Add(new PlannedBlockTileViewModel(
-                syntheticDto, blockPresetType, dayIndex, position.Value.Top, position.Value.Height, isDraft: true));
+                syntheticDto, localStart, localEnd, blockPresetType, dayIndex, position.Value.Top, position.Value.Height, isDraft: true));
         }
     }
 
@@ -2205,7 +2124,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     // to reconstruct it locally. Focus-only: Background blocks are never Work-Hours constrained.
     private string? ValidateDraftPlacement(DateTime localStart, DateTime localEnd, bool isFocus)
     {
-        if (localStart <= _clockService.LocalNow)
+        if (localStart <= LocalNow)
             return "Blocks cannot start in the past.";
 
         if (_draftRules is not null)
@@ -2232,7 +2151,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
         var focusRanges = _draftBlocks
             .Where(d => d.IsFocus)
-            .Select(d => (d.Start, d.End))
+            .Select(d => d.Slot)
             .ToList();
 
         var hoursByDay = await _queryDispatcher.QueryAsync(
@@ -2268,7 +2187,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         try
         {
             var blocks = _draftBlocks
-                .Select(d => new NenContractBlockSpec(d.PresetId, d.Start, d.End, d.IsFocus))
+                .Select(d => new NenContractBlockSpec(d.PresetId, d.Slot, d.IsFocus))
                 .ToList();
 
             bool success;

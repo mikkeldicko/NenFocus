@@ -11,5 +11,5 @@ namespace NenFocus.Application.Interfaces;
 /// </summary>
 public interface IBreakTransitionResponder
 {
-    Task RespondAsync(IReadOnlyList<BreakTransition> transitions, DateTime at, bool keepBlockingDuringBreaks, CancellationToken ct = default);
+    Task RespondAsync(IReadOnlyList<BreakTransition> transitions, Moment at, bool keepBlockingDuringBreaks, CancellationToken ct = default);
 }

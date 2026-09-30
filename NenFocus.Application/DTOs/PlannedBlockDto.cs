@@ -1,4 +1,5 @@
 using NenFocus.Domain.Enums;
+using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Application.DTOs;
 
@@ -17,8 +18,7 @@ public sealed record PlannedBlockDto
     /// reflects the actual worked window. A grace-period-late start is left untrimmed, since
     /// it's credited as full duration.
     /// </summary>
-    public DateTime Start { get; init; }
-    public DateTime End { get; init; }
+    public TimeSlot Shown { get; init; } = null!;
 
     public bool IsCompleted { get; init; }
 
@@ -82,12 +82,12 @@ public sealed record PlannedBlockDto
     /// <summary>The covering contract's Name when ContractBadge is Bonus, otherwise null.</summary>
     public string? BonusContractName { get; init; }
 
-    public int DurationMinutes => (int)(End - Start).TotalMinutes;
+    public int DurationMinutes => (int)Shown.Length.TotalMinutes;
 
     /// <summary>
     /// Same span as DurationMinutes, as a TimeSpan — lets the Planner snapshot view bind
     /// through DurationToStringConverter without the ViewModel doing its own TimeSpan math
     /// (the ViewModel Forbidden Zone's "No Math" rule).
     /// </summary>
-    public TimeSpan Duration => End - Start;
+    public TimeSpan Duration => Shown.Length;
 }

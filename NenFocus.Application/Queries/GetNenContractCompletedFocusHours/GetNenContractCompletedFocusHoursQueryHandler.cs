@@ -1,3 +1,4 @@
+using NenFocus.Domain.ValueObjects;
 using NenFocus.Application.Interfaces;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
@@ -39,7 +40,7 @@ public sealed class GetNenContractCompletedFocusHoursQueryHandler
         if (contract is null)
             return new Dictionary<DateOnly, double>();
 
-        var now = _clock.UtcNow;
+        var now = _clock.Now;
         var contractBlocks = await _blocks.GetForContractAsync(query.ContractId, ct);
         var focusBlocks = contractBlocks.OfType<FocusBlock>().ToList();
 
@@ -53,17 +54,17 @@ public sealed class GetNenContractCompletedFocusHoursQueryHandler
         // alike — local-converted and handed to the calculator once, so a window spanning
         // midnight (in either source) is split across the days it actually occupies exactly
         // like the planned-hours side already does.
-        var creditedWindows = new List<(DateTime Start, DateTime End)>();
+        var creditedWindows = new List<TimeSlot>();
 
         foreach (var block in focusBlocks)
         {
             var session = await _sessions.GetByOriginatingBlockIdAsync(block.Id, ct);
             var actualElapsedMinutes = session?.GetElapsedTime(now)?.TotalMinutes ?? 0;
             var window = _classifier.CreditedWindow(
-                block.Start, block.End, block.RitualCompletedAt, session?.EndedAt, actualElapsedMinutes);
+                block.Scheduled, block.RitualCompletedAt, session?.EndedAt, actualElapsedMinutes);
 
             if (window is { } w)
-                creditedWindows.Add((_clock.ToLocal(w.Start), _clock.ToLocal(w.End)));
+                creditedWindows.Add(w);
         }
 
         // The contract's dates are local, but GetHistoryAsync reads its dates as UTC days — so
@@ -77,15 +78,15 @@ public sealed class GetNenContractCompletedFocusHoursQueryHandler
             if (session.Origin != SessionOrigin.Spontaneous) continue;
             if (!focusPresetIds.Contains(session.BlockPresetId)) continue;
             if (session.StartedAt is not { } startedAt) continue;
-            var localDate = _clock.ToLocalDate(startedAt);
+            var localDate = _clock.TimeZone.DateOf(startedAt);
             if (localDate < contract.StartDate || localDate > contract.EndDate) continue;
 
             var minutes = session.GetElapsedTime(now)?.TotalMinutes ?? 0;
             if (minutes <= 0) continue;
 
-            creditedWindows.Add((_clock.ToLocal(startedAt), _clock.ToLocal(startedAt.AddMinutes(minutes))));
+            creditedWindows.Add(new TimeSlot(startedAt, startedAt + TimeSpan.FromMinutes(minutes)));
         }
 
-        return _calculator.Calculate(creditedWindows);
+        return _calculator.Calculate(creditedWindows, _clock.TimeZone);
     }
 }

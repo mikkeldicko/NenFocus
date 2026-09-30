@@ -18,7 +18,7 @@ public class EfCoreUnitOfWorkTests : SqliteRepositoryTestBase
     [Fact]
     public async Task CommitAsync_PersistsPendingChanges()
     {
-        var preset = BlockPreset.Create(Guid.NewGuid(), "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, DateTime.UtcNow);
+        var preset = BlockPreset.Create(Guid.NewGuid(), "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(DateTime.UtcNow));
         await Context.BlockPresets.AddAsync(preset);
 
         await CreateUnitOfWork().CommitAsync();
@@ -39,7 +39,7 @@ public class EfCoreUnitOfWorkTests : SqliteRepositoryTestBase
             .Returns(Task.CompletedTask)
             .AndDoes(ci => capturedEvents = ci.Arg<IEnumerable<DomainEvent>>().ToList());
 
-        var preset = BlockPreset.Create(Guid.NewGuid(), "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, DateTime.UtcNow);
+        var preset = BlockPreset.Create(Guid.NewGuid(), "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(DateTime.UtcNow));
         await Context.BlockPresets.AddAsync(preset);
 
         await CreateUnitOfWork().CommitAsync();
@@ -52,7 +52,7 @@ public class EfCoreUnitOfWorkTests : SqliteRepositoryTestBase
     [Fact]
     public async Task CommitAsync_ClearsDomainEventsAfterPublishing()
     {
-        var preset = BlockPreset.Create(Guid.NewGuid(), "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, DateTime.UtcNow);
+        var preset = BlockPreset.Create(Guid.NewGuid(), "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(DateTime.UtcNow));
         await Context.BlockPresets.AddAsync(preset);
 
         await CreateUnitOfWork().CommitAsync();

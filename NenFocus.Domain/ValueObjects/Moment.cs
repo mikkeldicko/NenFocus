@@ -15,7 +15,17 @@ public readonly record struct Moment : IComparable<Moment>
     /// <summary>The raw UTC value, for the Domain's own conversions (<see cref="UserTimeZone"/>).</summary>
     internal DateTime Utc => DateTime.SpecifyKind(_utc, DateTimeKind.Utc);
 
-    internal static Moment FromUtc(DateTime utc) => new(DateTime.SpecifyKind(utc, DateTimeKind.Utc));
+    /// <summary>
+    /// Gap 88 transition, Domain-only: entities still take DateTimes until phase 6. Unspecified is
+    /// read as UTC (the database's convention); a local time is a mix-up and throws — before Gap 88
+    /// the storage converter silently shifted it instead.
+    /// </summary>
+    internal static Moment FromUtc(DateTime utc)
+    {
+        if (utc.Kind == DateTimeKind.Local)
+            throw new ArgumentException("Expected a UTC time, got a local one — convert through UserTimeZone.", nameof(utc));
+        return new(DateTime.SpecifyKind(utc, DateTimeKind.Utc));
+    }
 
     /// <summary>
     /// Storage entry: only the database converter, the machine clock and the tests' <c>At</c>

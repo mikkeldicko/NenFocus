@@ -27,7 +27,7 @@ public class GetInEffectNenContractsQueryHandlerTests
             changeWindow: null,
             allowCancellation: true,
             plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-            localSealedAt: start.AddDays(-1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
+            sealedAt: At.Utc(start.AddDays(-1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)), timeZone: At.UtcZone);
 
     private static NenContract ActiveContract(string name, DateOnly start, DateOnly end) => NenContract.Seal(
         id: Guid.NewGuid(),
@@ -39,7 +39,7 @@ public class GetInEffectNenContractsQueryHandlerTests
         changeWindow: null,
         allowCancellation: true,
         plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-        localSealedAt: start.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)); // sealedAt == start -> auto-activates
+        sealedAt: At.Utc(start.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)), timeZone: At.UtcZone); // sealedAt == start -> auto-activates
 
     [Fact]
     public async Task HandleAsync_NoContracts_ReturnsEmpty()

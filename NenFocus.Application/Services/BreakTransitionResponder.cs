@@ -23,7 +23,7 @@ public sealed class BreakTransitionResponder : IBreakTransitionResponder
     }
 
     public async Task RespondAsync(
-        IReadOnlyList<BreakTransition> transitions, DateTime at, bool keepBlockingDuringBreaks, CancellationToken ct = default)
+        IReadOnlyList<BreakTransition> transitions, Moment at, bool keepBlockingDuringBreaks, CancellationToken ct = default)
     {
         if (transitions.Count == 0) return;
 

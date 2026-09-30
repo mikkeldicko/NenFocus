@@ -1,4 +1,5 @@
 using NenFocus.Application.Interfaces;
+using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Application.Queries.GetFocusBlockAwaitingRitual;
 
@@ -7,4 +8,4 @@ namespace NenFocus.Application.Queries.GetFocusBlockAwaitingRitual;
 /// Null when none should. Deliberately separate from ComputeActivePolicySliceQuery — the
 /// slice answers what to block; this answers whether to prompt the Ritual (Gap 62).
 /// </summary>
-public sealed record GetFocusBlockAwaitingRitualQuery(DateTime At) : IQuery<Guid?>;
+public sealed record GetFocusBlockAwaitingRitualQuery(Moment At) : IQuery<Guid?>;

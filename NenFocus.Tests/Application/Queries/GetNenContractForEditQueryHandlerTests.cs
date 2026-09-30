@@ -49,7 +49,7 @@ public class GetNenContractForEditQueryHandlerTests
             changeWindow: null,
             allowCancellation: true,
             plannedFocusHoursByDay: new Dictionary<DateOnly, double> { [StartDate] = 2 },
-            localSealedAt: StartDate.AddDays(-1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
+            sealedAt: At.Utc(StartDate.AddDays(-1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)), timeZone: At.UtcZone);
         _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(contract);
 
         var result = await CreateHandler().HandleAsync(new GetNenContractForEditQuery(ContractId));
@@ -80,7 +80,7 @@ public class GetNenContractForEditQueryHandlerTests
             floorRule: new DailyFloorRule.Fixed(new DailyFloor(3)),
             changeWindow: null, allowCancellation: false,
             plannedFocusHoursByDay: plannedHours,
-            localSealedAt: StartDate.AddDays(-1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
+            sealedAt: At.Utc(StartDate.AddDays(-1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)), timeZone: At.UtcZone);
         _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(contract);
 
         var result = await CreateHandler().HandleAsync(new GetNenContractForEditQuery(ContractId));
@@ -107,21 +107,19 @@ public class GetNenContractForEditQueryHandlerTests
             changeWindow: null,
             allowCancellation: true,
             plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-            localSealedAt: StartDate.AddDays(-1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
+            sealedAt: At.Utc(StartDate.AddDays(-1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)), timeZone: At.UtcZone);
         _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(contract);
 
         var focusPresetId = Guid.NewGuid();
         var backgroundPresetId = Guid.NewGuid();
-        var later = FocusBlock.Create(Guid.NewGuid(), focusPresetId,
-            StartDate.ToDateTime(new TimeOnly(14, 0)), StartDate.ToDateTime(new TimeOnly(16, 0)), contractId: ContractId);
-        var earlier = BackgroundBlock.Create(Guid.NewGuid(), backgroundPresetId,
-            StartDate.ToDateTime(new TimeOnly(9, 0)), StartDate.ToDateTime(new TimeOnly(10, 0)), contractId: ContractId);
+        var later = FocusBlock.Create(Guid.NewGuid(), focusPresetId,At.Slot(StartDate.ToDateTime(new TimeOnly(14, 0)), StartDate.ToDateTime(new TimeOnly(16, 0))), contractId: ContractId);
+        var earlier = BackgroundBlock.Create(Guid.NewGuid(), backgroundPresetId,At.Slot(StartDate.ToDateTime(new TimeOnly(9, 0)), StartDate.ToDateTime(new TimeOnly(10, 0))), contractId: ContractId);
         _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[later, earlier]);
 
         _presets.GetByIdAsync(focusPresetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(focusPresetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, StartDate.ToDateTime(TimeOnly.MinValue)));
+            .Returns(BlockPreset.Create(focusPresetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(StartDate.ToDateTime(TimeOnly.MinValue))));
         _presets.GetByIdAsync(backgroundPresetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(backgroundPresetId, "Ambient Block", WebsiteFilterType.Blocklist, BlockPresetType.Background, StartDate.ToDateTime(TimeOnly.MinValue)));
+            .Returns(BlockPreset.Create(backgroundPresetId, "Ambient Block", WebsiteFilterType.Blocklist, BlockPresetType.Background, At.Utc(StartDate.ToDateTime(TimeOnly.MinValue))));
 
         var result = await CreateHandler().HandleAsync(new GetNenContractForEditQuery(ContractId));
 

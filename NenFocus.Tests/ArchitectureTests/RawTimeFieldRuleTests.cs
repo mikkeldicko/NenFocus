@@ -7,11 +7,14 @@ namespace NenFocus.Tests.ArchitectureTests;
 /// the Domain is a business question answered a second time ("has it started", "do they overlap",
 /// "how long") — MODULE_STANDARDS → Application Handler Forbidden Zone, and the ViewModel's No Math.
 ///
-/// A bridge (Guard Hierarchy rank 2) until Gap 90 lets the compiler take over (blocks and sessions
-/// hold a TimeSlot, no raw fields left to compare) — delete this test then. A text scan: it can't tell
-/// an entity's Start from a DTO's, so each entry carries a reason. Entries are "File has N", so a new
-/// comparison in an already-listed file is caught too. Repositories and the DbContext are left out:
-/// SQL must mirror entity rules, and parity tests guard those copies.
+/// Blocks and sessions hold a TimeSlot whose Start/End are internal (Gap 88, folding in Gap 90), so the
+/// compiler already stops this on entities. It can't on DTOs: they carry public Moments
+/// (SessionDto.StartedAt/EndAt, EndedAt, …) and Moment has public &lt; and −. Kept for that reason
+/// (Gap 88 last step, 2026-09-30 — it caught ActiveSessionMonitor's own `EndAt - StartedAt` that day).
+/// → Gap 89 area 4 turns the session DTOs' Moment pairs into a TimeSlot, leaving this test only
+/// single moments to watch. A text scan: each entry carries a reason; entries are "File has N", so a
+/// new comparison in an already-listed file is caught too. Repositories and the DbContext are left out:
+/// SQL narrows through TimeSlot.Filters, and parity tests guard any copy of a rule.
 /// </summary>
 public class RawTimeFieldRuleTests
 {
@@ -32,37 +35,8 @@ public class RawTimeFieldRuleTests
 
     private static readonly string[] KnownRawUses =
     [
-        // Gap 88 — one source for time slots and placement:
-        // display end re-derived (SessionEndedAt < End) though FocusBlock.EffectiveEnd answers it.
-        "NenFocus.Application/Queries/GetPlannedBlocksForDay/GetPlannedBlocksForDayQueryHandler.cs has 2",
-        // "do these overlap" — Cover Deficit moves onto the placement checker.
-        "NenFocus.Application/Queries/GetSuggestedRedemptionPlacements/GetSuggestedRedemptionPlacementsQueryHandler.cs has 2",
-        // "do these overlap" in the UI — UI checks built on the checker.
-        "NenFocus/ViewModels/Components/PlannerDragMath.cs has 2",
-        "NenFocus/ViewModels/Pages/PlannerPageViewModel.cs has 2",
-        // end after start, ≥ 1 minute, Focus ≤ 12 h — copies of FocusBlock.Create's own rules.
-        "NenFocus.Application/UseCases/Planner/CreatePlannedBlock/CreatePlannedBlockValidator.cs has 3",
-        "NenFocus.Application/UseCases/Planner/UpdatePlannedBlock/UpdatePlannedBlockValidator.cs has 2",
-        // "end after start" on input — a rule TimeSlot's constructor will own (Gaps 88/99).
-        "NenFocus.Application/UseCases/NenContracts/Seal/SealNenContractValidator.cs has 1",
-        "NenFocus.Application/UseCases/NenContracts/Edit/EditNenContractValidator.cs has 1",
-
-        // Gap 89 — "has the block ended" decided in the UI.
-        "NenFocus/ViewModels/Ritual/HatsuPageViewModel.cs has 1",
-        "NenFocus/ViewModels/ShellViewModel.cs has 1",
-
-        // Gap 90 — lengths and "how long until" move onto TimeSlot:
-        // session length (Session.RunLength already exists) and break progress.
-        "NenFocus.Infrastructure/Services/ActiveSessionMonitor.cs has 3",
-        // block length.
-        "NenFocus.Application/UseCases/Sessions/StartSession/StartSessionCommandHandler.cs has 1",
-        // "how late".
-        "NenFocus.Application/Queries/GetFocusBlockRitualContext/GetFocusBlockRitualContextQueryHandler.cs has 1",
-        // minutes until start, for the wording.
-        "NenFocus.Application/Services/BlockMarkerNotifier.cs has 1",
-
         // Allowed: drag/resize pixel geometry on tile positions (MODULE_STANDARDS → UI → Views).
-        // Stays until this test is deleted at Gap 90; its business rules are caught by the local-time rule.
+        // Its business rules are caught by the local-time rule.
         "NenFocus/Views/PlannerPageView.axaml.cs has 6",
     ];
 

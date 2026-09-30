@@ -63,7 +63,7 @@ public partial class App : Avalonia.Application
         {
             using var limit = new CancellationTokenSource(ShutdownSyncLimit);
             var clock = services.GetRequiredService<ISystemClock>();
-            await services.GetRequiredService<IEnforcementSynchronizer>().SyncAsync(clock.UtcNow, limit.Token);
+            await services.GetRequiredService<IEnforcementSynchronizer>().SyncAsync(clock.Now, limit.Token);
         }
         catch (Exception ex)
         {

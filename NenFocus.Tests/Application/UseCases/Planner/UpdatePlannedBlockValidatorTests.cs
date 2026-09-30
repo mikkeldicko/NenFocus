@@ -1,6 +1,8 @@
 using FluentAssertions;
+using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.ComputePlannedFocusHours;
+using NenFocus.Application.Queries.GetBlockPlacementVerdict;
 using NenFocus.Application.UseCases.Planner.UpdatePlannedBlock;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
@@ -16,27 +18,32 @@ public class UpdatePlannedBlockValidatorTests
     private readonly IPlannedBlockRepository _blocks = Substitute.For<IPlannedBlockRepository>();
     private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
     private readonly INenContractRepository _contracts = Substitute.For<INenContractRepository>();
-    private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
+    private readonly ISystemClock _clock = TestClock.Create();
     private readonly IQueryHandler<ComputePlannedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> _computePlannedFocusHours =
         Substitute.For<IQueryHandler<ComputePlannedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>>>();
+    // Placement (past, contract hours, free for Focus) is GetBlockPlacementVerdictQuery's answer
+    // since Gap 88 phase 8 — tested in GetBlockPlacementVerdictQueryHandlerTests. Allowed by default here.
+    private readonly IQueryHandler<GetBlockPlacementVerdictQuery, BlockPlacementVerdictDto> _placement =
+        Substitute.For<IQueryHandler<GetBlockPlacementVerdictQuery, BlockPlacementVerdictDto>>();
 
     public UpdatePlannedBlockValidatorTests()
     {
-        _clock.UtcNow.Returns(Now);
-        _clock.ToLocal(Arg.Any<DateTime>()).Returns(ci => ci.Arg<DateTime>());
+        _clock.SetNow(Now);
+        _clock.SetTimeZoneOffset(TimeSpan.Zero);
         _computePlannedFocusHours.HandleAsync(Arg.Any<ComputePlannedFocusHoursQuery>(), Arg.Any<CancellationToken>())
             .Returns(new Dictionary<DateOnly, double>());
+        _placement.HandleAsync(Arg.Any<GetBlockPlacementVerdictQuery>(), Arg.Any<CancellationToken>())
+            .Returns(new BlockPlacementVerdictDto { Outcome = PlacementOutcome.Allowed });
     }
 
     private UpdatePlannedBlockValidator CreateValidator() =>
-        new(_blocks, _presets, _contracts, _clock, _computePlannedFocusHours);
+        new(_blocks, _presets, _contracts, _clock, _computePlannedFocusHours, _placement);
 
     private static UpdatePlannedBlockCommand ValidCommand(Guid blockId, Guid presetId) => new()
     {
         BlockId = blockId,
         PresetId = presetId,
-        Start = Now.AddHours(1),
-        End = Now.AddHours(2)
+        Slot = At.Slot(Now.AddHours(1), Now.AddHours(2))
     };
 
     [Fact]
@@ -45,9 +52,9 @@ public class UpdatePlannedBlockValidatorTests
         var blockId = Guid.NewGuid();
         var presetId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId, Now.AddHours(1), Now.AddHours(2)));
+            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(2))));
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Now));
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
 
         var result = await CreateValidator().ValidateAsync(ValidCommand(blockId, presetId));
 
@@ -62,11 +69,11 @@ public class UpdatePlannedBlockValidatorTests
         // be immutable to Update too, not just Delete.
         var blockId = Guid.NewGuid();
         var presetId = Guid.NewGuid();
-        var endedBlock = FocusBlock.Create(blockId, presetId, Now.AddHours(-3), Now.AddHours(-2));
+        var endedBlock = FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(-3), Now.AddHours(-2)));
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns(endedBlock);
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Now));
-        var command = ValidCommand(blockId, presetId) with { Start = Now.AddHours(-3), End = Now.AddHours(-1) };
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
+        var command = ValidCommand(blockId, presetId) with { Slot = At.Slot(Now.AddHours(-3), Now.AddHours(-1))};
 
         var result = await CreateValidator().ValidateAsync(command);
 
@@ -95,9 +102,9 @@ public class UpdatePlannedBlockValidatorTests
         var blockId = Guid.NewGuid();
         var presetId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId, Now.AddHours(1), Now.AddHours(2)));
+            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(2))));
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Background", WebsiteFilterType.Blocklist, BlockPresetType.Background, Now));
+            .Returns(BlockPreset.Create(presetId, "Background", WebsiteFilterType.Blocklist, BlockPresetType.Background, At.Utc(Now)));
 
         var result = await CreateValidator().ValidateAsync(ValidCommand(blockId, presetId));
 
@@ -111,10 +118,10 @@ public class UpdatePlannedBlockValidatorTests
         var blockId = Guid.NewGuid();
         var presetId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId, Now.AddMinutes(-30), Now.AddHours(1)));
+            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddMinutes(-30), Now.AddHours(1))));
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Now));
-        var command = ValidCommand(blockId, presetId) with { Start = Now.AddMinutes(-30), End = Now.AddHours(2) };
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
+        var command = ValidCommand(blockId, presetId) with { Slot = At.Slot(Now.AddMinutes(-30), Now.AddHours(2))};
 
         var result = await CreateValidator().ValidateAsync(command);
 
@@ -128,46 +135,14 @@ public class UpdatePlannedBlockValidatorTests
         var blockId = Guid.NewGuid();
         var presetId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(BackgroundBlock.Create(blockId, presetId, Now, Now.AddHours(1)));
+            .Returns(BackgroundBlock.Create(blockId, presetId,At.Slot(Now, Now.AddHours(1))));
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Background", WebsiteFilterType.Blocklist, BlockPresetType.Background, Now));
-        var command = ValidCommand(blockId, presetId) with { Start = Now.AddHours(1), End = Now.AddHours(2) };
+            .Returns(BlockPreset.Create(presetId, "Background", WebsiteFilterType.Blocklist, BlockPresetType.Background, At.Utc(Now)));
+        var command = ValidCommand(blockId, presetId) with { Slot = At.Slot(Now.AddHours(1), Now.AddHours(2))};
 
         var result = await CreateValidator().ValidateAsync(command);
 
         result.Errors.Should().Contain(e => e.ErrorMessage.Contains("already started"));
-    }
-
-    [Fact]
-    public async Task Validate_StartInPast_BlockNotYetStarted_IsInvalid()
-    {
-        var blockId = Guid.NewGuid();
-        var presetId = Guid.NewGuid();
-        _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId, Now.AddHours(1), Now.AddHours(2)));
-        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Now));
-        var command = ValidCommand(blockId, presetId) with { Start = Now.AddMinutes(-10) };
-
-        var result = await CreateValidator().ValidateAsync(command);
-
-        result.IsValid.Should().BeFalse();
-    }
-
-    [Fact]
-    public async Task Validate_EndBeforeStart_IsInvalid()
-    {
-        var blockId = Guid.NewGuid();
-        var presetId = Guid.NewGuid();
-        _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId, Now.AddHours(1), Now.AddHours(2)));
-        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Now));
-        var command = ValidCommand(blockId, presetId) with { End = Now.AddMinutes(30) };
-
-        var result = await CreateValidator().ValidateAsync(command);
-
-        result.IsValid.Should().BeFalse();
     }
 
     [Fact]
@@ -176,13 +151,13 @@ public class UpdatePlannedBlockValidatorTests
         var blockId = Guid.NewGuid();
         var presetId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId, Now.AddHours(1), Now.AddHours(2)));
+            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(2))));
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Now));
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
         var command = ValidCommand(blockId, presetId) with
-        {
-            End = Now.AddHours(1).AddHours(FocusBlock.MaxDurationHours).AddMinutes(1)
-        };
+{
+    Slot = At.Slot(Now.AddHours(1), Now.AddHours(1).AddHours(FocusBlock.MaxDurationHours).AddMinutes(1))
+};
 
         var result = await CreateValidator().ValidateAsync(command);
 
@@ -195,13 +170,13 @@ public class UpdatePlannedBlockValidatorTests
         var blockId = Guid.NewGuid();
         var presetId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId, Now.AddHours(1), Now.AddHours(2)));
+            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(2))));
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Now));
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
         var command = ValidCommand(blockId, presetId) with
-        {
-            End = Now.AddHours(1).AddHours(FocusBlock.MaxDurationHours)
-        };
+{
+    Slot = At.Slot(Now.AddHours(1), Now.AddHours(1).AddHours(FocusBlock.MaxDurationHours))
+};
 
         var result = await CreateValidator().ValidateAsync(command);
 
@@ -214,13 +189,13 @@ public class UpdatePlannedBlockValidatorTests
         var blockId = Guid.NewGuid();
         var presetId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(BackgroundBlock.Create(blockId, presetId, Now.AddHours(1), Now.AddHours(2)));
+            .Returns(BackgroundBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(2))));
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Background", WebsiteFilterType.Blocklist, BlockPresetType.Background, Now));
+            .Returns(BlockPreset.Create(presetId, "Background", WebsiteFilterType.Blocklist, BlockPresetType.Background, At.Utc(Now)));
         var command = ValidCommand(blockId, presetId) with
-        {
-            End = Now.AddHours(1).AddHours(FocusBlock.MaxDurationHours).AddDays(1)
-        };
+{
+    Slot = At.Slot(Now.AddHours(1), Now.AddHours(1).AddHours(FocusBlock.MaxDurationHours).AddDays(1))
+};
 
         var result = await CreateValidator().ValidateAsync(command);
 
@@ -228,105 +203,38 @@ public class UpdatePlannedBlockValidatorTests
     }
 
     [Fact]
-    public async Task Validate_BlockHasNoContractId_SkipsWorkHoursCheck()
+    public async Task Validate_PlacementRefused_IsInvalidWithTheQuerysMessage()
     {
         var blockId = Guid.NewGuid();
         var presetId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId, Now.AddHours(1), Now.AddHours(2)));
+            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(2))));
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Now));
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
+        _placement.HandleAsync(Arg.Any<GetBlockPlacementVerdictQuery>(), Arg.Any<CancellationToken>())
+            .Returns(new BlockPlacementVerdictDto { Outcome = PlacementOutcome.OutsideContractHours, Message = "Outside." });
 
         var result = await CreateValidator().ValidateAsync(ValidCommand(blockId, presetId));
 
-        result.IsValid.Should().BeTrue();
+        result.Errors.Should().ContainSingle(e => e.ErrorMessage == "Outside.");
     }
 
     [Fact]
-    public async Task Validate_ContractHasNoWorkHoursPolicy_IsValid()
+    public async Task Validate_AsksThePlacementQueryAsAnEditOfThisBlock()
     {
         var blockId = Guid.NewGuid();
         var presetId = Guid.NewGuid();
-        var contractId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId, Now.AddHours(1), Now.AddHours(2), contractId: contractId));
+            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(2))));
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Now));
-        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
-            .Returns(NenContract.Seal(
-                id: contractId,
-                name: "Contract",
-                goal: new NenContractGoal("Goal"),
-                strictnessRule: StrictnessRule.PeriodTimeBudget,
-                calendar: TestCalendars.For(DateOnly.FromDateTime(Now), DateOnly.FromDateTime(Now).AddDays(7), new DailyFloorRule.Fixed(DailyFloor.None)),
-                floorRule: new DailyFloorRule.Fixed(DailyFloor.None),
-                changeWindow: null,
-                allowCancellation: false,
-                plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-                localSealedAt: Now.Date));
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
+        var command = ValidCommand(blockId, presetId);
 
-        var result = await CreateValidator().ValidateAsync(ValidCommand(blockId, presetId));
+        await CreateValidator().ValidateAsync(command);
 
-        result.IsValid.Should().BeTrue();
-    }
-
-    [Fact]
-    public async Task Validate_BlockOutsideWorkHours_IsInvalid()
-    {
-        var blockId = Guid.NewGuid();
-        var presetId = Guid.NewGuid();
-        var contractId = Guid.NewGuid();
-        _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId, Now.AddHours(1), Now.AddHours(2), contractId: contractId));
-        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Now));
-        var workHours = new WorkHours(new TimeOnly(9, 0), new TimeOnly(17, 0));
-        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
-            .Returns(NenContract.Seal(
-                id: contractId,
-                name: "Contract",
-                goal: new NenContractGoal("Goal"),
-                strictnessRule: StrictnessRule.PeriodTimeBudget,
-                calendar: TestCalendars.For(DateOnly.FromDateTime(Now), DateOnly.FromDateTime(Now).AddDays(7), new DailyFloorRule.Fixed(DailyFloor.None), workHours: workHours),
-                floorRule: new DailyFloorRule.Fixed(DailyFloor.None),
-                changeWindow: null,
-                allowCancellation: false,
-                plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-                localSealedAt: Now.Date));
-        var command = ValidCommand(blockId, presetId) with { Start = Now.Date.AddHours(20), End = Now.Date.AddHours(21) };
-
-        var result = await CreateValidator().ValidateAsync(command);
-
-        result.IsValid.Should().BeFalse();
-    }
-
-    [Fact]
-    public async Task Validate_BlockInsideWorkHours_IsValid()
-    {
-        var blockId = Guid.NewGuid();
-        var presetId = Guid.NewGuid();
-        var contractId = Guid.NewGuid();
-        _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId, Now.AddHours(1), Now.AddHours(2), contractId: contractId));
-        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Now));
-        var workHours = new WorkHours(new TimeOnly(9, 0), new TimeOnly(17, 0));
-        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
-            .Returns(NenContract.Seal(
-                id: contractId,
-                name: "Contract",
-                goal: new NenContractGoal("Goal"),
-                strictnessRule: StrictnessRule.PeriodTimeBudget,
-                calendar: TestCalendars.For(DateOnly.FromDateTime(Now), DateOnly.FromDateTime(Now).AddDays(7), new DailyFloorRule.Fixed(DailyFloor.None), workHours: workHours),
-                floorRule: new DailyFloorRule.Fixed(DailyFloor.None),
-                changeWindow: null,
-                allowCancellation: false,
-                plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-                localSealedAt: Now.Date));
-
-        var result = await CreateValidator().ValidateAsync(ValidCommand(blockId, presetId)); // Now+1h..Now+2h = 13:00-14:00
-
-        result.IsValid.Should().BeTrue();
+        await _placement.Received(1).HandleAsync(
+            new GetBlockPlacementVerdictQuery(command.Slot, BlockPresetType.Focus, presetId, ExistingBlockId: blockId),
+            Arg.Any<CancellationToken>());
     }
 
     // ── Sealed-contract strictness guards ──────────────────────────────────────
@@ -342,7 +250,7 @@ public class UpdatePlannedBlockValidatorTests
             changeWindow: null,
             allowCancellation: false,
             plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-            localSealedAt: Now.Date); // Active on seal
+            sealedAt: At.Utc(Now.Date), timeZone: At.UtcZone); // Active on seal
 
     [Fact]
     public async Task Validate_LockedContract_AnyUpdateIsInvalid()
@@ -351,9 +259,9 @@ public class UpdatePlannedBlockValidatorTests
         var presetId = Guid.NewGuid();
         var contractId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId, Now.AddHours(1), Now.AddHours(2), contractId: contractId));
+            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(2)), contractId: contractId));
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Now));
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
             .Returns(SealedContract(StrictnessRule.Locked, contractId));
 
@@ -371,12 +279,12 @@ public class UpdatePlannedBlockValidatorTests
         var presetId = Guid.NewGuid();
         var contractId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId, Now.AddHours(1), Now.AddHours(2), contractId: contractId));
+            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(2)), contractId: contractId));
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Now));
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
             .Returns(SealedContract(StrictnessRule.DailyFlexibility, contractId));
-        var command = ValidCommand(blockId, presetId) with { Start = Now.AddHours(3), End = Now.AddHours(4) };
+        var command = ValidCommand(blockId, presetId) with { Slot = At.Slot(Now.AddHours(3), Now.AddHours(4))};
 
         var result = await CreateValidator().ValidateAsync(command);
 
@@ -397,12 +305,12 @@ public class UpdatePlannedBlockValidatorTests
         DateTime AtLocal(double hours) => DateTime.SpecifyKind(localDay.AddHours(hours), DateTimeKind.Local).ToUniversalTime();
 
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId, AtLocal(14), AtLocal(16), contractId: contractId));
+            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(AtLocal(14), AtLocal(16)), contractId: contractId));
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Now));
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
             .Returns(SealedContract(StrictnessRule.DailyFlexibility, contractId));
-        var command = ValidCommand(blockId, presetId) with { Start = AtLocal(22), End = AtLocal(24) };
+        var command = ValidCommand(blockId, presetId) with { Slot = At.Slot(AtLocal(22), AtLocal(24))};
 
         var result = await CreateValidator().ValidateAsync(command);
 
@@ -416,12 +324,12 @@ public class UpdatePlannedBlockValidatorTests
         var presetId = Guid.NewGuid();
         var contractId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId, Now.AddHours(1), Now.AddHours(2), contractId: contractId));
+            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(2)), contractId: contractId));
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Now));
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
             .Returns(SealedContract(StrictnessRule.DailyFlexibility, contractId));
-        var command = ValidCommand(blockId, presetId) with { Start = Now.AddDays(1).AddHours(1), End = Now.AddDays(1).AddHours(2) };
+        var command = ValidCommand(blockId, presetId) with { Slot = At.Slot(Now.AddDays(1).AddHours(1), Now.AddDays(1).AddHours(2))};
 
         var result = await CreateValidator().ValidateAsync(command);
 
@@ -435,12 +343,12 @@ public class UpdatePlannedBlockValidatorTests
         var presetId = Guid.NewGuid();
         var contractId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId, Now.AddHours(1), Now.AddHours(2), contractId: contractId));
+            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(2)), contractId: contractId));
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Now));
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
             .Returns(SealedContract(StrictnessRule.PeriodTimeBudget, contractId));
-        var command = ValidCommand(blockId, presetId) with { Start = Now.AddDays(3), End = Now.AddDays(3).AddHours(1) };
+        var command = ValidCommand(blockId, presetId) with { Slot = At.Slot(Now.AddDays(3), Now.AddDays(3).AddHours(1))};
 
         var result = await CreateValidator().ValidateAsync(command);
 
@@ -454,12 +362,12 @@ public class UpdatePlannedBlockValidatorTests
         var presetId = Guid.NewGuid();
         var contractId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId, Now.AddHours(1), Now.AddHours(2), contractId: contractId));
+            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(2)), contractId: contractId));
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Now));
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
             .Returns(SealedContract(StrictnessRule.PeriodTimeBudget, contractId));
-        var command = ValidCommand(blockId, presetId) with { Start = Now.AddDays(10), End = Now.AddDays(10).AddHours(1) };
+        var command = ValidCommand(blockId, presetId) with { Slot = At.Slot(Now.AddDays(10), Now.AddDays(10).AddHours(1))};
 
         var result = await CreateValidator().ValidateAsync(command);
 
@@ -474,13 +382,13 @@ public class UpdatePlannedBlockValidatorTests
         var newPresetId = Guid.NewGuid();
         var contractId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, originalPresetId, Now.AddHours(1), Now.AddHours(2), contractId: contractId));
+            .Returns(FocusBlock.Create(blockId, originalPresetId,At.Slot(Now.AddHours(1), Now.AddHours(2)), contractId: contractId));
         _presets.GetByIdAsync(newPresetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(newPresetId, "Other", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Now));
+            .Returns(BlockPreset.Create(newPresetId, "Other", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
             .Returns(SealedContract(StrictnessRule.PeriodTimeBudget, contractId));
         // Same Start/End as the existing block — only the preset differs.
-        var command = ValidCommand(blockId, newPresetId) with { Start = Now.AddHours(1), End = Now.AddHours(2) };
+        var command = ValidCommand(blockId, newPresetId) with { Slot = At.Slot(Now.AddHours(1), Now.AddHours(2))};
 
         var result = await CreateValidator().ValidateAsync(command);
 
@@ -494,11 +402,11 @@ public class UpdatePlannedBlockValidatorTests
         var presetId = Guid.NewGuid();
         var contractId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId, Now.AddHours(1), Now.AddHours(2), contractId: contractId));
+            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(2)), contractId: contractId));
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Now));
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
         var contract = SealedContract(StrictnessRule.Locked, contractId);
-        contract.Complete(Now.AddDays(8));
+        contract.Complete(At.Utc(Now.AddDays(8)));
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
             .Returns(contract);
 
@@ -523,7 +431,7 @@ public class UpdatePlannedBlockValidatorTests
             changeWindow: null,
             allowCancellation: false,
             plannedFocusHoursByDay: Enumerable.Range(0, 8).ToDictionary(i => DateOnly.FromDateTime(Now).AddDays(i), _ => floorHours),
-            localSealedAt: Now.Date);
+            sealedAt: At.Utc(Now.Date), timeZone: At.UtcZone);
 
     [Fact]
     public async Task Validate_DailyFlexibility_ShrinkBelowFloor_IsInvalid()
@@ -532,12 +440,12 @@ public class UpdatePlannedBlockValidatorTests
         var presetId = Guid.NewGuid();
         var contractId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId, Now.AddHours(1), Now.AddHours(3), contractId: contractId)); // 2h originally
+            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(3)), contractId: contractId)); // 2h originally
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Now));
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
             .Returns(SealedContractWithFloor(StrictnessRule.DailyFlexibility, contractId, floorHours: 2));
-        var command = ValidCommand(blockId, presetId) with { Start = Now.AddHours(1), End = Now.AddHours(2) }; // shrunk to 1h
+        var command = ValidCommand(blockId, presetId) with { Slot = At.Slot(Now.AddHours(1), Now.AddHours(2))}; // shrunk to 1h
         _computePlannedFocusHours.HandleAsync(
                 Arg.Is<ComputePlannedFocusHoursQuery>(q => q.ContractId == contractId && q.ExcludeBlockId == blockId),
                 Arg.Any<CancellationToken>())
@@ -555,12 +463,12 @@ public class UpdatePlannedBlockValidatorTests
         var presetId = Guid.NewGuid();
         var contractId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId, Now.AddHours(1), Now.AddHours(4), contractId: contractId)); // 3h originally
+            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(4)), contractId: contractId)); // 3h originally
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Now));
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
             .Returns(SealedContractWithFloor(StrictnessRule.DailyFlexibility, contractId, floorHours: 2));
-        var command = ValidCommand(blockId, presetId) with { Start = Now.AddHours(1), End = Now.AddHours(3) }; // shrunk to 2h, exactly the floor
+        var command = ValidCommand(blockId, presetId) with { Slot = At.Slot(Now.AddHours(1), Now.AddHours(3))}; // shrunk to 2h, exactly the floor
         _computePlannedFocusHours.HandleAsync(
                 Arg.Is<ComputePlannedFocusHoursQuery>(q => q.ContractId == contractId && q.ExcludeBlockId == blockId),
                 Arg.Any<CancellationToken>())
@@ -578,14 +486,14 @@ public class UpdatePlannedBlockValidatorTests
         var presetId = Guid.NewGuid();
         var contractId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(BackgroundBlock.Create(blockId, presetId, Now.AddHours(1), Now.AddHours(3), contractId: contractId));
+            .Returns(BackgroundBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(3)), contractId: contractId));
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Background", WebsiteFilterType.Blocklist, BlockPresetType.Background, Now));
+            .Returns(BlockPreset.Create(presetId, "Background", WebsiteFilterType.Blocklist, BlockPresetType.Background, At.Utc(Now)));
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
             .Returns(SealedContractWithFloor(StrictnessRule.DailyFlexibility, contractId, floorHours: 2));
         // Shrunk well below what would be the floor for a Focus block — irrelevant here,
         // Background blocks never count toward the floor.
-        var command = ValidCommand(blockId, presetId) with { Start = Now.AddHours(1), End = Now.AddHours(1).AddMinutes(10) };
+        var command = ValidCommand(blockId, presetId) with { Slot = At.Slot(Now.AddHours(1), Now.AddHours(1).AddMinutes(10))};
 
         var result = await CreateValidator().ValidateAsync(command);
 
@@ -605,14 +513,14 @@ public class UpdatePlannedBlockValidatorTests
         var presetId = Guid.NewGuid();
         var contractId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId, Now.AddHours(1), Now.AddHours(4), contractId: contractId));
+            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(4)), contractId: contractId));
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Now));
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
             .Returns(SealedContractWithFloor(StrictnessRule.PeriodTimeBudget, contractId, floorHours: 2));
         var command = ValidCommand(blockId, presetId) with
         {
-            Start = Now.AddDays(3), End = Now.AddDays(3).AddMinutes(10) // shrunk to 10 minutes, elsewhere in the period
+            Slot = At.Slot(Now.AddDays(3), Now.AddDays(3).AddMinutes(10)) // shrunk to 10 minutes, elsewhere in the period
         };
 
         var result = await CreateValidator().ValidateAsync(command);
@@ -633,7 +541,7 @@ public class UpdatePlannedBlockValidatorTests
             changeWindow: null,
             allowCancellation: false,
             plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-            localSealedAt: Now.Date,
+            sealedAt: At.Utc(Now.Date), timeZone: At.UtcZone,
             contractFloor: new ContractFloor(contractFloorHours));
 
     [Fact]
@@ -643,12 +551,12 @@ public class UpdatePlannedBlockValidatorTests
         var presetId = Guid.NewGuid();
         var contractId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId, Now.AddHours(1), Now.AddHours(3), contractId: contractId)); // 2h originally
+            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(3)), contractId: contractId)); // 2h originally
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Now));
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
             .Returns(SealedContractWithContractFloor(contractId, contractFloorHours: 2));
-        var command = ValidCommand(blockId, presetId) with { Start = Now.AddHours(1), End = Now.AddHours(2) }; // shrunk to 1h
+        var command = ValidCommand(blockId, presetId) with { Slot = At.Slot(Now.AddHours(1), Now.AddHours(2))}; // shrunk to 1h
         _computePlannedFocusHours.HandleAsync(
                 Arg.Is<ComputePlannedFocusHoursQuery>(q => q.ContractId == contractId && q.ExcludeBlockId == blockId),
                 Arg.Any<CancellationToken>())
@@ -666,12 +574,12 @@ public class UpdatePlannedBlockValidatorTests
         var presetId = Guid.NewGuid();
         var contractId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId, Now.AddHours(1), Now.AddHours(3), contractId: contractId)); // 2h originally
+            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(3)), contractId: contractId)); // 2h originally
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Now));
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
             .Returns(SealedContractWithContractFloor(contractId, contractFloorHours: 2));
-        var command = ValidCommand(blockId, presetId) with { Start = Now.AddHours(1), End = Now.AddHours(2) }; // shrunk to 1h here...
+        var command = ValidCommand(blockId, presetId) with { Slot = At.Slot(Now.AddHours(1), Now.AddHours(2))}; // shrunk to 1h here...
         // ...but another day already has 1h scheduled, so the period total still meets the 2h floor.
         _computePlannedFocusHours.HandleAsync(
                 Arg.Is<ComputePlannedFocusHoursQuery>(q => q.ContractId == contractId && q.ExcludeBlockId == blockId),
@@ -694,14 +602,14 @@ public class UpdatePlannedBlockValidatorTests
         var presetId = Guid.NewGuid();
         var contractId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId, Now.AddHours(1), Now.AddHours(3), contractId: contractId));
+            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(3)), contractId: contractId));
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Now));
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
             .Returns(SealedContract(StrictnessRule.PeriodTimeBudget, contractId)); // floor = 0 every day, no ContractFloor
         // Shrunk to almost nothing — the per-day guard still runs, but a 0h floor is
         // always trivially satisfied regardless of total.
-        var command = ValidCommand(blockId, presetId) with { Start = Now.AddHours(1), End = Now.AddHours(1).AddMinutes(5) };
+        var command = ValidCommand(blockId, presetId) with { Slot = At.Slot(Now.AddHours(1), Now.AddHours(1).AddMinutes(5))};
 
         var result = await CreateValidator().ValidateAsync(command);
 
@@ -717,16 +625,15 @@ public class UpdatePlannedBlockValidatorTests
         var presetId = Guid.NewGuid();
         var contractId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId, Now.AddHours(1), Now.AddHours(3), contractId: contractId));
+            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(3)), contractId: contractId));
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Now));
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
             .Returns(SealedContractWithFloor(StrictnessRule.PeriodTimeBudget, contractId, floorHours: 2));
         // Moved to a different day entirely — the origin day now has nothing scheduled.
         var command = ValidCommand(blockId, presetId) with
         {
-            Start = Now.AddDays(3).AddHours(1),
-            End = Now.AddDays(3).AddHours(3)
+            Slot = At.Slot(Now.AddDays(3).AddHours(1), Now.AddDays(3).AddHours(3))
         };
         _computePlannedFocusHours.HandleAsync(
                 Arg.Is<ComputePlannedFocusHoursQuery>(q => q.ContractId == contractId && q.ExcludeBlockId == blockId),
@@ -749,17 +656,16 @@ public class UpdatePlannedBlockValidatorTests
         var presetId = Guid.NewGuid();
         var contractId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId, Now.AddHours(1), Now.AddHours(2), contractId: contractId)); // 1h
+            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(2)), contractId: contractId)); // 1h
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Now));
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
             .Returns(SealedContractWithFloor(StrictnessRule.PeriodTimeBudget, contractId, floorHours: 2));
         // Origin day still meets its floor via other blocks; destination day only gets
         // this 1h block, which alone doesn't reach its own 2h floor.
         var command = ValidCommand(blockId, presetId) with
         {
-            Start = Now.AddDays(3).AddHours(1),
-            End = Now.AddDays(3).AddHours(2)
+            Slot = At.Slot(Now.AddDays(3).AddHours(1), Now.AddDays(3).AddHours(2))
         };
         _computePlannedFocusHours.HandleAsync(
                 Arg.Is<ComputePlannedFocusHoursQuery>(q => q.ContractId == contractId && q.ExcludeBlockId == blockId),
@@ -782,15 +688,14 @@ public class UpdatePlannedBlockValidatorTests
         var presetId = Guid.NewGuid();
         var contractId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId, Now.AddHours(1), Now.AddHours(3), contractId: contractId));
+            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(3)), contractId: contractId));
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Now));
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
             .Returns(SealedContractWithFloor(StrictnessRule.PeriodTimeBudget, contractId, floorHours: 2));
         var command = ValidCommand(blockId, presetId) with
         {
-            Start = Now.AddDays(3).AddHours(1),
-            End = Now.AddDays(3).AddHours(3)
+            Slot = At.Slot(Now.AddDays(3).AddHours(1), Now.AddDays(3).AddHours(3))
         };
         _computePlannedFocusHours.HandleAsync(
                 Arg.Is<ComputePlannedFocusHoursQuery>(q => q.ContractId == contractId && q.ExcludeBlockId == blockId),

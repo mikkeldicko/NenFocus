@@ -18,14 +18,15 @@ public class ComputeRedemptionAttributionQueryHandlerTests
     private readonly INenContractRepository _contracts = Substitute.For<INenContractRepository>();
     private readonly IQueryHandler<GetNenContractDeficitsQuery, IReadOnlyList<FocusBlockDeficitDto>> _deficits =
         Substitute.For<IQueryHandler<GetNenContractDeficitsQuery, IReadOnlyList<FocusBlockDeficitDto>>>();
-    private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
+    private readonly ISystemClock _clock = TestClock.Create();
 
     public ComputeRedemptionAttributionQueryHandlerTests()
     {
         // Identity conversion by default — every existing scenario below reasons purely in
         // UTC, so "local" trivially equals the UTC value unless a test overrides it.
-        _clock.ToLocal(Arg.Any<DateTime>()).Returns(ci => ci.Arg<DateTime>());
-        _clock.UtcNow.Returns(Now);
+        _clock.SetTimeZoneOffset(TimeSpan.Zero);
+        _clock.SetTimeZoneOffset(TimeSpan.Zero);
+        _clock.SetNow(Now);
     }
 
     private ComputeRedemptionAttributionQueryHandler CreateHandler() => new(_contracts, _deficits, _clock);
@@ -41,7 +42,7 @@ public class ComputeRedemptionAttributionQueryHandlerTests
             changeWindow: null,
             allowCancellation: false,
             plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-            localSealedAt: Today.AddDays(-1).ToDateTime(TimeOnly.MinValue),
+            sealedAt: At.Utc(Today.AddDays(-1).ToDateTime(TimeOnly.MinValue)), timeZone: At.UtcZone,
             redemptionPlacementPolicy: RedemptionPlacementPolicy.CurrentDayOnly);
 
     private static NenContract AnyDayContract(Guid id) =>
@@ -55,7 +56,7 @@ public class ComputeRedemptionAttributionQueryHandlerTests
             changeWindow: null,
             allowCancellation: false,
             plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-            localSealedAt: Today.AddDays(-7).ToDateTime(TimeOnly.MinValue),
+            sealedAt: At.Utc(Today.AddDays(-7).ToDateTime(TimeOnly.MinValue)), timeZone: At.UtcZone,
             contractFloor: new ContractFloor(10),
             redemptionPlacementPolicy: RedemptionPlacementPolicy.AnywhereInContract);
 
@@ -64,8 +65,7 @@ public class ComputeRedemptionAttributionQueryHandlerTests
         {
             FocusBlockId = focusBlockId ?? Guid.NewGuid(),
             BlockPresetId = presetId,
-            ScheduledStart = scheduledStart,
-            ScheduledEnd = scheduledStart.AddHours(1),
+            Scheduled = At.Slot(scheduledStart, scheduledStart.AddHours(1)),
             Outcome = FocusBlockOutcome.Missed,
             RemainingDeficitMinutes = remaining,
             PlannedMinutes = 60,
@@ -78,7 +78,7 @@ public class ComputeRedemptionAttributionQueryHandlerTests
         _contracts.GetAllInEffectAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<NenContract>)[]);
 
         var result = await CreateHandler().HandleAsync(
-            new ComputeRedemptionAttributionQuery(null, Guid.NewGuid(), Now, Now.AddHours(1), null), CancellationToken.None);
+            new ComputeRedemptionAttributionQuery(null, Guid.NewGuid(),At.Slot(Now, Now.AddHours(1)), null), CancellationToken.None);
 
         result.ContractId.Should().BeNull();
         result.Entries.Should().BeEmpty();
@@ -96,7 +96,7 @@ public class ComputeRedemptionAttributionQueryHandlerTests
             .Returns((IReadOnlyList<FocusBlockDeficitDto>)[deficit]);
 
         var result = await CreateHandler().HandleAsync(
-            new ComputeRedemptionAttributionQuery(null, presetId, Now, Now.AddHours(1), null), CancellationToken.None);
+            new ComputeRedemptionAttributionQuery(null, presetId,At.Slot(Now, Now.AddHours(1)), null), CancellationToken.None);
 
         result.ContractId.Should().Be(contractId);
         result.Entries.Should().ContainSingle(e => e.MissedBlockId == deficit.FocusBlockId && e.MinutesCovered == 40);
@@ -113,7 +113,7 @@ public class ComputeRedemptionAttributionQueryHandlerTests
             .Returns((IReadOnlyList<FocusBlockDeficitDto>)[deficit]);
 
         var result = await CreateHandler().HandleAsync(
-            new ComputeRedemptionAttributionQuery(null, Guid.NewGuid(), Now, Now.AddHours(1), null), CancellationToken.None);
+            new ComputeRedemptionAttributionQuery(null, Guid.NewGuid(),At.Slot(Now, Now.AddHours(1)), null), CancellationToken.None);
 
         result.ContractId.Should().BeNull();
         result.Entries.Should().BeEmpty();
@@ -134,7 +134,7 @@ public class ComputeRedemptionAttributionQueryHandlerTests
             .Returns((IReadOnlyList<FocusBlockDeficitDto>)[deficit]);
 
         var result = await CreateHandler().HandleAsync(
-            new ComputeRedemptionAttributionQuery(null, presetId, Now, Now.AddHours(1), null), CancellationToken.None);
+            new ComputeRedemptionAttributionQuery(null, presetId,At.Slot(Now, Now.AddHours(1)), null), CancellationToken.None);
 
         result.ContractId.Should().Be(contractId);
         result.Entries.Should().ContainSingle(e => e.MissedBlockId == deficit.FocusBlockId && e.MinutesCovered == 40);
@@ -153,7 +153,7 @@ public class ComputeRedemptionAttributionQueryHandlerTests
 
         // Proposing the block for tomorrow, even though "now" (today) is still today.
         var result = await CreateHandler().HandleAsync(
-            new ComputeRedemptionAttributionQuery(null, presetId, Now.AddDays(1), Now.AddDays(1).AddHours(1), null),
+            new ComputeRedemptionAttributionQuery(null, presetId,At.Slot(Now.AddDays(1), Now.AddDays(1).AddHours(1)), null),
             CancellationToken.None);
 
         result.ContractId.Should().BeNull();
@@ -176,14 +176,15 @@ public class ComputeRedemptionAttributionQueryHandlerTests
         // would compare Jan 1 (UTC) against Jan 2 (UTC) and wrongly report WrongDay.
         var proposedStartUtc = new DateTime(2026, 1, 1, 23, 0, 0, DateTimeKind.Utc);
 
-        _clock.ToLocal(Arg.Any<DateTime>()).Returns(ci => ci.Arg<DateTime>().AddHours(-5));
-        _clock.UtcNow.Returns(nowUtc);
+        _clock.SetTimeZoneOffset(TimeSpan.FromHours(-5));
+        _clock.SetTimeZoneOffset(TimeSpan.FromHours(-5));
+        _clock.SetNow(nowUtc);
         _contracts.GetAllInEffectAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<NenContract>)[contract]);
         _deficits.HandleAsync(new GetNenContractDeficitsQuery(contractId), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<FocusBlockDeficitDto>)[deficit]);
 
         var result = await CreateHandler().HandleAsync(
-            new ComputeRedemptionAttributionQuery(null, presetId, proposedStartUtc, proposedStartUtc.AddHours(1), null),
+            new ComputeRedemptionAttributionQuery(null, presetId,At.Slot(proposedStartUtc, proposedStartUtc.AddHours(1)), null),
             CancellationToken.None);
 
         result.ContractId.Should().Be(contractId);
@@ -202,7 +203,7 @@ public class ComputeRedemptionAttributionQueryHandlerTests
             .Returns((IReadOnlyList<FocusBlockDeficitDto>)[deficit]);
 
         var result = await CreateHandler().HandleAsync(
-            new ComputeRedemptionAttributionQuery(null, presetId, Now, Now.AddHours(1), deficit.FocusBlockId), CancellationToken.None);
+            new ComputeRedemptionAttributionQuery(null, presetId,At.Slot(Now, Now.AddHours(1)), deficit.FocusBlockId), CancellationToken.None);
 
         result.ContractId.Should().BeNull();
         result.Entries.Should().BeEmpty();
@@ -226,7 +227,7 @@ public class ComputeRedemptionAttributionQueryHandlerTests
             .Returns((IReadOnlyList<FocusBlockDeficitDto>)[deficit]);
 
         var result = await CreateHandler().HandleAsync(
-            new ComputeRedemptionAttributionQuery(null, presetId, Now, Now.AddMinutes(8), editingBlockId), CancellationToken.None);
+            new ComputeRedemptionAttributionQuery(null, presetId,At.Slot(Now, Now.AddMinutes(8)), editingBlockId), CancellationToken.None);
 
         result.Entries.Should().ContainSingle(e => e.MissedBlockId == deficit.FocusBlockId && e.MinutesCovered == 8);
     }
@@ -246,12 +247,58 @@ public class ComputeRedemptionAttributionQueryHandlerTests
         // A 100-minute block: fully covers the 30-min older deficit, spills 50 into the
         // newer one, and the remaining 20 minutes of surplus attributes to nothing further.
         var result = await CreateHandler().HandleAsync(
-            new ComputeRedemptionAttributionQuery(null, presetId, Now, Now.AddMinutes(100), null), CancellationToken.None);
+            new ComputeRedemptionAttributionQuery(null, presetId,At.Slot(Now, Now.AddMinutes(100)), null), CancellationToken.None);
 
         result.ContractId.Should().Be(contractId);
         result.Entries.Should().HaveCount(2);
         result.Entries.Should().ContainSingle(e => e.MissedBlockId == older.FocusBlockId && e.MinutesCovered == 30);
         result.Entries.Should().ContainSingle(e => e.MissedBlockId == newer.FocusBlockId && e.MinutesCovered == 50);
+    }
+
+    // ── The final slot (Gap 88 phase 8: attribution is the one place the cap is computed) ──
+
+    [Fact]
+    public async Task HandleAsync_BlockLongerThanItCovers_CapsTheSlotAndReportsCapped()
+    {
+        var contractId = Guid.NewGuid();
+        var presetId = Guid.NewGuid();
+        _contracts.GetAllInEffectAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<NenContract>)[SameDayContract(contractId)]);
+        _deficits.HandleAsync(new GetNenContractDeficitsQuery(contractId), Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyList<FocusBlockDeficitDto>)[Deficit(presetId, Now.AddHours(-2), remaining: 45)]);
+
+        var result = await CreateHandler().HandleAsync(
+            new ComputeRedemptionAttributionQuery(null, presetId, At.Slot(Now, Now.AddHours(2)), null), CancellationToken.None);
+
+        result.Slot.Should().Be(At.Slot(Now, Now.AddMinutes(45)));
+        result.WasCapped.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task HandleAsync_BlockFullyCovered_KeepsTheRequestedSlot()
+    {
+        var contractId = Guid.NewGuid();
+        var presetId = Guid.NewGuid();
+        _contracts.GetAllInEffectAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<NenContract>)[SameDayContract(contractId)]);
+        _deficits.HandleAsync(new GetNenContractDeficitsQuery(contractId), Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyList<FocusBlockDeficitDto>)[Deficit(presetId, Now.AddHours(-2), remaining: 90)]);
+
+        var result = await CreateHandler().HandleAsync(
+            new ComputeRedemptionAttributionQuery(null, presetId, At.Slot(Now, Now.AddHours(1)), null), CancellationToken.None);
+
+        result.Slot.Should().Be(At.Slot(Now, Now.AddHours(1)));
+        result.WasCapped.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task HandleAsync_NoEligibleDeficit_KeepsTheRequestedSlot()
+    {
+        _contracts.GetAllInEffectAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<NenContract>)[]);
+
+        var result = await CreateHandler().HandleAsync(
+            new ComputeRedemptionAttributionQuery(null, Guid.NewGuid(), At.Slot(Now, Now.AddHours(2)), null), CancellationToken.None);
+
+        result.Slot.Should().Be(At.Slot(Now, Now.AddHours(2)));
+        result.WasCapped.Should().BeFalse();
     }
 
     [Fact]
@@ -272,7 +319,7 @@ public class ComputeRedemptionAttributionQueryHandlerTests
             .Returns((IReadOnlyList<FocusBlockDeficitDto>)[deficit]);
 
         var result = await CreateHandler().HandleAsync(
-            new ComputeRedemptionAttributionQuery(null, presetId, Now, Now.AddHours(1), null), CancellationToken.None);
+            new ComputeRedemptionAttributionQuery(null, presetId,At.Slot(Now, Now.AddHours(1)), null), CancellationToken.None);
 
         result.ContractId.Should().Be(eligibleContractId);
         result.Entries.Should().ContainSingle(e => e.MissedBlockId == deficit.FocusBlockId);
@@ -291,7 +338,7 @@ public class ComputeRedemptionAttributionQueryHandlerTests
             .Returns((IReadOnlyList<FocusBlockDeficitDto>)[]);
 
         var result = await CreateHandler().HandleAsync(
-            new ComputeRedemptionAttributionQuery(contractId, presetId, Now, Now.AddHours(1), null), CancellationToken.None);
+            new ComputeRedemptionAttributionQuery(contractId, presetId,At.Slot(Now, Now.AddHours(1)), null), CancellationToken.None);
 
         result.ContractId.Should().Be(contractId);
         result.Entries.Should().BeEmpty();
@@ -314,7 +361,7 @@ public class ComputeRedemptionAttributionQueryHandlerTests
             .Returns((IReadOnlyList<FocusBlockDeficitDto>)[otherDeficit]);
 
         var result = await CreateHandler().HandleAsync(
-            new ComputeRedemptionAttributionQuery(scopedContractId, presetId, Now, Now.AddHours(1), null), CancellationToken.None);
+            new ComputeRedemptionAttributionQuery(scopedContractId, presetId,At.Slot(Now, Now.AddHours(1)), null), CancellationToken.None);
 
         result.ContractId.Should().Be(scopedContractId);
         result.Entries.Should().BeEmpty();
@@ -341,7 +388,7 @@ public class ComputeRedemptionAttributionQueryHandlerTests
         // Proposed a day away from "today" — CurrentDayOnly would refuse this as a *new* claim.
         var proposedStart = Now.AddDays(1);
         var result = await CreateHandler().HandleAsync(
-            new ComputeRedemptionAttributionQuery(contractId, presetId, proposedStart, proposedStart.AddMinutes(25), null, existingEntries),
+            new ComputeRedemptionAttributionQuery(contractId, presetId,At.Slot(proposedStart, proposedStart.AddMinutes(25)), null, existingEntries),
             CancellationToken.None);
 
         result.ContractId.Should().Be(contractId);
@@ -365,7 +412,7 @@ public class ComputeRedemptionAttributionQueryHandlerTests
 
         var existingEntries = new[] { new RedemptionEntryDto(missedBlockId, 25) };
         var result = await CreateHandler().HandleAsync(
-            new ComputeRedemptionAttributionQuery(contractId, presetId, Now, Now.AddMinutes(25), null, existingEntries),
+            new ComputeRedemptionAttributionQuery(contractId, presetId,At.Slot(Now, Now.AddMinutes(25)), null, existingEntries),
             CancellationToken.None);
 
         result.Entries.Should().ContainSingle(e => e.MissedBlockId == missedBlockId && e.MinutesCovered == 10);
@@ -384,7 +431,7 @@ public class ComputeRedemptionAttributionQueryHandlerTests
 
         var existingEntries = new[] { new RedemptionEntryDto(missedBlockId, 25) };
         var result = await CreateHandler().HandleAsync(
-            new ComputeRedemptionAttributionQuery(contractId, presetId, Now, Now.AddMinutes(25), null, existingEntries),
+            new ComputeRedemptionAttributionQuery(contractId, presetId,At.Slot(Now, Now.AddMinutes(25)), null, existingEntries),
             CancellationToken.None);
 
         result.Entries.Should().BeEmpty();
@@ -407,7 +454,7 @@ public class ComputeRedemptionAttributionQueryHandlerTests
         // A 25-minute block: 10 carried forward, 15 minutes of fresh capacity left over —
         // eligible today, so the new claim against `fresh` fills it.
         var result = await CreateHandler().HandleAsync(
-            new ComputeRedemptionAttributionQuery(contractId, presetId, Now, Now.AddMinutes(25), null, existingEntries),
+            new ComputeRedemptionAttributionQuery(contractId, presetId,At.Slot(Now, Now.AddMinutes(25)), null, existingEntries),
             CancellationToken.None);
 
         result.Entries.Should().HaveCount(2);
@@ -427,7 +474,7 @@ public class ComputeRedemptionAttributionQueryHandlerTests
             .Returns((IReadOnlyList<FocusBlockDeficitDto>)[deficit]);
 
         var result = await CreateHandler().HandleAsync(
-            new ComputeRedemptionAttributionQuery(null, presetId, Now, Now.AddHours(1), null), CancellationToken.None);
+            new ComputeRedemptionAttributionQuery(null, presetId,At.Slot(Now, Now.AddHours(1)), null), CancellationToken.None);
 
         result.ContractId.Should().Be(contractId);
         result.Entries.Should().ContainSingle(e => e.MissedBlockId == deficit.FocusBlockId);

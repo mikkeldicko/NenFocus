@@ -1,3 +1,4 @@
+using NenFocus.Domain.ValueObjects;
 namespace NenFocus.Application.DTOs;
 
 /// <summary>
@@ -8,7 +9,6 @@ namespace NenFocus.Application.DTOs;
 /// </summary>
 public sealed record NenContractBlockSpec(
     Guid PresetId,
-    DateTime Start,
-    DateTime End,
+    TimeSlot Slot,
     bool IsFocus,
     string? Title = null);

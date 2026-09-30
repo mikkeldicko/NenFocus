@@ -13,9 +13,9 @@ public class Session : AggregateRoot
     public SessionOrigin Origin { get; private set; }
     public Guid BlockPresetId { get; private set; }
     public Guid? OriginatingBlockId { get; private set; }
-    public DateTime? StartedAt { get; private set; }
-    public DateTime? EndAt { get; private set; }
-    public DateTime? EndedAt { get; private set; }
+    public Moment? StartedAt { get; private set; }
+    public Moment? EndAt { get; private set; }
+    public Moment? EndedAt { get; private set; }
 
     // Persisted as the SessionBreaks child table (EF OwnsMany); exposed as a BreakSchedule.
     private List<SessionBreak> _breaks = [];
@@ -44,7 +44,7 @@ public class Session : AggregateRoot
     /// </summary>
     public bool KeepBlockingDuringBreaks { get; private set; }
     public string? Reflection { get; private set; }
-    public DateTime? PostSessionAcknowledgedAt { get; private set; }
+    public Moment? PostSessionAcknowledgedAt { get; private set; }
     public IReadOnlyList<string> TemporaryBlockedApps { get; private set; } = [];
     public IReadOnlyList<string> TemporaryBlockedSites { get; private set; } = [];
 
@@ -83,17 +83,19 @@ public class Session : AggregateRoot
     }
 
     /// <summary>
-    /// How long this session will run if started at <paramref name="startedAt"/> — until
-    /// <paramref name="scheduledEnd"/> (a Planned session's block end) or for its
-    /// Duration. The one definition Start and a caller building a BreakSchedule share,
-    /// so a schedule is always laid over exactly the run it will be checked against.
+    /// How long this session will run if started at <paramref name="startedAt"/> — until the
+    /// end of <paramref name="plannedWindow"/> (a Planned session's block, <c>block.Scheduled</c>)
+    /// or for its Duration. The one definition Start and a caller building a BreakSchedule
+    /// share, so a schedule is always laid over exactly the run it will be checked against.
     /// </summary>
-    public TimeSpan RunLength(DateTime startedAt, DateTime? scheduledEnd = null) =>
-        (scheduledEnd ?? startedAt + Duration.Value) - startedAt;
+    public TimeSpan RunLength(Moment startedAt, TimeSlot? plannedWindow = null) => EndOfRun(startedAt, plannedWindow) - startedAt;
+
+    private Moment EndOfRun(Moment startedAt, TimeSlot? plannedWindow) =>
+        plannedWindow?.End ?? startedAt + Duration.Value;
 
     public void Start(
-        DateTime startedAt,
-        DateTime? scheduledEnd = null,
+        Moment startedAt,
+        TimeSlot? plannedWindow = null,
         BreakSchedule? breakSchedule = null,
         string? breakPresetName = null,
         bool keepBlockingDuringBreaks = false)
@@ -103,13 +105,13 @@ public class Session : AggregateRoot
                 "Session has already been started.");
 
         var schedule = breakSchedule ?? BreakSchedule.None;
-        if (!schedule.FitsWithin(RunLength(startedAt, scheduledEnd)))
+        if (!schedule.FitsWithin(RunLength(startedAt, plannedWindow)))
             throw new ArgumentException(
                 "Every break must end before the session does.", nameof(breakSchedule));
 
         Status = SessionStatus.Active;
         StartedAt = startedAt;
-        EndAt = scheduledEnd ?? startedAt + Duration.Value;
+        EndAt = EndOfRun(startedAt, plannedWindow);
         _breaks = schedule.Breaks.ToList();
         // A label only ever describes breaks that exist — a preset that turned out to
         // have no room for a single break leaves the session honestly labelled as none.
@@ -120,29 +122,29 @@ public class Session : AggregateRoot
 
     /// <summary>True while <paramref name="at"/> falls inside one of this running
     /// session's break slots — whether it *is* a break; see LiftsBlockingAt for what it does.</summary>
-    public bool IsOnBreakAt(DateTime at) => CurrentBreakAt(at) is not null;
+    public bool IsOnBreakAt(Moment at) => CurrentBreakAt(at) is not null;
 
     /// <summary>True when this session's own preset should stop being enforced at
     /// <paramref name="at"/>: it is inside a break slot and its contract doesn't keep
     /// blocking through breaks. The one question PolicyEngine and the UI ask (Gap 64).</summary>
-    public bool LiftsBlockingAt(DateTime at) => IsOnBreakAt(at) && !KeepBlockingDuringBreaks;
+    public bool LiftsBlockingAt(Moment at) => IsOnBreakAt(at) && !KeepBlockingDuringBreaks;
 
     /// <summary>The break slot covering <paramref name="at"/>, or null while working or
     /// when the session isn't running.</summary>
-    public SessionBreak? CurrentBreakAt(DateTime at) =>
+    public SessionBreak? CurrentBreakAt(Moment at) =>
         Status == SessionStatus.Active && StartedAt is { } startedAt
             ? BreakSchedule.BreakAt(at - startedAt)
             : null;
 
     /// <summary>Every break boundary this session crossed in (from, to] — what the
     /// clock-watching monitor asks each tick instead of tracking phases itself.</summary>
-    public IReadOnlyList<BreakTransition> BreakTransitionsBetween(DateTime from, DateTime to) =>
+    public IReadOnlyList<BreakTransition> BreakTransitionsBetween(Moment from, Moment to) =>
         StartedAt is { } startedAt
             ? BreakSchedule.TransitionsBetween(from - startedAt, to - startedAt)
             : [];
 
     /// <summary>Breaks begun by <paramref name="at"/>.</summary>
-    public int BreaksTakenBy(DateTime at) =>
+    public int BreaksTakenBy(Moment at) =>
         StartedAt is { } startedAt ? BreakSchedule.BreaksStartedBy(at - startedAt) : 0;
 
     /// <summary>Final break count, once the session has ended; 0 before then.</summary>
@@ -153,7 +155,7 @@ public class Session : AggregateRoot
     /// longer than planned, however late its end is noticed (sleep, a restart, a skipped
     /// clock). The break schedule is trimmed to what actually happened by then.
     /// </summary>
-    public void Complete(DateTime endedAt)
+    public void Complete(Moment endedAt)
     {
         if (Status == SessionStatus.Completed)
             throw new InvalidOperationException(
@@ -168,7 +170,9 @@ public class Session : AggregateRoot
         Raise(new SessionEndedEvent(Id, actualEnd));
     }
 
-    public void Miss(DateTime scheduledStart, DateTime scheduledEnd)
+    /// <summary>A planned session whose block's window closed without the Ritual: it holds that
+    /// window (<paramref name="scheduled"/> — the block's own slot) as its start and end.</summary>
+    public void Miss(TimeSlot scheduled)
     {
         if (Origin != SessionOrigin.Planned)
             throw new InvalidOperationException("Only a planned session can be missed.");
@@ -177,9 +181,9 @@ public class Session : AggregateRoot
             throw new InvalidOperationException("Only a session that never started can be missed.");
 
         Status = SessionStatus.Missed;
-        StartedAt = scheduledStart;
-        EndedAt = scheduledEnd;
-        Raise(new SessionMissedEvent(Id, scheduledStart, scheduledEnd));
+        StartedAt = scheduled.Start;
+        EndedAt = scheduled.End;
+        Raise(new SessionMissedEvent(Id, scheduled.Start, scheduled.End));
     }
 
     public void SetReflection(string? reflection)
@@ -201,7 +205,7 @@ public class Session : AggregateRoot
     /// the one fact that distinguishes the two, letting a startup query find any
     /// Completed or Missed session whose post-session screen was never dismissed.
     /// </summary>
-    public void MarkPostSessionAcknowledged(DateTime acknowledgedAt)
+    public void MarkPostSessionAcknowledged(Moment acknowledgedAt)
     {
         if (Status != SessionStatus.Completed && Status != SessionStatus.Missed)
             throw new InvalidOperationException(
@@ -216,6 +220,16 @@ public class Session : AggregateRoot
     public bool HasEnded => EndedAt.HasValue;
 
     /// <summary>
+    /// The time this session occupies while it runs — StartedAt to its scheduled end — and null
+    /// once it isn't running. What Focus placement must keep clear (Gap 88). A running planned
+    /// session covers the same time as its block; checking both is harmless.
+    /// </summary>
+    public TimeSlot? ReservedSlot =>
+        Status == SessionStatus.Active && StartedAt is { } started && EndAt is { } end
+            ? new TimeSlot(started, end)
+            : null;
+
+    /// <summary>
     /// Floored to whole minutes — the single source every accounting consumer (credited
     /// focus time, the deficit ledger, completed/bonus hours, Post-Session's duration,
     /// session history) reads elapsed time from, so none of them ever have to reconcile
@@ -225,7 +239,7 @@ public class Session : AggregateRoot
     /// much does this count for," where a whole minute is already the smallest unit that
     /// means anything.
     /// </summary>
-    public TimeSpan? GetElapsedTime(DateTime asOf)
+    public TimeSpan? GetElapsedTime(Moment asOf)
     {
         // A missed session never ran — its StartedAt/EndedAt hold the scheduled
         // window (inherited from the originating block), not real elapsed time.
@@ -235,7 +249,7 @@ public class Session : AggregateRoot
         return TimeSpan.FromMinutes(Math.Floor(raw.TotalMinutes));
     }
 
-    public TimeSpan? GetRemainingTime(DateTime asOf)
+    public TimeSpan? GetRemainingTime(Moment asOf)
     {
         if (EndAt is null) return null;
         var remaining = EndAt.Value - asOf;

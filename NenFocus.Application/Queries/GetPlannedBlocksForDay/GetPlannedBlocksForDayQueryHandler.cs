@@ -3,6 +3,7 @@ using NenFocus.Application.Interfaces;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
 using NenFocus.Domain.Services;
+using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Application.Queries.GetPlannedBlocksForDay;
 
@@ -39,7 +40,7 @@ public sealed class GetPlannedBlocksForDayQueryHandler
 
         var allPresets = await _presets.GetAllAsync(cancellationToken);
         var presetMap = allPresets.ToDictionary(p => p.Id);
-        var now = _clock.UtcNow;
+        var now = _clock.Now;
 
         var contractIds = blocks.Select(b => b.ContractId).Where(id => id.HasValue).Select(id => id!.Value).Distinct();
         var contractsById = new Dictionary<Guid, NenContract?>();
@@ -61,25 +62,25 @@ public sealed class GetPlannedBlocksForDayQueryHandler
             // genuinely be both. This flag lets the tile badge say so even when Outcome alone
             // would hide it.
             var wasStartedLate = focusBlock?.RitualCompletedAt is { } ritualCompletedAt
-                && _classifier.IsLateStart(b.Start, ritualCompletedAt)
-                && ritualCompletedAt < b.End;
+                && _classifier.IsLateStart(b.Scheduled, ritualCompletedAt)
+                && !b.Scheduled.HasEnded(ritualCompletedAt);
 
             // Display span mirrors the actual worked window, not the scheduled one: a ritual
             // completed past the grace period pulls the visual start forward, and a session
             // ended before the block's own scheduled end pulls the visual end back. A grace-
             // period-late start is left untrimmed — it's credited as full duration, so it
             // should look like full duration too.
-            var displayStart = wasStartedLate ? focusBlock!.RitualCompletedAt!.Value : b.Start;
-            var displayEnd = focusBlock?.SessionEndedAt is { } sessionEndedAt && sessionEndedAt < b.End
-                ? sessionEndedAt
-                : b.End;
+            var shown = wasStartedLate ? b.Scheduled.From(focusBlock!.RitualCompletedAt!.Value) : b.Scheduled;
+            if (focusBlock?.SessionEndedAt is { } sessionEndedAt && !b.Scheduled.HasEnded(sessionEndedAt))
+                shown = shown.Until(sessionEndedAt);
 
             // Bonus is only meaningful for an unlinked block — a committed or redeemed block
             // (ContractId set) already has its one true contract. Contract date ranges never
             // overlap, so at most one contract can ever cover a given Start date. StartsAt/
             // EndsAt, not a date-only truncation — a Work-Hours contract's true boundary
-            // isn't midnight. b.Start is UTC; StartsAt/EndsAt are local wall-clock instants.
-            var localStart = _clock.ToLocal(b.Start);
+            // isn't midnight. StartsAt/EndsAt are local wall-clock times, so the block's start
+            // is compared on the user's clock.
+            var localStart = _clock.TimeZone.ToCalendarTimes(b.Scheduled).Start;
             // Focus only — Bonus hours only ever come from Focus blocks (same set as
             // GetNenContractBonusFocusHoursQueryHandler); a Background block is never Bonus.
             var bonusContract = b is FocusBlock && b.ContractId is null
@@ -101,8 +102,7 @@ public sealed class GetPlannedBlocksForDayQueryHandler
                 PresetId = b.BlockPresetId,
                 PresetName = preset?.Name ?? "Unknown",
                 BlockPresetType = b.PresetType,
-                Start = displayStart,
-                End = displayEnd,
+                Shown = shown,
                 WebsiteFilterType = preset?.WebsiteFilterType ?? WebsiteFilterType.Blocklist,
                 ContractId = b.ContractId,
                 IsCompleted = focusBlock?.RitualCompletedAt.HasValue ?? false,

@@ -32,8 +32,8 @@ public class GetUnacknowledgedPostSessionsQueryHandlerTests
         var session = Session.Create(
             Guid.NewGuid(), new SessionGoal("Deep work"), new SessionDuration(elapsed),
             Guid.NewGuid(), SessionOrigin.Spontaneous);
-        session.Start(endedAt - elapsed);
-        session.Complete(endedAt);
+        session.Start(At.Utc(endedAt - elapsed));
+        session.Complete(At.Utc(endedAt));
         return session;
     }
 
@@ -55,7 +55,7 @@ public class GetUnacknowledgedPostSessionsQueryHandlerTests
         _sessions.GetUnacknowledgedPostSessionsAsync(Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<Session>)[session]);
         _presets.GetByIdAsync(session.BlockPresetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(session.BlockPresetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Now));
+            .Returns(BlockPreset.Create(session.BlockPresetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
 
         var result = await CreateHandler().HandleAsync(new GetUnacknowledgedPostSessionsQuery());
 
@@ -74,7 +74,7 @@ public class GetUnacknowledgedPostSessionsQueryHandlerTests
         var session = Session.Create(
             Guid.NewGuid(), new SessionGoal("(missed — no goal set)"), new SessionDuration(TimeSpan.FromMinutes(30)),
             Guid.NewGuid(), SessionOrigin.Planned, originatingBlockId: blockId);
-        session.Miss(scheduledStart, scheduledStart.AddMinutes(30));
+        session.Miss(new TimeSlot(At.Utc(scheduledStart), At.Utc(scheduledStart.AddMinutes(30))));
         _sessions.GetUnacknowledgedPostSessionsAsync(Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<Session>)[session]);
 
@@ -92,15 +92,15 @@ public class GetUnacknowledgedPostSessionsQueryHandlerTests
         var blockEnd = Now;
         var ritualCompletedAt = blockStart.AddMinutes(3); // within 5-minute grace
 
-        var block = FocusBlock.Create(blockId, Guid.NewGuid(), blockStart, blockEnd);
-        block.MarkRitualCompleted(ritualCompletedAt);
+        var block = FocusBlock.Create(blockId, Guid.NewGuid(),At.Slot(blockStart, blockEnd));
+        block.MarkRitualCompleted(At.Utc(ritualCompletedAt));
         _plannedBlocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns(block);
 
         var session = Session.Create(
             Guid.NewGuid(), new SessionGoal("Deep work"), new SessionDuration(blockEnd - blockStart),
             Guid.NewGuid(), SessionOrigin.Planned, originatingBlockId: blockId);
-        session.Start(ritualCompletedAt, blockEnd);
-        session.Complete(blockEnd);
+        session.Start(At.Utc(ritualCompletedAt), At.PlannedWindowEnding(blockEnd));
+        session.Complete(At.Utc(blockEnd));
         _sessions.GetUnacknowledgedPostSessionsAsync(Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<Session>)[session]);
 
@@ -116,8 +116,8 @@ public class GetUnacknowledgedPostSessionsQueryHandlerTests
         var session = Session.Create(
             Guid.NewGuid(), new SessionGoal("Deep work"), new SessionDuration(TimeSpan.FromMinutes(30)),
             Guid.NewGuid(), SessionOrigin.Planned, originatingBlockId: blockId);
-        session.Start(Now.AddMinutes(-10));
-        session.Complete(Now);
+        session.Start(At.Utc(Now.AddMinutes(-10)));
+        session.Complete(At.Utc(Now));
         _plannedBlocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns((PlannedBlock?)null);
         _sessions.GetUnacknowledgedPostSessionsAsync(Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<Session>)[session]);
@@ -135,9 +135,9 @@ public class GetUnacknowledgedPostSessionsQueryHandlerTests
             .Returns((IReadOnlyList<Session>)[session]);
         _attemptTracker.GetAttemptsForSessionAsync(session.Id).Returns(
         [
-            BlockedAttempt.Record(Guid.NewGuid(), session.Id, "chrome", BlockedAttemptType.App, Now),
-            BlockedAttempt.Record(Guid.NewGuid(), session.Id, "chrome", BlockedAttemptType.App, Now),
-            BlockedAttempt.Record(Guid.NewGuid(), session.Id, "facebook.com", BlockedAttemptType.Website, Now)
+            BlockedAttempt.Record(Guid.NewGuid(), session.Id, "chrome", BlockedAttemptType.App, At.Utc(Now)),
+            BlockedAttempt.Record(Guid.NewGuid(), session.Id, "chrome", BlockedAttemptType.App, At.Utc(Now)),
+            BlockedAttempt.Record(Guid.NewGuid(), session.Id, "facebook.com", BlockedAttemptType.Website, At.Utc(Now))
         ]);
 
         var result = await CreateHandler().HandleAsync(new GetUnacknowledgedPostSessionsQuery());

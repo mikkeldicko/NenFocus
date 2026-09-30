@@ -30,7 +30,7 @@ public sealed class CompleteNenContractCommandHandler
         // days, finished by day 7"), and NenContract.IsInEffect (Scheduled/Active only)
         // already governs the date-range-overlap check, so completing here frees the
         // calendar for a new contract immediately regardless of the old EndDate.
-        contract.Complete(_clock.UtcNow);
+        contract.Complete(_clock.Now);
 
         await _contracts.SaveAsync(contract, ct);
 

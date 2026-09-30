@@ -28,7 +28,7 @@ public class StartSessionValidatorTests
     {
         var presetId = Guid.NewGuid();
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, DateTime.UtcNow));
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(DateTime.UtcNow)));
 
         var result = await CreateValidator().ValidateAsync(ValidCommand(presetId));
 
@@ -84,7 +84,7 @@ public class StartSessionValidatorTests
     {
         var presetId = Guid.NewGuid();
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, DateTime.UtcNow));
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(DateTime.UtcNow)));
         var command = ValidCommand(presetId) with { DurationMinutes = minutes };
 
         var result = await CreateValidator().ValidateAsync(command);
@@ -120,7 +120,7 @@ public class StartSessionValidatorTests
     {
         var presetId = Guid.NewGuid();
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Background", WebsiteFilterType.Blocklist, BlockPresetType.Background, DateTime.UtcNow));
+            .Returns(BlockPreset.Create(presetId, "Background", WebsiteFilterType.Blocklist, BlockPresetType.Background, At.Utc(DateTime.UtcNow)));
 
         var result = await CreateValidator().ValidateAsync(ValidCommand(presetId));
 
@@ -134,7 +134,7 @@ public class StartSessionValidatorTests
         // scheduling time, so the Focus-only check is intentionally skipped.
         var presetId = Guid.NewGuid();
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Background", WebsiteFilterType.Blocklist, BlockPresetType.Background, DateTime.UtcNow));
+            .Returns(BlockPreset.Create(presetId, "Background", WebsiteFilterType.Blocklist, BlockPresetType.Background, At.Utc(DateTime.UtcNow)));
         var command = ValidCommand(presetId) with { OriginatingBlockId = Guid.NewGuid() };
 
         var result = await CreateValidator().ValidateAsync(command);
@@ -147,7 +147,7 @@ public class StartSessionValidatorTests
     {
         var presetId = Guid.NewGuid();
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, DateTime.UtcNow));
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(DateTime.UtcNow)));
         // _breakTimerPresets.GetByIdAsync unstubbed already returns null, matching
         // "doesn't exist" — same defense-in-depth reasoning as the block preset check.
         var command = ValidCommand(presetId) with { BreakTimerPresetId = Guid.NewGuid() };
@@ -162,7 +162,7 @@ public class StartSessionValidatorTests
     {
         var presetId = Guid.NewGuid();
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, DateTime.UtcNow));
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(DateTime.UtcNow)));
         var breakTimerPresetId = Guid.NewGuid();
         _breakTimerPresets.GetByIdAsync(breakTimerPresetId, Arg.Any<CancellationToken>())
             .Returns(BreakTimerPreset.Create(breakTimerPresetId, "Classic", new BreakTimer(25, 5, 4, 15)));

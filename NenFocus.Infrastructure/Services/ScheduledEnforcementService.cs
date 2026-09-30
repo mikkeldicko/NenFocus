@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.GetFocusBlockAwaitingRitual;
 using NenFocus.Application.UseCases.Sessions.SweepMissedFocusBlocks;
+using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Infrastructure.Services;
 
@@ -25,7 +26,7 @@ public sealed class ScheduledEnforcementService : BackgroundService
     // The end of the last tick whose block markers were reported — the heartbeat's only
     // memory, like ActiveSessionMonitor's break cursor. Null until the first tick, which
     // reports nothing: a marker passed before the app was watching is not announced late.
-    private DateTime? _lastBoundaryCheckAt;
+    private Moment? _lastBoundaryCheckAt;
 
     public ScheduledEnforcementService(
         IServiceScopeFactory scopeFactory,
@@ -49,7 +50,7 @@ public sealed class ScheduledEnforcementService : BackgroundService
             {
                 using var scope = _scopeFactory.CreateScope();
 
-                var now = _clock.UtcNow;
+                var now = _clock.Now;
 
                 // Backstop for the case where this heartbeat's own edge-triggered ritual-
                 // required tracking never observed a block go active — e.g. the system slept
@@ -64,7 +65,7 @@ public sealed class ScheduledEnforcementService : BackgroundService
                 //
                 // AsOf = now (the same value passed to SyncAsync and GetFocusBlockAwaitingRitual
                 // below) is deliberate, not incidental: without it, the sweep would read its own
-                // fresh ISystemClock.UtcNow, which can drift from `now` by however long DI/DB/
+                // fresh ISystemClock.Now, which can drift from `now` by however long DI/DB/
                 // debugger overhead takes between the two reads. A block whose End falls in
                 // that gap could then get two different verdicts in the same tick — the sweep
                 // (later clock) marks it Missed while the Ritual check (earlier `now`) still

@@ -29,4 +29,26 @@ public sealed record UserTimeZone
 
     /// <summary>The user's calendar date at this moment.</summary>
     public DateOnly DateOf(Moment moment) => DateOnly.FromDateTime(ToCalendarTime(moment));
+
+    /// <summary>Both ends of a slot as the user's clock shows them — for display; a slot's own Start/End are Domain-only.</summary>
+    public (DateTime Start, DateTime End) ToCalendarTimes(TimeSlot slot) => (ToCalendarTime(slot.Start), ToCalendarTime(slot.End));
+
+    /// <summary>
+    /// The slot cut at the user's local midnights, one part per calendar day it touches, in real
+    /// time — so a daylight-saving night's day is 23 or 25 hours, and "how much falls on each day"
+    /// is always right. A slot ending exactly at midnight has no part on the next day.
+    /// </summary>
+    public IEnumerable<(DateOnly Date, TimeSlot Part)> SplitByDay(TimeSlot slot)
+    {
+        var cursor = slot.Start;
+        while (cursor < slot.End)
+        {
+            var date = DateOf(cursor);
+            var nextMidnight = ToMoment(date.AddDays(1).ToDateTime(TimeOnly.MinValue));
+            var partEnd = nextMidnight < slot.End ? nextMidnight : slot.End;
+
+            yield return (date, new TimeSlot(cursor, partEnd));
+            cursor = partEnd;
+        }
+    }
 }

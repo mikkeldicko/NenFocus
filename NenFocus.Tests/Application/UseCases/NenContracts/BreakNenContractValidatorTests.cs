@@ -27,7 +27,7 @@ public class BreakNenContractValidatorTests
         changeWindow: null,
         allowCancellation: allowCancellation,
         plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-        localSealedAt: sealedAt);
+        sealedAt: At.Utc(sealedAt), timeZone: At.UtcZone);
 
     [Fact]
     public async Task Validate_EmptyContractId_IsInvalid()
@@ -64,7 +64,7 @@ public class BreakNenContractValidatorTests
     public async Task Validate_ContractAlreadyCompleted_IsInvalid()
     {
         var contract = Seal(allowCancellation: true, sealedAt: StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)); // Active
-        contract.Complete(StartDate.AddDays(10).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
+        contract.Complete(At.Utc(StartDate.AddDays(10).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)));
         _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
 
         var result = await CreateValidator().ValidateAsync(new BreakNenContractCommand { ContractId = contract.Id });

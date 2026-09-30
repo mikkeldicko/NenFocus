@@ -30,7 +30,7 @@ public class NenContractCompletedEventHandlerTests
         changeWindow: null,
         allowCancellation: true,
         plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-        localSealedAt: StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
+        sealedAt: At.Utc(StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)), timeZone: At.UtcZone);
 
     [Fact]
     public async Task HandleAsync_ContractExists_SendsNotificationWithContractName()
@@ -38,7 +38,7 @@ public class NenContractCompletedEventHandlerTests
         var contract = SealedContract("Study Month");
         _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
 
-        await CreateHandler().HandleAsync(new NenContractCompletedEvent(contract.Id, DateTime.UtcNow));
+        await CreateHandler().HandleAsync(new NenContractCompletedEvent(contract.Id, At.Utc(DateTime.UtcNow)));
 
         await _notifier.Received(1).NotifyAsync(new ContractCompleted("Study Month"), Arg.Any<CancellationToken>());
     }
@@ -48,7 +48,7 @@ public class NenContractCompletedEventHandlerTests
     {
         _contracts.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((NenContract?)null);
 
-        await CreateHandler().HandleAsync(new NenContractCompletedEvent(Guid.NewGuid(), DateTime.UtcNow));
+        await CreateHandler().HandleAsync(new NenContractCompletedEvent(Guid.NewGuid(), At.Utc(DateTime.UtcNow)));
 
         await _notifier.DidNotReceiveWithAnyArgs().NotifyAsync(default!);
     }

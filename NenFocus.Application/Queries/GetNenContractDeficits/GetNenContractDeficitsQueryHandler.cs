@@ -3,6 +3,7 @@ using NenFocus.Application.Interfaces;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
 using NenFocus.Domain.Services;
+using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Application.Queries.GetNenContractDeficits;
 
@@ -30,7 +31,7 @@ public sealed class GetNenContractDeficitsQueryHandler
         GetNenContractDeficitsQuery query,
         CancellationToken ct = default)
     {
-        var now = _clock.UtcNow;
+        var now = _clock.Now;
         var focusBlocks = (await _blocks.GetForContractAsync(query.ContractId, ct))
             .OfType<FocusBlock>()
             .ToList();
@@ -55,7 +56,7 @@ public sealed class GetNenContractDeficitsQueryHandler
             // than re-derived, so the two can never disagree about "how much of this block
             // was actually honored."
             var creditedMinutes = _classifier.CreditedFocusMinutes(
-                block.Start, block.End, block.RitualCompletedAt, session?.EndedAt, actualElapsedMinutes);
+            block.Scheduled, block.RitualCompletedAt, session?.EndedAt, actualElapsedMinutes);
 
             // Classify answers "what does this look like right now" — a deliberately live
             // read other consumers (Day Met's progress number, Insights, Planner badges) rely
@@ -124,8 +125,7 @@ public sealed class GetNenContractDeficitsQueryHandler
             {
                 FocusBlockId = block.Id,
                 BlockPresetId = block.BlockPresetId,
-                ScheduledStart = block.Start,
-                ScheduledEnd = block.End,
+                Scheduled = block.Scheduled,
                 // CanContributeOwnDeficit already guarantees outcome is one of the three
                 // shortfall values, not null — the compiler just can't see that through the
                 // method call.
@@ -136,6 +136,6 @@ public sealed class GetNenContractDeficitsQueryHandler
             });
         }
 
-        return deficits.OrderBy(d => d.ScheduledStart).ToList();
+        return deficits.OrderBy(d => d.Scheduled).ToList();
     }
 }

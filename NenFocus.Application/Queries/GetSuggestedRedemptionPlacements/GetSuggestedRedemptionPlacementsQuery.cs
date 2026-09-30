@@ -1,5 +1,6 @@
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
+using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Application.Queries.GetSuggestedRedemptionPlacements;
 
@@ -11,5 +12,5 @@ namespace NenFocus.Application.Queries.GetSuggestedRedemptionPlacements;
 /// deficit at all or because every outstanding one belongs to a preset whose strictness
 /// only allows same-day coverage on a day other than today.
 /// </summary>
-public sealed record GetSuggestedRedemptionPlacementsQuery(Guid ContractId, DateTime AsOf)
+public sealed record GetSuggestedRedemptionPlacementsQuery(Guid ContractId, Moment AsOf)
     : IQuery<IReadOnlyList<SuggestedRedemptionPlacementDto>>;

@@ -1,4 +1,5 @@
 using FluentAssertions;
+using NenFocus.Domain.Services;
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.UseCases.Sessions.StartSession;
@@ -19,17 +20,17 @@ public class StartSessionCommandHandlerTests
     private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
     private readonly IBreakTimerPresetRepository _breakTimerPresets = Substitute.For<IBreakTimerPresetRepository>();
     private readonly INenContractRepository _contracts = Substitute.For<INenContractRepository>();
-    private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
+    private readonly ISystemClock _clock = TestClock.Create();
 
     public StartSessionCommandHandlerTests()
     {
-        _clock.UtcNow.Returns(Now);
-        _plannedBlocks.GetForRangeAsync(Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
+        _clock.SetNow(Now);
+        _plannedBlocks.GetForRangeAsync(Arg.Any<TimeSlot>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[]);
     }
 
     private StartSessionCommandHandler CreateHandler()
-        => new(_sessions, _plannedBlocks, _sessionState, _presets, _breakTimerPresets, _contracts, _clock);
+        => new(_sessions, _plannedBlocks, _sessionState, _presets, _breakTimerPresets, _contracts, _clock, new BlockPlacementChecker());
 
     private static StartSessionCommand SpontaneousCommand(Guid? presetId = null) => new()
     {
@@ -43,7 +44,7 @@ public class StartSessionCommandHandlerTests
     {
         var presetId = Guid.NewGuid();
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Now));
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
 
         var result = await CreateHandler().HandleAsync(SpontaneousCommand(presetId), CancellationToken.None);
 
@@ -71,8 +72,8 @@ public class StartSessionCommandHandlerTests
     [Fact]
     public async Task HandleAsync_UpcomingFocusBlockWithinDuration_Fails()
     {
-        var conflictingBlock = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Now.AddMinutes(10), Now.AddHours(1));
-        _plannedBlocks.GetForRangeAsync(Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
+        var conflictingBlock = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now.AddMinutes(10), Now.AddHours(1)));
+        _plannedBlocks.GetForRangeAsync(Arg.Any<TimeSlot>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[conflictingBlock]);
 
         var result = await CreateHandler().HandleAsync(SpontaneousCommand(), CancellationToken.None);
@@ -85,8 +86,8 @@ public class StartSessionCommandHandlerTests
     [Fact]
     public async Task HandleAsync_FocusBlockAlreadyActive_IsRejected()
     {
-        var activeBlock = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Now.AddMinutes(-5), Now.AddHours(1));
-        _plannedBlocks.GetForRangeAsync(Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
+        var activeBlock = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now.AddMinutes(-5), Now.AddHours(1)));
+        _plannedBlocks.GetForRangeAsync(Arg.Any<TimeSlot>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[activeBlock]);
 
         var result = await CreateHandler().HandleAsync(SpontaneousCommand(), CancellationToken.None);
@@ -101,10 +102,10 @@ public class StartSessionCommandHandlerTests
         // A Focus block that already ended its session early no longer occupies the rest
         // of its slated window — starting a spontaneous session in that freed tail must
         // not be rejected as "a focus block is currently active."
-        var endedEarlyBlock = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Now.AddHours(-2), Now.AddHours(1));
-        endedEarlyBlock.MarkRitualCompleted(Now.AddHours(-2));
-        endedEarlyBlock.MarkSessionEnded(Now.AddMinutes(-5));
-        _plannedBlocks.GetForRangeAsync(Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
+        var endedEarlyBlock = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now.AddHours(-2), Now.AddHours(1)));
+        endedEarlyBlock.MarkRitualCompleted(At.Utc(Now.AddHours(-2)));
+        endedEarlyBlock.MarkSessionEnded(At.Utc(Now.AddMinutes(-5)));
+        _plannedBlocks.GetForRangeAsync(Arg.Any<TimeSlot>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[endedEarlyBlock]);
 
         var result = await CreateHandler().HandleAsync(SpontaneousCommand(), CancellationToken.None);
@@ -156,7 +157,7 @@ public class StartSessionCommandHandlerTests
         // minutes after the session actually started (12:25), not the block (12:15).
         var blockId = Guid.NewGuid();
         _plannedBlocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, Guid.NewGuid(), Now.AddMinutes(-10), Now.AddMinutes(50)));
+            .Returns(FocusBlock.Create(blockId, Guid.NewGuid(),At.Slot(Now.AddMinutes(-10), Now.AddMinutes(50))));
         var breakTimerPresetId = Guid.NewGuid();
         _breakTimerPresets.GetByIdAsync(breakTimerPresetId, Arg.Any<CancellationToken>())
             .Returns(BreakTimerPreset.Create(breakTimerPresetId, "Classic", new BreakTimer(25, 5, 4, 15)));
@@ -188,14 +189,14 @@ public class StartSessionCommandHandlerTests
     public async Task HandleAsync_Planned_MarksOriginatingFocusBlockRitualCompleted()
     {
         var blockId = Guid.NewGuid();
-        var focusBlock = FocusBlock.Create(blockId, Guid.NewGuid(), Now.AddMinutes(-1), Now.AddHours(1));
+        var focusBlock = FocusBlock.Create(blockId, Guid.NewGuid(),At.Slot(Now.AddMinutes(-1), Now.AddHours(1)));
         _plannedBlocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns(focusBlock);
 
         var command = SpontaneousCommand() with { OriginatingBlockId = blockId };
         var result = await CreateHandler().HandleAsync(command, CancellationToken.None);
 
         result.Success.Should().BeTrue();
-        focusBlock.RitualCompletedAt.Should().Be(Now);
+        focusBlock.RitualCompletedAt.Should().Be(At.Utc(Now));
         await _plannedBlocks.Received(1).SaveAsync(focusBlock, Arg.Any<CancellationToken>());
         await _sessions.Received(1).SaveAsync(
             Arg.Is<Session>(s => s.Origin == SessionOrigin.Planned && s.OriginatingBlockId == blockId),
@@ -210,7 +211,7 @@ public class StartSessionCommandHandlerTests
         // clicked (which is what DurationMinutes reflects).
         var blockId = Guid.NewGuid();
         var blockEnd = Now.AddMinutes(3);
-        var focusBlock = FocusBlock.Create(blockId, Guid.NewGuid(), Now.AddMinutes(-2), blockEnd);
+        var focusBlock = FocusBlock.Create(blockId, Guid.NewGuid(),At.Slot(Now.AddMinutes(-2), blockEnd));
         _plannedBlocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns(focusBlock);
 
         // Simulates the Hatsu-computed remaining minutes (rounded, e.g. via the
@@ -220,9 +221,9 @@ public class StartSessionCommandHandlerTests
 
         result.Success.Should().BeTrue();
         await _sessions.Received(1).SaveAsync(
-            Arg.Is<Session>(s => s.EndAt == blockEnd),
+            Arg.Is<Session>(s => s.EndAt == At.Utc(blockEnd)),
             Arg.Any<CancellationToken>());
-        _sessionState.Received(1).SetActive(Arg.Is<SessionDto>(d => d.EndAt == blockEnd));
+        _sessionState.Received(1).SetActive(Arg.Is<SessionDto>(d => d.EndAt == At.Utc(blockEnd)));
     }
 
     [Fact]
@@ -237,7 +238,7 @@ public class StartSessionCommandHandlerTests
         var blockId = Guid.NewGuid();
         var blockStart = Now.AddMinutes(-2); // Ritual took 2 minutes
         var blockEnd = Now.AddMinutes(58);
-        var focusBlock = FocusBlock.Create(blockId, Guid.NewGuid(), blockStart, blockEnd);
+        var focusBlock = FocusBlock.Create(blockId, Guid.NewGuid(),At.Slot(blockStart, blockEnd));
         _plannedBlocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns(focusBlock);
 
         // Deliberately stale/wrong DurationMinutes, as if Hatsu computed it earlier.
@@ -262,7 +263,7 @@ public class StartSessionCommandHandlerTests
         var blockId = Guid.NewGuid();
         var blockStart = Now.AddMinutes(-1); // Ritual took 1 minute
         var blockEnd = Now.AddMinutes(1);
-        var focusBlock = FocusBlock.Create(blockId, Guid.NewGuid(), blockStart, blockEnd);
+        var focusBlock = FocusBlock.Create(blockId, Guid.NewGuid(),At.Slot(blockStart, blockEnd));
         _plannedBlocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns(focusBlock);
 
         var command = SpontaneousCommand() with { OriginatingBlockId = blockId };
@@ -292,8 +293,8 @@ public class StartSessionCommandHandlerTests
     public async Task HandleAsync_Planned_DoesNotTreatOwnOriginatingBlockAsConflict()
     {
         var blockId = Guid.NewGuid();
-        var ownBlock = FocusBlock.Create(blockId, Guid.NewGuid(), Now.AddMinutes(-5), Now.AddMinutes(55));
-        _plannedBlocks.GetForRangeAsync(Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
+        var ownBlock = FocusBlock.Create(blockId, Guid.NewGuid(),At.Slot(Now.AddMinutes(-5), Now.AddMinutes(55)));
+        _plannedBlocks.GetForRangeAsync(Arg.Any<TimeSlot>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[ownBlock]);
         _plannedBlocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns(ownBlock);
 
@@ -301,14 +302,14 @@ public class StartSessionCommandHandlerTests
         var result = await CreateHandler().HandleAsync(command, CancellationToken.None);
 
         result.Success.Should().BeTrue();
-        ownBlock.RitualCompletedAt.Should().Be(Now);
+        ownBlock.RitualCompletedAt.Should().Be(At.Utc(Now));
     }
 
     [Fact]
     public async Task HandleAsync_Planned_OriginatingBlockWindowAlreadyClosed_Fails()
     {
         var blockId = Guid.NewGuid();
-        var closedBlock = FocusBlock.Create(blockId, Guid.NewGuid(), Now.AddHours(-2), Now.AddHours(-1));
+        var closedBlock = FocusBlock.Create(blockId, Guid.NewGuid(),At.Slot(Now.AddHours(-2), Now.AddHours(-1)));
         _plannedBlocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns(closedBlock);
 
         var command = SpontaneousCommand() with { OriginatingBlockId = blockId };
@@ -319,26 +320,27 @@ public class StartSessionCommandHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_Planned_OriginatingBlockEndsExactlyNow_StillAllowed()
+    public async Task HandleAsync_Planned_OriginatingBlockEndsExactlyNow_IsRefused()
     {
         // PlannedBlock.HasEnded(asOf) is the codebase's one canonical "is this past"
-        // definition (End < asOf, strict) — this check must match it exactly rather than
-        // its own now >= End (inclusive of the exact-equality instant).
+        // definition — this check must match it exactly. Since Gap 88 it's half-open: at
+        // exactly End the block has ended (and the classifier already calls it Missed), so
+        // a session can't start for it.
         var blockId = Guid.NewGuid();
-        var block = FocusBlock.Create(blockId, Guid.NewGuid(), Now.AddHours(-1), Now);
+        var block = FocusBlock.Create(blockId, Guid.NewGuid(),At.Slot(Now.AddHours(-1), Now));
         _plannedBlocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns(block);
 
         var command = SpontaneousCommand() with { OriginatingBlockId = blockId };
         var result = await CreateHandler().HandleAsync(command, CancellationToken.None);
 
-        result.Success.Should().BeTrue();
+        result.Success.Should().BeFalse();
     }
 
     [Fact]
     public async Task HandleAsync_Planned_SessionAlreadyExistsForBlock_Fails()
     {
         var blockId = Guid.NewGuid();
-        var focusBlock = FocusBlock.Create(blockId, Guid.NewGuid(), Now.AddMinutes(-1), Now.AddHours(1));
+        var focusBlock = FocusBlock.Create(blockId, Guid.NewGuid(),At.Slot(Now.AddMinutes(-1), Now.AddHours(1)));
         _plannedBlocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns(focusBlock);
         _sessions.ExistsForOriginatingBlockAsync(blockId, Arg.Any<CancellationToken>()).Returns(true);
 
@@ -361,7 +363,7 @@ public class StartSessionCommandHandlerTests
         changeWindow: null,
         allowCancellation: false,
         plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-        localSealedAt: Now.Date,
+        sealedAt: At.Utc(Now.Date), timeZone: At.UtcZone,
         keepBlockingDuringBreaks: keepBlockingDuringBreaks);
 
     private StartSessionCommand PlannedCommandFor(FocusBlock block)
@@ -377,7 +379,7 @@ public class StartSessionCommandHandlerTests
     {
         var contract = SealContract(keepBlocking);
         _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Now, Now.AddHours(1));
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now, Now.AddHours(1)));
         block.AssignContract(contract.Id);
 
         var result = await CreateHandler().HandleAsync(PlannedCommandFor(block), CancellationToken.None);
@@ -391,7 +393,7 @@ public class StartSessionCommandHandlerTests
     [Fact]
     public async Task HandleAsync_BonusBlockWithoutContract_DoesNotKeepBlockingAndNeverLooksUpAContract()
     {
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Now, Now.AddHours(1));
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now, Now.AddHours(1)));
 
         await CreateHandler().HandleAsync(PlannedCommandFor(block), CancellationToken.None);
 

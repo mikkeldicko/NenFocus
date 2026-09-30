@@ -18,9 +18,9 @@ public class SessionStartedEventHandlerTests
     private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
     private readonly IPlannedBlockRepository _blocks = Substitute.For<IPlannedBlockRepository>();
     private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
-    private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
+    private readonly ISystemClock _clock = TestClock.Create();
 
-    public SessionStartedEventHandlerTests() => _clock.UtcNow.Returns(Now);
+    public SessionStartedEventHandlerTests() => _clock.SetNow(Now);
 
     private SessionStartedEventHandler CreateHandler() => new(_synchronizer, _notifier, _sessions, _blocks, _presets, _clock);
 
@@ -34,19 +34,19 @@ public class SessionStartedEventHandlerTests
         {
             _blocks.GetByIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns(block);
             _presets.GetByIdAsync(block.BlockPresetId, Arg.Any<CancellationToken>()).Returns(BlockPreset.Create(
-                block.BlockPresetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Now));
+                block.BlockPresetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
         }
         return session;
     }
 
-    private static SessionStartedEvent StartedEvent(Session session) => new(session.Id, Guid.NewGuid(), "Goal", Now);
+    private static SessionStartedEvent StartedEvent(Session session) => new(session.Id, Guid.NewGuid(), "Goal", At.Utc(Now));
 
     [Fact]
     public async Task HandleAsync_SyncsEnforcementAtCurrentTime()
     {
         await CreateHandler().HandleAsync(StartedEvent(GivenSession()));
 
-        await _synchronizer.Received(1).SyncAsync(Now, Arg.Any<CancellationToken>());
+        await _synchronizer.Received(1).SyncAsync(At.Utc(Now), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -60,7 +60,7 @@ public class SessionStartedEventHandlerTests
     [Fact]
     public async Task HandleAsync_PlannedSession_ReportsStartNamedAfterItsBlock()
     {
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Now, Now.AddHours(1), "Thesis");
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now, Now.AddHours(1)), "Thesis");
 
         await CreateHandler().HandleAsync(StartedEvent(GivenSession(block)));
 
@@ -70,7 +70,7 @@ public class SessionStartedEventHandlerTests
     [Fact]
     public async Task HandleAsync_PlannedSessionUntitledBlock_ReportsStartNamedAfterThePreset()
     {
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Now, Now.AddHours(1));
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now, Now.AddHours(1)));
 
         await CreateHandler().HandleAsync(StartedEvent(GivenSession(block)));
 

@@ -16,7 +16,7 @@ public class UpdateBlockPresetCommandHandlerTests
 
     private static BlockPreset CreatePreset(Guid id)
     {
-        var preset = BlockPreset.Create(id, "Old Name", WebsiteFilterType.Blocklist, BlockPresetType.Focus, DateTime.UtcNow);
+        var preset = BlockPreset.Create(id, "Old Name", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(DateTime.UtcNow));
         preset.AddBlockedApp(new BlockedApp("spotify"));
         preset.AddWebsite(new BlockedSite("reddit.com"));
         preset.AddTag("old-tag");

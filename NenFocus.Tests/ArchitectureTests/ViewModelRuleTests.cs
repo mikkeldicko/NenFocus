@@ -90,7 +90,7 @@ public class ViewModelRuleTests
     private static readonly string[] ValueFormattingExceptions =
     [
         // All → Gap 89 (ViewModel audit): values should reach the View raw and be formatted by a converter.
-        "NenFocus/ViewModels/Pages/PlannerPageViewModel.cs has 35",
+        "NenFocus/ViewModels/Pages/PlannerPageViewModel.cs has 33",
         "NenFocus/ViewModels/Pages/ContractPresetPageViewModel.cs has 6",
         "NenFocus/ViewModels/Components/DayFloorPreviewViewModel.cs has 6",
         "NenFocus/ViewModels/Contracts/ContractWizardViewModel.cs has 3",

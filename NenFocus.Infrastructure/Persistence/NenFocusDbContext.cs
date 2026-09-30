@@ -53,20 +53,24 @@ public class NenFocusDbContext : DbContext
     {
         public UtcDateTimeConverter()
             : base(
-                v => v.Kind == DateTimeKind.Utc ? v : v.ToUniversalTime(),
+                v => v.Kind == DateTimeKind.Utc ? v : ThrowNonUtc(),
                 v => DateTime.SpecifyKind(v, DateTimeKind.Utc))
         {
         }
+
+        private static DateTime ThrowNonUtc() => throw new ArgumentException("Stored DateTimes must be UTC.");
     }
 
     private class NullableUtcDateTimeConverter : ValueConverter<DateTime?, DateTime?>
     {
         public NullableUtcDateTimeConverter()
             : base(
-                v => !v.HasValue ? v : (v.Value.Kind == DateTimeKind.Utc ? v : v.Value.ToUniversalTime()),
+                v => !v.HasValue ? v : (v.Value.Kind == DateTimeKind.Utc ? v : ThrowNonUtc()),
                 v => !v.HasValue ? v : DateTime.SpecifyKind(v.Value, DateTimeKind.Utc))
         {
         }
+
+        private static DateTime? ThrowNonUtc() => throw new ArgumentException("Stored DateTimes must be UTC.");
     }
 
     // JSON round-tripping DTOs for the value objects below — DateOnly dictionary keys are
@@ -312,11 +316,14 @@ public class NenFocusDbContext : DbContext
             entity.Property(b => b.BlockPresetId)
                 .IsRequired();
 
-            entity.Property(b => b.Start)
-                .IsRequired();
-
-            entity.Property(b => b.End)
-                .IsRequired();
+            // Gap 88: the block's time is its TimeSlot, stored in the same Start/End columns as
+            // before (no migration). A slot's fields are Domain-only, so they're mapped by name.
+            entity.OwnsOne(b => b.Scheduled, slot =>
+            {
+                slot.Property<Moment>("Start").HasColumnName("Start").IsRequired();
+                slot.Property<Moment>("End").HasColumnName("End").IsRequired();
+            });
+            entity.Navigation(b => b.Scheduled).IsRequired();
 
             entity.Property(b => b.Title)
                 .HasMaxLength(100);

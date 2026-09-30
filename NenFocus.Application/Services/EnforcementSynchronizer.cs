@@ -26,7 +26,7 @@ public sealed class EnforcementSynchronizer : IEnforcementSynchronizer
         _enforcement = enforcement;
     }
 
-    public async Task<ActivePolicySlice> SyncAsync(DateTime at, CancellationToken ct = default)
+    public async Task<ActivePolicySlice> SyncAsync(Moment at, CancellationToken ct = default)
     {
         await _lock.WaitAsync(ct);
         try

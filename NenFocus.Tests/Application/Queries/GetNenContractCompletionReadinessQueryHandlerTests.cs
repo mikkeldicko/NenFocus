@@ -21,14 +21,15 @@ public class GetNenContractCompletionReadinessQueryHandlerTests
     private readonly IPlannedBlockRepository _blocks = Substitute.For<IPlannedBlockRepository>();
     private readonly IQueryHandler<GetNenContractCompletedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> _completedHours =
         Substitute.For<IQueryHandler<GetNenContractCompletedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>>>();
-    private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
+    private readonly ISystemClock _clock = TestClock.Create();
     private readonly IFocusBlockOutcomeClassifier _outcomeClassifier = Substitute.For<IFocusBlockOutcomeClassifier>();
 
     public GetNenContractCompletionReadinessQueryHandlerTests()
     {
-        _clock.UtcNow.Returns(Now);
-        _clock.ToLocal(Arg.Any<DateTime>()).Returns(ci => ci.Arg<DateTime>());
-        _blocks.GetForRangeAsync(Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
+        _clock.SetNow(Now);
+        _clock.SetTimeZoneOffset(TimeSpan.Zero);
+        _clock.SetTimeZoneOffset(TimeSpan.Zero);
+        _blocks.GetForRangeAsync(Arg.Any<TimeSlot>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[]);
     }
 
@@ -45,7 +46,7 @@ public class GetNenContractCompletionReadinessQueryHandlerTests
         changeWindow: null,
         allowCancellation: true,
         plannedFocusHoursByDay: new Dictionary<DateOnly, double> { [StartDate] = committedHours },
-        localSealedAt: StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
+        sealedAt: At.Utc(StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)), timeZone: At.UtcZone);
 
     private void StubCompleted(double hours) =>
         _completedHours.HandleAsync(Arg.Any<GetNenContractCompletedFocusHoursQuery>(), Arg.Any<CancellationToken>())
@@ -65,7 +66,7 @@ public class GetNenContractCompletionReadinessQueryHandlerTests
     public async Task HandleAsync_ContractNotActive_NotReady()
     {
         var contract = ActiveContract();
-        contract.Break(Now);
+        contract.Break(At.Utc(Now), At.UtcZone);
         _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(contract);
 
         var result = await CreateHandler().HandleAsync(new GetNenContractCompletionReadinessQuery(ContractId));
@@ -115,8 +116,8 @@ public class GetNenContractCompletionReadinessQueryHandlerTests
     {
         _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(ActiveContract(committedHours: 4));
         StubCompleted(4);
-        var pending = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Now.AddHours(1), Now.AddHours(2), contractId: ContractId);
-        _blocks.GetForRangeAsync(Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
+        var pending = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now.AddHours(1), Now.AddHours(2)), contractId: ContractId);
+        _blocks.GetForRangeAsync(Arg.Any<TimeSlot>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[pending]);
 
         var result = await CreateHandler().HandleAsync(new GetNenContractCompletionReadinessQuery(ContractId));
@@ -131,8 +132,8 @@ public class GetNenContractCompletionReadinessQueryHandlerTests
         _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(ActiveContract(committedHours: 4));
         StubCompleted(4);
         var bonusDay = StartDate.AddDays(3).ToDateTime(new TimeOnly(9, 0), DateTimeKind.Utc);
-        var pendingBonus = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), bonusDay, bonusDay.AddHours(1));
-        _blocks.GetForRangeAsync(Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
+        var pendingBonus = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(bonusDay, bonusDay.AddHours(1)));
+        _blocks.GetForRangeAsync(Arg.Any<TimeSlot>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[pendingBonus]);
 
         var result = await CreateHandler().HandleAsync(new GetNenContractCompletionReadinessQuery(ContractId));
@@ -146,11 +147,11 @@ public class GetNenContractCompletionReadinessQueryHandlerTests
     {
         _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(ActiveContract(committedHours: 4));
         StubCompleted(4);
-        var ended = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Now.AddHours(-3), Now.AddHours(-2), contractId: ContractId);
-        _blocks.GetForRangeAsync(Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
+        var ended = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now.AddHours(-3), Now.AddHours(-2)), contractId: ContractId);
+        _blocks.GetForRangeAsync(Arg.Any<TimeSlot>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[ended]);
         // Never ritual-completed and its scheduled End has already passed — resolved as Missed.
-        _outcomeClassifier.Classify(ended, Now).Returns(FocusBlockOutcome.Missed);
+        _outcomeClassifier.Classify(ended, At.Utc(Now)).Returns(FocusBlockOutcome.Missed);
 
         var result = await CreateHandler().HandleAsync(new GetNenContractCompletionReadinessQuery(ContractId));
 
@@ -165,10 +166,10 @@ public class GetNenContractCompletionReadinessQueryHandlerTests
         // arrived — it already has a resolved outcome (EndedEarly).
         _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(ActiveContract(committedHours: 4));
         StubCompleted(4);
-        var endedEarly = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Now.AddMinutes(-30), Now.AddHours(1), contractId: ContractId);
-        _blocks.GetForRangeAsync(Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
+        var endedEarly = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now.AddMinutes(-30), Now.AddHours(1)), contractId: ContractId);
+        _blocks.GetForRangeAsync(Arg.Any<TimeSlot>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[endedEarly]);
-        _outcomeClassifier.Classify(endedEarly, Now)
+        _outcomeClassifier.Classify(endedEarly, At.Utc(Now))
             .Returns(FocusBlockOutcome.EndedEarly);
 
         var result = await CreateHandler().HandleAsync(new GetNenContractCompletionReadinessQuery(ContractId));
@@ -182,9 +183,9 @@ public class GetNenContractCompletionReadinessQueryHandlerTests
     {
         _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(ActiveContract(committedHours: 4));
         StubCompleted(4);
-        var cancelled = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Now.AddHours(1), Now.AddHours(2), contractId: ContractId);
-        cancelled.MarkCancelled(Now);
-        _blocks.GetForRangeAsync(Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
+        var cancelled = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now.AddHours(1), Now.AddHours(2)), contractId: ContractId);
+        cancelled.MarkCancelled(At.Utc(Now));
+        _blocks.GetForRangeAsync(Arg.Any<TimeSlot>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[cancelled]);
 
         var result = await CreateHandler().HandleAsync(new GetNenContractCompletionReadinessQuery(ContractId));
@@ -198,8 +199,8 @@ public class GetNenContractCompletionReadinessQueryHandlerTests
         _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(ActiveContract(committedHours: 4));
         StubCompleted(4);
         var outsideDay = EndDate.AddDays(5).ToDateTime(new TimeOnly(9, 0), DateTimeKind.Utc);
-        var outsideBonus = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), outsideDay, outsideDay.AddHours(1));
-        _blocks.GetForRangeAsync(Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
+        var outsideBonus = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(outsideDay, outsideDay.AddHours(1)));
+        _blocks.GetForRangeAsync(Arg.Any<TimeSlot>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[outsideBonus]);
 
         var result = await CreateHandler().HandleAsync(new GetNenContractCompletionReadinessQuery(ContractId));
@@ -223,12 +224,12 @@ public class GetNenContractCompletionReadinessQueryHandlerTests
             changeWindow: null,
             allowCancellation: true,
             plannedFocusHoursByDay: new Dictionary<DateOnly, double> { [StartDate] = 4 },
-            localSealedAt: StartDate.ToDateTime(new TimeOnly(9, 0))); // Active from its 09:00 start
+            sealedAt: At.Utc(StartDate.ToDateTime(new TimeOnly(9, 0))), timeZone: At.UtcZone); // Active from its 09:00 start
         _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(contract);
         StubCompleted(4);
         var afterClose = EndDate.ToDateTime(new TimeOnly(18, 0), DateTimeKind.Utc);
-        var afterCloseBonus = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), afterClose, afterClose.AddHours(1));
-        _blocks.GetForRangeAsync(Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
+        var afterCloseBonus = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(afterClose, afterClose.AddHours(1)));
+        _blocks.GetForRangeAsync(Arg.Any<TimeSlot>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[afterCloseBonus]);
 
         var result = await CreateHandler().HandleAsync(new GetNenContractCompletionReadinessQuery(ContractId));

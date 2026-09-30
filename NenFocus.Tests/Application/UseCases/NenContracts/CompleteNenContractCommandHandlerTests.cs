@@ -17,13 +17,13 @@ public class CompleteNenContractCommandHandlerTests
     private static readonly DateOnly EndDate = new(2026, 1, 10);
 
     private readonly INenContractRepository _contracts = Substitute.For<INenContractRepository>();
-    private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
+    private readonly ISystemClock _clock = TestClock.Create();
     private readonly IQueryHandler<GetNenContractRecapQuery, NenContractRecapDto?> _recap =
         Substitute.For<IQueryHandler<GetNenContractRecapQuery, NenContractRecapDto?>>();
 
     public CompleteNenContractCommandHandlerTests()
     {
-        _clock.UtcNow.Returns(Now);
+        _clock.SetNow(Now);
     }
 
     private CompleteNenContractCommandHandler CreateHandler() => new(_contracts, _clock, _recap);
@@ -38,7 +38,7 @@ public class CompleteNenContractCommandHandlerTests
         changeWindow: null,
         allowCancellation: true,
         plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-        localSealedAt: StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
+        sealedAt: At.Utc(StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)), timeZone: At.UtcZone);
 
     [Fact]
     public async Task HandleAsync_ContractNotFound_Fails()

@@ -1,11 +1,12 @@
-﻿namespace NenFocus.Domain.Events;
+﻿using NenFocus.Domain.ValueObjects;
+namespace NenFocus.Domain.Events;
 
 public class SessionEndedEvent : DomainEvent
 {
     public Guid SessionId { get; }
-    public DateTime EndedAt { get; }
+    public Moment EndedAt { get; }
 
-    public SessionEndedEvent(Guid sessionId, DateTime endedAt)
+    public SessionEndedEvent(Guid sessionId, Moment endedAt)
         : base(endedAt)
     {
         SessionId = sessionId;

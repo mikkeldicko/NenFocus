@@ -25,12 +25,12 @@ public sealed class BlockedAttemptTracker : IBlockedAttemptTracker
 
     public async Task RecordAppBlockedAsync(Guid sessionId, string processName)
     {
-        await SaveAttemptInternal(BlockedAttempt.Record(Guid.NewGuid(), sessionId, processName, BlockedAttemptType.App, _clock.UtcNow));
+        await SaveAttemptInternal(BlockedAttempt.Record(Guid.NewGuid(), sessionId, processName, BlockedAttemptType.App, _clock.Now));
     }
 
     public async Task RecordWebBlockedAsync(Guid sessionId, string domain)
     {
-        await SaveAttemptInternal(BlockedAttempt.Record(Guid.NewGuid(), sessionId, domain, BlockedAttemptType.Website, _clock.UtcNow));
+        await SaveAttemptInternal(BlockedAttempt.Record(Guid.NewGuid(), sessionId, domain, BlockedAttemptType.Website, _clock.Now));
     }
 
     private async Task SaveAttemptInternal(BlockedAttempt attempt)
@@ -40,7 +40,7 @@ public sealed class BlockedAttemptTracker : IBlockedAttemptTracker
         {
             using var context = await _dbFactory.CreateDbContextAsync();
 
-            var threshold = _clock.UtcNow.AddSeconds(-2);
+            var threshold = _clock.Now - TimeSpan.FromSeconds(2);
 
             // SQLite can't apply the OccurredAt comparison in-query, so fetch the most
             // recent row only and compare in C#.

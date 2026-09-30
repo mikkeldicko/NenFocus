@@ -17,7 +17,7 @@ public class EndSessionCommandHandlerTests
     private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
     private readonly IPlannedBlockRepository _plannedBlocks = Substitute.For<IPlannedBlockRepository>();
     private readonly IBlockedAttemptTracker _attemptTracker = Substitute.For<IBlockedAttemptTracker>();
-    private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
+    private readonly ISystemClock _clock = TestClock.Create();
 
     // Real instance, not mocked — it's a pure, dependency-free domain service, and the
     // grace-period-crediting tests below exist specifically to verify its actual
@@ -26,7 +26,7 @@ public class EndSessionCommandHandlerTests
 
     public EndSessionCommandHandlerTests()
     {
-        _clock.UtcNow.Returns(Now);
+        _clock.SetNow(Now);
         _attemptTracker.GetAttemptsForSessionAsync(Arg.Any<Guid>()).Returns([]);
     }
 
@@ -42,7 +42,7 @@ public class EndSessionCommandHandlerTests
             Guid.NewGuid(),
             originatingBlockId is null ? SessionOrigin.Spontaneous : SessionOrigin.Planned,
             originatingBlockId: originatingBlockId);
-        session.Start(Now.AddMinutes(-10));
+        session.Start(At.Utc(Now.AddMinutes(-10)));
         return session;
     }
 
@@ -73,7 +73,7 @@ public class EndSessionCommandHandlerTests
     public async Task HandleAsync_AlreadyCompleted_Fails()
     {
         var session = CreateActiveSession();
-        session.Complete(Now);
+        session.Complete(At.Utc(Now));
         _sessions.GetByIdAsync(session.Id, Arg.Any<CancellationToken>()).Returns(session);
 
         var result = await CreateHandler().HandleAsync(new EndSessionCommand { SessionId = session.Id });
@@ -88,7 +88,7 @@ public class EndSessionCommandHandlerTests
         var session = Session.Create(
             Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(60)),
             Guid.NewGuid(), SessionOrigin.Spontaneous);
-        session.Start(Now.AddMinutes(-27), breakSchedule: new BreakTimer(25, 5, 4, 15).ScheduleFor(TimeSpan.FromMinutes(60)),
+        session.Start(At.Utc(Now.AddMinutes(-27)), breakSchedule: new BreakTimer(25, 5, 4, 15).ScheduleFor(TimeSpan.FromMinutes(60)),
             breakPresetName: "Classic");
         _sessions.GetByIdAsync(session.Id, Arg.Any<CancellationToken>()).Returns(session);
 
@@ -107,12 +107,12 @@ public class EndSessionCommandHandlerTests
         var session = Session.Create(
             Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(30)),
             Guid.NewGuid(), SessionOrigin.Spontaneous);
-        session.Start(Now.AddMinutes(-40));
+        session.Start(At.Utc(Now.AddMinutes(-40)));
         _sessions.GetByIdAsync(session.Id, Arg.Any<CancellationToken>()).Returns(session);
 
         var result = await CreateHandler().HandleAsync(new EndSessionCommand { SessionId = session.Id });
 
-        session.EndedAt.Should().Be(Now.AddMinutes(-10));
+        session.EndedAt.Should().Be(At.Utc(Now.AddMinutes(-10)));
         result.PostSession!.ActualDurationMinutes.Should().Be(30);
     }
 
@@ -123,7 +123,7 @@ public class EndSessionCommandHandlerTests
         var session = CreateActiveSession();
         _sessions.GetByIdAsync(session.Id, Arg.Any<CancellationToken>()).Returns(session);
         _presets.GetByIdAsync(session.BlockPresetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(session.BlockPresetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Now));
+            .Returns(BlockPreset.Create(session.BlockPresetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
 
         var result = await CreateHandler().HandleAsync(new EndSessionCommand { SessionId = session.Id });
 
@@ -142,9 +142,9 @@ public class EndSessionCommandHandlerTests
         _sessions.GetByIdAsync(session.Id, Arg.Any<CancellationToken>()).Returns(session);
         _attemptTracker.GetAttemptsForSessionAsync(session.Id).Returns(
         [
-            BlockedAttempt.Record(Guid.NewGuid(), session.Id, "chrome", BlockedAttemptType.App, Now),
-            BlockedAttempt.Record(Guid.NewGuid(), session.Id, "chrome", BlockedAttemptType.App, Now),
-            BlockedAttempt.Record(Guid.NewGuid(), session.Id, "facebook.com", BlockedAttemptType.Website, Now)
+            BlockedAttempt.Record(Guid.NewGuid(), session.Id, "chrome", BlockedAttemptType.App, At.Utc(Now)),
+            BlockedAttempt.Record(Guid.NewGuid(), session.Id, "chrome", BlockedAttemptType.App, At.Utc(Now)),
+            BlockedAttempt.Record(Guid.NewGuid(), session.Id, "facebook.com", BlockedAttemptType.Website, At.Utc(Now))
         ]);
 
         var result = await CreateHandler().HandleAsync(new EndSessionCommand { SessionId = session.Id });
@@ -161,13 +161,13 @@ public class EndSessionCommandHandlerTests
         var session = CreateActiveSession(blockId);
         _sessions.GetByIdAsync(session.Id, Arg.Any<CancellationToken>()).Returns(session);
         var originalEnd = Now.AddHours(1);
-        var block = FocusBlock.Create(blockId, session.BlockPresetId, Now.AddMinutes(-10), originalEnd);
+        var block = FocusBlock.Create(blockId, session.BlockPresetId,At.Slot(Now.AddMinutes(-10), originalEnd));
         _plannedBlocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns(block);
 
         await CreateHandler().HandleAsync(new EndSessionCommand { SessionId = session.Id });
 
-        block.SessionEndedAt.Should().Be(Now);
-        block.End.Should().Be(originalEnd); // original schedule preserved, not overwritten
+        block.SessionEndedAt.Should().Be(At.Utc(Now));
+        block.Scheduled.Should().Be(At.Slot(Now.AddMinutes(-10), originalEnd)); // original schedule preserved, not overwritten
         await _plannedBlocks.Received(1).SaveAsync(block, Arg.Any<CancellationToken>());
     }
 
@@ -179,13 +179,13 @@ public class EndSessionCommandHandlerTests
         var blockId = Guid.NewGuid();
         var session = CreateActiveSession(blockId);
         _sessions.GetByIdAsync(session.Id, Arg.Any<CancellationToken>()).Returns(session);
-        var block = FocusBlock.Create(blockId, session.BlockPresetId, Now.AddMinutes(-10), Now);
+        var block = FocusBlock.Create(blockId, session.BlockPresetId,At.Slot(Now.AddMinutes(-10), Now));
         _plannedBlocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns(block);
 
         await CreateHandler().HandleAsync(new EndSessionCommand { SessionId = session.Id });
 
         block.SessionEndedAt.Should().Be(session.EndedAt);
-        block.End.Should().Be(Now);
+        block.Scheduled.Should().Be(At.Slot(Now.AddMinutes(-10), Now));
         await _plannedBlocks.Received(1).SaveAsync(block, Arg.Any<CancellationToken>());
     }
 
@@ -213,14 +213,14 @@ public class EndSessionCommandHandlerTests
         var blockEnd = Now;
         var ritualCompletedAt = blockStart + ritualDelayAfterBlockStart;
 
-        var block = FocusBlock.Create(blockId, Guid.NewGuid(), blockStart, blockEnd);
-        block.MarkRitualCompleted(ritualCompletedAt);
+        var block = FocusBlock.Create(blockId, Guid.NewGuid(),At.Slot(blockStart, blockEnd));
+        block.MarkRitualCompleted(At.Utc(ritualCompletedAt));
         _plannedBlocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns(block);
 
         var session = Session.Create(
             Guid.NewGuid(), new SessionGoal("Deep work"), new SessionDuration(blockEnd - ritualCompletedAt),
             Guid.NewGuid(), SessionOrigin.Planned, originatingBlockId: blockId);
-        session.Start(ritualCompletedAt, blockEnd);
+        session.Start(At.Utc(ritualCompletedAt), At.PlannedWindowEnding(blockEnd));
         _sessions.GetByIdAsync(session.Id, Arg.Any<CancellationToken>()).Returns(session);
 
         return (block, session);
@@ -274,17 +274,17 @@ public class EndSessionCommandHandlerTests
         var blockEnd = Now.AddMinutes(1);
         var ritualCompletedAt = Now; // Ritual took the full first minute — still within 5-min grace
 
-        var block = FocusBlock.Create(blockId, Guid.NewGuid(), blockStart, blockEnd);
-        block.MarkRitualCompleted(ritualCompletedAt);
+        var block = FocusBlock.Create(blockId, Guid.NewGuid(),At.Slot(blockStart, blockEnd));
+        block.MarkRitualCompleted(At.Utc(ritualCompletedAt));
         _plannedBlocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns(block);
 
         var session = Session.Create(
             Guid.NewGuid(), new SessionGoal("Deep work"), new SessionDuration(blockEnd - blockStart),
             Guid.NewGuid(), SessionOrigin.Planned, originatingBlockId: blockId);
-        session.Start(ritualCompletedAt, blockEnd);
+        session.Start(At.Utc(ritualCompletedAt), At.PlannedWindowEnding(blockEnd));
         _sessions.GetByIdAsync(session.Id, Arg.Any<CancellationToken>()).Returns(session);
 
-        _clock.UtcNow.Returns(blockEnd); // session runs to its natural end
+        _clock.SetNow(blockEnd); // session runs to its natural end
 
         var result = await CreateHandler().HandleAsync(new EndSessionCommand { SessionId = session.Id });
 
@@ -303,7 +303,7 @@ public class EndSessionCommandHandlerTests
         var session = Session.Create(
             Guid.NewGuid(), new SessionGoal("Quick check"), new SessionDuration(TimeSpan.FromMinutes(1)),
             Guid.NewGuid(), SessionOrigin.Spontaneous);
-        session.Start(Now.AddSeconds(-45));
+        session.Start(At.Utc(Now.AddSeconds(-45)));
         _sessions.GetByIdAsync(session.Id, Arg.Any<CancellationToken>()).Returns(session);
 
         var result = await CreateHandler().HandleAsync(new EndSessionCommand { SessionId = session.Id });

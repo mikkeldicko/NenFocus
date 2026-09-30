@@ -1,4 +1,5 @@
 using FluentAssertions;
+using NenFocus.Domain.ValueObjects;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.GetAllBlockPresets;
 using NenFocus.Domain.Entities;
@@ -14,7 +15,7 @@ public class GetAllBlockPresetsQueryHandlerTests
     private GetAllBlockPresetsQueryHandler CreateHandler() => new(_presets);
 
     private static BlockPreset CreatePreset(string name, BlockPresetType type)
-        => BlockPreset.Create(Guid.NewGuid(), name, WebsiteFilterType.Blocklist, type, DateTime.UtcNow);
+        => BlockPreset.Create(Guid.NewGuid(), name, WebsiteFilterType.Blocklist, type, At.Utc(DateTime.UtcNow));
 
     [Fact]
     public async Task HandleAsync_NoTagFilter_ReturnsAllPresets()

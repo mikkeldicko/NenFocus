@@ -12,11 +12,11 @@ public class GetSessionHistoryQueryHandlerTests
 {
     private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
     private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
-    private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
+    private readonly ISystemClock _clock = TestClock.Create();
 
     public GetSessionHistoryQueryHandlerTests()
     {
-        _clock.UtcNow.Returns(DateTime.UtcNow);
+        _clock.SetNow(DateTime.UtcNow);
     }
 
     private GetSessionHistoryQueryHandler CreateHandler() => new(_sessions, _presets, _clock);
@@ -44,12 +44,12 @@ public class GetSessionHistoryQueryHandlerTests
             Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(60)),
             presetId, SessionOrigin.Spontaneous);
         var startedAt = new DateTime(2026, 1, 5, 10, 0, 0, DateTimeKind.Utc);
-        session.Start(startedAt);
-        session.Complete(startedAt.AddMinutes(45));
+        session.Start(At.Utc(startedAt));
+        session.Complete(At.Utc(startedAt.AddMinutes(45)));
         _sessions.GetHistoryAsync(Arg.Any<DateOnly>(), Arg.Any<DateOnly>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<Session>)[session]);
         _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns(
-            (IReadOnlyList<BlockPreset>)[BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, startedAt)]);
+            (IReadOnlyList<BlockPreset>)[BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(startedAt))]);
 
         var result = await CreateHandler().HandleAsync(new GetSessionHistoryQuery { From = From, To = To });
 
@@ -57,7 +57,7 @@ public class GetSessionHistoryQueryHandlerTests
         dto.PresetName.Should().Be("Deep Work");
         dto.PlannedDurationMinutes.Should().Be(60);
         dto.ActualDurationMinutes.Should().Be(45);
-        dto.StartedAt.Should().Be(startedAt);
+        dto.StartedAt.Should().Be(At.Utc(startedAt));
     }
 
     [Fact]
@@ -66,8 +66,8 @@ public class GetSessionHistoryQueryHandlerTests
         var session = Session.Create(
             Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(30)),
             Guid.NewGuid(), SessionOrigin.Spontaneous);
-        session.Start(DateTime.UtcNow.AddHours(-1));
-        session.Complete(DateTime.UtcNow);
+        session.Start(At.Utc(DateTime.UtcNow.AddHours(-1)));
+        session.Complete(At.Utc(DateTime.UtcNow));
         _sessions.GetHistoryAsync(Arg.Any<DateOnly>(), Arg.Any<DateOnly>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<Session>)[session]);
         _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
@@ -84,7 +84,7 @@ public class GetSessionHistoryQueryHandlerTests
             Guid.NewGuid(), new SessionGoal("(missed — no goal set)"), new SessionDuration(TimeSpan.FromMinutes(60)),
             Guid.NewGuid(), SessionOrigin.Planned, originatingBlockId: Guid.NewGuid());
         var scheduledStart = new DateTime(2026, 1, 5, 10, 0, 0, DateTimeKind.Utc);
-        session.Miss(scheduledStart, scheduledStart.AddHours(1));
+        session.Miss(new TimeSlot(At.Utc(scheduledStart), At.Utc(scheduledStart.AddHours(1))));
         _sessions.GetHistoryAsync(Arg.Any<DateOnly>(), Arg.Any<DateOnly>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<Session>)[session]);
         _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
@@ -93,7 +93,7 @@ public class GetSessionHistoryQueryHandlerTests
 
         var dto = result.Should().ContainSingle().Subject;
         dto.ActualDurationMinutes.Should().Be(0);
-        dto.StartedAt.Should().Be(scheduledStart);
+        dto.StartedAt.Should().Be(At.Utc(scheduledStart));
     }
 
     [Fact]

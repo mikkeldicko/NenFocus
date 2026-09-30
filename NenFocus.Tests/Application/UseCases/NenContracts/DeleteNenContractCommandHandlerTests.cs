@@ -28,7 +28,7 @@ public class DeleteNenContractCommandHandlerTests
         changeWindow: null,
         allowCancellation: true,
         plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-        localSealedAt: StartDate.AddDays(-10).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
+        sealedAt: At.Utc(StartDate.AddDays(-10).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)), timeZone: At.UtcZone);
 
     [Fact]
     public async Task HandleAsync_ContractNotFound_FailsWithoutTouchingBlocks()
@@ -49,10 +49,8 @@ public class DeleteNenContractCommandHandlerTests
         var contract = ScheduledContract();
         _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
 
-        var block1 = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),
-            StartDate.ToDateTime(new TimeOnly(9, 0)), StartDate.ToDateTime(new TimeOnly(10, 0)), contractId: contract.Id);
-        var block2 = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(),
-            StartDate.ToDateTime(new TimeOnly(11, 0)), StartDate.ToDateTime(new TimeOnly(12, 0)), contractId: contract.Id);
+        var block1 = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(StartDate.ToDateTime(new TimeOnly(9, 0)), StartDate.ToDateTime(new TimeOnly(10, 0))), contractId: contract.Id);
+        var block2 = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(StartDate.ToDateTime(new TimeOnly(11, 0)), StartDate.ToDateTime(new TimeOnly(12, 0))), contractId: contract.Id);
         _blocks.GetForContractAsync(contract.Id, Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[block1, block2]);
 

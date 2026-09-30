@@ -23,7 +23,7 @@ public sealed class AcknowledgePostContractCommandHandler
         if (contract.Status != NenContractStatus.Completed && contract.Status != NenContractStatus.Broken)
             return AcknowledgePostContractResult.Fail("Post-contract can only be acknowledged for a completed or broken contract.");
 
-        contract.MarkPostContractAcknowledged(_clock.UtcNow);
+        contract.MarkPostContractAcknowledged(_clock.Now);
 
         await _contracts.SaveAsync(contract, ct);
         return AcknowledgePostContractResult.Ok();

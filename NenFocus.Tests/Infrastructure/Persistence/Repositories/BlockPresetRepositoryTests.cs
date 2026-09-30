@@ -14,7 +14,7 @@ public class BlockPresetRepositoryTests : SqliteRepositoryTestBase
     public async Task AddAsync_ThenSaveChanges_IsRetrievableWithAppsAndSites()
     {
         var repo = CreateRepository();
-        var preset = BlockPreset.Create(Guid.NewGuid(), "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, DateTime.UtcNow);
+        var preset = BlockPreset.Create(Guid.NewGuid(), "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(DateTime.UtcNow));
         preset.AddBlockedApp(new BlockedApp("chrome"));
         preset.AddWebsite(new BlockedSite("facebook.com"));
 
@@ -32,8 +32,8 @@ public class BlockPresetRepositoryTests : SqliteRepositoryTestBase
     public async Task GetAllAsync_OrdersByName()
     {
         var repo = CreateRepository();
-        await repo.AddAsync(BlockPreset.Create(Guid.NewGuid(), "Zeta", WebsiteFilterType.Blocklist, BlockPresetType.Focus, DateTime.UtcNow));
-        await repo.AddAsync(BlockPreset.Create(Guid.NewGuid(), "Alpha", WebsiteFilterType.Blocklist, BlockPresetType.Focus, DateTime.UtcNow));
+        await repo.AddAsync(BlockPreset.Create(Guid.NewGuid(), "Zeta", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(DateTime.UtcNow)));
+        await repo.AddAsync(BlockPreset.Create(Guid.NewGuid(), "Alpha", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(DateTime.UtcNow)));
         await Context.SaveChangesAsync();
 
         var all = await CreateRepository().GetAllAsync();
@@ -46,7 +46,7 @@ public class BlockPresetRepositoryTests : SqliteRepositoryTestBase
     public async Task DeleteAsync_ThenSaveChanges_RemovesPreset()
     {
         var repo = CreateRepository();
-        var preset = BlockPreset.Create(Guid.NewGuid(), "Temp Preset", WebsiteFilterType.Blocklist, BlockPresetType.Focus, DateTime.UtcNow);
+        var preset = BlockPreset.Create(Guid.NewGuid(), "Temp Preset", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(DateTime.UtcNow));
         await repo.AddAsync(preset);
         await Context.SaveChangesAsync();
 
@@ -93,7 +93,7 @@ public class BlockPresetRepositoryTests : SqliteRepositoryTestBase
     public async Task ExistsWithNameAsync_ExcludingSelf_ReturnsFalseForOwnName()
     {
         var repo = CreateRepository();
-        var preset = BlockPreset.Create(Guid.NewGuid(), "Unique Name", WebsiteFilterType.Blocklist, BlockPresetType.Focus, DateTime.UtcNow);
+        var preset = BlockPreset.Create(Guid.NewGuid(), "Unique Name", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(DateTime.UtcNow));
         await repo.AddAsync(preset);
         await Context.SaveChangesAsync();
 
@@ -110,7 +110,7 @@ public class BlockPresetRepositoryTests : SqliteRepositoryTestBase
         // mutation automatically on SaveChangesAsync. This test pins down that the no-op
         // actually works as intended rather than silently dropping edits.
         var repo = CreateRepository();
-        var preset = BlockPreset.Create(Guid.NewGuid(), "Original", WebsiteFilterType.Blocklist, BlockPresetType.Focus, DateTime.UtcNow);
+        var preset = BlockPreset.Create(Guid.NewGuid(), "Original", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(DateTime.UtcNow));
         await repo.AddAsync(preset);
         await Context.SaveChangesAsync();
 
@@ -134,7 +134,7 @@ public class BlockPresetRepositoryTests : SqliteRepositoryTestBase
         // a real round-trip since it isn't obvious from reading the mapping code alone.
         var repo = CreateRepository();
         var preset = BlockPreset.Create(
-            Guid.NewGuid(), "Tagged Preset", WebsiteFilterType.Blocklist, BlockPresetType.Focus, DateTime.UtcNow, tags: ["work", "focus"]);
+            Guid.NewGuid(), "Tagged Preset", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(DateTime.UtcNow), tags: ["work", "focus"]);
         await repo.AddAsync(preset);
         await Context.SaveChangesAsync();
 
@@ -148,7 +148,7 @@ public class BlockPresetRepositoryTests : SqliteRepositoryTestBase
     {
         var repo = CreateRepository();
         var preset = BlockPreset.Create(
-            Guid.NewGuid(), "Tagged Preset 2", WebsiteFilterType.Blocklist, BlockPresetType.Focus, DateTime.UtcNow, tags: ["work"]);
+            Guid.NewGuid(), "Tagged Preset 2", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(DateTime.UtcNow), tags: ["work"]);
         await repo.AddAsync(preset);
         await Context.SaveChangesAsync();
 

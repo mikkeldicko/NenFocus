@@ -12,13 +12,13 @@ public class BlockPresetTests
         WebsiteFilterType policy = WebsiteFilterType.Blocklist,
         BlockPresetType type = BlockPresetType.Focus,
         IEnumerable<string>? tags = null)
-        => BlockPreset.Create(Guid.NewGuid(), "Deep Work", policy, type, DateTime.UtcNow, tags);
+        => BlockPreset.Create(Guid.NewGuid(), "Deep Work", policy, type, At.Utc(DateTime.UtcNow), tags);
 
     [Fact]
     public void Create_Valid_RaisesEventAndTrimsName()
     {
         var preset = BlockPreset.Create(
-            Guid.NewGuid(), "  Deep Work  ", WebsiteFilterType.Blocklist, BlockPresetType.Focus, DateTime.UtcNow);
+            Guid.NewGuid(), "  Deep Work  ", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(DateTime.UtcNow));
 
         preset.Name.Should().Be("Deep Work");
         var raised = preset.DomainEvents.OfType<BlockPresetCreatedEvent>().Single();
@@ -32,7 +32,7 @@ public class BlockPresetTests
     public void Create_BlankName_Throws(string? blank)
     {
         var act = () => BlockPreset.Create(
-            Guid.NewGuid(), blank!, WebsiteFilterType.Blocklist, BlockPresetType.Focus, DateTime.UtcNow);
+            Guid.NewGuid(), blank!, WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(DateTime.UtcNow));
 
         act.Should().Throw<ArgumentException>();
     }
@@ -185,7 +185,7 @@ public class BlockPresetTests
         original.AddWebsite(new BlockedSite("facebook.com"));
         var newId = Guid.NewGuid();
 
-        var copy = original.Duplicate("Deep Work Copy", newId, DateTime.UtcNow);
+        var copy = original.Duplicate("Deep Work Copy", newId, At.Utc(DateTime.UtcNow));
 
         copy.Id.Should().Be(newId);
         copy.Id.Should().NotBe(original.Id);
@@ -204,7 +204,7 @@ public class BlockPresetTests
     {
         var original = CreatePreset();
         original.AddBlockedApp(new BlockedApp("chrome"));
-        var copy = original.Duplicate("Copy", Guid.NewGuid(), DateTime.UtcNow);
+        var copy = original.Duplicate("Copy", Guid.NewGuid(), At.Utc(DateTime.UtcNow));
 
         copy.AddBlockedApp(new BlockedApp("spotify"));
 

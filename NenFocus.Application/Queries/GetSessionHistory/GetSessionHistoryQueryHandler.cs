@@ -36,7 +36,7 @@ public sealed class GetSessionHistoryQueryHandler
 
         return sessions.Select(s =>
         {
-            var elapsed = s.GetElapsedTime(s.EndedAt ?? _clock.UtcNow);
+            var elapsed = s.GetElapsedTime(s.EndedAt ?? _clock.Now);
             return new SessionSummaryDto
             {
                 Id = s.Id,
@@ -46,7 +46,7 @@ public sealed class GetSessionHistoryQueryHandler
                 PlannedDurationMinutes = (int)s.Duration.Value.TotalMinutes,
                 ActualDurationMinutes = elapsed.HasValue
                     ? (int)elapsed.Value.TotalMinutes : 0,
-                StartedAt = s.StartedAt.GetValueOrDefault(),
+                StartedAt = s.StartedAt ?? default,
                 EndedAt = s.EndedAt,
                 Status = s.Status,
                 BreaksTaken = s.BreaksTaken

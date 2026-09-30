@@ -1,4 +1,5 @@
 using FluentAssertions;
+using NenFocus.Domain.ValueObjects;
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.CheckNenContractDateRangeOverlap;
@@ -181,23 +182,11 @@ public class SealNenContractValidatorTests
     }
 
     [Fact]
-    public async Task Validate_BlockEndNotAfterStart_IsInvalid()
-    {
-        var block = new NenContractBlockSpec(Guid.NewGuid(),
-            new DateTime(2026, 1, 1, 10, 0, 0), new DateTime(2026, 1, 1, 9, 0, 0), IsFocus: true);
-
-        var result = await CreateValidator().ValidateAsync(ValidCommand() with { Blocks = [block] });
-
-        result.IsValid.Should().BeFalse();
-    }
-
-    [Fact]
     public async Task Validate_BlockPresetNotFound_IsInvalid()
     {
         var presetId = Guid.NewGuid();
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>()).Returns((BlockPreset?)null);
-        var block = new NenContractBlockSpec(presetId,
-            new DateTime(2026, 1, 1, 9, 0, 0), new DateTime(2026, 1, 1, 10, 0, 0), IsFocus: true);
+        var block = new NenContractBlockSpec(presetId, At.Slot(new DateTime(2026, 1, 1, 9, 0, 0), new DateTime(2026, 1, 1, 10, 0, 0)), IsFocus: true);
 
         var result = await CreateValidator().ValidateAsync(ValidCommand() with { Blocks = [block] });
 
@@ -209,9 +198,8 @@ public class SealNenContractValidatorTests
     {
         var presetId = Guid.NewGuid();
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, DateTime.UtcNow));
-        var block = new NenContractBlockSpec(presetId,
-            new DateTime(2026, 1, 1, 9, 0, 0), new DateTime(2026, 1, 1, 10, 0, 0), IsFocus: true);
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(DateTime.UtcNow)));
+        var block = new NenContractBlockSpec(presetId, At.Slot(new DateTime(2026, 1, 1, 9, 0, 0), new DateTime(2026, 1, 1, 10, 0, 0)), IsFocus: true);
 
         var result = await CreateValidator().ValidateAsync(ValidCommand() with { Blocks = [block] });
 

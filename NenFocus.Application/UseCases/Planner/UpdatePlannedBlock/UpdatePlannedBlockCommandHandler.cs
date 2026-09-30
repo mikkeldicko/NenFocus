@@ -10,28 +10,21 @@ public sealed class UpdatePlannedBlockCommandHandler : ICommandHandler<UpdatePla
 {
     private readonly IPlannedBlockRepository _blocks;
     private readonly IBlockPresetRepository _presets;
-    private readonly ISessionRepository _sessions;
-    private readonly ISystemClock _clock;
     private readonly IQueryHandler<ComputeRedemptionAttributionQuery, RedemptionAttributionResult> _computeRedemptionAttribution;
 
     public UpdatePlannedBlockCommandHandler(
         IPlannedBlockRepository blocks,
         IBlockPresetRepository presets,
-        ISessionRepository sessions,
-        ISystemClock clock,
         IQueryHandler<ComputeRedemptionAttributionQuery, RedemptionAttributionResult> computeRedemptionAttribution)
     {
         _blocks = blocks;
         _presets = presets;
-        _sessions = sessions;
-        _clock = clock;
         _computeRedemptionAttribution = computeRedemptionAttribution;
     }
 
     public async Task<UpdatePlannedBlockResult> HandleAsync(UpdatePlannedBlockCommand command, CancellationToken cancellationToken = default)
     {
-        var startTime = command.Start.ToUniversalTime();
-        var endTime = command.End.ToUniversalTime();
+        var slot = command.Slot;
 
         var existing = await _blocks.GetByIdAsync(command.BlockId, cancellationToken);
         if (existing is null)
@@ -50,57 +43,26 @@ public sealed class UpdatePlannedBlockCommandHandler : ICommandHandler<UpdatePla
             // contract — never re-parented to a different one via an ordinary edit (see
             // UpdatePlannedBlockCommand). A standalone block (ContractId null) stays
             // standalone; editing it never auto-discovers a contract for the first time.
-            // Resolved before the overlap/active-session checks below, not just before
-            // Reschedule — those checks must validate the window that will actually be
-            // persisted (post-cap), not the longer one the caller originally asked for.
+            // Attribution returns the final (capped) window — the one place the cap is computed,
+            // so the validator's placement check and this save can never disagree (Gap 88 phase 8).
             if (existingFocusBlock.ContractId is { } contractId)
             {
                 var existingEntries = existingFocusBlock.RedemptionEntries
-                    .Select(e => new RedemptionEntryDto(e.MissedBlockId, e.MinutesCovered))
+                    .Select(RedemptionEntryDto.From)
                     .ToList();
 
                 var attribution = await _computeRedemptionAttribution.HandleAsync(
-                    new ComputeRedemptionAttributionQuery(contractId, command.PresetId, startTime, endTime, existing.Id, existingEntries),
+                    new ComputeRedemptionAttributionQuery(contractId, command.PresetId, slot, existing.Id, existingEntries),
                     cancellationToken);
                 redemptionEntries = attribution.Entries
                     .Select(e => new RedemptionEntry(e.MissedBlockId, e.MinutesCovered))
                     .ToList();
-
-                var cappedEnd = FocusBlock.CapEndToRedemptionCoverage(startTime, endTime, redemptionEntries);
-                redemptionCapped = FocusBlock.WasRedemptionCoverageMeaningfullyCapped(endTime, cappedEnd);
-                endTime = cappedEnd;
-            }
-
-            var overlapping = await _blocks.GetOverlappingAsync(
-                startTime,
-                endTime,
-                _clock.UtcNow,
-                ritualOnly: true,
-                excludeId: command.BlockId,
-                cancellationToken: cancellationToken);
-
-            if (overlapping.Count > 0)
-                return UpdatePlannedBlockResult.Fail("A Focus block already exists in this time window.");
-
-            var activeSession = await _sessions.GetActiveAsync(cancellationToken);
-            if (activeSession?.StartedAt is not null)
-            {
-                var sessionStart = activeSession.StartedAt.Value;
-                // EndAt, not StartedAt + Duration — see CreatePlannedBlockCommandHandler's
-                // identical check for the full explanation. Set together with StartedAt
-                // inside Session.Start(), so it's never null here.
-                var sessionEnd = activeSession.EndAt!.Value;
-                if (sessionStart < endTime && sessionEnd > startTime)
-                {
-                    var localStart = sessionStart.ToLocalTime();
-                    var localEnd = sessionEnd.ToLocalTime();
-                    return UpdatePlannedBlockResult.Fail(
-                        $"There is already an active focus session running from {localStart:HH:mm} to {localEnd:HH:mm} — please plan your session after {localEnd:HH:mm}.");
-                }
+                slot = attribution.Slot;
+                redemptionCapped = attribution.WasCapped;
             }
         }
 
-        existing.Reschedule(startTime, endTime);
+        existing.Reschedule(slot);
         existing.AssignPreset(command.PresetId);
 
         if (existing is FocusBlock focusBlockToUpdate)

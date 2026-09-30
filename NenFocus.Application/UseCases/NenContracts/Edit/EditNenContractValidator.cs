@@ -88,10 +88,6 @@ public sealed class EditNenContractValidator : AbstractValidator<EditNenContract
             .WithMessage("Daily floor cannot exceed the total work hours window.");
 
         RuleForEach(x => x.Blocks)
-            .Must(b => b.End > b.Start)
-            .WithMessage("Every block's end time must be after its start time.");
-
-        RuleForEach(x => x.Blocks)
             .MustAsync(async (b, ct) =>
             {
                 if (b.PresetId == Guid.Empty) return false;

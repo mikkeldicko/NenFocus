@@ -96,8 +96,7 @@ public partial class RitualShellViewModel : ViewModelBase
         if (isLateToBlock && lockedSchedule is not null)
         {
             IsLateToBlock = true;
-            LateBlockStart = lockedSchedule.Start.ToLocalTime();
-            LateBlockEnd = lockedSchedule.End.ToLocalTime();
+            (LateBlockStart, LateBlockEnd) = clock.TimeZone.ToCalendarTimes(lockedSchedule.Slot);
             LateBy = lateBy;
         }
 

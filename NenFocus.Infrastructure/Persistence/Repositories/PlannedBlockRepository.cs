@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using NenFocus.Application.Interfaces;
 using NenFocus.Domain.Entities;
+using NenFocus.Domain.ValueObjects;
+using static NenFocus.Infrastructure.Persistence.SlotQuery;
 
 namespace NenFocus.Infrastructure.Persistence.Repositories;
 
@@ -10,6 +12,20 @@ public sealed class PlannedBlockRepository : IPlannedBlockRepository
 
     public PlannedBlockRepository(NenFocusDbContext context)
         => _context = context;
+
+    // Every time filter here is one of TimeSlot.Filters applied to the block's Scheduled slot, so
+    // the SQL is the Domain's own rule, never a copy (Gap 88). The sort key comes from there too.
+    private static readonly System.Linq.Expressions.Expression<Func<PlannedBlock, Moment>> ByStart =
+        OnSlot<PlannedBlock, Moment>(b => b.Scheduled, TimeSlot.Filters.ByStart);
+
+    private static System.Linq.Expressions.Expression<Func<PlannedBlock, bool>> Overlapping(DateTime start, DateTime end) =>
+        OnSlot<PlannedBlock, bool>(b => b.Scheduled, TimeSlot.Filters.Overlaps(new TimeSlot(AsMoment(start), AsMoment(end))));
+
+    // Gap 88 bridge, removed in phase 6 when this interface takes Moments: callers pass UTC
+    // DateTimes. A local one is a mix-up and throws rather than being read as UTC.
+    private static Moment AsMoment(DateTime utc) => utc.Kind == DateTimeKind.Local
+        ? throw new ArgumentException("Expected a UTC time, got a local one.", nameof(utc))
+        : Moment.FromStorage(DateTime.SpecifyKind(utc, DateTimeKind.Utc));
 
     public async Task<IReadOnlyList<PlannedBlock>> GetForDayAsync(
         DateOnly date,
@@ -28,59 +44,28 @@ public sealed class PlannedBlockRepository : IPlannedBlockRepository
         var dayEnd = date.AddDays(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Local).ToUniversalTime();
 
         return await _context.PlannedBlocks
-            .Where(b => b.Start < dayEnd && b.End > dayStart)
-            .OrderBy(b => b.Start)
+            .Where(Overlapping(dayStart, dayEnd))
+            .OrderBy(ByStart)
             .ToListAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyList<PlannedBlock>> GetForRangeAsync(
-        DateTime from,
-        DateTime to,
+        TimeSlot range,
         CancellationToken ct = default)
     {
-        // Excludes cancelled blocks for the same reason GetOverlappingAsync does — a
+        // Excludes cancelled blocks — a
         // cancelled block (its owning contract was broken) has vacated its schedule
         // entirely and must never count as a live block to any caller. Without this,
         // StartSessionCommandHandler would refuse a spontaneous session because a
         // cancelled block "conflicts" with it, and ScheduledEnforcementService would
         // warn about a block that will never actually enforce.
         var blocks = await _context.PlannedBlocks
-            .Where(b => b.Start < to && b.End > from && b.CancelledAt == null)
-            .OrderBy(b => b.Start)
+            .Where(OnSlot<PlannedBlock, bool>(b => b.Scheduled, TimeSlot.Filters.Overlaps(range)))
+            .Where(b => b.CancelledAt == null)
+            .OrderBy(ByStart)
             .ToListAsync(ct);
 
         return blocks.AsReadOnly();
-    }
-
-    public async Task<IReadOnlyList<PlannedBlock>> GetOverlappingAsync(
-        DateTime start,
-        DateTime end,
-        DateTime asOf,
-        bool ritualOnly = false,
-        Guid? excludeId = null,
-        CancellationToken cancellationToken = default)
-    {
-        // Filters on raw Start/End first — a safe superset, since EffectiveEnd(asOf) is
-        // never later than End — then refines in-memory against EffectiveEnd, which needs
-        // the materialized FocusBlock/BackgroundBlock type to evaluate. A cancelled block
-        // (its owning contract was broken) has vacated its schedule entirely — same
-        // "stops enforcing, stops appearing" treatment CancelledAt already gets in
-        // ComputeActivePolicySliceQueryHandler and GetPlannedBlocksForDayQueryHandler —
-        // so it must never count as a scheduling collision for new/moved blocks either.
-        var query = _context.PlannedBlocks
-            .Where(b => b.Start < end && b.End > start && b.CancelledAt == null);
-
-        if (excludeId.HasValue)
-            query = query.Where(b => b.Id != excludeId.Value);
-
-        var blocks = await query.ToListAsync(cancellationToken);
-
-        var stillReserved = blocks.Where(b => b.EffectiveEnd(asOf) > start).ToList();
-
-        if (ritualOnly)
-            return stillReserved.OfType<FocusBlock>().ToList<PlannedBlock>();
-
-        return stillReserved;
     }
 
     public async Task<PlannedBlock?> GetByIdAsync(
@@ -133,26 +118,28 @@ public sealed class PlannedBlockRepository : IPlannedBlockRepository
 
     public Task<bool> HasFutureBlocksForPresetAsync(
         Guid presetId,
-        DateTime after,
+        Moment after,
         CancellationToken cancellationToken = default)
     {
         // Cancelled excluded: a broken contract's leftover block must not keep a preset
         // locked from editing/deletion just because it still has a future End date.
         return _context.PlannedBlocks
-            .AnyAsync(b => b.BlockPresetId == presetId && b.End > after && b.CancelledAt == null, cancellationToken);
+            .Where(Not(OnSlot<PlannedBlock, bool>(b => b.Scheduled, TimeSlot.Filters.HasEnded(after))))
+            .AnyAsync(b => b.BlockPresetId == presetId && b.CancelledAt == null, cancellationToken);
     }
 
     public async Task<IReadOnlyList<FocusBlock>> GetUnresolvedFocusBlocksAsync(
-        DateTime asOf,
+        Moment asOf,
         CancellationToken cancellationToken = default)
     {
-        // SQL mirror of FocusBlock.IsUnresolved (the Domain rule), kept for query speed —
-        // PlannedBlockRepositoryTests checks the two agree. Cancelled excluded: a block
-        // cancelled by breaking its contract never ran its Ritual by design, not by oversight.
+        // FocusBlock.IsUnresolved in SQL: the window-closed part is the Domain's own filter, so it
+        // can't drift from the entity (Gap 88). Cancelled excluded: a block cancelled by breaking
+        // its contract never ran its Ritual by design, not by oversight.
         return await _context.PlannedBlocks
+            .Where(OnSlot<PlannedBlock, bool>(b => b.Scheduled, TimeSlot.Filters.HasEnded(asOf)))
             .OfType<FocusBlock>()
-            .Where(b => b.End < asOf && b.RitualCompletedAt == null && b.CancelledAt == null)
-            .OrderBy(b => b.Start)
+            .Where(b => b.RitualCompletedAt == null && b.CancelledAt == null)
+            .OrderBy(OnSlot<FocusBlock, Moment>(b => b.Scheduled, TimeSlot.Filters.ByStart))
             .ToListAsync(cancellationToken);
     }
 
@@ -162,7 +149,7 @@ public sealed class PlannedBlockRepository : IPlannedBlockRepository
     {
         return await _context.PlannedBlocks
             .Where(b => b.ContractId == contractId)
-            .OrderBy(b => b.Start)
+            .OrderBy(ByStart)
             .ToListAsync(cancellationToken);
     }
 }

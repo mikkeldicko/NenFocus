@@ -1,4 +1,5 @@
-﻿namespace NenFocus.Domain.Events;
+﻿using NenFocus.Domain.ValueObjects;
+namespace NenFocus.Domain.Events;
 
 public class SessionStartedEvent : DomainEvent
 {
@@ -6,7 +7,7 @@ public class SessionStartedEvent : DomainEvent
     public Guid BlockPresetId { get; }
     public string Goal { get; }
 
-    public SessionStartedEvent(Guid sessionId, Guid blockPresetId, string goal, DateTime occurredAt)
+    public SessionStartedEvent(Guid sessionId, Guid blockPresetId, string goal, Moment occurredAt)
         : base(occurredAt)
     {
         SessionId = sessionId;

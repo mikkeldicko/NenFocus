@@ -30,8 +30,8 @@ public class SaveNenContractReflectionCommandHandlerTests
             changeWindow: null,
             allowCancellation: true,
             plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-            localSealedAt: StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
-        contract.Complete(EndDate.AddDays(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
+            sealedAt: At.Utc(StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)), timeZone: At.UtcZone);
+        contract.Complete(At.Utc(EndDate.AddDays(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)));
         return contract;
     }
 

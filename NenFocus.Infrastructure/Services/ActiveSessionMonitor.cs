@@ -27,12 +27,10 @@ public sealed class ActiveSessionMonitor : IActiveSessionMonitor, IDisposable
     private System.Timers.Timer? _timer;
 
     private Guid? _sessionId;
-    private DateTime _sessionStart;
-    private DateTime _sessionEnd;
-    private double _sessionDurationSeconds;
+    private TimeSlot? _run;
     private BreakSchedule _schedule = BreakSchedule.None;
     private bool _keepBlockingDuringBreaks;
-    private DateTime _lastCheckedAt;
+    private Moment _lastCheckedAt;
     private bool _autoEndPending;
 
     public TimeSpan SessionTimeRemaining { get; private set; } = TimeSpan.Zero;
@@ -61,7 +59,7 @@ public sealed class ActiveSessionMonitor : IActiveSessionMonitor, IDisposable
         // startup (Program.Main) before any DI singleton — including this one — is ever
         // constructed. Its SessionChanged notification for an already-active session
         // fired before the subscription above existed to hear it, and unlike a plain
-        // UI refresh, this monitor only ever populates _sessionEnd/_sessionDurationSeconds
+        // UI refresh, this monitor only ever populates _run
         // and starts its countdown timer inside OnSessionChanged — missing that one
         // notification means the timer never starts at all, not just a stale display.
         // Catch up directly on whatever session is already active.
@@ -79,6 +77,7 @@ public sealed class ActiveSessionMonitor : IActiveSessionMonitor, IDisposable
             if (session is null)
             {
                 _sessionId = null;
+                _run = null;
                 _schedule = BreakSchedule.None;
                 _keepBlockingDuringBreaks = false;
                 KeepsBlockingDuringBreak = false;
@@ -95,12 +94,10 @@ public sealed class ActiveSessionMonitor : IActiveSessionMonitor, IDisposable
             // screen just shows the right phase. The same session re-published keeps its
             // cursor, so a boundary between the last tick and now isn't lost.
             if (_sessionId != session.Id)
-                _lastCheckedAt = _clock.UtcNow;
+                _lastCheckedAt = _clock.Now;
 
             _sessionId = session.Id;
-            _sessionStart = session.StartedAt;
-            _sessionEnd = session.EndAt;
-            _sessionDurationSeconds = (session.EndAt - session.StartedAt).TotalSeconds;
+            _run = new TimeSlot(session.StartedAt, session.EndAt);
             _keepBlockingDuringBreaks = session.KeepBlockingDuringBreaks;
 
             // Rebuilt on every SessionChanged, not once per session, so any future
@@ -109,7 +106,7 @@ public sealed class ActiveSessionMonitor : IActiveSessionMonitor, IDisposable
             BreakMarkers = _schedule.Breaks
                 .Select(b => new BreakMarkerDto
                 {
-                    ProgressFraction = b.Start.TotalSeconds / _sessionDurationSeconds,
+                    ProgressFraction = b.Start / _run.Length,
                     IsLongBreak = b.Kind == SessionPhaseKind.LongBreak
                 })
                 .ToList();
@@ -150,10 +147,10 @@ public sealed class ActiveSessionMonitor : IActiveSessionMonitor, IDisposable
     // ever move forward from one reader at a time.
     private void Recalculate()
     {
-        var now = _clock.UtcNow;
-        var remaining = _sessionEnd - now;
+        if (_run is not { } run) return; // no session — nothing to count down
+        var now = _clock.Now;
 
-        if (remaining <= TimeSpan.Zero)
+        if (run.HasEnded(now))
         {
             SessionTimeRemaining = TimeSpan.Zero;
             SessionProgress = 1.0;
@@ -170,11 +167,11 @@ public sealed class ActiveSessionMonitor : IActiveSessionMonitor, IDisposable
             return;
         }
 
-        SessionTimeRemaining = remaining;
-        SessionProgress = Math.Clamp(1.0 - (remaining.TotalSeconds / _sessionDurationSeconds), 0.0, 1.0);
+        SessionTimeRemaining = run.RemainingAt(now);
+        SessionProgress = run.ProgressAt(now);
 
-        var offset = now - _sessionStart;
-        var transitions = _schedule.TransitionsBetween(_lastCheckedAt - _sessionStart, offset);
+        var offset = run.SinceStart(now);
+        var transitions = _schedule.TransitionsBetween(run.SinceStart(_lastCheckedAt), offset);
         _lastCheckedAt = now;
         if (transitions.Count > 0)
             _ = HandleBreakTransitionsAsync(transitions, now, _keepBlockingDuringBreaks);
@@ -185,8 +182,8 @@ public sealed class ActiveSessionMonitor : IActiveSessionMonitor, IDisposable
         {
             IsOnBreak = true;
             KeepsBlockingDuringBreak = _keepBlockingDuringBreaks;
-            BreakTimeRemaining = current.End - offset;
-            BreakProgress = Math.Clamp((offset - current.Start) / current.Length, 0.0, 1.0);
+            BreakTimeRemaining = current.RemainingAt(offset);
+            BreakProgress = current.ProgressAt(offset);
         }
         else
         {
@@ -201,7 +198,7 @@ public sealed class ActiveSessionMonitor : IActiveSessionMonitor, IDisposable
     // the heartbeat's next SyncAsync, which reads the same schedule; only the notification
     // for this one boundary would be lost, and that is logged.
     private async Task HandleBreakTransitionsAsync(
-        IReadOnlyList<BreakTransition> transitions, DateTime at, bool keepBlockingDuringBreaks)
+        IReadOnlyList<BreakTransition> transitions, Moment at, bool keepBlockingDuringBreaks)
     {
         try
         {

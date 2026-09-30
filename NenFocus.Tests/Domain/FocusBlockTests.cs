@@ -13,9 +13,9 @@ public class FocusBlockTests
     {
         var requestedEnd = Start.AddHours(2);
 
-        var result = FocusBlock.CapEndToRedemptionCoverage(Start, requestedEnd, []);
+        var result = FocusBlock.CapEndToRedemptionCoverage(At.Slot(Start, requestedEnd), []);
 
-        result.Should().Be(requestedEnd);
+        result.Should().Be(At.Slot(Start, requestedEnd));
     }
 
     [Fact]
@@ -24,9 +24,9 @@ public class FocusBlockTests
         var requestedEnd = Start.AddHours(1); // 60 min requested
         var entries = new List<RedemptionEntry> { new(Guid.NewGuid(), 60) };
 
-        var result = FocusBlock.CapEndToRedemptionCoverage(Start, requestedEnd, entries);
+        var result = FocusBlock.CapEndToRedemptionCoverage(At.Slot(Start, requestedEnd), entries);
 
-        result.Should().Be(requestedEnd);
+        result.Should().Be(At.Slot(Start, requestedEnd));
     }
 
     [Fact]
@@ -37,9 +37,9 @@ public class FocusBlockTests
         var requestedEnd = Start.AddMinutes(30);
         var entries = new List<RedemptionEntry> { new(Guid.NewGuid(), 90) };
 
-        var result = FocusBlock.CapEndToRedemptionCoverage(Start, requestedEnd, entries);
+        var result = FocusBlock.CapEndToRedemptionCoverage(At.Slot(Start, requestedEnd), entries);
 
-        result.Should().Be(requestedEnd);
+        result.Should().Be(At.Slot(Start, requestedEnd));
     }
 
     [Fact]
@@ -48,9 +48,9 @@ public class FocusBlockTests
         var requestedEnd = Start.AddHours(2); // 120 min requested
         var entries = new List<RedemptionEntry> { new(Guid.NewGuid(), 45) };
 
-        var result = FocusBlock.CapEndToRedemptionCoverage(Start, requestedEnd, entries);
+        var result = FocusBlock.CapEndToRedemptionCoverage(At.Slot(Start, requestedEnd), entries);
 
-        result.Should().Be(Start.AddMinutes(45));
+        result.Should().Be(At.Slot(Start, Start.AddMinutes(45)));
     }
 
     [Fact]
@@ -59,9 +59,9 @@ public class FocusBlockTests
         var requestedEnd = Start.AddHours(2);
         var entries = new List<RedemptionEntry> { new(Guid.NewGuid(), 20), new(Guid.NewGuid(), 25) };
 
-        var result = FocusBlock.CapEndToRedemptionCoverage(Start, requestedEnd, entries);
+        var result = FocusBlock.CapEndToRedemptionCoverage(At.Slot(Start, requestedEnd), entries);
 
-        result.Should().Be(Start.AddMinutes(45));
+        result.Should().Be(At.Slot(Start, Start.AddMinutes(45)));
     }
 
     [Fact]
@@ -75,9 +75,9 @@ public class FocusBlockTests
         var requestedEnd = Start.AddHours(2);
         var entries = new List<RedemptionEntry> { new(Guid.NewGuid(), 45.9) };
 
-        var result = FocusBlock.CapEndToRedemptionCoverage(Start, requestedEnd, entries);
+        var result = FocusBlock.CapEndToRedemptionCoverage(At.Slot(Start, requestedEnd), entries);
 
-        result.Should().Be(Start.AddMinutes(45.9));
+        result.Length.Should().Be(TimeSpan.FromMinutes(45.9));
     }
 
     [Fact]
@@ -90,10 +90,9 @@ public class FocusBlockTests
         var requestedEnd = Start.AddMinutes(1); // suggestion padded up to a whole minute
         var entries = new List<RedemptionEntry> { new(Guid.NewGuid(), 0.0667) }; // ~4 seconds owed
 
-        var result = FocusBlock.CapEndToRedemptionCoverage(Start, requestedEnd, entries);
+        var result = FocusBlock.CapEndToRedemptionCoverage(At.Slot(Start, requestedEnd), entries);
 
-        result.Should().Be(Start.AddMinutes(0.0667));
-        result.Should().BeAfter(Start);
+        result.Length.Should().Be(TimeSpan.FromMinutes(0.0667));
     }
 
     [Fact]
@@ -104,7 +103,7 @@ public class FocusBlockTests
         var requestedEnd = Start.AddMinutes(2);
         var cappedEnd = Start.AddMinutes(1.0667);
 
-        FocusBlock.WasRedemptionCoverageMeaningfullyCapped(requestedEnd, cappedEnd).Should().BeFalse();
+        FocusBlock.WasRedemptionCoverageMeaningfullyCapped(At.Slot(Start, requestedEnd), At.Slot(Start, cappedEnd)).Should().BeFalse();
     }
 
     [Fact]
@@ -115,13 +114,13 @@ public class FocusBlockTests
         var requestedEnd = Start.AddHours(2);
         var cappedEnd = Start.AddMinutes(45);
 
-        FocusBlock.WasRedemptionCoverageMeaningfullyCapped(requestedEnd, cappedEnd).Should().BeTrue();
+        FocusBlock.WasRedemptionCoverageMeaningfullyCapped(At.Slot(Start, requestedEnd), At.Slot(Start, cappedEnd)).Should().BeTrue();
     }
 
     [Fact]
     public void RawDeficitMinutes_NothingCredited_ReturnsFullScheduledDuration()
     {
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, Start.AddHours(1));
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, Start.AddHours(1)));
 
         block.RawDeficitMinutes(creditedMinutes: 0).Should().Be(60);
     }
@@ -129,7 +128,7 @@ public class FocusBlockTests
     [Fact]
     public void RawDeficitMinutes_PartiallyCredited_ReturnsShortfallOnly()
     {
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, Start.AddHours(1));
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, Start.AddHours(1)));
 
         block.RawDeficitMinutes(creditedMinutes: 20).Should().Be(40);
     }
@@ -139,7 +138,7 @@ public class FocusBlockTests
     {
         // Credited can legitimately exceed the scheduled window (e.g. a session that ran
         // past the block's own end) — the deficit floors at zero rather than going negative.
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, Start.AddHours(1));
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, Start.AddHours(1)));
 
         block.RawDeficitMinutes(creditedMinutes: 75).Should().Be(0);
     }
@@ -149,9 +148,9 @@ public class FocusBlockTests
     [Fact]
     public void IsAwaitingRitual_ActiveAndRitualNotCompleted_ReturnsTrue()
     {
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, Start.AddHours(1));
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, Start.AddHours(1)));
 
-        block.IsAwaitingRitual(Start.AddMinutes(10)).Should().BeTrue();
+        block.IsAwaitingRitual(At.Utc(Start.AddMinutes(10))).Should().BeTrue();
     }
 
     [Fact]
@@ -160,34 +159,34 @@ public class FocusBlockTests
         // The race this replaces FocusSessionCompleted for: the block is still inside its
         // window at `at`, its session has just completed, nothing is running — the Ritual
         // must not be prompted again for a block that already had one.
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, Start.AddHours(1));
-        block.MarkRitualCompleted(Start);
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, Start.AddHours(1)));
+        block.MarkRitualCompleted(At.Utc(Start));
 
-        block.IsAwaitingRitual(Start.AddMinutes(59)).Should().BeFalse();
+        block.IsAwaitingRitual(At.Utc(Start.AddMinutes(59))).Should().BeFalse();
     }
 
     [Fact]
     public void IsAwaitingRitual_BeforeStart_ReturnsFalse()
     {
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, Start.AddHours(1));
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, Start.AddHours(1)));
 
-        block.IsAwaitingRitual(Start.AddSeconds(-1)).Should().BeFalse();
+        block.IsAwaitingRitual(At.Utc(Start.AddSeconds(-1))).Should().BeFalse();
     }
 
     [Fact]
     public void IsAwaitingRitual_AtOrAfterEnd_ReturnsFalse()
     {
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, Start.AddHours(1));
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, Start.AddHours(1)));
 
-        block.IsAwaitingRitual(Start.AddHours(1)).Should().BeFalse();
+        block.IsAwaitingRitual(At.Utc(Start.AddHours(1))).Should().BeFalse();
     }
 
     [Fact]
     public void IsAwaitingRitual_Cancelled_ReturnsFalse()
     {
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, Start.AddHours(1));
-        block.MarkCancelled(Start);
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, Start.AddHours(1)));
+        block.MarkCancelled(At.Utc(Start));
 
-        block.IsAwaitingRitual(Start.AddMinutes(10)).Should().BeFalse();
+        block.IsAwaitingRitual(At.Utc(Start.AddMinutes(10))).Should().BeFalse();
     }
 }

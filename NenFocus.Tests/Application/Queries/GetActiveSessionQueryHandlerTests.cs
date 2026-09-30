@@ -13,7 +13,7 @@ public class GetActiveSessionQueryHandlerTests
 {
     private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
     private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
-    private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
+    private readonly ISystemClock _clock = TestClock.Create();
 
     private GetActiveSessionQueryHandler CreateHandler() => new(_sessions, _presets, _clock);
 
@@ -34,10 +34,10 @@ public class GetActiveSessionQueryHandlerTests
         var session = Session.Create(
             Guid.NewGuid(), new SessionGoal("Deep work"), new SessionDuration(TimeSpan.FromMinutes(45)),
             presetId, SessionOrigin.Spontaneous);
-        session.Start(DateTime.UtcNow);
+        session.Start(At.Utc(DateTime.UtcNow));
         _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns(session);
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, DateTime.UtcNow));
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(DateTime.UtcNow)));
 
         var result = await CreateHandler().HandleAsync(new GetActiveSessionQuery());
 
@@ -55,7 +55,7 @@ public class GetActiveSessionQueryHandlerTests
         var session = Session.Create(
             Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(30)),
             Guid.NewGuid(), SessionOrigin.Spontaneous);
-        session.Start(DateTime.UtcNow);
+        session.Start(At.Utc(DateTime.UtcNow));
         _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns(session);
         _presets.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((BlockPreset?)null);
 
@@ -70,7 +70,7 @@ public class GetActiveSessionQueryHandlerTests
         var session = Session.Create(
             Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(60)),
             Guid.NewGuid(), SessionOrigin.Spontaneous);
-        session.Start(DateTime.UtcNow, breakSchedule: new BreakTimer(25, 5, 4, 15).ScheduleFor(TimeSpan.FromMinutes(60)),
+        session.Start(At.Utc(DateTime.UtcNow), breakSchedule: new BreakTimer(25, 5, 4, 15).ScheduleFor(TimeSpan.FromMinutes(60)),
             breakPresetName: "Classic");
         _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns(session);
         _presets.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((BlockPreset?)null);
@@ -80,7 +80,6 @@ public class GetActiveSessionQueryHandlerTests
         result!.BreakPresetName.Should().Be("Classic");
         result.Breaks.Should().ContainSingle().Which.Should().Be(new SessionBreakDto
         {
-            Kind = SessionPhaseKind.ShortBreak, Start = TimeSpan.FromMinutes(25), End = TimeSpan.FromMinutes(30)
-        });
+            Kind = SessionPhaseKind.ShortBreak, Start = TimeSpan.FromMinutes(25), End = TimeSpan.FromMinutes(30)});
     }
 }

@@ -21,7 +21,7 @@ public partial class MainPageViewModel : ViewModelBase
     private readonly ISessionStateService _sessionState;
     private readonly IActiveSessionMonitor _monitor;
     private readonly ICommandDispatcher _commandDispatcher;
-    private readonly IPlannerClockService _clock;
+    private readonly ISystemClock _clock;
     private Guid _activeSessionId;
 
     [ObservableProperty]
@@ -63,14 +63,14 @@ public partial class MainPageViewModel : ViewModelBase
     [ObservableProperty]
     private IReadOnlyList<BreakMarkerDto> _breakMarkers = [];
 
-    public string Greeting => _clock.LocalNow.Hour switch
+    public string Greeting => _clock.TimeZone.ToCalendarTime(_clock.Now).Hour switch
     {
         < 12 => "Good morning.",
         < 17 => "Good afternoon.",
         _ => "Good evening."
     };
 
-    public DateTime Today => _clock.LocalNow;
+    public DateTime Today => _clock.TimeZone.ToCalendarTime(_clock.Now);
 
     public ObservableCollection<ChecklistItemViewModel> TodaysChecklist { get; } = new();
     public bool HasNoChecklist => TodaysChecklist.Count == 0;
@@ -81,7 +81,7 @@ public partial class MainPageViewModel : ViewModelBase
         ISessionStateService sessionState,
         IActiveSessionMonitor monitor,
         ICommandDispatcher commandDispatcher,
-        IPlannerClockService clock)
+        ISystemClock clock)
     {
         _onStartRitual = onStartRitual;
         _onShowPostSession = onShowPostSession;

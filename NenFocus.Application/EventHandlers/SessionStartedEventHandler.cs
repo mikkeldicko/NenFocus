@@ -33,7 +33,7 @@ public sealed class SessionStartedEventHandler : IDomainEventHandler<SessionStar
         SessionStartedEvent domainEvent,
         CancellationToken cancellationToken = default)
     {
-        await _synchronizer.SyncAsync(_clock.UtcNow, cancellationToken);
+        await _synchronizer.SyncAsync(_clock.Now, cancellationToken);
 
         // A planned session is named after its block — the block itself stays quiet about
         // this moment (its Started toast already fired when it activated).

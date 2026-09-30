@@ -13,12 +13,13 @@ public class SweepNenContractLifecycleCommandHandlerTests
     private static readonly DateTime Now = new(2026, 1, 5, 0, 0, 0, DateTimeKind.Utc);
 
     private readonly INenContractRepository _contracts = Substitute.For<INenContractRepository>();
-    private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
+    private readonly ISystemClock _clock = TestClock.Create();
 
     public SweepNenContractLifecycleCommandHandlerTests()
     {
-        _clock.UtcNow.Returns(Now);
-        _clock.ToLocal(Arg.Any<DateTime>()).Returns(ci => ci.Arg<DateTime>());
+        _clock.SetNow(Now);
+        _clock.SetTimeZoneOffset(TimeSpan.Zero);
+        _clock.SetTimeZoneOffset(TimeSpan.Zero);
         SetInEffect();
     }
 
@@ -34,7 +35,7 @@ public class SweepNenContractLifecycleCommandHandlerTests
         changeWindow: null,
         allowCancellation: false,
         plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-        localSealedAt: startDate.AddDays(-1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)); // seals as Scheduled
+        sealedAt: At.Utc(startDate.AddDays(-1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)), timeZone: At.UtcZone); // seals as Scheduled
 
     private static NenContract ActiveContract(DateOnly startDate, DateOnly endDate)
     {
@@ -48,7 +49,7 @@ public class SweepNenContractLifecycleCommandHandlerTests
             changeWindow: null,
             allowCancellation: false,
             plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-            localSealedAt: startDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)); // seals as Active
+            sealedAt: At.Utc(startDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)), timeZone: At.UtcZone); // seals as Active
         return contract;
     }
 
@@ -130,8 +131,9 @@ public class SweepNenContractLifecycleCommandHandlerTests
     public async Task HandleAsync_JustAfterLocalMidnightAtUtcPlus2_ActivatesAContractStartingThatDay()
     {
         var localStartDay = new DateOnly(2026, 1, 5);
-        _clock.UtcNow.Returns(new DateTime(2026, 1, 4, 22, 28, 0, DateTimeKind.Utc)); // 00:28 local on Jan 5
-        _clock.ToLocal(Arg.Any<DateTime>()).Returns(ci => ci.Arg<DateTime>().AddHours(2));
+        _clock.SetNow(new DateTime(2026, 1, 4, 22, 28, 0, DateTimeKind.Utc)); // 00:28 local on Jan 5
+        _clock.SetTimeZoneOffset(TimeSpan.FromHours(2));
+        _clock.SetTimeZoneOffset(TimeSpan.FromHours(2));
         var contract = ScheduledContract(localStartDay);
         SetInEffect(contract);
 
@@ -144,8 +146,9 @@ public class SweepNenContractLifecycleCommandHandlerTests
     public async Task HandleAsync_JustAfterLocalMidnightAtUtcPlus2_CompletesAContractThatEndedYesterday()
     {
         var localToday = new DateOnly(2026, 1, 5);
-        _clock.UtcNow.Returns(new DateTime(2026, 1, 4, 22, 28, 0, DateTimeKind.Utc)); // 00:28 local on Jan 5
-        _clock.ToLocal(Arg.Any<DateTime>()).Returns(ci => ci.Arg<DateTime>().AddHours(2));
+        _clock.SetNow(new DateTime(2026, 1, 4, 22, 28, 0, DateTimeKind.Utc)); // 00:28 local on Jan 5
+        _clock.SetTimeZoneOffset(TimeSpan.FromHours(2));
+        _clock.SetTimeZoneOffset(TimeSpan.FromHours(2));
         var contract = ActiveContract(localToday.AddDays(-7), localToday.AddDays(-1));
         SetInEffect(contract);
 

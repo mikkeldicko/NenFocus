@@ -15,7 +15,7 @@ public class SessionRepositoryTests : SqliteRepositoryTestBase
         var session = Session.Create(
             Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(30)),
             presetId ?? Guid.NewGuid(), SessionOrigin.Spontaneous);
-        session.Start(startedAt ?? DateTime.UtcNow);
+        session.Start(At.Utc(startedAt ?? DateTime.UtcNow));
         return session;
     }
 
@@ -39,7 +39,7 @@ public class SessionRepositoryTests : SqliteRepositoryTestBase
         await repo.SaveAsync(session);
         await Context.SaveChangesAsync();
 
-        session.Complete(DateTime.UtcNow);
+        session.Complete(At.Utc(DateTime.UtcNow));
         await CreateRepository().SaveAsync(session);
         await Context.SaveChangesAsync();
 
@@ -54,7 +54,7 @@ public class SessionRepositoryTests : SqliteRepositoryTestBase
             Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(120)),
             Guid.NewGuid(), SessionOrigin.Spontaneous);
         var schedule = new BreakTimer(25, 5, 4, 15).ScheduleFor(TimeSpan.FromMinutes(120));
-        session.Start(new DateTime(2026, 1, 1, 17, 0, 0, DateTimeKind.Utc), breakSchedule: schedule, breakPresetName: "Classic");
+        session.Start(At.Utc(new DateTime(2026, 1, 1, 17, 0, 0, DateTimeKind.Utc)), breakSchedule: schedule, breakPresetName: "Classic");
         await CreateRepository().SaveAsync(session);
         await Context.SaveChangesAsync();
 
@@ -72,11 +72,11 @@ public class SessionRepositoryTests : SqliteRepositoryTestBase
         var session = Session.Create(
             Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(120)),
             Guid.NewGuid(), SessionOrigin.Spontaneous);
-        session.Start(startedAt, breakSchedule: new BreakTimer(25, 5, 4, 15).ScheduleFor(TimeSpan.FromMinutes(120)));
+        session.Start(At.Utc(startedAt), breakSchedule: new BreakTimer(25, 5, 4, 15).ScheduleFor(TimeSpan.FromMinutes(120)));
         await CreateRepository().SaveAsync(session);
         await Context.SaveChangesAsync();
 
-        session.Complete(startedAt.AddMinutes(57)); // mid second break
+        session.Complete(At.Utc(startedAt.AddMinutes(57))); // mid second break
         await CreateRepository().SaveAsync(session);
         await Context.SaveChangesAsync();
 
@@ -113,7 +113,7 @@ public class SessionRepositoryTests : SqliteRepositoryTestBase
     {
         var repo = CreateRepository();
         var session = CreateSession();
-        session.Complete(DateTime.UtcNow);
+        session.Complete(At.Utc(DateTime.UtcNow));
         await repo.SaveAsync(session);
         await Context.SaveChangesAsync();
 
@@ -189,7 +189,7 @@ public class SessionRepositoryTests : SqliteRepositoryTestBase
         var repo = CreateRepository();
         var active = CreateSession();
         var completed = CreateSession();
-        completed.Complete(DateTime.UtcNow);
+        completed.Complete(At.Utc(DateTime.UtcNow));
         await repo.SaveAsync(active);
         await repo.SaveAsync(completed);
         await Context.SaveChangesAsync();
@@ -216,7 +216,7 @@ public class SessionRepositoryTests : SqliteRepositoryTestBase
             Guid.NewGuid(), new SessionGoal("(missed — no goal set)"), new SessionDuration(TimeSpan.FromMinutes(30)),
             Guid.NewGuid(), SessionOrigin.Planned, originatingBlockId: blockId);
         var scheduledStart = DateTime.UtcNow.AddHours(-1);
-        session.Miss(scheduledStart, scheduledStart.AddMinutes(30));
+        session.Miss(new TimeSlot(At.Utc(scheduledStart), At.Utc(scheduledStart.AddMinutes(30))));
         await repo.SaveAsync(session);
         await Context.SaveChangesAsync();
 

@@ -34,7 +34,7 @@ public sealed class SplitPlannedBlockCommandHandler : ICommandHandler<SplitPlann
         if (original is FocusBlock focusOriginal)
         {
             // Split in half, not two independent creations: querying attribution once for
-            // the original's whole [FirstBlockStart, SecondBlockEnd) span and then
+            // the whole span of both halves and then
             // partitioning the result by each half's own duration keeps the total minutes
             // covered identical to what the un-split block would have covered — computing
             // each half separately would have both halves independently re-claim against
@@ -42,11 +42,11 @@ public sealed class SplitPlannedBlockCommandHandler : ICommandHandler<SplitPlann
             var attribution = focusOriginal.ContractId is { } contractId
                 ? await _computeRedemptionAttribution.HandleAsync(
                     new ComputeRedemptionAttributionQuery(
-                        contractId, focusOriginal.BlockPresetId, command.FirstBlockStart, command.SecondBlockEnd, original.Id),
+                        contractId, focusOriginal.BlockPresetId, TimeSlot.Enclosing(command.First, command.Second), original.Id),
                     cancellationToken)
-                : new RedemptionAttributionResult(null, []);
+                : new RedemptionAttributionResult(null, [], TimeSlot.Enclosing(command.First, command.Second));
 
-            var firstDurationMinutes = (command.FirstBlockEnd - command.FirstBlockStart).TotalMinutes;
+            var firstDurationMinutes = command.First.Length.TotalMinutes;
             var (firstEntries, secondEntries) = SplitEntriesAcrossHalves(attribution.Entries, firstDurationMinutes);
 
             // A half can still end up needing its own cap even though the combined span's
@@ -54,23 +54,23 @@ public sealed class SplitPlannedBlockCommandHandler : ICommandHandler<SplitPlann
             // covered less than its own full duration, both resulting halves inherit that
             // same shortfall proportionally, and each must independently respect "duration
             // never exceeds what it covers" — the same rule Create/Update enforce.
-            var firstEnd = FocusBlock.CapEndToRedemptionCoverage(command.FirstBlockStart, command.FirstBlockEnd, firstEntries);
-            var secondEnd = FocusBlock.CapEndToRedemptionCoverage(command.SecondBlockStart, command.SecondBlockEnd, secondEntries);
+            var firstSlot = FocusBlock.CapEndToRedemptionCoverage(command.First, firstEntries);
+            var secondSlot = FocusBlock.CapEndToRedemptionCoverage(command.Second, secondEntries);
 
             first = FocusBlock.Create(
-                firstId, focusOriginal.BlockPresetId, command.FirstBlockStart, firstEnd,
+                firstId, focusOriginal.BlockPresetId, firstSlot,
                 focusOriginal.Title, attribution.ContractId, firstEntries);
             second = FocusBlock.Create(
-                secondId, focusOriginal.BlockPresetId, command.SecondBlockStart, secondEnd,
+                secondId, focusOriginal.BlockPresetId, secondSlot,
                 focusOriginal.Title, attribution.ContractId, secondEntries);
         }
         else
         {
             first = BackgroundBlock.Create(
-                firstId, original.BlockPresetId, command.FirstBlockStart, command.FirstBlockEnd,
+                firstId, original.BlockPresetId, command.First,
                 original.Title, original.ContractId);
             second = BackgroundBlock.Create(
-                secondId, original.BlockPresetId, command.SecondBlockStart, command.SecondBlockEnd,
+                secondId, original.BlockPresetId, command.Second,
                 original.Title, original.ContractId);
         }
 

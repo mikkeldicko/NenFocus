@@ -1,4 +1,5 @@
 using NenFocus.Application.Interfaces;
+using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Application.Queries.ComputePlannedFocusHours;
 
@@ -18,5 +19,5 @@ namespace NenFocus.Application.Queries.ComputePlannedFocusHours;
 /// </param>
 public sealed record ComputePlannedFocusHoursQuery(
     Guid? ContractId,
-    IReadOnlyList<(DateTime Start, DateTime End)> DraftFocusBlockRanges,
+    IReadOnlyList<TimeSlot> DraftFocusBlockRanges,
     Guid? ExcludeBlockId = null) : IQuery<IReadOnlyDictionary<DateOnly, double>>;

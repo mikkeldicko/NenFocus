@@ -44,7 +44,7 @@ public sealed class SessionEndedEventHandler : IDomainEventHandler<SessionEndedE
 
         // Sync, never "remove everything" — a Background Block still running must stay
         // enforced after the session ends (Gap 62).
-        await _synchronizer.SyncAsync(_clock.UtcNow, cancellationToken);
+        await _synchronizer.SyncAsync(_clock.Now, cancellationToken);
 
         // The session owns a planned block's ending: the block never announces it
         // (FocusBlock.AnnouncesOwnEnd), so this is the one toast for that moment.

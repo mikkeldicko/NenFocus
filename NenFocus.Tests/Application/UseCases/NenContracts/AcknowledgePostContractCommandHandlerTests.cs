@@ -16,9 +16,9 @@ public class AcknowledgePostContractCommandHandlerTests
     private static readonly DateTime Now = new(2026, 1, 8, 12, 0, 0, DateTimeKind.Utc);
 
     private readonly INenContractRepository _contracts = Substitute.For<INenContractRepository>();
-    private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
+    private readonly ISystemClock _clock = TestClock.Create();
 
-    public AcknowledgePostContractCommandHandlerTests() => _clock.UtcNow.Returns(Now);
+    public AcknowledgePostContractCommandHandlerTests() => _clock.SetNow(Now);
 
     private AcknowledgePostContractCommandHandler CreateHandler() => new(_contracts, _clock);
 
@@ -32,7 +32,7 @@ public class AcknowledgePostContractCommandHandlerTests
         changeWindow: null,
         allowCancellation: true,
         plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-        localSealedAt: StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
+        sealedAt: At.Utc(StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)), timeZone: At.UtcZone);
 
     [Fact]
     public async Task HandleAsync_ContractNotFound_Fails()
@@ -48,13 +48,13 @@ public class AcknowledgePostContractCommandHandlerTests
     public async Task HandleAsync_CompletedContract_StampsAndSaves()
     {
         var contract = CompletedContract();
-        contract.Complete(Now);
+        contract.Complete(At.Utc(Now));
         _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(contract);
 
         var result = await CreateHandler().HandleAsync(new AcknowledgePostContractCommand { ContractId = ContractId }, CancellationToken.None);
 
         result.Success.Should().BeTrue();
-        contract.PostContractAcknowledgedAt.Should().Be(Now);
+        contract.PostContractAcknowledgedAt.Should().Be(At.Utc(Now));
         await _contracts.Received(1).SaveAsync(contract, Arg.Any<CancellationToken>());
     }
 

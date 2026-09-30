@@ -1,5 +1,6 @@
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
+using NenFocus.Domain.ValueObjects;
 using NenFocus.Application.Queries.GetNenContractCompletedFocusHours;
 using NenFocus.Domain.Enums;
 using NenFocus.Domain.Services;
@@ -48,10 +49,11 @@ public sealed class GetNenContractCompletionReadinessQueryHandler
         var totalCompleted = completedByDay.Values.Sum();
         var remainingHours = Math.Max(0, contract.CommittedFocusHours - totalCompleted);
 
-        var now = _clock.UtcNow;
+        var now = _clock.Now;
         var rangeStart = contract.StartDate.AddDays(-1).ToDateTime(TimeOnly.MinValue);
         var rangeEnd = contract.EndDate.AddDays(1).ToDateTime(TimeOnly.MinValue);
-        var blocksInRange = await _blocks.GetForRangeAsync(rangeStart, rangeEnd, ct);
+        var blocksInRange = await _blocks.GetForRangeAsync(
+            new TimeSlot(_clock.TimeZone.ToMoment(rangeStart), _clock.TimeZone.ToMoment(rangeEnd)), ct);
 
         // Covers (the exact start/end moments), not a date-only truncation, for the unlinked-Bonus half — a
         // contract's true boundary isn't midnight (see NenContract.Covers).
@@ -63,7 +65,7 @@ public sealed class GetNenContractCompletionReadinessQueryHandler
             !b.IsResolved(_outcomeClassifier, now) &&
             (b.ContractId == contract.Id ||
                 (b.ContractId is null &&
-                 contract.Covers(_clock.ToLocal(b.Start)))));
+                 contract.Covers(_clock.TimeZone.ToCalendarTimes(b.Scheduled).Start))));
 
         return new NenContractCompletionReadinessDto
         {

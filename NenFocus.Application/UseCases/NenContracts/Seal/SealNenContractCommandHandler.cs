@@ -1,5 +1,4 @@
 using NenFocus.Application.Interfaces;
-using NenFocus.Application.Queries.CheckFocusBlockBatchOverlap;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
 using NenFocus.Domain.Services;
@@ -12,20 +11,23 @@ public sealed class SealNenContractCommandHandler : ICommandHandler<SealNenContr
     private readonly INenContractRepository _contracts;
     private readonly IPlannedBlockRepository _blocks;
     private readonly IContractBlockBatchPreparer _batchPreparer;
-    private readonly IQueryHandler<CheckFocusBlockBatchOverlapQuery, bool> _checkOverlap;
+    private readonly ISessionRepository _sessions;
+    private readonly IBlockPlacementChecker _placement;
     private readonly ISystemClock _clock;
 
     public SealNenContractCommandHandler(
         INenContractRepository contracts,
         IPlannedBlockRepository blocks,
         IContractBlockBatchPreparer batchPreparer,
-        IQueryHandler<CheckFocusBlockBatchOverlapQuery, bool> checkOverlap,
+        ISessionRepository sessions,
+        IBlockPlacementChecker placement,
         ISystemClock clock)
     {
         _contracts = contracts;
         _blocks = blocks;
         _batchPreparer = batchPreparer;
-        _checkOverlap = checkOverlap;
+        _sessions = sessions;
+        _placement = placement;
         _clock = clock;
     }
 
@@ -34,14 +36,14 @@ public sealed class SealNenContractCommandHandler : ICommandHandler<SealNenContr
         var contractId = Guid.NewGuid();
 
         var preparation = _batchPreparer.Prepare(
-            command.Blocks.Select(spec => (spec.PresetId, spec.Start, spec.End, spec.IsFocus, spec.Title)).ToList(),
-            contractId);
+            command.Blocks.Select(spec => (spec.PresetId, spec.Slot, spec.IsFocus, spec.Title)).ToList(),
+            contractId,
+            _clock.TimeZone);
 
         if (preparation.Outcome == ContractBlockBatchOutcome.OverlapsWithinBatch)
             return SealNenContractResult.Fail("Two Focus blocks in this schedule overlap each other.");
 
-        if (await _checkOverlap.HandleAsync(new CheckFocusBlockBatchOverlapQuery(preparation.FocusBlocks), ct))
-            return SealNenContractResult.Fail("A Focus block already exists here.");
+        var now = _clock.Now;
 
         // Advanced-only "no fixed floor" choice: for Daily Flexibility/Locked each day's floor
         // follows the plan (that day's own planned hours). For Period Time Budget it means
@@ -68,7 +70,7 @@ public sealed class SealNenContractCommandHandler : ICommandHandler<SealNenContr
             ? new WorkHours(workHoursStart, workHoursEnd)
             : null;
 
-        var localNow = _clock.ToLocal(_clock.UtcNow);
+        var localNow = _clock.TimeZone.ToCalendarTime(now);
 
         NenContract contract;
         try
@@ -95,7 +97,8 @@ public sealed class SealNenContractCommandHandler : ICommandHandler<SealNenContr
                 changeWindow: null,
                 allowCancellation: command.AllowCancellation,
                 plannedFocusHoursByDay: preparation.PlannedFocusHoursByDay,
-                localSealedAt: localNow,
+                sealedAt: now,
+                timeZone: _clock.TimeZone,
                 contractPresetId: command.ContractPresetId,
                 contractFloor: contractFloor,
                 redemptionPlacementPolicy: command.RedemptionPlacementPolicy,
@@ -106,10 +109,19 @@ public sealed class SealNenContractCommandHandler : ICommandHandler<SealNenContr
             return SealNenContractResult.Fail(ex.Message);
         }
 
-        // Every block must fit its day's window — which also refuses a block before the
-        // contract's start, i.e. one already in the past.
-        if (preparation.Blocks.Any(b => !contract.AllowsBlockPlacement(_clock.ToLocal(b.Start), _clock.ToLocal(b.End))))
-            return SealNenContractResult.Fail("A block falls outside the contract's hours — move it inside them.");
+        // Every block asks the one placement answer, BlockPlacementChecker.Check (Gap 88 phase 8):
+        // not in the past → inside its day's window of this contract → free for Focus, against the
+        // calendar as it will be and the running session. Seal's own batch sentences, by outcome.
+        var running = await _sessions.GetActiveSessionsAsync(ct);
+        foreach (var block in preparation.Blocks)
+        {
+            var calendar = await _blocks.GetForRangeAsync(block.Scheduled, ct);
+            var verdict = _placement.Check(block.Scheduled, block.PresetType, contract, calendar, running, now, _clock.TimeZone);
+            if (verdict.Outcome == PlacementOutcome.TimeTaken)
+                return SealNenContractResult.Fail("A Focus block already exists here.");
+            if (verdict.Outcome != PlacementOutcome.Allowed)
+                return SealNenContractResult.Fail("A block falls outside the contract's hours — move it inside them.");
+        }
 
         foreach (var block in preparation.Blocks)
             await _blocks.AddAsync(block, ct);

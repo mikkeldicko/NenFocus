@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using NenFocus.Application.Interfaces;
 using NenFocus.Domain.Entities;
+using NenFocus.Domain.ValueObjects;
 using NenFocus.Domain.Enums;
 
 namespace NenFocus.Infrastructure.Persistence.Repositories;
@@ -32,8 +33,9 @@ public sealed class SessionRepository : ISessionRepository
         Guid? presetId = null,
         CancellationToken cancellationToken = default)
     {
-        var fromDate = from.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
-        var toDate = to.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc);
+        // UTC days, not the user's — the trap Gap 97 fixes; storage bridge until then.
+        var fromDate = Moment.FromStorage(from.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
+        var toDate = Moment.FromStorage(to.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc));
 
         var query = _context.Sessions
             .Where(s => s.StartedAt >= fromDate && s.StartedAt <= toDate);

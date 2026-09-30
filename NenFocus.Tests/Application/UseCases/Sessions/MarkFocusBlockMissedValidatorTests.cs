@@ -1,4 +1,5 @@
 using FluentAssertions;
+using NenFocus.Domain.ValueObjects;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.UseCases.Sessions.MarkFocusBlockMissed;
 using NenFocus.Domain.Entities;
@@ -41,7 +42,7 @@ public class MarkFocusBlockMissedValidatorTests
     [Fact]
     public async Task Validate_BlockIsBackgroundBlock_IsInvalid()
     {
-        var block = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End);
+        var block = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End));
         _blocks.GetByIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns(block);
         _sessions.ExistsForOriginatingBlockAsync(block.Id, Arg.Any<CancellationToken>()).Returns(false);
 
@@ -54,8 +55,8 @@ public class MarkFocusBlockMissedValidatorTests
     [Fact]
     public async Task Validate_RitualAlreadyCompleted_IsInvalid()
     {
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End);
-        block.MarkRitualCompleted(Start);
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End));
+        block.MarkRitualCompleted(At.Utc(Start));
         _blocks.GetByIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns(block);
         _sessions.ExistsForOriginatingBlockAsync(block.Id, Arg.Any<CancellationToken>()).Returns(false);
 
@@ -68,7 +69,7 @@ public class MarkFocusBlockMissedValidatorTests
     [Fact]
     public async Task Validate_SessionAlreadyExistsForBlock_IsInvalid()
     {
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End);
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End));
         _blocks.GetByIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns(block);
         _sessions.ExistsForOriginatingBlockAsync(block.Id, Arg.Any<CancellationToken>()).Returns(true);
 
@@ -81,7 +82,7 @@ public class MarkFocusBlockMissedValidatorTests
     [Fact]
     public async Task Validate_ValidCommand_IsValid()
     {
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Start, End);
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End));
         _blocks.GetByIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns(block);
         _sessions.ExistsForOriginatingBlockAsync(block.Id, Arg.Any<CancellationToken>()).Returns(false);
 

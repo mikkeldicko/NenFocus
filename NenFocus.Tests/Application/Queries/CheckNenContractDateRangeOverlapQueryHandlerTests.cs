@@ -24,7 +24,7 @@ public class CheckNenContractDateRangeOverlapQueryHandlerTests
         changeWindow: null,
         allowCancellation: true,
         plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-        localSealedAt: start.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
+        sealedAt: At.Utc(start.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)), timeZone: At.UtcZone);
 
     [Fact]
     public async Task HandleAsync_NoInEffectContracts_ReturnsNull()
@@ -81,7 +81,7 @@ public class CheckNenContractDateRangeOverlapQueryHandlerTests
         // check entirely (GetAllInEffectAsync excludes Completed), letting a new contract
         // start the very same day the old one finished.
         var existing = SealedContract(Guid.NewGuid(), "Study Month", new DateOnly(2026, 1, 1), new DateOnly(2026, 1, 10));
-        existing.Complete(new DateOnly(2026, 1, 11).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
+        existing.Complete(At.Utc(new DateOnly(2026, 1, 11).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)));
         _contracts.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<NenContract>)[existing]);
 
         var result = await CreateHandler().HandleAsync(
@@ -96,7 +96,7 @@ public class CheckNenContractDateRangeOverlapQueryHandlerTests
         // Break() shrinks EndDate to the day it was actually broken (see NenContract.Break) —
         // confirms this query respects that shrunk EndDate rather than the original one.
         var existing = SealedContract(Guid.NewGuid(), "Study Month", new DateOnly(2026, 1, 1), new DateOnly(2026, 1, 31));
-        existing.Break(new DateOnly(2026, 1, 5).ToDateTime(new TimeOnly(14, 0), DateTimeKind.Utc)); // EndDate -> Jan 5
+        existing.Break(At.Utc(new DateOnly(2026, 1, 5).ToDateTime(new TimeOnly(14, 0), DateTimeKind.Utc)), At.UtcZone); // EndDate -> Jan 5
         _contracts.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<NenContract>)[existing]);
 
         var blockedOnBreakDay = await CreateHandler().HandleAsync(

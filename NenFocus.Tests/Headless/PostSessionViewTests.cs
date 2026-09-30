@@ -23,8 +23,8 @@ public class PostSessionViewTests
         Status = status,
         Goal = "Finish chapter 3",
         PresetName = "Deep Work",
-        StartedAt = new DateTime(2026, 9, 29, 8, 0, 0, DateTimeKind.Utc),
-        EndedAt = new DateTime(2026, 9, 29, 8, 25, 0, DateTimeKind.Utc),
+        StartedAt = At.Utc(new DateTime(2026, 9, 29, 8, 0, 0, DateTimeKind.Utc)),
+        EndedAt = At.Utc(new DateTime(2026, 9, 29, 8, 25, 0, DateTimeKind.Utc)),
         PlannedDurationMinutes = 30,
         ActualDurationMinutes = 25,
         BreaksTaken = 1,
@@ -35,7 +35,7 @@ public class PostSessionViewTests
     [AvaloniaFact]
     public void Completed_ShowsTheSummaryAndBlockedAttempts()
     {
-        var view = new PostSessionView { DataContext = new PostSessionViewModel(Session(SessionStatus.Completed), Substitute.For<ICommandDispatcher>(), () => { }) };
+        var view = new PostSessionView { DataContext = new PostSessionViewModel(Session(SessionStatus.Completed), Substitute.For<ICommandDispatcher>(), () => { }, At.UtcZone) };
         Show(view);
 
         VisibleTexts(view).Should().Contain([
@@ -46,7 +46,7 @@ public class PostSessionViewTests
     [AvaloniaFact]
     public void Missed_WearsTheMissedCopy()
     {
-        var view = new PostSessionView { DataContext = new PostSessionViewModel(Session(SessionStatus.Missed), Substitute.For<ICommandDispatcher>(), () => { }) };
+        var view = new PostSessionView { DataContext = new PostSessionViewModel(Session(SessionStatus.Missed), Substitute.For<ICommandDispatcher>(), () => { }, At.UtcZone) };
         Show(view);
 
         VisibleTexts(view).Should().Contain(["SESSION MISSED", "What got in the way?"]).And.NotContain("SESSION COMPLETE");
@@ -60,7 +60,7 @@ public class PostSessionViewTests
         commands.DispatchAsync(Arg.Any<SaveReflectionCommand>(), Arg.Any<CancellationToken>()).Returns(SaveReflectionResult.Ok());
         commands.DispatchAsync(Arg.Any<AcknowledgePostSessionCommand>(), Arg.Any<CancellationToken>()).Returns(AcknowledgePostSessionResult.Ok());
         var done = false;
-        var view = new PostSessionView { DataContext = new PostSessionViewModel(data, commands, () => done = true) };
+        var view = new PostSessionView { DataContext = new PostSessionViewModel(data, commands, () => done = true, At.UtcZone) };
         var window = Show(view);
 
         Type(window, view.GetLogicalDescendants().OfType<TextBox>().Single(), "Went well");

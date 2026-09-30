@@ -2,6 +2,7 @@ using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
+using NenFocus.Domain.Services;
 using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Application.UseCases.Sessions.StartSession;
@@ -16,6 +17,7 @@ public sealed class StartSessionCommandHandler
     private readonly IBreakTimerPresetRepository _breakTimerPresets;
     private readonly INenContractRepository _contracts;
     private readonly ISystemClock _clock;
+    private readonly IBlockPlacementChecker _placement;
 
     public StartSessionCommandHandler(
         ISessionRepository sessions,
@@ -24,7 +26,8 @@ public sealed class StartSessionCommandHandler
         IBlockPresetRepository presets,
         IBreakTimerPresetRepository breakTimerPresets,
         INenContractRepository contracts,
-        ISystemClock clock)
+        ISystemClock clock,
+        IBlockPlacementChecker placement)
     {
         _sessions = sessions;
         _plannedBlocks = plannedBlocks;
@@ -33,26 +36,25 @@ public sealed class StartSessionCommandHandler
         _breakTimerPresets = breakTimerPresets;
         _contracts = contracts;
         _clock = clock;
+        _placement = placement;
     }
 
     public async Task<StartSessionResult> HandleAsync(
         StartSessionCommand command,
         CancellationToken ct)
     {
-        var now = _clock.UtcNow;
-        var requestedEnd = now.AddMinutes(command.DurationMinutes);
+        var now = _clock.Now;
 
-        var upcomingBlocks = await _plannedBlocks.GetForRangeAsync(now, requestedEnd, ct);
-        var conflictingBlock = upcomingBlocks
-            .OfType<FocusBlock>()
-            .Where(b => b.Id != command.OriginatingBlockId)
-            .Where(b => b.EffectiveEnd(now) > now)
-            .OrderBy(b => b.Start)
-            .FirstOrDefault();
+        // Is the requested run free of other Focus blocks? BlockPlacementChecker.CheckFree (Gap 88),
+        // leaving out the block this session is for. Running sessions aren't passed yet: only one
+        // runs at a time today, and phase 8 words that case properly.
+        var requested = new TimeSlot(now, now + TimeSpan.FromMinutes(command.DurationMinutes));
+        var calendar = (await _plannedBlocks.GetForRangeAsync(requested, ct)).Where(b => b.Id != command.OriginatingBlockId);
+        var verdict = _placement.CheckFree(requested, calendar, [], now);
 
-        if (conflictingBlock is not null)
+        if (verdict.Conflict is { } conflict)
         {
-            var minutesAvailable = conflictingBlock.MinutesUntilStart(now);
+            var minutesAvailable = (int)conflict.StartsIn(now).TotalMinutes;
             if (minutesAvailable > 0)
                 return StartSessionResult.Fail(
                     $"A planned focus block starts in {minutesAvailable} minutes. " +
@@ -91,7 +93,7 @@ public sealed class StartSessionCommandHandler
         // exceed it either, since StartedAt ≥ Start and EndedAt ≤ End by construction. A
         // planned block can't be credited for longer than it was ever planned to run.
         var duration = originatingBlock is not null
-            ? originatingBlock.End - originatingBlock.Start
+            ? originatingBlock.Scheduled.Length
             : TimeSpan.FromMinutes(command.DurationMinutes);
 
         var session = Session.Create(
@@ -116,7 +118,7 @@ public sealed class StartSessionCommandHandler
             if (breakTimerPreset is null)
                 return StartSessionResult.Fail("The selected break timer preset was not found.");
 
-            breakSchedule = breakTimerPreset.BreakTimer.ScheduleFor(session.RunLength(now, originatingBlock?.End));
+            breakSchedule = breakTimerPreset.BreakTimer.ScheduleFor(session.RunLength(now, originatingBlock?.Scheduled));
             breakPresetName = breakTimerPreset.Name;
         }
 
@@ -127,7 +129,7 @@ public sealed class StartSessionCommandHandler
         var keepBlockingDuringBreaks = originatingBlock?.ContractId is { } contractId
             && (await _contracts.GetByIdAsync(contractId, ct))?.KeepBlockingDuringBreaks == true;
 
-        session.Start(now, originatingBlock?.End, breakSchedule, breakPresetName, keepBlockingDuringBreaks);
+        session.Start(now, originatingBlock?.Scheduled, breakSchedule, breakPresetName, keepBlockingDuringBreaks);
 
         if (originatingBlock is not null)
         {

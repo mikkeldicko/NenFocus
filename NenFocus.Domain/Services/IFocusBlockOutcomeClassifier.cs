@@ -1,5 +1,6 @@
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
+using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Domain.Services;
 
@@ -12,7 +13,7 @@ public interface IFocusBlockOutcomeClassifier
     /// tile badge) or a live "if the ritual completed right now" check before it's happened
     /// (the Ritual page's own late warning).
     /// </summary>
-    bool IsLateStart(DateTime scheduledStart, DateTime momentToCheck);
+    bool IsLateStart(TimeSlot scheduled, Moment momentToCheck);
 
     /// <summary>
     /// Classifies a Focus block's outcome from its own facts: its scheduled window, when its
@@ -24,7 +25,7 @@ public interface IFocusBlockOutcomeClassifier
     /// period after its start still counts as CompletedOnTime, unless the session ended
     /// early, which takes priority and produces EndedEarly instead.
     /// </summary>
-    FocusBlockOutcome? Classify(FocusBlock block, DateTime asOf);
+    FocusBlockOutcome? Classify(FocusBlock block, Moment asOf);
 
     /// <summary>
     /// Focus minutes to credit toward a Daily Floor for this block. Within the grace
@@ -36,10 +37,9 @@ public interface IFocusBlockOutcomeClassifier
     /// grace period forgives a late start, not an early end.
     /// </summary>
     double CreditedFocusMinutes(
-        DateTime scheduledStart,
-        DateTime scheduledEnd,
-        DateTime? ritualCompletedAt,
-        DateTime? sessionEndedAt,
+        TimeSlot scheduled,
+        Moment? ritualCompletedAt,
+        Moment? sessionEndedAt,
         double actualElapsedMinutes);
 
     /// <summary>
@@ -51,10 +51,9 @@ public interface IFocusBlockOutcomeClassifier
     /// caller split credited time across the calendar days it actually falls on — the
     /// scalar alone can't say which days.
     /// </summary>
-    (DateTime Start, DateTime End)? CreditedWindow(
-        DateTime scheduledStart,
-        DateTime scheduledEnd,
-        DateTime? ritualCompletedAt,
-        DateTime? sessionEndedAt,
+    TimeSlot? CreditedWindow(
+        TimeSlot scheduled,
+        Moment? ritualCompletedAt,
+        Moment? sessionEndedAt,
         double actualElapsedMinutes);
 }

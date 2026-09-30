@@ -1,4 +1,5 @@
 using NenFocus.Application.Interfaces;
+using NenFocus.Domain.ValueObjects;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Services;
 
@@ -38,7 +39,7 @@ public sealed class GetNenContractBonusFocusHoursQueryHandler
         if (contract is null)
             return new Dictionary<DateOnly, double>();
 
-        var now = _clock.UtcNow;
+        var now = _clock.Now;
 
         // Coarse pre-filter (a day either side, so no boundary block is missed) — the
         // precise "is this block's Start actually within the contract's range" check
@@ -46,7 +47,8 @@ public sealed class GetNenContractBonusFocusHoursQueryHandler
         // tile-level Bonus resolution already uses.
         var rangeStart = contract.StartDate.AddDays(-1).ToDateTime(TimeOnly.MinValue);
         var rangeEnd = contract.EndDate.AddDays(1).ToDateTime(TimeOnly.MinValue);
-        var blocksInRange = await _blocks.GetForRangeAsync(rangeStart, rangeEnd, ct);
+        var blocksInRange = await _blocks.GetForRangeAsync(
+            new TimeSlot(_clock.TimeZone.ToMoment(rangeStart), _clock.TimeZone.ToMoment(rangeEnd)), ct);
 
         // StartsAt/EndsAt, not a date-only truncation of Start — a Work-Hours contract's
         // true boundary isn't midnight, so a block placed after Work Hours close on the
@@ -56,21 +58,21 @@ public sealed class GetNenContractBonusFocusHoursQueryHandler
         var bonusBlocks = blocksInRange
             .OfType<FocusBlock>()
             .Where(b => b.ContractId is null)
-            .Where(b => contract.Covers(_clock.ToLocal(b.Start)))
+            .Where(b => contract.Covers(_clock.TimeZone.ToCalendarTimes(b.Scheduled).Start))
             .ToList();
 
-        var creditedWindows = new List<(DateTime Start, DateTime End)>();
+        var creditedWindows = new List<TimeSlot>();
         foreach (var block in bonusBlocks)
         {
             var session = await _sessions.GetByOriginatingBlockIdAsync(block.Id, ct);
             var actualElapsedMinutes = session?.GetElapsedTime(now)?.TotalMinutes ?? 0;
             var window = _classifier.CreditedWindow(
-                block.Start, block.End, block.RitualCompletedAt, session?.EndedAt, actualElapsedMinutes);
+                block.Scheduled, block.RitualCompletedAt, session?.EndedAt, actualElapsedMinutes);
 
             if (window is { } w)
-                creditedWindows.Add((_clock.ToLocal(w.Start), _clock.ToLocal(w.End)));
+                creditedWindows.Add(w);
         }
 
-        return _calculator.Calculate(creditedWindows);
+        return _calculator.Calculate(creditedWindows, _clock.TimeZone);
     }
 }

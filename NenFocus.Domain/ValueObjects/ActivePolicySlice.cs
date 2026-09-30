@@ -5,8 +5,8 @@ namespace NenFocus.Domain.ValueObjects;
 public sealed record ActivePolicySlice
 {
     public Guid? ActiveSessionId { get; init; }
-    public DateTime SliceStart { get; init; }
-    public DateTime SliceEnd { get; init; }
+    public Moment SliceStart { get; init; }
+    public Moment SliceEnd { get; init; }
     public WebsiteFilterType WebsiteFilterTypeMode { get; init; } = WebsiteFilterType.Blocklist;
 
     public IReadOnlySet<string> AllowedSites { get; init; } = new HashSet<string>();

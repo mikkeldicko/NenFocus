@@ -20,7 +20,7 @@ public sealed class DeleteBlockPresetValidator : AbstractValidator<DeleteBlockPr
 
         RuleFor(x => x.PresetId)
             .MustAsync(async (id, ct) =>
-                !await plannedBlocks.HasFutureBlocksForPresetAsync(id, clock.UtcNow, ct))
+                !await plannedBlocks.HasFutureBlocksForPresetAsync(id, clock.Now, ct))
             .WithMessage("This preset is assigned to one or more future planned blocks and cannot be deleted.");
     }
 }

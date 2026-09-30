@@ -1,4 +1,5 @@
 using FluentAssertions;
+using TestAt = NenFocus.Tests.At;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -36,11 +37,11 @@ public class KeepBlockingDuringBreaksPersistenceTests : SqliteRepositoryTestBase
             changeWindow: null,
             allowCancellation: false,
             plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-            localSealedAt: At.Date,
+            sealedAt: TestAt.Utc(At.Date), timeZone: TestAt.UtcZone,
             keepBlockingDuringBreaks: keepBlocking);
         var session = Session.Create(Guid.NewGuid(), new SessionGoal("Goal"),
             new SessionDuration(TimeSpan.FromHours(1)), Guid.NewGuid(), SessionOrigin.Spontaneous);
-        session.Start(At, keepBlockingDuringBreaks: keepBlocking);
+        session.Start(TestAt.Utc(At), keepBlockingDuringBreaks: keepBlocking);
 
         Context.AddRange(preset, contract, session);
         await Context.SaveChangesAsync();

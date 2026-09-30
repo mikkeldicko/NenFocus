@@ -61,6 +61,85 @@ public class UserTimeZoneTests
         => Copenhagen.DateOf(At.Utc(2026, 9, 29, 12)).Should().Be(new DateOnly(2026, 9, 29));
 
     [Fact]
+    public void ToCalendarTimes_ShowsBothEndsOfASlotOnTheUsersClock()
+    {
+        var slot = new TimeSlot(At.Utc(2026, 7, 15, 8), At.Utc(2026, 7, 15, 9, 30));
+
+        Copenhagen.ToCalendarTimes(slot).Should().Be((new DateTime(2026, 7, 15, 10, 0, 0), new DateTime(2026, 7, 15, 11, 30, 0)));
+    }
+
+    // SplitByDay — cut at the user's local midnights, in real time (Gap 88 phase 4; replaces
+    // DayRangeSplitter, which cut calendar times and so got DST nights an hour wrong).
+
+    private static TimeSlot LocalSlot(DateTime localStart, DateTime localEnd)
+        => new(Copenhagen.ToMoment(localStart), Copenhagen.ToMoment(localEnd));
+
+    [Fact]
+    public void SplitByDay_WithinOneDay_IsOnePart()
+    {
+        var slot = LocalSlot(new DateTime(2026, 1, 15, 9, 0, 0), new DateTime(2026, 1, 15, 11, 0, 0));
+
+        Copenhagen.SplitByDay(slot).Should().Equal((new DateOnly(2026, 1, 15), slot));
+    }
+
+    [Fact]
+    public void SplitByDay_AcrossLocalMidnight_CutsAtLocalMidnightNotUtcMidnight()
+    {
+        var slot = LocalSlot(new DateTime(2026, 1, 15, 23, 0, 0), new DateTime(2026, 1, 16, 1, 0, 0));
+        var localMidnight = Copenhagen.ToMoment(new DateTime(2026, 1, 16, 0, 0, 0)); // 23:00 UTC
+
+        Copenhagen.SplitByDay(slot).Should().Equal(
+            (new DateOnly(2026, 1, 15), new TimeSlot(Copenhagen.ToMoment(new DateTime(2026, 1, 15, 23, 0, 0)), localMidnight)),
+            (new DateOnly(2026, 1, 16), new TimeSlot(localMidnight, Copenhagen.ToMoment(new DateTime(2026, 1, 16, 1, 0, 0)))));
+    }
+
+    [Fact]
+    public void SplitByDay_JustAfterLocalMidnight_BelongsToTheLocalDay()
+    {
+        // 00:30–01:30 in Copenhagen is 23:30–00:30 UTC the day before: it's the local day that counts.
+        var slot = LocalSlot(new DateTime(2026, 1, 16, 0, 30, 0), new DateTime(2026, 1, 16, 1, 30, 0));
+
+        Copenhagen.SplitByDay(slot).Select(p => p.Date).Should().Equal(new DateOnly(2026, 1, 16));
+    }
+
+    [Fact]
+    public void SplitByDay_SeveralDays_OnePartPerDayTouched()
+    {
+        var slot = LocalSlot(new DateTime(2026, 1, 1, 22, 0, 0), new DateTime(2026, 1, 3, 2, 0, 0));
+
+        var parts = Copenhagen.SplitByDay(slot).ToList();
+
+        parts.Select(p => p.Date).Should().Equal(new DateOnly(2026, 1, 1), new DateOnly(2026, 1, 2), new DateOnly(2026, 1, 3));
+        parts.Select(p => p.Part.Length).Should().Equal(TimeSpan.FromHours(2), TimeSpan.FromHours(24), TimeSpan.FromHours(2));
+    }
+
+    [Fact]
+    public void SplitByDay_EndingExactlyAtLocalMidnight_HasNoPresenceOnTheNextDay()
+    {
+        var slot = LocalSlot(new DateTime(2026, 1, 1, 15, 0, 0), new DateTime(2026, 1, 2, 0, 0, 0));
+
+        Copenhagen.SplitByDay(slot).Select(p => p.Date).Should().Equal(new DateOnly(2026, 1, 1));
+    }
+
+    [Fact]
+    public void SplitByDay_SpringForwardNight_TheDayIsOnly23HoursLong()
+    {
+        // 29 March 2026: 02:00 jumps to 03:00. Midnight to midnight is 23 real hours.
+        var slot = LocalSlot(new DateTime(2026, 3, 29, 0, 0, 0), new DateTime(2026, 3, 30, 0, 0, 0));
+
+        Copenhagen.SplitByDay(slot).Should().ContainSingle().Which.Part.Length.Should().Be(TimeSpan.FromHours(23));
+    }
+
+    [Fact]
+    public void SplitByDay_FallBackNight_TheDayIs25HoursLong()
+    {
+        // 25 October 2026: 03:00 falls back to 02:00. Midnight to midnight is 25 real hours.
+        var slot = LocalSlot(new DateTime(2026, 10, 25, 0, 0, 0), new DateTime(2026, 10, 26, 0, 0, 0));
+
+        Copenhagen.SplitByDay(slot).Should().ContainSingle().Which.Part.Length.Should().Be(TimeSpan.FromHours(25));
+    }
+
+    [Fact]
     public void MachineZone_MatchesTodaysConversions_EveryQuarterHourOfTheYear()
     {
         // Pins "same behaviour as today" (Gap 88 phase 1): UserTimeZone over the machine's own zone

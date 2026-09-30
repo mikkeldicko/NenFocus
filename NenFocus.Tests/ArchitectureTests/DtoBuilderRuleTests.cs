@@ -18,9 +18,6 @@ public class DtoBuilderRuleTests
         "SessionDto built in 3 files",
         // → Gap 95: EndSession, MarkFocusBlockMissed, GetUnacknowledgedPostSessions assemble credited minutes each (F6).
         "PostSessionDto built in 3 files",
-        // → Gap 88 phase 8: the attribution query and the Update handler each map redemption entries;
-        // attribution becomes the one answer (it returns the final slot).
-        "RedemptionEntryDto built in 2 files",
         // → Gap 89 area 2: the Planner builds draft tiles as PlannedBlockDtos beside the day query.
         "PlannedBlockDto built in 2 files",
     ];

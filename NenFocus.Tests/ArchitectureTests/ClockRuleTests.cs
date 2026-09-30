@@ -46,4 +46,20 @@ public class ClockRuleTests
 
         KnownExceptions.Check(violations, []);
     }
+
+    /// <summary>
+    /// A fake clock nobody set runs at year 0001 and passes silently — it hid an empty Work-Hours check
+    /// for months, and a Planner view test ran in the wrong week (Gap 88 close-out, lessons 1 and 12).
+    /// TestClock.Create() makes one that throws until it's set, so every fake goes through it.
+    /// </summary>
+    [Fact]
+    public void TestsMakeFakeClocksOnlyThroughTestClock()
+    {
+        var violations = SourceCode.Files("NenFocus.Tests")
+            .Where(f => f.Path != "NenFocus.Tests/TestClock.cs"
+                        && Regex.IsMatch(f.Code, @"Substitute\s*\.\s*For\s*<\s*[\w.]*\bISystemClock\s*>"))
+            .Select(f => f.Path);
+
+        KnownExceptions.Check(violations, []);
+    }
 }

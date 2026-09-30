@@ -8,7 +8,7 @@ namespace NenFocus.Domain.Services;
 public sealed class PolicyEngine : IPolicyEngine
 {
     public ActivePolicySlice ComputeSlice(
-        DateTime at,
+        Moment at,
         IEnumerable<BlockPreset> presets,
         IEnumerable<Session> sessions,
         IEnumerable<PlannedBlock> blocks)
@@ -27,8 +27,8 @@ public sealed class PolicyEngine : IPolicyEngine
         // `presets` is the same kind of over-fetched superset as `blocks` — the caller
         // resolves it from the coarse block/session query, not from activeBlocks/activeSessions
         // above. Narrowing it here (rather than trusting it as-is) mirrors the same
-        // "coarse fetch, precise narrow" discipline PlannedBlockRepository.GetOverlappingAsync
-        // already applies via EffectiveEnd. Without this, a FocusBlock whose session ended
+        // "coarse fetch, precise narrow" discipline the repositories
+        // follow (MODULE_STANDARDS → narrow in SQL, decide in the entity). Without this, a FocusBlock whose session ended
         // early correctly drops out of activeBlocks but its preset's blocked sites/apps kept
         // being reapplied every heartbeat tick anyway, for as long as `at` was still inside
         // the block's *original* Start/End window.
@@ -57,7 +57,7 @@ public sealed class PolicyEngine : IPolicyEngine
         var activePresets = allPresets.Where(p => activePresetIds.Contains(p.Id)).ToList();
 
         if (activePresets.Count == 0 && activeSessions.Count == 0 && activeBlocks.Count == 0)
-            return new ActivePolicySlice { SliceStart = at, SliceEnd = at.AddMinutes(1) };
+            return new ActivePolicySlice { SliceStart = at, SliceEnd = at + TimeSpan.FromMinutes(1) };
 
         var tempApps = activeSessions
             .Where(s => !pausedSessionIds.Contains(s.Id))
@@ -110,7 +110,7 @@ public sealed class PolicyEngine : IPolicyEngine
         {
             ActiveSessionId = activeSessions.FirstOrDefault()?.Id,
             SliceStart = at,
-            SliceEnd = activeBlocks.Any() ? activeBlocks.Max(b => b.End) : at.AddMinutes(1),
+            SliceEnd = activeBlocks.Any() ? activeBlocks.Max(b => b.Scheduled.End) : at + TimeSpan.FromMinutes(1),
             WebsiteFilterTypeMode = effectivePolicy,
             AllowedSites = allowedSites,
             BlockedSites = blockedSites,

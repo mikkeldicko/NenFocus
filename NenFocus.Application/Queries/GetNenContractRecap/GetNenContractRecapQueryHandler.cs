@@ -1,5 +1,6 @@
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
+using NenFocus.Domain.ValueObjects;
 using NenFocus.Application.Queries.GetNenContractBonusFocusHours;
 using NenFocus.Application.Queries.GetNenContractCompletedFocusHours;
 using NenFocus.Domain.Entities;
@@ -38,7 +39,7 @@ public sealed class GetNenContractRecapQueryHandler : IQueryHandler<GetNenContra
         var contract = await _contracts.GetByIdAsync(query.ContractId, ct);
         if (contract is null) return null;
 
-        var now = _clock.UtcNow;
+        var now = _clock.Now;
 
         var linkedBlocks = await _blocks.GetForContractAsync(query.ContractId, ct);
 
@@ -95,10 +96,11 @@ public sealed class GetNenContractRecapQueryHandler : IQueryHandler<GetNenContra
         // are always answered from the same underlying set.
         var rangeStart = contract.StartDate.AddDays(-1).ToDateTime(TimeOnly.MinValue);
         var rangeEnd = contract.EndDate.AddDays(1).ToDateTime(TimeOnly.MinValue);
-        var blocksInRange = await _blocks.GetForRangeAsync(rangeStart, rangeEnd, ct);
+        var blocksInRange = await _blocks.GetForRangeAsync(
+            new TimeSlot(_clock.TimeZone.ToMoment(rangeStart), _clock.TimeZone.ToMoment(rangeEnd)), ct);
         var bonusBlockCount = blocksInRange.OfType<FocusBlock>().Count(b =>
             b.ContractId is null &&
-            contract.Covers(_clock.ToLocal(b.Start)));
+            contract.Covers(_clock.TimeZone.ToCalendarTimes(b.Scheduled).Start));
 
         var dailyBreakdown = new List<NenContractDailyRecapEntryDto>();
         var bestStreakDays = 0;

@@ -1,4 +1,5 @@
 using NenFocus.Application.Interfaces;
+using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Application.UseCases.Planner.UpdatePlannedBlock;
 
@@ -6,6 +7,5 @@ public sealed record UpdatePlannedBlockCommand : ICommand<UpdatePlannedBlockResu
 {
     public Guid BlockId { get; init; }
     public Guid PresetId { get; init; }
-    public DateTime Start { get; init; }
-    public DateTime End { get; init; }
+    public required TimeSlot Slot { get; init; }
 }

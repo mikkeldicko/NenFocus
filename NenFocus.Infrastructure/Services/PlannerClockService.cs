@@ -4,17 +4,14 @@ namespace NenFocus.Infrastructure.Services;
 
 public sealed class PlannerClockService : IPlannerClockService, IDisposable
 {
-    private readonly ISystemClock _clock;
     private readonly IDebugClockController _debugClock;
     private readonly System.Timers.Timer _timer;
     private readonly EventHandler _onDebugClockChanged;
 
     public event EventHandler? Tick;
-    public DateTime LocalNow => _clock.UtcNow.ToLocalTime();
 
-    public PlannerClockService(ISystemClock clock, IDebugClockController debugClock)
+    public PlannerClockService(IDebugClockController debugClock)
     {
-        _clock = clock;
         _debugClock = debugClock;
 
         // The debug clock's Changed event also fires on its own ~1s ambient ticker, not

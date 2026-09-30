@@ -1,4 +1,6 @@
 using FluentAssertions;
+using NenFocus.Domain.ValueObjects;
+using NenFocus.Domain.ValueObjects;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
 using NenFocus.Domain.Services;
@@ -12,13 +14,17 @@ public class FocusBlockOutcomeClassifierTests
 
     private readonly FocusBlockOutcomeClassifier _classifier = new();
 
+    private static readonly TimeSlot Scheduled = new(At.Utc(ScheduledStart), At.Utc(ScheduledEnd));
+
+    private static Moment? M(DateTime? utc) => utc is { } value ? At.Utc(value) : null;
+
     // Classify only takes a block (Gap 86) — build one carrying exactly these stamps.
     private FocusBlockOutcome? Classify(DateTime? ritualCompletedAt, DateTime? sessionEndedAt, DateTime asOf)
     {
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), ScheduledStart, ScheduledEnd);
-        if (ritualCompletedAt is { } ritualAt) block.MarkRitualCompleted(ritualAt);
-        if (sessionEndedAt is { } endedAt) block.MarkSessionEnded(endedAt);
-        return _classifier.Classify(block, asOf);
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(ScheduledStart, ScheduledEnd));
+        if (ritualCompletedAt is { } ritualAt) block.MarkRitualCompleted(At.Utc(ritualAt));
+        if (sessionEndedAt is { } endedAt) block.MarkSessionEnded(At.Utc(endedAt));
+        return _classifier.Classify(block, At.Utc(asOf));
     }
 
     [Fact]
@@ -26,7 +32,7 @@ public class FocusBlockOutcomeClassifierTests
     {
         var moment = ScheduledStart.AddMinutes(FocusBlockOutcomeClassifier.GracePeriodMinutes);
 
-        _classifier.IsLateStart(ScheduledStart, moment).Should().BeFalse();
+        _classifier.IsLateStart(Scheduled, At.Utc(moment)).Should().BeFalse();
     }
 
     [Fact]
@@ -34,13 +40,13 @@ public class FocusBlockOutcomeClassifierTests
     {
         var moment = ScheduledStart.AddMinutes(FocusBlockOutcomeClassifier.GracePeriodMinutes).AddMinutes(1);
 
-        _classifier.IsLateStart(ScheduledStart, moment).Should().BeTrue();
+        _classifier.IsLateStart(Scheduled, At.Utc(moment)).Should().BeTrue();
     }
 
     [Fact]
     public void IsLateStart_BeforeScheduledStart_IsFalse()
     {
-        _classifier.IsLateStart(ScheduledStart, ScheduledStart.AddMinutes(-10)).Should().BeFalse();
+        _classifier.IsLateStart(Scheduled, At.Utc(ScheduledStart.AddMinutes(-10))).Should().BeFalse();
     }
 
     [Fact]
@@ -193,7 +199,7 @@ public class FocusBlockOutcomeClassifierTests
         // blocking enforcement was already active from ScheduledStart, so the 3 minutes of
         // Ritual setup counts alongside the 117 minutes of real elapsed progress.
         var credited = _classifier.CreditedFocusMinutes(
-            ScheduledStart, ScheduledEnd, ritualCompletedAt: ritualAt, sessionEndedAt: null, actualElapsedMinutes: 117);
+            Scheduled, ritualCompletedAt: M(ritualAt), sessionEndedAt: M(null), actualElapsedMinutes: 117);
 
         credited.Should().Be(120);
     }
@@ -204,7 +210,7 @@ public class FocusBlockOutcomeClassifierTests
         var ritualAt = ScheduledStart.AddMinutes(FocusBlockOutcomeClassifier.GracePeriodMinutes);
 
         var credited = _classifier.CreditedFocusMinutes(
-            ScheduledStart, ScheduledEnd, ritualCompletedAt: ritualAt, sessionEndedAt: null, actualElapsedMinutes: 115);
+            Scheduled, ritualCompletedAt: M(ritualAt), sessionEndedAt: M(null), actualElapsedMinutes: 115);
 
         credited.Should().Be(120);
     }
@@ -215,7 +221,7 @@ public class FocusBlockOutcomeClassifierTests
         var ritualAt = ScheduledStart.AddMinutes(FocusBlockOutcomeClassifier.GracePeriodMinutes + 1);
 
         var credited = _classifier.CreditedFocusMinutes(
-            ScheduledStart, ScheduledEnd, ritualCompletedAt: ritualAt, sessionEndedAt: null, actualElapsedMinutes: 90);
+            Scheduled, ritualCompletedAt: M(ritualAt), sessionEndedAt: M(null), actualElapsedMinutes: 90);
 
         credited.Should().Be(90);
     }
@@ -224,7 +230,7 @@ public class FocusBlockOutcomeClassifierTests
     public void CreditedFocusMinutes_Missed_CreditsZero()
     {
         var credited = _classifier.CreditedFocusMinutes(
-            ScheduledStart, ScheduledEnd, ritualCompletedAt: null, sessionEndedAt: null, actualElapsedMinutes: 0);
+            Scheduled, ritualCompletedAt: M(null), sessionEndedAt: M(null), actualElapsedMinutes: 0);
 
         credited.Should().Be(0);
     }
@@ -237,7 +243,7 @@ public class FocusBlockOutcomeClassifierTests
         var sessionEndedAt = ScheduledStart.AddMinutes(20);
 
         var credited = _classifier.CreditedFocusMinutes(
-            ScheduledStart, ScheduledEnd, ritualCompletedAt: ScheduledStart, sessionEndedAt: sessionEndedAt, actualElapsedMinutes: 20);
+            Scheduled, ritualCompletedAt: M(ScheduledStart), sessionEndedAt: M(sessionEndedAt), actualElapsedMinutes: 20);
 
         credited.Should().Be(20);
     }
@@ -253,7 +259,7 @@ public class FocusBlockOutcomeClassifierTests
         var ritualAt = ScheduledStart.AddMinutes(19);
 
         var credited = _classifier.CreditedFocusMinutes(
-            ScheduledStart, ScheduledEnd, ritualCompletedAt: ritualAt, sessionEndedAt: null, actualElapsedMinutes: 180);
+            Scheduled, ritualCompletedAt: M(ritualAt), sessionEndedAt: M(null), actualElapsedMinutes: 180);
 
         credited.Should().Be((ScheduledEnd - ritualAt).TotalMinutes);
     }
@@ -265,7 +271,7 @@ public class FocusBlockOutcomeClassifierTests
         var ritualAt = ScheduledStart.AddMinutes(FocusBlockOutcomeClassifier.GracePeriodMinutes + 1);
 
         var credited = _classifier.CreditedFocusMinutes(
-            ScheduledStart, ScheduledEnd, ritualCompletedAt: ritualAt, sessionEndedAt: null, actualElapsedMinutes: 90);
+            Scheduled, ritualCompletedAt: M(ritualAt), sessionEndedAt: M(null), actualElapsedMinutes: 90);
 
         credited.Should().Be(90);
     }
@@ -278,9 +284,9 @@ public class FocusBlockOutcomeClassifierTests
         // Grace forgives the late start unconditionally, even while the session is still
         // live (sessionEndedAt null) — the window starts at ScheduledStart, not ritualAt.
         var window = _classifier.CreditedWindow(
-            ScheduledStart, ScheduledEnd, ritualCompletedAt: ritualAt, sessionEndedAt: null, actualElapsedMinutes: 117);
+            Scheduled, ritualCompletedAt: M(ritualAt), sessionEndedAt: M(null), actualElapsedMinutes: 117);
 
-        window.Should().Be((ScheduledStart, ritualAt.AddMinutes(117)));
+        window.Should().Be(new TimeSlot(At.Utc(ScheduledStart), At.Utc(ritualAt.AddMinutes(117))));
     }
 
     [Fact]
@@ -290,9 +296,9 @@ public class FocusBlockOutcomeClassifierTests
         // jump to the full scheduled duration the instant the Ritual completes (progressive
         // accrual, so Planner badges/banner move live during an in-progress block).
         var window = _classifier.CreditedWindow(
-            ScheduledStart, ScheduledEnd, ritualCompletedAt: ScheduledStart, sessionEndedAt: null, actualElapsedMinutes: 30);
+            Scheduled, ritualCompletedAt: M(ScheduledStart), sessionEndedAt: M(null), actualElapsedMinutes: 30);
 
-        window.Should().Be((ScheduledStart, ScheduledStart.AddMinutes(30)));
+        window.Should().Be(new TimeSlot(At.Utc(ScheduledStart), At.Utc(ScheduledStart.AddMinutes(30))));
     }
 
     [Fact]
@@ -305,16 +311,16 @@ public class FocusBlockOutcomeClassifierTests
         var ritualAt = ScheduledStart.AddMinutes(3);
 
         var window = _classifier.CreditedWindow(
-            ScheduledStart, ScheduledEnd, ritualCompletedAt: ritualAt, sessionEndedAt: ScheduledEnd, actualElapsedMinutes: 117);
+            Scheduled, ritualCompletedAt: M(ritualAt), sessionEndedAt: M(ScheduledEnd), actualElapsedMinutes: 117);
 
-        window.Should().Be((ScheduledStart, ScheduledEnd));
+        window.Should().Be(new TimeSlot(At.Utc(ScheduledStart), At.Utc(ScheduledEnd)));
     }
 
     [Fact]
     public void CreditedWindow_Missed_IsNull()
     {
         var window = _classifier.CreditedWindow(
-            ScheduledStart, ScheduledEnd, ritualCompletedAt: null, sessionEndedAt: null, actualElapsedMinutes: 0);
+            Scheduled, ritualCompletedAt: M(null), sessionEndedAt: M(null), actualElapsedMinutes: 0);
 
         window.Should().BeNull();
     }
@@ -325,9 +331,9 @@ public class FocusBlockOutcomeClassifierTests
         var sessionEndedAt = ScheduledStart.AddMinutes(20);
 
         var window = _classifier.CreditedWindow(
-            ScheduledStart, ScheduledEnd, ritualCompletedAt: ScheduledStart, sessionEndedAt: sessionEndedAt, actualElapsedMinutes: 20);
+            Scheduled, ritualCompletedAt: M(ScheduledStart), sessionEndedAt: M(sessionEndedAt), actualElapsedMinutes: 20);
 
-        window.Should().Be((ScheduledStart, ScheduledStart.AddMinutes(20)));
+        window.Should().Be(new TimeSlot(At.Utc(ScheduledStart), At.Utc(ScheduledStart.AddMinutes(20))));
     }
 
     [Fact]
@@ -336,9 +342,9 @@ public class FocusBlockOutcomeClassifierTests
         var ritualAt = ScheduledStart.AddMinutes(19);
 
         var window = _classifier.CreditedWindow(
-            ScheduledStart, ScheduledEnd, ritualCompletedAt: ritualAt, sessionEndedAt: null, actualElapsedMinutes: 180);
+            Scheduled, ritualCompletedAt: M(ritualAt), sessionEndedAt: M(null), actualElapsedMinutes: 180);
 
-        window.Should().Be((ritualAt, ScheduledEnd));
+        window.Should().Be(new TimeSlot(At.Utc(ritualAt), At.Utc(ScheduledEnd)));
     }
 
     [Fact]
@@ -358,10 +364,10 @@ public class FocusBlockOutcomeClassifierTests
 
         foreach (var (ritual, ended, elapsed) in scenarios)
         {
-            var minutes = _classifier.CreditedFocusMinutes(ScheduledStart, ScheduledEnd, ritual, ended, elapsed);
-            var window = _classifier.CreditedWindow(ScheduledStart, ScheduledEnd, ritual, ended, elapsed);
+            var minutes = _classifier.CreditedFocusMinutes(Scheduled, M(ritual), M(ended), elapsed);
+            var window = _classifier.CreditedWindow(Scheduled, M(ritual), M(ended), elapsed);
 
-            var windowMinutes = window is { } w ? (w.End - w.Start).TotalMinutes : 0;
+            var windowMinutes = window?.Length.TotalMinutes ?? 0;
             windowMinutes.Should().Be(minutes);
         }
     }
@@ -378,9 +384,9 @@ public class FocusBlockOutcomeClassifierTests
         var sessionEndedAt = ScheduledEnd.AddSeconds(-40); // 40s short of the 3:00 scheduled end
 
         var window = _classifier.CreditedWindow(
-            ScheduledStart, ScheduledEnd, ritualCompletedAt: ScheduledStart, sessionEndedAt: sessionEndedAt, actualElapsedMinutes: 119.33);
+            Scheduled, ritualCompletedAt: M(ScheduledStart), sessionEndedAt: M(sessionEndedAt), actualElapsedMinutes: 119.33);
 
-        window.Should().Be((ScheduledStart, ScheduledStart.AddMinutes(119)));
+        window.Should().Be(new TimeSlot(At.Utc(ScheduledStart), At.Utc(ScheduledStart.AddMinutes(119))));
     }
 
     [Fact]
@@ -390,10 +396,10 @@ public class FocusBlockOutcomeClassifierTests
         var sessionEndedAt = ScheduledEnd.AddSeconds(-40); // 40s short of the 3:00 scheduled end
 
         var window = _classifier.CreditedWindow(
-            ScheduledStart, ScheduledEnd, ritualCompletedAt: ritualAt, sessionEndedAt: sessionEndedAt, actualElapsedMinutes: 100.33);
+            Scheduled, ritualCompletedAt: M(ritualAt), sessionEndedAt: M(sessionEndedAt), actualElapsedMinutes: 100.33);
 
         // 120 - 19 min late - 40s early = 100.3333 raw minutes, floored to 100.
-        window.Should().Be((ritualAt, ritualAt.AddMinutes(100)));
+        window.Should().Be(new TimeSlot(At.Utc(ritualAt), At.Utc(ritualAt.AddMinutes(100))));
     }
 
     [Fact]
@@ -412,9 +418,9 @@ public class FocusBlockOutcomeClassifierTests
         var sessionEndedAt = oneHourEnd.AddSeconds(-150); // 2 min 30 sec early
 
         var window = _classifier.CreditedWindow(
-            oneHourStart, oneHourEnd, ritualCompletedAt: ritualAt, sessionEndedAt: sessionEndedAt, actualElapsedMinutes: 55);
+            new TimeSlot(At.Utc(oneHourStart), At.Utc(oneHourEnd)), ritualCompletedAt: M(ritualAt), sessionEndedAt: M(sessionEndedAt), actualElapsedMinutes: 55);
 
-        window.Should().Be((oneHourStart, oneHourStart.AddMinutes(57)));
+        window.Should().Be(new TimeSlot(At.Utc(oneHourStart), At.Utc(oneHourStart.AddMinutes(57))));
     }
 
     [Fact]
@@ -424,10 +430,10 @@ public class FocusBlockOutcomeClassifierTests
         var actualElapsedMinutes = (sessionEndedAt - ScheduledStart).TotalMinutes;
 
         var window = _classifier.CreditedWindow(
-            ScheduledStart, ScheduledEnd, ritualCompletedAt: ScheduledStart, sessionEndedAt: sessionEndedAt, actualElapsedMinutes: actualElapsedMinutes);
+            Scheduled, ritualCompletedAt: M(ScheduledStart), sessionEndedAt: M(sessionEndedAt), actualElapsedMinutes: actualElapsedMinutes);
 
         // 120 - 1:01 = 118.9833 raw minutes, floored to 118.
-        window.Should().Be((ScheduledStart, ScheduledStart.AddMinutes(118)));
+        window.Should().Be(new TimeSlot(At.Utc(ScheduledStart), At.Utc(ScheduledStart.AddMinutes(118))));
     }
 
     [Fact]
@@ -438,8 +444,8 @@ public class FocusBlockOutcomeClassifierTests
         var ritualAt = overnightStart.AddMinutes(2);
 
         var window = _classifier.CreditedWindow(
-            overnightStart, overnightEnd, ritualCompletedAt: ritualAt, sessionEndedAt: null, actualElapsedMinutes: 178);
+            new TimeSlot(At.Utc(overnightStart), At.Utc(overnightEnd)), ritualCompletedAt: M(ritualAt), sessionEndedAt: M(null), actualElapsedMinutes: 178);
 
-        window.Should().Be((overnightStart, ritualAt.AddMinutes(178)));
+        window.Should().Be(new TimeSlot(At.Utc(overnightStart), At.Utc(ritualAt.AddMinutes(178))));
     }
 }

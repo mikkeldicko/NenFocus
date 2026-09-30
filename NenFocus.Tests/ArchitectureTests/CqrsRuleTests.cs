@@ -35,4 +35,19 @@ public class CqrsRuleTests
 
         KnownExceptions.Check(violations, []);
     }
+
+    /// <summary>
+    /// A command member that must be set is `required`, not `= null!` + a validator NotNull rule: `null!`
+    /// tells the compiler "never null" while the value can be, so the real check moved to runtime
+    /// (Gap 88 close-out, lesson 13; phase 6 made Slot/First/Second required).
+    /// </summary>
+    [Fact]
+    public void CommandsDoNotPromiseNonNullWithNullBang()
+    {
+        var violations = SourceCode.Files("NenFocus.Application")
+            .Where(f => f.Path.EndsWith("Command.cs", StringComparison.Ordinal) && Regex.IsMatch(f.Code, @"=\s*null\s*!"))
+            .Select(f => f.Path);
+
+        KnownExceptions.Check(violations, []);
+    }
 }

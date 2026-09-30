@@ -33,7 +33,7 @@ public class CompleteNenContractValidatorTests
         changeWindow: null,
         allowCancellation: true,
         plannedFocusHoursByDay: new Dictionary<DateOnly, double> { [StartDate] = committedHours },
-        localSealedAt: StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
+        sealedAt: At.Utc(StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)), timeZone: At.UtcZone);
 
     private void StubReadiness(bool isReady, double remainingHours = 0, int pendingBlockCount = 0) =>
         _readiness.HandleAsync(Arg.Any<GetNenContractCompletionReadinessQuery>(), Arg.Any<CancellationToken>())
@@ -58,7 +58,7 @@ public class CompleteNenContractValidatorTests
     public async Task Validate_ContractNotActive_IsInvalid()
     {
         var contract = ActiveContract();
-        contract.Break(Now);
+        contract.Break(At.Utc(Now), At.UtcZone);
         _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(contract);
         StubReadiness(isReady: false); // Broken -> readiness query itself reports not ready
 

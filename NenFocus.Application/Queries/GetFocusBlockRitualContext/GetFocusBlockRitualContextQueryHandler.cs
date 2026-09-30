@@ -39,14 +39,14 @@ public sealed class GetFocusBlockRitualContextQueryHandler
         // Reuses IFocusBlockOutcomeClassifier.IsLateStart — one definition of "late enough
         // to matter," not a second one invented for this modal — against a live "if the
         // ritual completed right now" check, since the ritual hasn't happened yet.
-        var now = _clock.UtcNow;
+        var now = _clock.Now;
 
         return new FocusBlockRitualContext
         {
             Preset = BlockPresetDto.FromEntity(preset),
-            Schedule = new FocusBlockSchedule { Start = block.Start, End = block.End },
-            LateBy = now - block.Start,
-            IsLate = _classifier.IsLateStart(block.Start, now),
+            Schedule = new FocusBlockSchedule { Slot = block.Scheduled },
+            LateBy = -block.Scheduled.StartsIn(now),
+            IsLate = _classifier.IsLateStart(block.Scheduled, now),
             AlreadyHasSession = await _sessions.ExistsForOriginatingBlockAsync(block.Id, ct)
         };
     }

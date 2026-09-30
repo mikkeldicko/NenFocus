@@ -38,7 +38,7 @@ public class EditNenContractValidatorTests
         changeWindow: null,
         allowCancellation: true,
         plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-        localSealedAt: sealedAt);
+        sealedAt: At.Utc(sealedAt), timeZone: At.UtcZone);
 
     private static EditNenContractCommand BaseCommand(Guid contractId) => new()
     {
@@ -198,8 +198,7 @@ public class EditNenContractValidatorTests
 
         var command = BaseCommand(contract.Id) with
         {
-            Blocks = [new NenFocus.Application.DTOs.NenContractBlockSpec(
-                Guid.NewGuid(), StartDate.ToDateTime(TimeOnly.MinValue), StartDate.ToDateTime(new TimeOnly(1, 0)), IsFocus: true)]
+            Blocks = [new NenFocus.Application.DTOs.NenContractBlockSpec(Guid.NewGuid(), At.Slot(StartDate.ToDateTime(TimeOnly.MinValue), StartDate.ToDateTime(new TimeOnly(1, 0))), IsFocus: true)]
         };
 
         var result = await CreateValidator().ValidateAsync(command);

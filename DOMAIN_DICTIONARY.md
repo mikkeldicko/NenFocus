@@ -11,7 +11,7 @@ This file is the canonical reference for every domain concept in NenFocus. It ex
 | **Session** | A bounded focus period; lifecycle `NotStarted → Active → Completed` — one continuous run, punctuated by the breaks in its `BreakSchedule` (a break is never a status) |
 | **Ritual** | The four-step wizard (Ten → Zetsu → Ren → Hatsu) that creates a Session |
 | **Block Preset** | A reusable template of blocked apps + website filter type; typed as Focus or Background at creation |
-| **Planned Block** | Abstract base for `FocusBlock` and `BackgroundBlock`; carries `Start`, `End`, `BlockPresetId`, `RecurringSeriesId (Guid?)`, `IsActive()`, `OverlapsWith()` |
+| **Planned Block** | Abstract base for `FocusBlock` and `BackgroundBlock`; carries `Scheduled` (a `TimeSlot`), `BlockPresetId`, `IsActive()`, `HasStarted()`, `ReservedSlot()` |
 | **Focus Block** | A planned calendar entry that activates enforcement AND triggers the Nen Ritual at the designated time |
 | **Background Block** | A planned calendar entry that activates enforcement at the designated time without triggering the Ritual |
 | **Policy Slice** | The merged, computed enforcement state at a given instant; represented as `ActivePolicySlice` (Domain Value Object), produced by `PolicyEngine` |
@@ -27,8 +27,11 @@ This file is the canonical reference for every domain concept in NenFocus. It ex
 | **SessionBreak** | One slot in a `BreakSchedule`: `Kind` (`ShortBreak` \| `LongBreak`), `Start`, `End` (offsets) |
 | **BreakTransition** | A break boundary (`Started` \| `Ended`) a running session crossed — reported by `Session.BreakTransitionsBetween(from, to)`, acted on by `IBreakTransitionResponder`; not a domain event, since nothing about the session changes |
 | **BlockMarker** | A point on a planned block's timeline (`StartingSoon` \| `Started` \| `Ended`) the clock passed — reported by `PlannedBlock.MarkersPassedBetween(from, to)`, announced by `IBlockMarkerNotifier` via `INotifier`; not a domain event, and not a "transition" (StartingSoon changes nothing) (Gap 84) || `Started` \| `Ended`) the clock crossed — reported by `PlannedBlock.TransitionsBetween(from, to)`, announced by `IBlockTransitionHandler` via `INotifier`; not a domain event (Gap 84) |
-| **Moment** | A point in time, always UTC (`Domain/ValueObjects/Moment.cs`); no calendar members — which day or hour needs `UserTimeZone`. Only storage and `SystemClock` turn it into a `DateTime` (architecture test). Built, not yet used (Gap 88) |
-| **UserTimeZone** | The user's time zone and its DST rules; the one place a `Moment` becomes a calendar time and back (`ToCalendarTime`, `ToMoment`, `DateOf`). Reached as `ISystemClock.TimeZone` (Gap 88) |
+| **Moment** | A point in time, always UTC (`Domain/ValueObjects/Moment.cs`); no calendar members — which day or hour needs `UserTimeZone`. Only storage and `SystemClock` turn it into a `DateTime` (architecture test). Every stored timestamp, `ISystemClock.Now` and DTO times are `Moment`s (Gap 88) |
+| **UserTimeZone** | The user's time zone and its DST rules; the one place a `Moment` becomes a calendar time and back (`ToCalendarTime`, `ToMoment`, `DateOf`, `SplitByDay`). Reached as `ISystemClock.TimeZone` (Gap 88) |
+| **TimeSlot** | Value object: a span of two `Moment`s, half-open `[Start, End)`, end after start by construction; `Start`/`End` are Domain-only (`internal`). Answers `Overlaps`, `Contains`, `HasStarted`/`HasEnded`, `Length`, `SinceStart`/`RemainingAt`/`ProgressAt`, `Covering(start, minutes)` (whole minutes, rounded up); `TimeSlot.Filters` are the same rules as SQL for repositories. Held by blocks (`Scheduled`) and sessions (Gap 88) |
+| **BlockPlacementChecker** | Domain service: the one answer to "may a block go here?" — `Check(slot, type, contract, blocks, sessions, now, timeZone)` asks, in order, not in the past → inside the contract's day window → free for Focus (`CheckFree`: no Focus block's or running session's reserved time). Returns a `PlacementVerdict` (`PlacementOutcome` `Allowed`/`InThePast`/`OutsideContractHours`/`TimeTaken`, plus the slot in the way). Asked by Create/Update (via `GetBlockPlacementVerdictQuery`), Split, Seal and Edit; worded once in `BlockPlacementVerdictDto.From` (Gap 88) |
+| **Started-block lock** | A block that has started (`PlannedBlock.HasStarted`) can't be moved, resized, split or edited, and can't be deleted until it has ended; it ends early only through End Early or by breaking its contract (Gap 88 phase 0) |
 | **Blocked Attempt** | An append-only fact recording a user's attempt to access a blocked app or site during a Session |
 | **Nen Contract** | A sealed, time-bound commitment over a contiguous date range that governs allowed changes to the Focus/Background blocks within it; own aggregate root, does not own `PlannedBlock`s |
 | **Seal** | The act of finalising a Nen Contract; the only way a `NenContract` comes into existence — there is no persisted draft state in the domain |
@@ -334,14 +337,14 @@ ActivePolicySlice ComputeSlice(
 
 ## Planned Block
 
-**Definition:** The abstract base class for all calendar-scheduled enforcement entries. A `PlannedBlock` has a `Start` time, an `End` time, a `BlockPresetId`, and an optional `Title`. It is never instantiated directly — only its two concrete subtypes (`FocusBlock` and `BackgroundBlock`) are created. The C# class type encodes the block preset type; there is no stored `BlockPresetType` column.
+**Definition:** The abstract base class for all calendar-scheduled enforcement entries. A `PlannedBlock` has a `Scheduled` time slot (`TimeSlot`, UTC moments), a `BlockPresetId`, and an optional `Title`. It is never instantiated directly — only its two concrete subtypes (`FocusBlock` and `BackgroundBlock`) are created. The C# class type encodes the block preset type; there is no stored `BlockPresetType` column.
 
 **Domain behaviour:** `PlannedBlock` carries these domain methods, used by both subtypes and the query layer:
-- `IsActive(DateTime atTime)` — returns `true` if `atTime` falls within `[Start, EffectiveEnd(atTime))`.
-- `EffectiveEnd(DateTime asOf)` — the one rule for how much of the window the block really occupies; every reason it shrinks lives here. Base: cancellation (ends at the cancel moment; empty if cancelled before `Start`). `FocusBlock` adds session-ended-early and missed; the earliest reason wins. `IsActive`, overlap checks and markers never check `CancelledAt` themselves (Gap 85).
-- `HasStarted(DateTime asOf)` — `Start <= asOf`; once true the block is locked: no edit or split, no delete until it has ended (Gap 88 phase 0).
-- `HasEnded(DateTime asOf)` — `End < asOf`; the one canonical "is this past" check.
-- `OverlapsWith(PlannedBlock other)` — returns `true` if the two windows intersect; used by the planner to prevent scheduling conflicts.
+- `IsActive(Moment at)` — returns `true` if `at` falls within `[Start, EffectiveEnd(at))`.
+- `EffectiveEnd(Moment asOf)` — the one rule for how much of the window the block really occupies; every reason it shrinks lives here. Base: cancellation (ends at the cancel moment; empty if cancelled before `Start`). `FocusBlock` adds session-ended-early and missed; the earliest reason wins. `IsActive`, overlap checks and markers never check `CancelledAt` themselves (Gap 85).
+- `HasStarted(Moment asOf)` — asks `Scheduled`; once true the block is locked: no edit or split, no delete until it has ended (Gap 88 phase 0).
+- `HasEnded(Moment asOf)` — asks `Scheduled` (half-open: ended *at* its end); the one canonical "is this past" check.
+- `ReservedSlot(asOf)` — the Focus time it really takes (up to `EffectiveEnd`), what `BlockPlacementChecker` compares; `OverlapsWith(other)` stays for the Seal batch's own check only — placement never calls it (Gap 88).
 - `MarkersPassedBetween(from, to)` — the markers the clock passed in (from, to]: `StartingSoon` (`UpcomingWarningLead`, 5 min, before `Start`), `Started`/`Ended` (`IsActive` flipped — the definition enforcement uses). `Ended` only if the block owns its ending: a `FocusBlock` whose Ritual was completed does not — its session announces it (Gap 84).
 
 **Why it exists:** `IPlannedBlockRepository` returns `IReadOnlyList<PlannedBlock>` so that the enforcement pipeline can work with all scheduled blocks polymorphically without knowing their concrete type. Enforcement treats Focus and Background blocks alike; the only place the subtype matters for triggering is the Ritual, where `GetFocusBlockAwaitingRitualQueryHandler` asks only `FocusBlock`s — the distinction is made exactly once, in the one place that needs it.

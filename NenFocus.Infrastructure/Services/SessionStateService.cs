@@ -3,6 +3,7 @@ using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.UseCases.Sessions.SweepMissedFocusBlocks;
 using NenFocus.Domain.Entities;
+using NenFocus.Domain.ValueObjects;
 
 
 namespace NenFocus.Infrastructure.Services;
@@ -56,7 +57,7 @@ public sealed class SessionStateService : ISessionStateService
                 presetName = preset?.Name ?? "Unknown Preset";
             }
 
-            _activeSession = MapToDto(session, presetName, _clock.UtcNow);
+            _activeSession = MapToDto(session, presetName, _clock.Now);
             SessionChanged?.Invoke(this, _activeSession);
         }
 
@@ -128,7 +129,7 @@ public sealed class SessionStateService : ISessionStateService
         RitualRequirementChanged?.Invoke(this, new RitualRequirementChange(false, null));
     }
 
-    private static SessionDto MapToDto(Session s, string presetName, DateTime now) => new SessionDto
+    private static SessionDto MapToDto(Session s, string presetName, Moment now) => new SessionDto
     {
         Id = s.Id,
         Goal = s.Goal?.Value ?? string.Empty,

@@ -1,4 +1,5 @@
 using FluentAssertions;
+using NenFocus.Domain.ValueObjects;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
 
@@ -13,13 +14,13 @@ public class BlockedAttemptTests
         var sessionId = Guid.NewGuid();
         var occurredAt = DateTime.UtcNow;
 
-        var attempt = BlockedAttempt.Record(id, sessionId, "  chrome  ", BlockedAttemptType.App, occurredAt);
+        var attempt = BlockedAttempt.Record(id, sessionId, "  chrome  ", BlockedAttemptType.App, At.Utc(occurredAt));
 
         attempt.Id.Should().Be(id);
         attempt.SessionId.Should().Be(sessionId);
         attempt.ResourceName.Should().Be("chrome");
         attempt.AttemptType.Should().Be(BlockedAttemptType.App);
-        attempt.OccurredAt.Should().Be(occurredAt);
+        attempt.OccurredAt.Should().Be(At.Utc(occurredAt));
     }
 
     [Theory]
@@ -29,7 +30,7 @@ public class BlockedAttemptTests
     public void Record_BlankResourceName_Throws(string? blank)
     {
         var act = () => BlockedAttempt.Record(
-            Guid.NewGuid(), Guid.NewGuid(), blank!, BlockedAttemptType.Website, DateTime.UtcNow);
+            Guid.NewGuid(), Guid.NewGuid(), blank!, BlockedAttemptType.Website, At.Utc(DateTime.UtcNow));
 
         act.Should().Throw<ArgumentException>();
     }

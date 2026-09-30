@@ -101,7 +101,7 @@ public class NenContract : AggregateRoot
     /// <summary>Stamped when the user dismisses the Post-Contract recap screen, regardless
     /// of whether they wrote a reflection — mirrors Session.PostSessionAcknowledgedAt's
     /// idiom exactly, including the "blank is a valid, deliberate outcome" reasoning.</summary>
-    public DateTime? PostContractAcknowledgedAt { get; private set; }
+    public Moment? PostContractAcknowledgedAt { get; private set; }
 
     private NenContract() { } // EF Core
 
@@ -116,9 +116,9 @@ public class NenContract : AggregateRoot
     /// Focus-only measure by design. Days missing from the map are treated as
     /// 0 planned hours. The caller (Application layer) owns assembling this map.
     /// </param>
-    /// <param name="localSealedAt">
-    /// Local wall-clock time — compared against the calendar's local StartsAt.
-    /// </param>
+    /// <param name="sealedAt">When the user sealed it; <paramref name="timeZone"/> gives its local
+    /// time, which is compared against the calendar's local StartsAt (Gap 88: the Domain converts,
+    /// the caller doesn't).</param>
     public static NenContract Seal(
         Guid id,
         string name,
@@ -129,7 +129,8 @@ public class NenContract : AggregateRoot
         ChangeWindow? changeWindow,
         bool allowCancellation,
         IReadOnlyDictionary<DateOnly, double> plannedFocusHoursByDay,
-        DateTime localSealedAt,
+        Moment sealedAt,
+        UserTimeZone timeZone,
         Guid? contractPresetId = null,
         ContractFloor? contractFloor = null,
         RedemptionPlacementPolicy redemptionPlacementPolicy = RedemptionPlacementPolicy.AnywhereInContract,
@@ -137,6 +138,8 @@ public class NenContract : AggregateRoot
     {
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Contract name cannot be empty.", nameof(name));
+
+        var localSealedAt = timeZone.ToCalendarTime(sealedAt);
 
         // The start may be "right now" — measured to the minute, since the current moment
         // always carries seconds and an exact comparison could never pass.
@@ -184,7 +187,7 @@ public class NenContract : AggregateRoot
         };
         contract.SetCalendar(calendar);
 
-        contract.Raise(new NenContractSealedEvent(id, contract.Name, contract.StartDate, contract.EndDate, localSealedAt));
+        contract.Raise(new NenContractSealedEvent(id, contract.Name, contract.StartDate, contract.EndDate, sealedAt));
 
         return contract;
     }
@@ -249,7 +252,7 @@ public class NenContract : AggregateRoot
     public bool Covers(DateTime localMoment)
         => localMoment >= StartsAt && localMoment < EndsAt;
 
-    public void Activate(DateTime activatedAt)
+    public void Activate(Moment activatedAt)
     {
         if (Status != NenContractStatus.Scheduled)
             throw new InvalidOperationException("Only a scheduled contract can be activated.");
@@ -258,7 +261,7 @@ public class NenContract : AggregateRoot
         Raise(new NenContractActivatedEvent(Id, activatedAt));
     }
 
-    public void Complete(DateTime completedAt)
+    public void Complete(Moment completedAt)
     {
         if (Status != NenContractStatus.Active)
             throw new InvalidOperationException("Only an active contract can be completed.");
@@ -278,7 +281,7 @@ public class NenContract : AggregateRoot
             : reflection.Trim();
     }
 
-    public void MarkPostContractAcknowledged(DateTime acknowledgedAt)
+    public void MarkPostContractAcknowledged(Moment acknowledgedAt)
     {
         if (Status != NenContractStatus.Completed && Status != NenContractStatus.Broken)
             throw new InvalidOperationException(
@@ -293,7 +296,7 @@ public class NenContract : AggregateRoot
     // flag; until Strict Mode exists, every in-effect contract can be broken regardless of
     // AllowCancellation. AllowCancellation itself is kept (still stored, still
     // user-configurable in Advanced) so Strict Mode has a real value to read once it lands.
-    public void Break(DateTime localBrokenAt)
+    public void Break(Moment brokenAt, UserTimeZone timeZone)
     {
         if (!IsInEffect)
             throw new InvalidOperationException("Only a contract that is still in effect (Scheduled or Active) can be broken.");
@@ -305,10 +308,10 @@ public class NenContract : AggregateRoot
         // clean up a bad day. OriginalEndDate (set once at Seal) keeps the originally-planned
         // range for the recap. Never shrinks below the first day — breaking a Scheduled
         // contract before it started keeps its first day.
-        SetCalendar(_calendar.EndingOn(DateOnly.FromDateTime(localBrokenAt)));
+        SetCalendar(_calendar.EndingOn(timeZone.DateOf(brokenAt)));
 
         Status = NenContractStatus.Broken;
-        Raise(new NenContractBrokenEvent(Id, localBrokenAt));
+        Raise(new NenContractBrokenEvent(Id, brokenAt));
     }
 
     /// <summary>
@@ -387,21 +390,23 @@ public class NenContract : AggregateRoot
     }
 
     /// <summary>
-    /// Whether a block spanning [localStart, localEnd) may be placed under this contract,
-    /// per each day it touches' own window — walked day-by-day so a block spanning midnight
-    /// is checked against both days' windows independently. Every contract day has a
-    /// window (a full day when there are no Work Hours), so day 1 before the contract's
-    /// start and the last day after its end are outside. Dates outside the contract are
-    /// not this method's concern. Callers must pass already-local-converted times.
+    /// Whether a block occupying <paramref name="slot"/> may be placed under this contract,
+    /// per each day it touches' own window — cut at the user's local midnights so a block
+    /// spanning midnight is checked against both days' windows independently. Every contract
+    /// day has a window (a full day when there are no Work Hours), so day 1 before the
+    /// contract's start and the last day after its end are outside. Dates outside the
+    /// contract are not this method's concern. The time zone does the local conversion
+    /// (Gap 88) — callers no longer convert first.
     /// </summary>
-    public bool AllowsBlockPlacement(DateTime localStart, DateTime localEnd)
+    public bool AllowsBlockPlacement(TimeSlot slot, UserTimeZone timeZone)
     {
-        foreach (var (date, segmentStart, segmentEnd) in DayRangeSplitter.Split(localStart, localEnd))
+        foreach (var (date, part) in timeZone.SplitByDay(slot))
         {
             var day = _calendar.DayOn(date);
             if (day is null) continue;
 
-            if (!day.Contains(segmentStart, segmentEnd))
+            var (localStart, localEnd) = timeZone.ToCalendarTimes(part);
+            if (!day.Contains(localStart, localEnd))
                 return false;
         }
         return true;

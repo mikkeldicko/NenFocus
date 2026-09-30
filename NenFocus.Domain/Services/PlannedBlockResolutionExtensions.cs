@@ -1,4 +1,5 @@
 using NenFocus.Domain.Entities;
+using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Domain.Services;
 
@@ -16,7 +17,7 @@ public static class PlannedBlockResolutionExtensions
     /// "is this live right now" check. A BackgroundBlock has no ritual/session to account
     /// for, so it falls back to the unchanged, already-correct HasEnded.
     /// </summary>
-    public static bool IsResolved(this PlannedBlock block, IFocusBlockOutcomeClassifier classifier, DateTime asOf)
+    public static bool IsResolved(this PlannedBlock block, IFocusBlockOutcomeClassifier classifier, Moment asOf)
         => block is FocusBlock fb
             ? classifier.Classify(fb, asOf) is not null
             : block.HasEnded(asOf);

@@ -19,8 +19,8 @@ public class SaveReflectionCommandHandlerTests
         var session = Session.Create(
             Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(30)),
             Guid.NewGuid(), SessionOrigin.Spontaneous);
-        session.Start(DateTime.UtcNow.AddMinutes(-30));
-        session.Complete(DateTime.UtcNow);
+        session.Start(At.Utc(DateTime.UtcNow.AddMinutes(-30)));
+        session.Complete(At.Utc(DateTime.UtcNow));
         return session;
     }
 
@@ -56,7 +56,7 @@ public class SaveReflectionCommandHandlerTests
             Guid.NewGuid(), new SessionGoal("(missed — no goal set)"), new SessionDuration(TimeSpan.FromMinutes(30)),
             Guid.NewGuid(), SessionOrigin.Planned, originatingBlockId: Guid.NewGuid());
         var scheduledStart = DateTime.UtcNow.AddHours(-2);
-        session.Miss(scheduledStart, scheduledStart.AddMinutes(30));
+        session.Miss(new TimeSlot(At.Utc(scheduledStart), At.Utc(scheduledStart.AddMinutes(30))));
         _sessions.GetByIdAsync(session.Id, Arg.Any<CancellationToken>()).Returns(session);
 
         var result = await CreateHandler().HandleAsync(
@@ -73,7 +73,7 @@ public class SaveReflectionCommandHandlerTests
         var session = Session.Create(
             Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(30)),
             Guid.NewGuid(), SessionOrigin.Spontaneous);
-        session.Start(DateTime.UtcNow.AddMinutes(-5));
+        session.Start(At.Utc(DateTime.UtcNow.AddMinutes(-5)));
         _sessions.GetByIdAsync(session.Id, Arg.Any<CancellationToken>()).Returns(session);
 
         var result = await CreateHandler().HandleAsync(

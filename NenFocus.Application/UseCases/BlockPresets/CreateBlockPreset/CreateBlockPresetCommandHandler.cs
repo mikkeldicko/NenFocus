@@ -28,7 +28,7 @@ public sealed class CreateBlockPresetCommandHandler
         BlockPreset preset;
         try
         {
-            preset = BlockPreset.Create(Guid.NewGuid(), command.Name, command.WebsiteFilterType, command.PresetType, _clock.UtcNow, command.Tags.ToList());
+            preset = BlockPreset.Create(Guid.NewGuid(), command.Name, command.WebsiteFilterType, command.PresetType, _clock.Now, command.Tags.ToList());
 
             foreach (var appName in command.BlockedApps)
                 preset.AddBlockedApp(new BlockedApp(appName));

@@ -1,4 +1,5 @@
 using FluentAssertions;
+using NenFocus.Domain.ValueObjects;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.UseCases.Sessions.MarkFocusBlockMissed;
 using NenFocus.Domain.Entities;
@@ -34,10 +35,10 @@ public class MarkFocusBlockMissedCommandHandlerTests
     public async Task HandleAsync_HappyPath_CreatesMissedSessionFromBlockSchedule()
     {
         var presetId = Guid.NewGuid();
-        var block = FocusBlock.Create(Guid.NewGuid(), presetId, Start, End);
+        var block = FocusBlock.Create(Guid.NewGuid(), presetId,At.Slot(Start, End));
         _blocks.GetByIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns(block);
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Start));
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Start)));
 
         var result = await CreateHandler().HandleAsync(new MarkFocusBlockMissedCommand { FocusBlockId = block.Id });
 
@@ -50,8 +51,8 @@ public class MarkFocusBlockMissedCommandHandlerTests
                 s.OriginatingBlockId == block.Id &&
                 s.BlockPresetId == presetId &&
                 s.Status == SessionStatus.Missed &&
-                s.StartedAt == Start &&
-                s.EndedAt == End &&
+                s.StartedAt == At.Utc(Start) &&
+                s.EndedAt == At.Utc(End) &&
                 s.Duration.Value == TimeSpan.FromHours(1) &&
                 s.Goal.Value == "(missed — no goal set)"),
             Arg.Any<CancellationToken>());
@@ -59,8 +60,8 @@ public class MarkFocusBlockMissedCommandHandlerTests
         result.PostSession.Should().NotBeNull();
         result.PostSession!.Status.Should().Be(SessionStatus.Missed);
         result.PostSession.PresetName.Should().Be("Deep Work");
-        result.PostSession.StartedAt.Should().Be(Start);
-        result.PostSession.EndedAt.Should().Be(End);
+        result.PostSession.StartedAt.Should().Be(At.Utc(Start));
+        result.PostSession.EndedAt.Should().Be(At.Utc(End));
         result.PostSession.PlannedDurationMinutes.Should().Be(60);
         result.PostSession.ActualDurationMinutes.Should().Be(0);
         result.PostSession.BreaksTaken.Should().Be(0);
@@ -70,7 +71,7 @@ public class MarkFocusBlockMissedCommandHandlerTests
     public async Task HandleAsync_PresetNotFound_PostSessionHasBlankPresetName()
     {
         var presetId = Guid.NewGuid();
-        var block = FocusBlock.Create(Guid.NewGuid(), presetId, Start, End);
+        var block = FocusBlock.Create(Guid.NewGuid(), presetId,At.Slot(Start, End));
         _blocks.GetByIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns(block);
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
             .Returns((BlockPreset?)null);

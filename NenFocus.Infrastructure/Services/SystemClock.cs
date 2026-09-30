@@ -17,21 +17,12 @@ public sealed class SystemClock : ISystemClock, IDebugClockController, IDisposab
     private readonly Timer _tickTimer;
     private TimeSpan _offset = TimeSpan.Zero;
 
-    public DateTime UtcNow => DateTime.UtcNow + _offset;
-
-    public Moment Now => Moment.FromStorage(UtcNow);
+    public Moment Now => Moment.FromStorage(DateTime.UtcNow + _offset);
 
     // The one place the machine's zone is read (architecture test). Read on each call, like
     // ToLocalTime did, so it follows the same cached TimeZoneInfo.Local.
     public UserTimeZone TimeZone => new(TimeZoneInfo.Local);
     public bool IsOverridden => _offset != TimeSpan.Zero;
-
-    public DateTime ToLocal(DateTime utc) => utc.ToLocalTime();
-
-    // SpecifyKind: a local value computed from a contract window or date arithmetic may carry
-    // Kind.Unspecified, and ToUniversalTime would leave a Kind.Utc value unconverted.
-    // ToUniversalTime never throws on a DST-skipped local time, unlike ConvertTimeToUtc.
-    public DateTime ToUtc(DateTime local) => DateTime.SpecifyKind(local, DateTimeKind.Local).ToUniversalTime();
 
     public event EventHandler? Changed;
 

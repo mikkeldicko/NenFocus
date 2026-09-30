@@ -13,11 +13,11 @@ public class AcknowledgePostSessionCommandHandlerTests
     private static readonly DateTime Now = new(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
 
     private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
-    private readonly ISystemClock _clock = Substitute.For<ISystemClock>();
+    private readonly ISystemClock _clock = TestClock.Create();
 
     public AcknowledgePostSessionCommandHandlerTests()
     {
-        _clock.UtcNow.Returns(Now);
+        _clock.SetNow(Now);
     }
 
     private AcknowledgePostSessionCommandHandler CreateHandler() => new(_sessions, _clock);
@@ -27,8 +27,8 @@ public class AcknowledgePostSessionCommandHandlerTests
         var session = Session.Create(
             Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(30)),
             Guid.NewGuid(), SessionOrigin.Spontaneous);
-        session.Start(Now.AddMinutes(-30));
-        session.Complete(Now);
+        session.Start(At.Utc(Now.AddMinutes(-30)));
+        session.Complete(At.Utc(Now));
         return session;
     }
 
@@ -52,7 +52,7 @@ public class AcknowledgePostSessionCommandHandlerTests
         var result = await CreateHandler().HandleAsync(new AcknowledgePostSessionCommand { SessionId = session.Id });
 
         result.Success.Should().BeTrue();
-        session.PostSessionAcknowledgedAt.Should().Be(Now);
+        session.PostSessionAcknowledgedAt.Should().Be(At.Utc(Now));
         await _sessions.Received(1).SaveAsync(session, Arg.Any<CancellationToken>());
     }
 
@@ -63,13 +63,13 @@ public class AcknowledgePostSessionCommandHandlerTests
             Guid.NewGuid(), new SessionGoal("(missed — no goal set)"), new SessionDuration(TimeSpan.FromMinutes(30)),
             Guid.NewGuid(), SessionOrigin.Planned, originatingBlockId: Guid.NewGuid());
         var scheduledStart = Now.AddHours(-2);
-        session.Miss(scheduledStart, scheduledStart.AddMinutes(30));
+        session.Miss(new TimeSlot(At.Utc(scheduledStart), At.Utc(scheduledStart.AddMinutes(30))));
         _sessions.GetByIdAsync(session.Id, Arg.Any<CancellationToken>()).Returns(session);
 
         var result = await CreateHandler().HandleAsync(new AcknowledgePostSessionCommand { SessionId = session.Id });
 
         result.Success.Should().BeTrue();
-        session.PostSessionAcknowledgedAt.Should().Be(Now);
+        session.PostSessionAcknowledgedAt.Should().Be(At.Utc(Now));
     }
 
     [Fact]
@@ -78,7 +78,7 @@ public class AcknowledgePostSessionCommandHandlerTests
         var session = Session.Create(
             Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(30)),
             Guid.NewGuid(), SessionOrigin.Spontaneous);
-        session.Start(Now.AddMinutes(-5));
+        session.Start(At.Utc(Now.AddMinutes(-5)));
         _sessions.GetByIdAsync(session.Id, Arg.Any<CancellationToken>()).Returns(session);
 
         var result = await CreateHandler().HandleAsync(new AcknowledgePostSessionCommand { SessionId = session.Id });

@@ -1,4 +1,5 @@
 ﻿using NenFocus.Domain.Enums;
+using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Domain.Entities;
 
@@ -19,7 +20,7 @@ public class BlockedAttempt
     /// UTC timestamp of when the attempt occurred.
     /// Passed in by the caller — domain never touches the clock.
     /// </summary>
-    public DateTime OccurredAt { get; private set; }
+    public Moment OccurredAt { get; private set; }
 
     private BlockedAttempt() { } // EF Core
 
@@ -28,7 +29,7 @@ public class BlockedAttempt
         Guid sessionId,
         string resourceName,
         BlockedAttemptType attemptType,
-        DateTime occurredAt)
+        Moment occurredAt)
     {
         if (string.IsNullOrWhiteSpace(resourceName))
             throw new ArgumentException(

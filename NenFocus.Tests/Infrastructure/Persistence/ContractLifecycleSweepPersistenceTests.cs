@@ -29,13 +29,14 @@ public class ContractLifecycleSweepPersistenceTests : SqliteRepositoryTestBase
         changeWindow: null,
         allowCancellation: true,
         plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-        localSealedAt: Tomorrow.AddDays(-1).ToDateTime(new TimeOnly(16, 38)));
+        sealedAt: At.Utc(Tomorrow.AddDays(-1).ToDateTime(new TimeOnly(16, 38))), timeZone: At.UtcZone);
 
     private async Task<NenContractStatus> SweepAtAsync(DateTime localNow)
     {
-        var clock = Substitute.For<ISystemClock>();
-        clock.UtcNow.Returns(localNow);
-        clock.ToLocal(Arg.Any<DateTime>()).Returns(ci => ci.Arg<DateTime>());
+        var clock = TestClock.Create();
+        clock.SetNow(localNow);
+        clock.SetTimeZoneOffset(TimeSpan.Zero);
+        clock.SetTimeZoneOffset(TimeSpan.Zero);
 
         await using var sweepContext = CreateFreshContext();
         var handler = new SweepNenContractLifecycleCommandHandler(new NenContractRepository(sweepContext), clock);

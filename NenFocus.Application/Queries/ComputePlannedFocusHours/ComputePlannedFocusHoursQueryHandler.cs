@@ -1,6 +1,7 @@
 using NenFocus.Application.Interfaces;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Services;
+using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Application.Queries.ComputePlannedFocusHours;
 
@@ -22,24 +23,20 @@ public sealed class ComputePlannedFocusHoursQueryHandler
         ComputePlannedFocusHoursQuery query,
         CancellationToken ct = default)
     {
-        var ranges = new List<(DateTime Start, DateTime End)>();
+        var focusTime = new List<TimeSlot>();
 
         if (query.ContractId.HasValue)
         {
             var persisted = await _blocks.GetForContractAsync(query.ContractId.Value, ct);
-            ranges.AddRange(persisted
+            focusTime.AddRange(persisted
                 .OfType<FocusBlock>()
                 .Where(b => b.Id != query.ExcludeBlockId)
-                .Select(b => (b.Start, b.End)));
+                .Select(b => b.Scheduled));
         }
 
-        ranges.AddRange(query.DraftFocusBlockRanges);
+        focusTime.AddRange(query.DraftFocusBlockRanges);
 
-        // Calculator buckets by calendar day off whatever it's given — convert to local
-        // here so "which day" always means the user's local day, not the UTC day these
-        // ranges are stored/passed in as.
-        var localRanges = ranges.Select(r => (_clock.ToLocal(r.Start), _clock.ToLocal(r.End)));
-
-        return _calculator.Calculate(localRanges);
+        // The time zone decides "which day" — the user's local day, in real hours (Gap 88).
+        return _calculator.Calculate(focusTime, _clock.TimeZone);
     }
 }

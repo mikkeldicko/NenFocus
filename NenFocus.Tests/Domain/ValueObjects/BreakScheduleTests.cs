@@ -40,6 +40,18 @@ public class BreakScheduleTests
         act.Should().Throw<ArgumentException>();
     }
 
+    [Fact]
+    public void SessionBreak_RemainingAt_IsTheTimeLeftInTheBreak()
+        => Short(25, 30).RemainingAt(M(27)).Should().Be(M(3));
+
+    [Fact]
+    public void SessionBreak_ProgressAt_IsTheFractionPassed_HeldBetweenZeroAndOne()
+    {
+        Short(25, 30).ProgressAt(M(26)).Should().BeApproximately(0.2, 1e-9);
+        Short(25, 30).ProgressAt(M(20)).Should().Be(0.0);
+        Short(25, 30).ProgressAt(M(40)).Should().Be(1.0);
+    }
+
     // ── BreakSchedule invariants ─────────────────────────────────────────────
 
     [Fact]

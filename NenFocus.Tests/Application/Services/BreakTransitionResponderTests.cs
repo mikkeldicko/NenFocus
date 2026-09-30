@@ -1,4 +1,5 @@
 using NenFocus.Application.Interfaces;
+using TestAt = NenFocus.Tests.At;
 using NenFocus.Application.Notifications;
 using NenFocus.Application.Services;
 using NenFocus.Domain.Enums;
@@ -25,11 +26,11 @@ public class BreakTransitionResponderTests
     [Fact]
     public async Task RespondAsync_BreakStarted_SyncsEnforcementThenReportsBreakStarted()
     {
-        await CreateResponder().RespondAsync([Started()], At, keepBlockingDuringBreaks: false);
+        await CreateResponder().RespondAsync([Started()], TestAt.Utc(At), keepBlockingDuringBreaks: false);
 
         Received.InOrder(() =>
         {
-            _synchronizer.SyncAsync(At, Arg.Any<CancellationToken>());
+            _synchronizer.SyncAsync(TestAt.Utc(At), Arg.Any<CancellationToken>());
             _notifier.NotifyAsync(new BreakStarted(IsLong: false, KeepsBlocking: false), Arg.Any<CancellationToken>());
         });
     }
@@ -37,7 +38,7 @@ public class BreakTransitionResponderTests
     [Fact]
     public async Task RespondAsync_LongBreakStarted_ReportsLongBreak()
     {
-        await CreateResponder().RespondAsync([Started(SessionPhaseKind.LongBreak)], At, keepBlockingDuringBreaks: false);
+        await CreateResponder().RespondAsync([Started(SessionPhaseKind.LongBreak)], TestAt.Utc(At), keepBlockingDuringBreaks: false);
 
         await _notifier.Received(1).NotifyAsync(
             new BreakStarted(IsLong: true, KeepsBlocking: false), Arg.Any<CancellationToken>());
@@ -46,7 +47,7 @@ public class BreakTransitionResponderTests
     [Fact]
     public async Task RespondAsync_BreakStarted_KeepBlocking_ReportsItKeepsBlocking()
     {
-        await CreateResponder().RespondAsync([Started()], At, keepBlockingDuringBreaks: true);
+        await CreateResponder().RespondAsync([Started()], TestAt.Utc(At), keepBlockingDuringBreaks: true);
 
         await _notifier.Received(1).NotifyAsync(
             new BreakStarted(IsLong: false, KeepsBlocking: true), Arg.Any<CancellationToken>());
@@ -55,9 +56,9 @@ public class BreakTransitionResponderTests
     [Fact]
     public async Task RespondAsync_BreakEnded_SyncsAndReportsBreakEnded()
     {
-        await CreateResponder().RespondAsync([Ended()], At, keepBlockingDuringBreaks: false);
+        await CreateResponder().RespondAsync([Ended()], TestAt.Utc(At), keepBlockingDuringBreaks: false);
 
-        await _synchronizer.Received(1).SyncAsync(At, Arg.Any<CancellationToken>());
+        await _synchronizer.Received(1).SyncAsync(TestAt.Utc(At), Arg.Any<CancellationToken>());
         await _notifier.Received(1).NotifyAsync(new BreakEnded(), Arg.Any<CancellationToken>());
     }
 
@@ -65,9 +66,9 @@ public class BreakTransitionResponderTests
     public async Task RespondAsync_WholeBreakCrossedAtOnce_SyncsOnceAndOnlyAnnouncesWhereTheSessionIsNow()
     {
         // Laptop slept through the entire break: "Break time" would be stale.
-        await CreateResponder().RespondAsync([Started(), Ended()], At, keepBlockingDuringBreaks: false);
+        await CreateResponder().RespondAsync([Started(), Ended()], TestAt.Utc(At), keepBlockingDuringBreaks: false);
 
-        await _synchronizer.Received(1).SyncAsync(At, Arg.Any<CancellationToken>());
+        await _synchronizer.Received(1).SyncAsync(TestAt.Utc(At), Arg.Any<CancellationToken>());
         await _notifier.Received(1).NotifyAsync(Arg.Any<NenNotification>(), Arg.Any<CancellationToken>());
         await _notifier.Received(1).NotifyAsync(new BreakEnded(), Arg.Any<CancellationToken>());
     }
@@ -75,7 +76,7 @@ public class BreakTransitionResponderTests
     [Fact]
     public async Task RespondAsync_NoTransitions_DoesNothing()
     {
-        await CreateResponder().RespondAsync([], At, keepBlockingDuringBreaks: false);
+        await CreateResponder().RespondAsync([], TestAt.Utc(At), keepBlockingDuringBreaks: false);
 
         await _synchronizer.DidNotReceiveWithAnyArgs().SyncAsync(default);
         await _notifier.DidNotReceiveWithAnyArgs().NotifyAsync(default!);
