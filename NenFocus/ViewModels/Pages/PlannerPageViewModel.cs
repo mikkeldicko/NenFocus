@@ -226,7 +226,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     [ObservableProperty] private BlockPresetDto? _selectedPreset;
     [ObservableProperty] private bool _isEditingBlockStarted;
     [ObservableProperty] private bool _isEditingBlockContractLocked;
-    [ObservableProperty] private bool _isEditingBlockDailyFlexibility;
+    [ObservableProperty] private bool _isEditingBlockContractAllowsSplit;
     [ObservableProperty] private string? _dragError;
 
     [ObservableProperty] private bool _isSnapshotVisible;
@@ -689,8 +689,9 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     public DateTime SnapshotStart => SnapshotBlock is null ? default : _clock.TimeZone.ToCalendarTimes(SnapshotBlock.Shown).Start;
     public DateTime SnapshotEnd => SnapshotBlock is null ? default : _clock.TimeZone.ToCalendarTimes(SnapshotBlock.Shown).End;
 
-    // Mirrors SplitPlannedBlockValidator's gating conditions exactly — sourced from
-    // dto.IsUnderInEffectContract + dto.ContractStrictnessRule (Application-computed),
+    // Mirrors SplitPlannedBlockValidator's gating conditions — sourced from
+    // dto.IsUnderInEffectContract + dto.ContractStrictnessRule (any rule but Lockdown, as the
+    // validator; this copy used to say Daily Flex only — Gap 93 finding 1, fixed 2026-10-01),
     // IsEditingBlockStarted (only a block that hasn't started can be split — which also rules
     // out a ran session and the running session's own block), and IsFocusBlock (Split is
     // Focus-only — a Background block has no session and no Daily Floor relevance). The
@@ -703,7 +704,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     // CreatePlannedBlockCommands instead of SplitPlannedBlockCommand.
     public bool CanSplitBlock => _isCreatingRedemption || (
         IsEditing && !_editingIsDraft && IsFocusBlock
-        && IsEditingBlockContractLocked && IsEditingBlockDailyFlexibility
+        && IsEditingBlockContractLocked && IsEditingBlockContractAllowsSplit
         && !IsEditingBlockStarted);
 
     // Preset is locked to the deficit's own preset while creating a redemption block —
@@ -756,7 +757,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(CanSplitBlock));
     }
 
-    partial void OnIsEditingBlockDailyFlexibilityChanged(bool value)
+    partial void OnIsEditingBlockContractAllowsSplitChanged(bool value)
     {
         OnPropertyChanged(nameof(CanSplitBlock));
     }
@@ -1389,7 +1390,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
             IsEditing = true;
             IsEditingBlockStarted = false;
             IsEditingBlockContractLocked = false;
-            IsEditingBlockDailyFlexibility = false;
+            IsEditingBlockContractAllowsSplit = false;
             FormTitle = "Edit Draft Block";
             ResetForm();
 
@@ -1424,7 +1425,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         IsEditing = true;
         IsEditingBlockStarted = dto.HasStarted;
         IsEditingBlockContractLocked = dto.IsUnderInEffectContract;
-        IsEditingBlockDailyFlexibility = dto.ContractStrictnessRule == StrictnessRule.DailyFlexibility;
+        IsEditingBlockContractAllowsSplit = dto.ContractStrictnessRule is { } strictness && strictness != StrictnessRule.Locked;
         FormTitle = "Edit Block";
         ResetForm();
 
@@ -1878,7 +1879,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         FormError = null;
         IsEditingBlockStarted = false;
         IsEditingBlockContractLocked = false;
-        IsEditingBlockDailyFlexibility = false;
+        IsEditingBlockContractAllowsSplit = false;
         IsSplitDialogVisible = false;
         SplitError = null;
         _editingBlockId = null;
