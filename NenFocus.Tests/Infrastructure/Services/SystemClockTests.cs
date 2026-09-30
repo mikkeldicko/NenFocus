@@ -105,4 +105,26 @@ public class SystemClockTests
         Assert.Equal(expected, clock.ToUtc(DateTime.SpecifyKind(local, DateTimeKind.Unspecified)));
         Assert.Equal(expected, clock.ToUtc(DateTime.SpecifyKind(local, DateTimeKind.Utc)));
     }
+
+    [Fact]
+    public void Now_IsUtcNowAsAMoment_IncludingTheDebugOffset()
+    {
+        // Gap 88 phase 1: the Moment door must carry the same debug jump as UtcNow.
+        using var clock = new SystemClock();
+        clock.AdvanceBy(TimeSpan.FromDays(2));
+
+        var before = clock.UtcNow;
+        var now = clock.Now.ToStorage();
+        var after = clock.UtcNow;
+
+        Assert.InRange(now, before, after);
+    }
+
+    [Fact]
+    public void TimeZone_IsTheMachinesZone()
+    {
+        using var clock = new SystemClock();
+
+        Assert.Equal(new NenFocus.Domain.ValueObjects.UserTimeZone(TimeZoneInfo.Local), clock.TimeZone);
+    }
 }

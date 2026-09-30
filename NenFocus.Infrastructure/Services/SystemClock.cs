@@ -1,4 +1,5 @@
 using NenFocus.Application.Interfaces;
+using NenFocus.Domain.ValueObjects;
 using System.Timers;
 using Timer = System.Timers.Timer;
 
@@ -17,6 +18,12 @@ public sealed class SystemClock : ISystemClock, IDebugClockController, IDisposab
     private TimeSpan _offset = TimeSpan.Zero;
 
     public DateTime UtcNow => DateTime.UtcNow + _offset;
+
+    public Moment Now => Moment.FromStorage(UtcNow);
+
+    // The one place the machine's zone is read (architecture test). Read on each call, like
+    // ToLocalTime did, so it follows the same cached TimeZoneInfo.Local.
+    public UserTimeZone TimeZone => new(TimeZoneInfo.Local);
     public bool IsOverridden => _offset != TimeSpan.Zero;
 
     public DateTime ToLocal(DateTime utc) => utc.ToLocalTime();

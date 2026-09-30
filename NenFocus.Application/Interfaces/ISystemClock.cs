@@ -1,7 +1,23 @@
+using NenFocus.Domain.ValueObjects;
+
 namespace NenFocus.Application.Interfaces;
 
+/// <summary>
+/// The one source of "now" and of the user's time zone. Gap 88 moves it to two members —
+/// <see cref="Now"/> and <see cref="TimeZone"/>; <see cref="UtcNow"/>, <see cref="ToLocal"/> and
+/// <see cref="ToUtc"/> stay beside them while callers convert, and are deleted in phase 6.
+/// </summary>
 public interface ISystemClock
 {
+    /// <summary>The current moment. Replaces <see cref="UtcNow"/> (Gap 88).</summary>
+    Moment Now { get; }
+
+    /// <summary>
+    /// The user's time zone — every moment ↔ calendar-time conversion goes through it.
+    /// Replaces <see cref="ToLocal"/>/<see cref="ToUtc"/> (Gap 88).
+    /// </summary>
+    UserTimeZone TimeZone { get; }
+
     DateTime UtcNow { get; }
 
     /// <summary>

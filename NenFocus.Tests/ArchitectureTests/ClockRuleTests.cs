@@ -29,4 +29,21 @@ public class ClockRuleTests
 
         KnownExceptions.Check(violations, Exceptions);
     }
+
+    private static readonly Regex MachineZoneRead = new(@"\bTimeZoneInfo\s*\.\s*Local\b");
+
+    /// <summary>
+    /// The user's time zone comes from ISystemClock.TimeZone (Gap 88). Reading the machine's zone
+    /// anywhere else would be a second source — and code a test can't run under a fixed zone.
+    /// </summary>
+    [Fact]
+    public void OnlySystemClockReadsTheMachineTimeZone()
+    {
+        var violations = SourceCode
+            .Files("NenFocus.Domain", "NenFocus.Application", "NenFocus.Infrastructure", "NenFocus")
+            .Where(f => f.Path != Home && MachineZoneRead.IsMatch(f.Code))
+            .Select(f => f.Path);
+
+        KnownExceptions.Check(violations, []);
+    }
 }

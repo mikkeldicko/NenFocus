@@ -32,6 +32,21 @@ public class NenFocusDbContext : DbContext
         configurationBuilder
             .Properties<DateTime?>()
             .HaveConversion<NullableUtcDateTimeConverter>();
+
+        // Gap 88: a Moment is stored as the same UTC DateTime column as today — no migration.
+        configurationBuilder
+            .Properties<Moment>()
+            .HaveConversion<MomentConverter>();
+    }
+
+    private class MomentConverter : ValueConverter<Moment, DateTime>
+    {
+        public MomentConverter()
+            : base(
+                v => v.ToStorage(),
+                v => Moment.FromStorage(DateTime.SpecifyKind(v, DateTimeKind.Utc)))
+        {
+        }
     }
 
     private class UtcDateTimeConverter : ValueConverter<DateTime, DateTime>
