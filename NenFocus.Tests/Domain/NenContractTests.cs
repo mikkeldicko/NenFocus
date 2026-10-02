@@ -43,7 +43,7 @@ public class NenContractTests
     {
         var rule = floorRule ?? (contractFloor is not null ? new DailyFloorRule.None() : new DailyFloorRule.Fixed(new DailyFloor(4)));
         var plan = plannedFocusHoursByDay ?? FullyPlanned();
-        return NenContract.Seal(
+        return TestContracts.Seal(
             id: Guid.NewGuid(),
             name: "Focused January",
             goal: new NenContractGoal("Ship the feature"),
@@ -84,7 +84,7 @@ public class NenContractTests
     [Fact]
     public void Seal_BlankName_Throws()
     {
-        var act = () => NenContract.Seal(
+        var act = () => TestContracts.Seal(
             id: Guid.NewGuid(),
             name: "   ",
             goal: new NenContractGoal("Goal"),
@@ -637,7 +637,9 @@ public class NenContractTests
     [Fact]
     public void Seal_FloorRuleNoneButADayHasAFloor_Throws()
     {
+        // "No daily floors" only exists under Period Time Budget with no fixed floor (Gap 93).
         var act = () => Seal(
+            strictnessRule: StrictnessRule.PeriodTimeBudget,
             floorRule: new DailyFloorRule.None(),
             calendar: TestCalendars.For(StartDate, EndDate, new DailyFloorRule.Fixed(new DailyFloor(2))));
 
@@ -990,63 +992,6 @@ public class NenContractTests
         var contract = Seal(floorRule: new DailyFloorRule.Fixed(new DailyFloor(4)), restDays: [StartDate]);
 
         contract.FloorHoursFor(StartDate).Should().BeNull();
-    }
-
-    [Fact]
-    public void AllowsBlockTimeChange_Locked_NeverAllowed()
-    {
-        var contract = Seal(strictnessRule: StrictnessRule.Locked);
-
-        contract.AllowsBlockTimeChange(StartDate, StartDate, StartDate).Should().BeFalse();
-    }
-
-    [Fact]
-    public void AllowsBlockTimeChange_DailyFlexibility_SameDayAllowed()
-    {
-        var contract = Seal(strictnessRule: StrictnessRule.DailyFlexibility);
-
-        contract.AllowsBlockTimeChange(StartDate, StartDate, StartDate).Should().BeTrue();
-    }
-
-    [Fact]
-    public void AllowsBlockTimeChange_DailyFlexibility_DifferentStartDayNotAllowed()
-    {
-        var contract = Seal(strictnessRule: StrictnessRule.DailyFlexibility);
-
-        contract.AllowsBlockTimeChange(StartDate, StartDate.AddDays(1), StartDate.AddDays(1)).Should().BeFalse();
-    }
-
-    [Fact]
-    public void AllowsBlockTimeChange_DailyFlexibility_SpanningIntoNextDayNotAllowed()
-    {
-        var contract = Seal(strictnessRule: StrictnessRule.DailyFlexibility);
-
-        // Starts on the original day but the (resized) end crosses into the next day.
-        contract.AllowsBlockTimeChange(StartDate, StartDate, StartDate.AddDays(1)).Should().BeFalse();
-    }
-
-    [Fact]
-    public void AllowsBlockTimeChange_PeriodTimeBudget_WithinContractRangeAllowed()
-    {
-        var contract = Seal(strictnessRule: StrictnessRule.PeriodTimeBudget);
-
-        contract.AllowsBlockTimeChange(StartDate, StartDate.AddDays(2), StartDate.AddDays(3)).Should().BeTrue();
-    }
-
-    [Fact]
-    public void AllowsBlockTimeChange_PeriodTimeBudget_BeforeContractStartNotAllowed()
-    {
-        var contract = Seal(strictnessRule: StrictnessRule.PeriodTimeBudget);
-
-        contract.AllowsBlockTimeChange(StartDate, StartDate.AddDays(-1), StartDate).Should().BeFalse();
-    }
-
-    [Fact]
-    public void AllowsBlockTimeChange_PeriodTimeBudget_AfterContractEndNotAllowed()
-    {
-        var contract = Seal(strictnessRule: StrictnessRule.PeriodTimeBudget);
-
-        contract.AllowsBlockTimeChange(StartDate, EndDate, EndDate.AddDays(1)).Should().BeFalse();
     }
 
     // ── ContractFloor ────────────────────────────────────────────────────────────

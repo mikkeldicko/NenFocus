@@ -65,24 +65,20 @@ public sealed class EditNenContractCommandHandler : ICommandHandler<EditNenContr
 
         var now = _clock.Now;
 
-        // Mirrors SealNenContractCommandHandler's identical branch exactly — see its
-        // comment for the Period Time Budget / ContractFloor rationale.
-        DailyFloorRule floorRule;
-        ContractFloor? contractFloor = null;
+        var rules = new ContractRules(
+            command.StrictnessRule,
+            command.FixedDailyFloorHours is { } fixedHours ? new DailyFloor(fixedHours) : null,
+            command.AllowCancellation,
+            command.KeepBlockingDuringBreaks,
+            command.RedemptionPlacementPolicy,
+            command.BonusBlocksFollowStrictness);
 
-        if (command.FixedDailyFloorHours is { } fixedHours)
-        {
-            floorRule = new DailyFloorRule.Fixed(new DailyFloor(fixedHours));
-        }
-        else if (command.StrictnessRule == StrictnessRule.PeriodTimeBudget)
-        {
-            floorRule = new DailyFloorRule.None();
-            contractFloor = new ContractFloor(preparation.PlannedFocusHoursByDay.Values.Sum());
-        }
-        else
-        {
-            floorRule = new DailyFloorRule.FollowsPlan();
-        }
+        // The rules say how days get their floor (ContractRules.FloorRule). With no per-day
+        // obligation, whatever was drafted becomes the committed whole-period target.
+        var floorRule = rules.FloorRule;
+        var contractFloor = floorRule is DailyFloorRule.None
+            ? new ContractFloor(preparation.PlannedFocusHoursByDay.Values.Sum())
+            : null;
 
         var workHours = command.WorkHoursStart is { } workHoursStart && command.WorkHoursEnd is { } workHoursEnd
             ? new WorkHours(workHoursStart, workHoursEnd)
@@ -108,18 +104,14 @@ public sealed class EditNenContractCommandHandler : ICommandHandler<EditNenContr
                 id: contractId,
                 name: command.Name,
                 goal: new NenContractGoal(command.Goal),
-                strictnessRule: command.StrictnessRule,
+                rules: rules,
                 calendar: calendar,
-                floorRule: floorRule,
                 changeWindow: null,
-                allowCancellation: command.AllowCancellation,
                 plannedFocusHoursByDay: preparation.PlannedFocusHoursByDay,
                 sealedAt: now,
                 timeZone: _clock.TimeZone,
                 contractPresetId: command.ContractPresetId,
-                contractFloor: contractFloor,
-                redemptionPlacementPolicy: command.RedemptionPlacementPolicy,
-                keepBlockingDuringBreaks: command.KeepBlockingDuringBreaks);
+                contractFloor: contractFloor);
         }
         catch (ArgumentException ex)
         {

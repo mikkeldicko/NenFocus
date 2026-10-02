@@ -14,6 +14,7 @@ public sealed record ContractPresetDto
     public bool AllowCancellation { get; init; }
     public RedemptionPlacementPolicy RedemptionPlacementPolicy { get; init; }
     public bool KeepBlockingDuringBreaks { get; init; }
+    public bool BonusBlocksFollowStrictness { get; init; }
 
     public static ContractPresetDto FromEntity(ContractPreset preset) => new()
     {
@@ -25,6 +26,7 @@ public sealed record ContractPresetDto
         WorkHoursEnd = preset.WorkHours?.End,
         AllowCancellation = preset.AllowCancellation,
         RedemptionPlacementPolicy = preset.RedemptionPlacementPolicy,
-        KeepBlockingDuringBreaks = preset.KeepBlockingDuringBreaks
+        KeepBlockingDuringBreaks = preset.KeepBlockingDuringBreaks,
+        BonusBlocksFollowStrictness = preset.Rules.BonusBlocksFollowStrictness
     };
 }

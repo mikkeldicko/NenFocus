@@ -17,7 +17,7 @@ public class GetInEffectNenContractsQueryHandlerTests
     // sealedAt defaults to well before start, so Seal() leaves the contract Scheduled
     // rather than auto-activating it (Status becomes Active only if sealedAt >= startDate).
     private static NenContract SealedContract(
-        string name, DateOnly start, DateOnly end, StrictnessRule rule = StrictnessRule.DailyFlexibility) => NenContract.Seal(
+        string name, DateOnly start, DateOnly end, StrictnessRule rule = StrictnessRule.DailyFlexibility) => TestContracts.Seal(
             id: Guid.NewGuid(),
             name: name,
             goal: new NenContractGoal("Goal"),
@@ -29,7 +29,7 @@ public class GetInEffectNenContractsQueryHandlerTests
             plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
             sealedAt: At.Utc(start.AddDays(-1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)), timeZone: At.UtcZone);
 
-    private static NenContract ActiveContract(string name, DateOnly start, DateOnly end) => NenContract.Seal(
+    private static NenContract ActiveContract(string name, DateOnly start, DateOnly end) => TestContracts.Seal(
         id: Guid.NewGuid(),
         name: name,
         goal: new NenContractGoal("Goal"),

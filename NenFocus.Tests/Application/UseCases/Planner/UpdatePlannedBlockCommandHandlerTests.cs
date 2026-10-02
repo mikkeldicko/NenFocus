@@ -41,7 +41,8 @@ public class UpdatePlannedBlockCommandHandlerTests
             });
     }
 
-    private UpdatePlannedBlockCommandHandler CreateHandler() => new(_blocks, _presets, _contracts, _computeRedemptionAttribution, new BlockPlacementChecker(), _clock);
+    private UpdatePlannedBlockCommandHandler CreateHandler() => new(_blocks, _presets, _contracts, _computeRedemptionAttribution, new BlockPlacementChecker(),
+        new BlockChangeChecker(new PlannedFocusHoursCalculator()), _clock);
 
     private static UpdatePlannedBlockCommand ValidCommand(Guid blockId, Guid presetId) => new()
     {
@@ -174,7 +175,7 @@ public class UpdatePlannedBlockCommandHandlerTests
     /// <summary>A contract in effect covering the whole of 2–9 January — the command's slot is inside it.</summary>
     private Guid SetUpContractAroundTheSlot()
     {
-        var contract = NenContract.Seal(
+        var contract = TestContracts.Seal(
             id: Guid.NewGuid(),
             name: "Contract",
             goal: new NenContractGoal("Goal"),
@@ -186,6 +187,7 @@ public class UpdatePlannedBlockCommandHandlerTests
             plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
             sealedAt: At.Utc(Start.Date), timeZone: At.UtcZone);
         _contracts.GetAllInEffectAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<NenContract>)[contract]);
+        _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
         return contract.Id;
     }
 
@@ -213,16 +215,18 @@ public class UpdatePlannedBlockCommandHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_BonusBlockMovedOutOfItsContract_BecomesAPlainBlock()
+    public async Task HandleAsync_ABonusBlock_StaysItsContractsBlock_WhereverTheSlotIs()
     {
         var contractId = SetUpContractAroundTheSlot();
         var presetId = Guid.NewGuid();
         var block = SetUpBlock(At.Slot(Start, End), TestContracts.Bonus(contractId), presetId);
         var afterTheContract = At.Slot(Start.AddDays(20), End.AddDays(20));
 
+        // The validator refuses a move out of the contract's period (Gap 93); the handler never
+        // ends a membership as a side effect of a move.
         await CreateHandler().HandleAsync(ValidCommand(block.Id, presetId) with { Slot = afterTheContract });
 
-        block.Membership.Should().BeNull();
+        block.Membership.Should().Be(TestContracts.Bonus(contractId));
     }
 
     [Fact]
@@ -250,7 +254,7 @@ public class UpdatePlannedBlockCommandHandlerTests
     {
         var blockId = Guid.NewGuid();
         var presetId = Guid.NewGuid();
-        var contractId = Guid.NewGuid();
+        var contractId = SetUpContractAroundTheSlot();
         var block = FocusBlock.Create(blockId, presetId,At.Slot(Start, End), membership: TestContracts.Redemption(contractId),
             redemptionEntries: [new RedemptionEntry(Guid.NewGuid(), 60)]);
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns(block);
@@ -286,5 +290,37 @@ public class UpdatePlannedBlockCommandHandlerTests
 
         result.RedemptionCapped.Should().BeFalse();
         block.Scheduled.Should().Be(At.Slot(Start, Start.AddMinutes(30)));
+    }
+
+    [Fact]
+    public async Task HandleAsync_RedemptionBlock_CappedBelowItsDaysFloor_FailsAndSavesNothing()
+    {
+        // The validator approved the slot the user asked for; attribution then shortened it. The
+        // permission answer must hold for the slot that is saved (Design Review Rule 12).
+        var rules = TestRules.Of(StrictnessRule.DailyFlexibility, new DailyFloor(1));
+        var days = Enumerable.Range(0, 8).ToDictionary(i => DateOnly.FromDateTime(Start).AddDays(i), _ => 1.0);
+        var contract = NenContract.Seal(Guid.NewGuid(), "Contract", new NenContractGoal("Goal"), rules,
+            TestCalendars.For(DateOnly.FromDateTime(Start), DateOnly.FromDateTime(Start).AddDays(7), rules.FloorRule, days),
+            null, days, At.Utc(Start.Date), At.UtcZone);
+        _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
+        var presetId = Guid.NewGuid();
+        var block = FocusBlock.Create(Guid.NewGuid(), presetId, At.Slot(Start, End),
+            membership: contract.MembershipForPlacedBlock(claimsDeficit: true), redemptionEntries: [new RedemptionEntry(Guid.NewGuid(), 60)]);
+        var others = Enumerable.Range(1, 7).Select(day => (PlannedBlock)FocusBlock.Create(Guid.NewGuid(), presetId,
+            At.Slot(Start.AddDays(day), End.AddDays(day)), membership: TestContracts.Committed(contract.Id)));
+        _blocks.GetByIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns(block);
+        _blocks.GetForContractAsync(contract.Id, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block, .. others]);
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>()).Returns(FocusPreset(presetId));
+        _computeRedemptionAttribution
+            .HandleAsync(Arg.Any<ComputeRedemptionAttributionQuery>(), Arg.Any<CancellationToken>())
+            .Returns(new RedemptionAttributionResult([new(Guid.NewGuid(), 45)], At.Slot(Start, Start.AddMinutes(45)), true));
+
+        var result = await CreateHandler().HandleAsync(ValidCommand(block.Id, presetId) with { Slot = At.Slot(Start, Start.AddHours(2)) });
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Be("This would drop Jan 2's total below its 1h daily floor.");
+        block.Scheduled.Should().Be(At.Slot(Start, End));
+        block.RedemptionEntries.Should().ContainSingle(e => e.MinutesCovered == 60);
+        await _blocks.DidNotReceive().UpdateAsync(Arg.Any<PlannedBlock>(), Arg.Any<CancellationToken>());
     }
 }

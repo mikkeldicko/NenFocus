@@ -50,7 +50,7 @@ public class CreatePlannedBlockCommandHandlerTests
     /// <summary>A contract in effect whose period (the whole of 2–9 January) contains the command's slot.</summary>
     private Guid SetUpContractAroundTheSlot()
     {
-        var contract = NenContract.Seal(
+        var contract = TestContracts.Seal(
             id: Guid.NewGuid(),
             name: "Contract",
             goal: new NenContractGoal("Goal"),

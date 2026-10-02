@@ -27,7 +27,7 @@ public class GetAllContractPresetsQueryHandlerTests
     [Fact]
     public async Task HandleAsync_MapsEntitiesToDtos()
     {
-        var preset = ContractPreset.Create(Guid.NewGuid(), "Study Month", StrictnessRule.Locked, new DailyFloor(4), null, false);
+        var preset = ContractPreset.Create(Guid.NewGuid(), "Study Month", TestRules.Of(fixedDailyFloor: new DailyFloor(4)), null);
         _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<ContractPreset>)[preset]);
 
         var result = await CreateHandler().HandleAsync(new GetAllContractPresetsQuery(), CancellationToken.None);

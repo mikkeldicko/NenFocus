@@ -14,6 +14,7 @@ public sealed class UpdatePlannedBlockCommandHandler : ICommandHandler<UpdatePla
     private readonly INenContractRepository _contracts;
     private readonly IQueryHandler<ComputeRedemptionAttributionQuery, RedemptionAttributionResult> _computeRedemptionAttribution;
     private readonly IBlockPlacementChecker _placement;
+    private readonly IBlockChangeChecker _changes;
     private readonly ISystemClock _clock;
 
     public UpdatePlannedBlockCommandHandler(
@@ -22,6 +23,7 @@ public sealed class UpdatePlannedBlockCommandHandler : ICommandHandler<UpdatePla
         INenContractRepository contracts,
         IQueryHandler<ComputeRedemptionAttributionQuery, RedemptionAttributionResult> computeRedemptionAttribution,
         IBlockPlacementChecker placement,
+        IBlockChangeChecker changes,
         ISystemClock clock)
     {
         _blocks = blocks;
@@ -29,6 +31,7 @@ public sealed class UpdatePlannedBlockCommandHandler : ICommandHandler<UpdatePla
         _contracts = contracts;
         _computeRedemptionAttribution = computeRedemptionAttribution;
         _placement = placement;
+        _changes = changes;
         _clock = clock;
     }
 
@@ -60,6 +63,19 @@ public sealed class UpdatePlannedBlockCommandHandler : ICommandHandler<UpdatePla
             var attribution = await _computeRedemptionAttribution.HandleAsync(
                 new ComputeRedemptionAttributionQuery(redemption.Membership!.ContractId, command.PresetId, slot, existing.Id, existingEntries),
                 cancellationToken);
+
+            // Attribution may have shortened the slot after the validator approved the longer one —
+            // the permission answer (the floor, above all) must hold for the slot that is saved.
+            if (attribution.Slot != slot)
+            {
+                var contractId = redemption.Membership.ContractId;
+                var change = _changes.CheckReschedule(redemption, attribution.Slot, presetChanges: false,
+                    await _contracts.GetByIdAsync(contractId, cancellationToken),
+                    await _blocks.GetForContractAsync(contractId, cancellationToken), _clock.Now, _clock.TimeZone);
+                if (!change.IsAllowed)
+                    return UpdatePlannedBlockResult.Fail(BlockChangeVerdictDto.From(change).Message!);
+            }
+
             redemption.AssignRedemptionEntries(attribution.Entries
                 .Select(e => new RedemptionEntry(e.MissedBlockId, e.MinutesCovered))
                 .ToList());
@@ -70,7 +86,8 @@ public sealed class UpdatePlannedBlockCommandHandler : ICommandHandler<UpdatePla
         existing.Reschedule(slot);
         existing.AssignPreset(command.PresetId);
 
-        // A plain or Bonus block's membership follows where it now sits; the block decides.
+        // A plain block moved under a contract becomes its Bonus block; the block decides. A member
+        // stays what it is — the validator has already refused a move out of its contract's period.
         existing.PlaceUnder(_placement.GoverningContract(
             slot, await _contracts.GetAllInEffectAsync(cancellationToken), _clock.TimeZone));
 

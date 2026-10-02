@@ -14,7 +14,7 @@ public class CheckNenContractDateRangeOverlapQueryHandlerTests
 
     private CheckNenContractDateRangeOverlapQueryHandler CreateHandler() => new(_contracts);
 
-    private static NenContract SealedContract(Guid id, string name, DateOnly start, DateOnly end) => NenContract.Seal(
+    private static NenContract SealedContract(Guid id, string name, DateOnly start, DateOnly end) => TestContracts.Seal(
         id: id,
         name: name,
         goal: new NenContractGoal("Goal"),

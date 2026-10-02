@@ -28,7 +28,7 @@ public class NenContractRepositoryTests : SqliteRepositoryTestBase
     {
         var rule = floorRule ?? new DailyFloorRule.None();
         var plan = plannedFocusHoursByDay ?? new Dictionary<DateOnly, double>();
-        return NenContract.Seal(
+        return TestContracts.Seal(
             id: Guid.NewGuid(),
             name: "Focused January",
             goal: new NenContractGoal("Ship the feature"),
@@ -314,7 +314,7 @@ public class NenContractRepositoryTests : SqliteRepositoryTestBase
     {
         var repo = CreateRepository();
         var scheduled = Seal(sealedAt: SealedBeforeStart); // Scheduled
-        var active = NenContract.Seal(
+        var active = TestContracts.Seal(
             id: Guid.NewGuid(),
             name: "Later Contract",
             goal: new NenContractGoal("Goal"),
@@ -390,7 +390,7 @@ public class NenContractRepositoryTests : SqliteRepositoryTestBase
     {
         var repo = CreateRepository();
         var scheduled = Seal(sealedAt: SealedBeforeStart); // Scheduled
-        var active = NenContract.Seal(
+        var active = TestContracts.Seal(
             id: Guid.NewGuid(),
             name: "Later Contract",
             goal: new NenContractGoal("Goal"),

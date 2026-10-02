@@ -23,7 +23,7 @@ public class CompleteNenContractValidatorTests
 
     private CompleteNenContractValidator CreateValidator() => new(_contracts, _readiness);
 
-    private static NenContract ActiveContract(double committedHours = 4) => NenContract.Seal(
+    private static NenContract ActiveContract(double committedHours = 4) => TestContracts.Seal(
         id: ContractId,
         name: "Focused Week",
         goal: new NenContractGoal("Ship it"),

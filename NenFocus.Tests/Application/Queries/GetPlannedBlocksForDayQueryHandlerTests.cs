@@ -31,7 +31,8 @@ public class GetPlannedBlocksForDayQueryHandlerTests
         _contracts.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<NenContract>)[]);
     }
 
-    private GetPlannedBlocksForDayQueryHandler CreateHandler() => new(_blocks, _presets, _contracts, _clock, _classifier);
+    private GetPlannedBlocksForDayQueryHandler CreateHandler() => new(_blocks, _presets, _contracts, _clock, _classifier,
+        new BlockChangeChecker(new PlannedFocusHoursCalculator()));
 
     [Fact]
     public async Task HandleAsync_FocusBlock_MapsPresetNameAndBlockPresetType()
@@ -179,7 +180,7 @@ public class GetPlannedBlocksForDayQueryHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_BlockAtItsStart_HasStartedIsTrue()
+    public async Task HandleAsync_BlockAtItsStart_AllowsNothing()
     {
         _clock.SetNow(Start);
         var block = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End));
@@ -188,7 +189,7 @@ public class GetPlannedBlocksForDayQueryHandlerTests
 
         var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
 
-        result.Should().ContainSingle().Subject.HasStarted.Should().BeTrue();
+        result.Should().ContainSingle().Subject.Allowances.Should().Be(new BlockChangeAllowances(false, false, false, false));
     }
 
     [Fact]
@@ -312,111 +313,81 @@ public class GetPlannedBlocksForDayQueryHandlerTests
         result.Should().ContainSingle().Subject.IsCompleted.Should().BeTrue();
     }
 
-    [Fact]
-    public async Task HandleAsync_BlockUnderActiveContract_IsUnderInEffectContractIsTrue()
+    // ── Allowances: BlockChangeChecker's answer, handed the block's own contract (Gap 93) ──
+
+    private NenContract SetUpContractInEffect(Guid contractId, StrictnessRule strictness)
     {
-        var contractId = Guid.NewGuid();
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End), membership: TestContracts.Committed(contractId));
-        _blocks.GetForRangeAsync(At.UtcZone.SlotCovering(Day), Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
-        _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
-        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>()).Returns(
-            NenContract.Seal(
-                id: contractId,
-                name: "Contract",
-                goal: new NenContractGoal("Goal"),
-                strictnessRule: StrictnessRule.Locked,
-                calendar: TestCalendars.For(DateOnly.FromDateTime(Start), DateOnly.FromDateTime(Start).AddDays(7), new DailyFloorRule.Fixed(DailyFloor.None)),
-                floorRule: new DailyFloorRule.Fixed(DailyFloor.None),
-                changeWindow: null,
-                allowCancellation: false,
-                plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-                sealedAt: At.Utc(Start.Date), timeZone: At.UtcZone));
-
-        var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
-
-        result.Should().ContainSingle().Subject.IsUnderInEffectContract.Should().BeTrue();
-    }
-
-    [Fact]
-    public async Task HandleAsync_BlockWithNoContract_IsUnderInEffectContractIsFalse()
-    {
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End));
-        _blocks.GetForRangeAsync(At.UtcZone.SlotCovering(Day), Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
-        _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
-
-        var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
-
-        result.Should().ContainSingle().Subject.IsUnderInEffectContract.Should().BeFalse();
-    }
-
-    [Fact]
-    public async Task HandleAsync_BlockUnderCompletedContract_IsUnderInEffectContractIsFalse()
-    {
-        var contractId = Guid.NewGuid();
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End), membership: TestContracts.Committed(contractId));
-        _blocks.GetForRangeAsync(At.UtcZone.SlotCovering(Day), Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
-        _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
-        var contract = NenContract.Seal(
-            id: contractId,
-            name: "Contract",
-            goal: new NenContractGoal("Goal"),
-            strictnessRule: StrictnessRule.Locked,
-            calendar: TestCalendars.For(DateOnly.FromDateTime(Start).AddDays(-10), DateOnly.FromDateTime(Start).AddDays(-3), new DailyFloorRule.Fixed(DailyFloor.None)),
-            floorRule: new DailyFloorRule.Fixed(DailyFloor.None),
-            changeWindow: null,
-            allowCancellation: false,
-            plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-            sealedAt: At.Utc(Start.Date.AddDays(-10)), timeZone: At.UtcZone);
-        contract.Complete(At.Utc(Start.AddDays(-2)));
+        var rules = TestRules.Of(strictness);
+        var contract = NenContract.Seal(contractId, "Contract", new NenContractGoal("Goal"), rules,
+            TestCalendars.For(DateOnly.FromDateTime(Start), DateOnly.FromDateTime(Start).AddDays(7), rules.FloorRule),
+            null, new Dictionary<DateOnly, double>(), At.Utc(Start.Date), At.UtcZone);
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>()).Returns(contract);
+        return contract;
+    }
+
+    private async Task<BlockChangeAllowances> AllowancesBeforeItStartsAsync(PlannedBlock block)
+    {
+        _clock.SetNow(Start.AddHours(-1));
+        _blocks.GetForRangeAsync(At.UtcZone.SlotCovering(Day), Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
+        _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
 
         var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
 
-        result.Should().ContainSingle().Subject.IsUnderInEffectContract.Should().BeFalse();
+        return result.Should().ContainSingle().Subject.Allowances;
     }
 
     [Fact]
-    public async Task HandleAsync_BlockUnderDailyFlexibilityContract_ContractStrictnessRuleIsDailyFlexibility()
+    public async Task HandleAsync_APlainFutureBlock_MayBeRescheduledReSetAndDeleted()
+    {
+        var allowances = await AllowancesBeforeItStartsAsync(FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Start, End)));
+
+        allowances.Should().Be(new BlockChangeAllowances(CanReschedule: true, CanChangePreset: true, CanSplit: false, CanDelete: true));
+    }
+
+    [Theory]
+    [InlineData(StrictnessRule.Locked, false, false)]
+    [InlineData(StrictnessRule.DailyFlexibility, true, true)]
+    [InlineData(StrictnessRule.PeriodTimeBudget, true, true)]
+    public async Task HandleAsync_ACommittedBlock_AllowancesFollowItsContractsStrictness(
+        StrictnessRule strictness, bool canReschedule, bool canSplit)
     {
         var contractId = Guid.NewGuid();
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End), membership: TestContracts.Committed(contractId));
-        _blocks.GetForRangeAsync(At.UtcZone.SlotCovering(Day), Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
-        _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
-        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>()).Returns(
-            NenContract.Seal(
-                id: contractId,
-                name: "Contract",
-                goal: new NenContractGoal("Goal"),
-                strictnessRule: StrictnessRule.DailyFlexibility,
-                calendar: TestCalendars.For(DateOnly.FromDateTime(Start), DateOnly.FromDateTime(Start).AddDays(7), new DailyFloorRule.Fixed(DailyFloor.None)),
-                floorRule: new DailyFloorRule.Fixed(DailyFloor.None),
-                changeWindow: null,
-                allowCancellation: false,
-                plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-                sealedAt: At.Utc(Start.Date), timeZone: At.UtcZone));
+        SetUpContractInEffect(contractId, strictness);
 
-        var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
+        var allowances = await AllowancesBeforeItStartsAsync(
+            FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Start, End), membership: TestContracts.Committed(contractId)));
 
-        result.Should().ContainSingle().Subject.ContractStrictnessRule.Should().Be(StrictnessRule.DailyFlexibility);
+        allowances.Should().Be(new BlockChangeAllowances(canReschedule, CanChangePreset: false, canSplit, CanDelete: false)
+        {
+            SplitPiecesMayChangeDay = strictness == StrictnessRule.PeriodTimeBudget
+        });
     }
 
     [Fact]
-    public async Task HandleAsync_BlockWithNoContract_ContractStrictnessRuleIsNull()
+    public async Task HandleAsync_AFreeBonusBlock_HasAPlainBlocksAllowances_EvenUnderLockdown()
     {
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End));
-        _blocks.GetForRangeAsync(At.UtcZone.SlotCovering(Day), Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
-        _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
+        var contract = SetUpContractInEffect(Guid.NewGuid(), StrictnessRule.Locked);
 
-        var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
+        var allowances = await AllowancesBeforeItStartsAsync(
+            FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Start, End), membership: contract.MembershipForPlacedBlock(claimsDeficit: false)));
 
-        result.Should().ContainSingle().Subject.ContractStrictnessRule.Should().BeNull();
+        allowances.Should().Be(new BlockChangeAllowances(CanReschedule: true, CanChangePreset: true, CanSplit: false, CanDelete: true));
     }
 
+    [Fact]
+    public async Task HandleAsync_ABlockWhoseContractIsFinishedOrGone_AllowsNothing()
+    {
+        // _contracts returns null for an unknown id — a member without its contract is history.
+        var allowances = await AllowancesBeforeItStartsAsync(
+            FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Start, End), membership: TestContracts.Committed(Guid.NewGuid())));
+
+        allowances.Should().Be(new BlockChangeAllowances(false, false, false, false));
+    }
     // ── Contract badge: the block's own stored role (Gap 97) ─────────────────
 
     private NenContract SetUpStudyMonth(Guid contractId, bool broken = false)
     {
-        var contract = NenContract.Seal(
+        var contract = TestContracts.Seal(
             id: contractId,
             name: "Study Month",
             goal: new NenContractGoal("Goal"),

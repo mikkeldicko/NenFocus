@@ -74,7 +74,7 @@ public class GetNenContractsForDateRangeQueryHandlerTests
     {
         var rule = floorRule ?? new DailyFloorRule.None();
         var plan = plannedFocusHoursByDay ?? new Dictionary<DateOnly, double>();
-        return NenContract.Seal(
+        return TestContracts.Seal(
             id: Guid.NewGuid(), name: name, goal: new NenContractGoal("Ship it"),
             strictnessRule: StrictnessRule.DailyFlexibility,
             calendar: TestCalendars.For(startDate ?? StartDate, endDate ?? EndDate, rule, plan, restDays: restDays),
@@ -96,7 +96,7 @@ public class GetNenContractsForDateRangeQueryHandlerTests
     // (SealNenContractCommandHandler derives ContractFloor from the identical sum), so the
     // two stay numerically consistent here too.
     private static NenContract ContractFloorContract(double contractFloorHours) =>
-        NenContract.Seal(
+        TestContracts.Seal(
             id: Guid.NewGuid(),
             name: "Period Contract",
             goal: new NenContractGoal("Ship it"),
@@ -259,7 +259,7 @@ public class GetNenContractsForDateRangeQueryHandlerTests
     [InlineData(false)]
     public async Task HandleAsync_MapsAllowCancellation(bool allowCancellation)
     {
-        var contract = NenContract.Seal(
+        var contract = TestContracts.Seal(
             id: Guid.NewGuid(),
             name: "Study Month",
             goal: new NenContractGoal("Ship it"),

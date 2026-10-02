@@ -113,6 +113,9 @@
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <TextBlock Text="{Binding SelectedPresetBreakBlockingLabel}" FontSize="12" FontWeight="Medium" Foreground="#1A1A2E"/>
                         </StackPanel>
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock Text="{Binding SelectedPresetBonusBlocksLabel}" FontSize="12" FontWeight="Medium" Foreground="#1A1A2E"/>
+                        </StackPanel>
                     </StackPanel>
                 </Border>
 

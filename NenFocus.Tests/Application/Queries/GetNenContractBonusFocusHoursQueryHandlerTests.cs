@@ -33,7 +33,7 @@ public class GetNenContractBonusFocusHoursQueryHandlerTests
 
     private GetNenContractBonusFocusHoursQueryHandler CreateHandler() => new(_contracts, _blocks, _sessions, _classifier, _calculator, _clock);
 
-    private static NenContract ActiveContract(WorkHours? workHoursPolicy = null) => NenContract.Seal(
+    private static NenContract ActiveContract(WorkHours? workHoursPolicy = null) => TestContracts.Seal(
         id: ContractId,
         name: "Focused Week",
         goal: new NenContractGoal("Ship it"),

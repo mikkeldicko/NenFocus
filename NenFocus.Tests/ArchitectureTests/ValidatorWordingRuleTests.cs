@@ -7,9 +7,9 @@ namespace NenFocus.Tests.ArchitectureTests;
 /// a validator says *what* went wrong; its wording lives in one place — today a topic's wording home in
 /// Application (e.g. BlockPlacementVerdictDto.From, Notifier), after Gap 100 a resource file. Counts every
 /// WithMessage(…)/AddFailure(…) that writes a string literal, per validator file. The list may only
-/// shrink: no new validator writes a sentence, no listed one writes more. → Gap 93 converts the
-/// permission validators; Gap 100 (step R1: validator text into Refusals.resx) empties the list, and the
-/// rule becomes "zero". Passing a sentence on from a wording home (verdict.Message) doesn't count.
+/// shrink: no new validator writes a sentence, no listed one writes more. Gap 93 converted the
+/// permission validators' rules (worded in BlockChangeVerdictDto.From); Gap 100 (step R1: validator
+/// text into Refusals.resx) empties the list, and the rule becomes "zero". Passing a sentence on from a wording home (verdict.Message) doesn't count.
 /// A text scan: it can't tell a proper wording home from a sentence hidden in a helper — review holds that line.
 /// </summary>
 public class ValidatorWordingRuleTests
@@ -18,10 +18,11 @@ public class ValidatorWordingRuleTests
 
     private static readonly string[] KnownSentenceWriters =
     [
-        // → Gap 93: the permission validators it rewrites return typed reasons as they go.
-        "NenFocus.Application/UseCases/Planner/DeletePlannedBlock/DeletePlannedBlockValidator.cs has 3",
-        "NenFocus.Application/UseCases/Planner/SplitPlannedBlock/SplitPlannedBlockValidator.cs has 15",
-        "NenFocus.Application/UseCases/Planner/UpdatePlannedBlock/UpdatePlannedBlockValidator.cs has 9",
+        // → Gap 100: what Gap 93 left in the permission validators — input shape only (required
+        // ids, a split's pieces), their rules now come from BlockChangeChecker as typed reasons.
+        "NenFocus.Application/UseCases/Planner/DeletePlannedBlock/DeletePlannedBlockValidator.cs has 1",
+        "NenFocus.Application/UseCases/Planner/SplitPlannedBlock/SplitPlannedBlockValidator.cs has 7",
+        "NenFocus.Application/UseCases/Planner/UpdatePlannedBlock/UpdatePlannedBlockValidator.cs has 4",
 
         // → Gap 100 step R1: every remaining sentence into Refusals.resx.
         "NenFocus.Application/UseCases/BlockPresets/CreateBlockPreset/CreateBlockPresetValidator.cs has 4",

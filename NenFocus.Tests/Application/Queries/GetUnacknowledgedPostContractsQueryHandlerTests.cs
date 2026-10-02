@@ -21,7 +21,7 @@ public class GetUnacknowledgedPostContractsQueryHandlerTests
 
     private GetUnacknowledgedPostContractsQueryHandler CreateHandler() => new(_contracts, _recap);
 
-    private static NenContract CompletedContract(Guid id) => NenContract.Seal(
+    private static NenContract CompletedContract(Guid id) => TestContracts.Seal(
         id: id,
         name: "Focused Week",
         goal: new NenContractGoal("Ship it"),

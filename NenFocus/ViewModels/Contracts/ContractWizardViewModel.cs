@@ -152,7 +152,8 @@ public partial class ContractWizardViewModel : ViewModelBase
             initialRestDays: _editPrefill?.RestDays,
             initialContractPresetId: _editingContract?.ContractPresetId,
             initialRedemptionPlacementPolicy: _editingContract?.RedemptionPlacementPolicy,
-            initialKeepBlockingDuringBreaks: _editingContract?.KeepBlockingDuringBreaks ?? false);
+            initialKeepBlockingDuringBreaks: _editingContract?.KeepBlockingDuringBreaks ?? false,
+            initialBonusBlocksFollowStrictness: _editingContract?.BonusBlocksFollowStrictness ?? false);
         _currentBackAction = NavigateToMode;
         CurrentStep = _rulesVm;
     }
@@ -170,6 +171,7 @@ public partial class ContractWizardViewModel : ViewModelBase
         var contractPresetId = rules?.ResolvedContractPresetId;
         var redemptionPlacementPolicy = rules?.ResolvedRedemptionPlacementPolicy ?? RedemptionPlacementPolicy.AnywhereInContract;
         var keepBlockingDuringBreaks = rules?.ResolvedKeepBlockingDuringBreaks ?? false;
+        var bonusBlocksFollowStrictness = rules?.ResolvedBonusBlocksFollowStrictness ?? false;
         var modeLabel = rules?.ResolvedSummaryLabel ?? "Simple";
 
         StepIndex = 3;
@@ -190,6 +192,7 @@ public partial class ContractWizardViewModel : ViewModelBase
                 ContractPresetId = contractPresetId,
                 RedemptionPlacementPolicy = redemptionPlacementPolicy,
                 KeepBlockingDuringBreaks = keepBlockingDuringBreaks,
+                BonusBlocksFollowStrictness = bonusBlocksFollowStrictness,
                 EditingContractId = _editingContract?.Id
             },
             summaryName: _name,

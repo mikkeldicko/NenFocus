@@ -85,6 +85,31 @@ public abstract class PlannedBlock : AggregateRoot
     public bool HasStarted(Moment asOf) => Scheduled.HasStarted(asOf);
 
     /// <summary>
+    /// What the block itself allows, from its own schedule and the clock (Gap 93): once started
+    /// it is locked — no move, resize or preset change, running or ended. What its contract
+    /// allows is the contract's answer; BlockChangeChecker combines the two.
+    /// </summary>
+    public ChangeVerdict CheckOwnChange(Moment asOf)
+    {
+        // Cancelled when its contract was broken: it is part of that contract's record.
+        if (CancelledAt is not null)
+            return ChangeVerdict.Refused(ChangeOutcome.ContractIsOver);
+
+        return HasStarted(asOf) ? ChangeVerdict.Refused(ChangeOutcome.BlockHasStarted) : ChangeVerdict.Allowed;
+    }
+
+    /// <summary>Only a Focus block that hasn't started can be split — a Background block has no session and no floor to divide.</summary>
+    public ChangeVerdict CheckOwnSplit(Moment asOf) =>
+        PresetType != BlockPresetType.Focus ? ChangeVerdict.Refused(ChangeOutcome.SplitNotOffered) : CheckOwnChange(asOf);
+
+    /// <summary>
+    /// A running block can't be deleted until it ends. Before it starts and after it has ended
+    /// the block itself has no objection — a contract's block is then the contract's to refuse.
+    /// </summary>
+    public ChangeVerdict CheckOwnDelete(Moment asOf) =>
+        HasStarted(asOf) && !HasEnded(asOf) ? ChangeVerdict.Refused(ChangeOutcome.BlockIsRunning) : ChangeVerdict.Allowed;
+
+    /// <summary>
     /// Where this block's reserved time ends, as of <paramref name="asOf"/> — the boundary
     /// <see cref="ReservedSlot"/> is built on, so a block that no longer occupies its full
     /// scheduled span (e.g. a Focus session that ended early) frees the rest for new scheduling
@@ -174,8 +199,8 @@ public abstract class PlannedBlock : AggregateRoot
     }
 
     /// <summary>
-    /// A Bonus block becomes a plain block again. Committed and Redemption blocks never leave
-    /// their contract.
+    /// A Bonus block becomes a plain block again — only when its contract releases it (broken
+    /// or deleted), never by being moved. Committed and Redemption blocks never leave their contract.
     /// </summary>
     public void Leave()
     {
@@ -186,17 +211,16 @@ public abstract class PlannedBlock : AggregateRoot
     }
 
     /// <summary>
-    /// After being placed or moved: a plain or Bonus block's membership follows where it sits —
-    /// under <paramref name="governing"/> it is that contract's Bonus block, under none it is a
-    /// plain block. A Committed or Redemption block is unaffected: it never leaves its contract.
+    /// After being placed or moved: a plain block that now sits under <paramref name="governing"/>
+    /// becomes that contract's Bonus block. A block that already belongs to a contract is
+    /// unaffected — no member ever leaves its contract's period by being moved (Gap 93); it
+    /// leaves only when the contract releases it (<see cref="Leave"/>).
     /// </summary>
     public void PlaceUnder(NenContract? governing)
     {
-        if (Membership is { IsBonus: false }) return;
-        if (Membership?.ContractId == governing?.Id) return;
+        if (Membership is not null || governing is null) return;
 
-        if (Membership is not null) Leave();
-        if (governing is not null) Join(governing.MembershipForPlacedBlock(claimsDeficit: false));
+        Join(governing.MembershipForPlacedBlock(claimsDeficit: false));
     }
 
     public void MarkCancelled(Moment cancelledAt)

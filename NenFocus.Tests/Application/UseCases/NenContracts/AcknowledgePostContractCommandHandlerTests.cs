@@ -22,7 +22,7 @@ public class AcknowledgePostContractCommandHandlerTests
 
     private AcknowledgePostContractCommandHandler CreateHandler() => new(_contracts, _clock);
 
-    private static NenContract CompletedContract() => NenContract.Seal(
+    private static NenContract CompletedContract() => TestContracts.Seal(
         id: ContractId,
         name: "Focused Week",
         goal: new NenContractGoal("Ship it"),

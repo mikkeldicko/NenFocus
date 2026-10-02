@@ -68,4 +68,8 @@ public sealed record SealNenContractCommand : ICommand<SealNenContractResult>
     /// <summary>Copied from the picked ContractPreset (Advanced) or false (Simple), same
     /// split as RedemptionPlacementPolicy (Gap 64).</summary>
     public bool KeepBlockingDuringBreaks { get; init; }
+
+    /// <summary>Whether the contract's strictness also governs its Bonus blocks (Gap 93). Copied from
+    /// the picked ContractPreset (Advanced) or false (Simple).</summary>
+    public bool BonusBlocksFollowStrictness { get; init; }
 }

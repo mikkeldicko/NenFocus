@@ -118,7 +118,7 @@ public class BlockPlacementCheckerTests
     // ── Which contract governs (Gap 97) ──────────────────────────────────────
     // Day is the first of three contract days, each 09:00–17:00; "now" is 08:00 on Day.
 
-    private static NenContract Contract(DateOnly? firstDay = null) => NenContract.Seal(
+    private static NenContract Contract(DateOnly? firstDay = null) => TestContracts.Seal(
         id: Guid.NewGuid(),
         name: "Contract",
         goal: new NenContractGoal("Goal"),

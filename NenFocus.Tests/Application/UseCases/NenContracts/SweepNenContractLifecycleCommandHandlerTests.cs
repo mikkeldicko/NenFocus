@@ -25,7 +25,7 @@ public class SweepNenContractLifecycleCommandHandlerTests
 
     private SweepNenContractLifecycleCommandHandler CreateHandler() => new(_contracts, _clock);
 
-    private static NenContract ScheduledContract(DateOnly startDate) => NenContract.Seal(
+    private static NenContract ScheduledContract(DateOnly startDate) => TestContracts.Seal(
         id: Guid.NewGuid(),
         name: "Focused Week",
         goal: new NenContractGoal("Ship it"),
@@ -39,7 +39,7 @@ public class SweepNenContractLifecycleCommandHandlerTests
 
     private static NenContract ActiveContract(DateOnly startDate, DateOnly endDate)
     {
-        var contract = NenContract.Seal(
+        var contract = TestContracts.Seal(
             id: Guid.NewGuid(),
             name: "Focused Week",
             goal: new NenContractGoal("Ship it"),

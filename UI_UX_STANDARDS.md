@@ -121,7 +121,7 @@ ViewModels expose raw values and Views format them with converters — the rule 
 **Ghost overlay:** A `Border` added directly to the Canvas (`#B8922A`, 90% opacity, `IsHitTestVisible = false`). Shows a live time label (`HH:mm – HH:mm`) that snaps to 15-minute increments. The create ghost (`#B8922A`, 70% opacity) persists after drag release until the form closes or a rebuild fires.
 
 **Lock rules:**
-- `IsTileFullyLocked` — the block has started (`PlannedBlockDto.HasStarted`, from `PlannedBlock.HasStarted(now)`): no move, no resize of either edge. Draft tiles are never locked. A started block runs to its end — it ends early only through End Early or by breaking its contract (Gap 88 phase 0; replaced the old "bottom-resize allowed once started, GCal behaviour").
+- `IsTileFullyLocked` — the block's `Allowances` say it can't be rescheduled (`PlannedBlockDto.Allowances.CanReschedule`, from `IBlockChangeChecker` — it has started, or its contract binds it and allows no movement; Gap 93): no move, no resize of either edge. Draft tiles are never locked. A started block runs to its end — it ends early only through End Early or by breaking its contract (Gap 88 phase 0; replaced the old "bottom-resize allowed once started, GCal behaviour").
 
 **Drag error banner:** Red `DragError` banner at row 1 of the planner grid, bound to `PlannerPageViewModel.DragError`. Surfaces overlap rejections and lock violations.
 
@@ -132,28 +132,30 @@ ViewModels expose raw values and Views format them with converters — the rule 
 | Layer | Artifact | Role |
 |-------|----------|------|
 | UI | `PlannerPageView.axaml.cs` | All drag state machine, ghost lifecycle, pointer routing |
-| UI | `PlannerPageViewModel` | `OpenNewBlockFormWithRangeCommand`, `MoveOrResizeBlockCommand`, `IsTileFullyLocked`, `DragError`, `IsBlockLocked`, `CanSaveBlock` |
+| UI | `PlannerPageViewModel` | `OpenNewBlockFormWithRangeCommand`, `MoveOrResizeBlockCommand`, `IsTileFullyLocked`, `DragError`, `EditingAllowances` and what reads it (`CanRescheduleBlock`, `CanChangePreset`, `CanSaveBlock`, `CanSplitBlock`, `CanDeleteFromForm`) |
 | UI | `PlannerDragMath` (`ViewModels/Components/`) | Pure static pixel-geometry helper: `YToSnappedTime`, `DeltaYToSnappedMinutes`, `ClampRange`, `ClampMoveStart`, `ClampResizeTopStart`, `ClampResizeBottomEnd`. No placement rules — overlap is `BlockPlacementChecker`'s (Gap 88 phase 8) |
 | UI | `DragCreatedRange` | Record struct passed from code-behind → ViewModel on drag-create completion |
 | UI | `DragMoveResult` | Record struct passed from code-behind → ViewModel on drag-move/resize completion |
 | Application | Create/Update validators → `GetBlockPlacementVerdictQuery` → `BlockPlacementChecker` | Decide whether a drop or form save is allowed (past, contract hours, Focus time taken by a block or running session); the refusal text lands in `DragError`/`FormError` (Gap 88) |
 
-**Form locking:** `IsBlockLocked` (= `IsEditing && IsEditingBlockStarted`, copied from `PlannedBlockDto.HasStarted`) disables every field and hides Save. It covers a completed Ritual and the running session's block too — both only exist once the block has started. The ViewModel never compares times itself (Gap 88 phase 0).
+**Form locking:** the form reads the edited block's `Allowances` (`EditingAllowances`; null for a new block or a draft tile, which nothing restricts). `CanRescheduleBlock` enables the date and time fields, `CanChangePreset` the preset picker; Save shows when either is true, Split and Delete from `CanSplit` and `CanDelete`. The ViewModel works out no lock itself and never reads the in-memory session for one (Gap 93).
 
-**Deletion:** Delete shows in the form (`CanDeleteFromForm`) for a block that hasn't started and isn't a contract block, and in the snapshot (`CanDeleteSnapshotBlock`) for an ended block that was never in a contract. The rule itself is `DeletePlannedBlockValidator`'s; these flags only hide the button. Who may change or delete which block is being given one Domain answer in `OPEN_GAPS.md` → Gap 93, which replaces these flags.
+**Deletion:** Delete shows in the form (`CanDeleteFromForm`) and in the snapshot (`CanDeleteSnapshotBlock`) when the block's `Allowances.CanDelete` says so — a block in no contract that isn't running, or a future Bonus block its contract doesn't bind. The rule is the Domain's (`IBlockChangeChecker`, Gap 93); the validator refuses from the same answer.
+
+**Split dialog:** each piece has a start and an end time. A date field per piece shows only when `Allowances.SplitPiecesMayChangeDay` is set (a bound block under Period Study); otherwise both pieces stay on the block's own day.
 
 **Block Snapshot — read-only view for a done block (Gap 28):** clicking a **done** block opens a separate read-only overlay, not the edit form. "Done" means: a Focus block whose `Outcome` has resolved; a Background block that has ended. The running session's own block opens nothing (checked first, via `ActiveSession?.OriginatingBlockId` — unreliable after a restart, see Gap 89 area 4 F2).
 
 - **Focus block with a session** (`GetSessionSnapshotForBlockQuery` returns one): type/outcome/redemption badges, date, time range, duration, Zetsu goal, reflection (placeholder when blank — a valid outcome, not an error), an expandable list of blocked attempts, and — for a redemption block — which missed blocks it covered and how much.
 - **No session** (a missed Focus block, or any Background block): type, preset, date, scheduled time range, duration only. Cancelled blocks never appear as tiles (`GetPlannedBlocksForDayQueryHandler` filters them out).
-- **Delete** shows only for a block never linked to a contract (see Deletion above).
+- **Delete** shows only when the block's `Allowances.CanDelete` says so (see Deletion above) — never for a contract's block that has run.
 
 **Technical mapping (Block Snapshot):**
 
 | Layer | Artifact | Role |
 |---|---|---|
 | Application | `GetSessionSnapshotForBlockQuery`/`Handler` → `SessionSnapshotDto` (`Queries/GetSessionSnapshotForBlock/`, `DTOs/`) | Given a `PlannedBlockId`, returns `null` when no Session exists, otherwise `{ Goal, Reflection, Attempts, RedemptionCoverage }` — pure composition of `ISessionRepository.GetByOriginatingBlockIdAsync`, `IBlockedAttemptTracker.GetAttemptsForSessionAsync`, and the block's own `RedemptionEntries`. No new persistence. |
-| UI | `PlannerPageViewModel.ShowSnapshotAsync`/`IsSnapshotVisible`/`SnapshotBlock`/`SnapshotSession` | Opened from `EditBlockAsync`'s "done" branch. `CanDeleteSnapshotBlock`/`HasSnapshotSession`/`ShowSnapshotNoSessionMessage` are boolean combinations of already-loaded state, same shape as the pre-existing `CanDeleteFromForm`/`IsBlockLocked`. |
+| UI | `PlannerPageViewModel.ShowSnapshotAsync`/`IsSnapshotVisible`/`SnapshotBlock`/`SnapshotSession` | Opened from `EditBlockAsync`'s "done" branch. `CanDeleteSnapshotBlock`/`HasSnapshotSession`/`ShowSnapshotNoSessionMessage` are boolean combinations of already-loaded state, same shape as `CanDeleteFromForm`. |
 | UI | `PlannerPageView.axaml` snapshot overlay | A separate `Border` overlay, not the reused edit-form modal — badges via `FocusBlockOutcomeToLabelConverter`/`FocusBlockOutcomeToBrushConverter`/`BlockPresetTypeToLabelConverter`, an `Expander` for the blocked-attempts list. |
 
 **`TryParseFormTime`:** Static helper on `PlannerPageViewModel` that special-cases `"24:00"` (rejected by `TimeSpan.TryParse`) to support end-of-day block scheduling.

@@ -19,6 +19,7 @@ public static class DependencyInjection
 
         services.AddScoped<IPolicyEngine, PolicyEngine>();
         services.AddScoped<IBlockPlacementChecker, BlockPlacementChecker>();
+        services.AddScoped<IBlockChangeChecker, BlockChangeChecker>();
 
         services.AddScoped<IPlannedFocusHoursCalculator, PlannedFocusHoursCalculator>();
         services.AddScoped<IFocusBlockOutcomeClassifier, FocusBlockOutcomeClassifier>();

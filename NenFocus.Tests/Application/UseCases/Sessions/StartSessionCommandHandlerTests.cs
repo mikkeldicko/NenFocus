@@ -353,7 +353,7 @@ public class StartSessionCommandHandlerTests
 
     // ── Keep blocking during breaks (Gap 64) ─────────────────────────────────
 
-    private static NenContract SealContract(bool keepBlockingDuringBreaks) => NenContract.Seal(
+    private static NenContract SealContract(bool keepBlockingDuringBreaks) => TestContracts.Seal(
         id: Guid.NewGuid(),
         name: "Contract",
         goal: new NenContractGoal("Goal"),

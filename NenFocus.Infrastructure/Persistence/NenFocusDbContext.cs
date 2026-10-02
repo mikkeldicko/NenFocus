@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
@@ -80,7 +81,6 @@ public class NenFocusDbContext : DbContext
     // never through the UTC DateTime converter above, since a contract's days are local by
     // definition and a window may end at 24:00 (the next day's midnight).
     private sealed record ContractDayJson(string Date, string WindowStart, string WindowEnd, double? Floor);
-    private sealed record DailyFloorRuleJson(string Kind, double? Hours);
     private sealed record RedemptionEntryJson(Guid MissedBlockId, double MinutesCovered);
 
     private const string LocalMomentFormat = "yyyy-MM-ddTHH:mm:ss";
@@ -100,24 +100,6 @@ public class NenFocusDbContext : DbContext
             DateTime.ParseExact(d.WindowEnd, LocalMomentFormat, CultureInfo.InvariantCulture),
             d.Floor is { } hours ? new DailyFloor(hours) : null)));
 
-    private static string SerializeDailyFloorRule(DailyFloorRule rule) => JsonSerializer.Serialize(rule switch
-    {
-        DailyFloorRule.Fixed f => new DailyFloorRuleJson("Fixed", f.Floor.Hours),
-        DailyFloorRule.FollowsPlan => new DailyFloorRuleJson("FollowsPlan", null),
-        _ => new DailyFloorRuleJson("None", null)
-    }, (JsonSerializerOptions?)null);
-
-    private static DailyFloorRule DeserializeDailyFloorRule(string json)
-    {
-        var dto = JsonSerializer.Deserialize<DailyFloorRuleJson>(json, (JsonSerializerOptions?)null)!;
-        return dto.Kind switch
-        {
-            "Fixed" => new DailyFloorRule.Fixed(new DailyFloor(dto.Hours!.Value)),
-            "FollowsPlan" => new DailyFloorRule.FollowsPlan(),
-            _ => new DailyFloorRule.None()
-        };
-    }
-
     private static string SerializeRedemptionEntries(IReadOnlyList<RedemptionEntry> entries) => JsonSerializer.Serialize(
         entries.Select(e => new RedemptionEntryJson(e.MissedBlockId, e.MinutesCovered)).ToList(),
         (JsonSerializerOptions?)null);
@@ -126,6 +108,44 @@ public class NenFocusDbContext : DbContext
         JsonSerializer.Deserialize<List<RedemptionEntryJson>>(json, (JsonSerializerOptions?)null)!
             .Select(e => new RedemptionEntry(e.MissedBlockId, e.MinutesCovered))
             .ToList();
+
+    /// <summary>
+    /// A ContractRules is stored flat on its owner's row, under the column names the settings
+    /// had before they were one value object (Gap 93) — the same for a preset and a contract.
+    /// </summary>
+    private static void MapContractRules<TOwner>(OwnedNavigationBuilder<TOwner, ContractRules> rules)
+        where TOwner : class
+    {
+        rules.Property(r => r.Strictness)
+            .HasConversion<string>()
+            .HasColumnName("StrictnessRule")
+            .IsRequired();
+
+        rules.Property(r => r.FixedDailyFloor)
+            .HasConversion(
+                f => f == null ? (double?)null : f.Hours,
+                v => v == null ? null : new DailyFloor(v.Value))
+            .HasColumnName("DailyFloorHours");
+
+        rules.Property(r => r.AllowCancellation)
+            .HasColumnName("AllowCancellation")
+            .IsRequired();
+
+        rules.Property(r => r.KeepBlockingDuringBreaks)
+            .HasColumnName("KeepBlockingDuringBreaks")
+            .IsRequired()
+            .HasDefaultValue(false);
+
+        rules.Property(r => r.RedemptionPlacement)
+            .HasConversion<string>()
+            .HasColumnName("RedemptionPlacementPolicy")
+            .IsRequired();
+
+        rules.Property(r => r.BonusBlocksFollowStrictness)
+            .HasColumnName("BonusBlocksFollowStrictness")
+            .IsRequired()
+            .HasDefaultValue(false);
+    }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -401,16 +421,6 @@ public class NenFocusDbContext : DbContext
             // the correct scope.
             entity.HasIndex(p => p.Name).IsUnique();
 
-            entity.Property(p => p.StrictnessRule)
-                .HasConversion<string>()
-                .IsRequired();
-
-            entity.Property(p => p.DailyFloor)
-                .HasConversion(
-                    f => f == null ? (double?)null : f.Hours,
-                    v => v == null ? null : new DailyFloor(v.Value))
-                .HasColumnName("DailyFloorHours");
-
             var lockdownId = new Guid("c0000003-0000-0000-0000-000000000001");
             var dailyFlexId = new Guid("c0000003-0000-0000-0000-000000000002");
             var periodStudyId = new Guid("c0000003-0000-0000-0000-000000000003");
@@ -427,39 +437,40 @@ public class NenFocusDbContext : DbContext
                 );
             });
 
-            entity.Property(p => p.AllowCancellation)
-                .IsRequired();
-
-            entity.Property(p => p.RedemptionPlacementPolicy)
-                .HasConversion<string>()
-                .IsRequired();
-
-            entity.Property(p => p.KeepBlockingDuringBreaks)
-                .IsRequired()
-                .HasDefaultValue(false);
-
             // One ordinary seeded row per strictness rule — freely editable/deletable like
             // the seeded block and break timer presets. Only Lockdown sets its own daily
             // floor; the other two derive it from the scheduled blocks.
+            entity.OwnsOne(p => p.Rules, rules =>
+            {
+                MapContractRules(rules);
+
+                rules.HasData(
+                    new
+                    {
+                        ContractPresetId = lockdownId, Strictness = StrictnessRule.Locked,
+                        FixedDailyFloor = new DailyFloor(4), AllowCancellation = false, KeepBlockingDuringBreaks = true,
+                        RedemptionPlacement = RedemptionPlacementPolicy.AnywhereInContract, BonusBlocksFollowStrictness = false
+                    },
+                    new
+                    {
+                        ContractPresetId = dailyFlexId, Strictness = StrictnessRule.DailyFlexibility,
+                        AllowCancellation = true, KeepBlockingDuringBreaks = false,
+                        RedemptionPlacement = RedemptionPlacementPolicy.AnywhereInContract, BonusBlocksFollowStrictness = false
+                    },
+                    new
+                    {
+                        ContractPresetId = periodStudyId, Strictness = StrictnessRule.PeriodTimeBudget,
+                        AllowCancellation = true, KeepBlockingDuringBreaks = false,
+                        RedemptionPlacement = RedemptionPlacementPolicy.AnywhereInContract, BonusBlocksFollowStrictness = false
+                    }
+                );
+            });
+            entity.Navigation(p => p.Rules).IsRequired();
+
             entity.HasData(
-                new
-                {
-                    Id = lockdownId, Name = "Lockdown", StrictnessRule = StrictnessRule.Locked,
-                    DailyFloor = new DailyFloor(4), AllowCancellation = false,
-                    RedemptionPlacementPolicy = RedemptionPlacementPolicy.AnywhereInContract, KeepBlockingDuringBreaks = true
-                },
-                new
-                {
-                    Id = dailyFlexId, Name = "Daily Flex", StrictnessRule = StrictnessRule.DailyFlexibility,
-                    AllowCancellation = true,
-                    RedemptionPlacementPolicy = RedemptionPlacementPolicy.AnywhereInContract, KeepBlockingDuringBreaks = false
-                },
-                new
-                {
-                    Id = periodStudyId, Name = "Period Study", StrictnessRule = StrictnessRule.PeriodTimeBudget,
-                    AllowCancellation = true,
-                    RedemptionPlacementPolicy = RedemptionPlacementPolicy.AnywhereInContract, KeepBlockingDuringBreaks = false
-                }
+                new { Id = lockdownId, Name = "Lockdown" },
+                new { Id = dailyFlexId, Name = "Daily Flex" },
+                new { Id = periodStudyId, Name = "Period Study" }
             );
         });
 
@@ -542,26 +553,15 @@ public class NenFocusDbContext : DbContext
             entity.Property(c => c.EndDate)
                 .IsRequired();
 
-            entity.Property(c => c.StrictnessRule)
-                .HasConversion<string>()
-                .IsRequired();
-
             entity.Property(c => c.Status)
-                .HasConversion<string>()
-                .IsRequired();
-
-            entity.Property(c => c.AllowCancellation)
-                .IsRequired();
-
-            entity.Property(c => c.RedemptionPlacementPolicy)
                 .HasConversion<string>()
                 .IsRequired();
 
             entity.Property(c => c.ContractPresetId);
 
-            entity.Property(c => c.KeepBlockingDuringBreaks)
-                .IsRequired()
-                .HasDefaultValue(false);
+            // The contract's own copy of its rules, on its own row (Gap 93).
+            entity.OwnsOne(c => c.Rules, MapContractRules);
+            entity.Navigation(c => c.Rules).IsRequired();
 
             // The contract's days (Gap 65) — a private field, the single source of truth for
             // windows and floors. Replaced wholesale (never mutated), so reference equality is
@@ -573,12 +573,6 @@ public class NenFocusDbContext : DbContext
                 .HasColumnName("Days")
                 .IsRequired();
 
-            entity.Property(c => c.FloorRule)
-                .HasConversion(
-                    rule => SerializeDailyFloorRule(rule),
-                    json => DeserializeDailyFloorRule(json))
-                .HasColumnName("FloorRule")
-                .IsRequired();
 
             // Single-value object — a direct double? conversion needs no JSON, unlike
             // the days, which carry a shape worth serializing.

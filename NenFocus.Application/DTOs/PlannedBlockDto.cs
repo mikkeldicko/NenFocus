@@ -22,34 +22,21 @@ public sealed record PlannedBlockDto
 
     public bool IsCompleted { get; init; }
 
-    /// <summary>
-    /// Mirrors PlannedBlock.HasEnded(now) — the same predicate DeletePlannedBlockValidator
-    /// enforces. The UI binds to this rather than deriving its own notion of "past" from
-    /// Start/End, so the two can never drift apart.
-    /// </summary>
     public Guid? ContractId { get; init; }
+
+    /// <summary>
+    /// PlannedBlock.HasEnded(now). The Planner uses it to pick the read-only snapshot over the
+    /// edit form for a Background block; what may be done to the block is <see cref="Allowances"/>.
+    /// </summary>
     public bool HasEnded { get; init; }
 
     /// <summary>
-    /// PlannedBlock.HasStarted(now) — the Update/Delete/Split validators' lock. The Planner
-    /// locks the tile and form on this, never on Start (which is a trimmed display span).
+    /// What may be done to this block at all — BlockChangeChecker's answer, the same one the
+    /// Update, Split and Delete validators ask (Gap 93). The Planner offers a drag, a button or
+    /// an editable field from these and never works a lock out itself; whether one concrete
+    /// change is allowed is still answered when it is saved.
     /// </summary>
-    public bool HasStarted { get; init; }
-
-    /// <summary>
-    /// True when ContractId resolves to a contract that is still a live commitment
-    /// (NenContract.IsInEffect — Scheduled or Active). Mirrors DeletePlannedBlockValidator/
-    /// UpdatePlannedBlockValidator's own resolution exactly, so the UI never re-derives
-    /// "is this block locked by its contract" independently of the Application-layer rule.
-    /// </summary>
-    public bool IsUnderInEffectContract { get; init; }
-
-    /// <summary>
-    /// The owning contract's StrictnessRule, or null when ContractId is null or doesn't
-    /// resolve. Drives Split Block eligibility on the Planner (Daily Flexibility only) —
-    /// the UI never re-derives strictness independently of this Application-computed value.
-    /// </summary>
-    public StrictnessRule? ContractStrictnessRule { get; init; }
+    public required BlockChangeAllowances Allowances { get; init; }
 
     /// <summary>
     /// FocusBlockOutcomeClassifier.Classify's result for a FocusBlock — null for a

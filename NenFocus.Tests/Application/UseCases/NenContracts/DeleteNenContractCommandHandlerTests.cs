@@ -18,7 +18,7 @@ public class DeleteNenContractCommandHandlerTests
 
     private DeleteNenContractCommandHandler CreateHandler() => new(_contracts, _blocks);
 
-    private static NenContract ScheduledContract() => NenContract.Seal(
+    private static NenContract ScheduledContract() => TestContracts.Seal(
         id: Guid.NewGuid(),
         name: "Summer Focus",
         goal: new NenContractGoal("Goal"),

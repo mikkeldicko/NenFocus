@@ -17,7 +17,7 @@ public class DeleteNenContractValidatorTests
 
     private DeleteNenContractValidator CreateValidator() => new(_contracts);
 
-    private static NenContract Seal(DateTime sealedAt) => NenContract.Seal(
+    private static NenContract Seal(DateTime sealedAt) => TestContracts.Seal(
         id: Guid.NewGuid(),
         name: "Summer Focus",
         goal: new NenContractGoal("Goal"),

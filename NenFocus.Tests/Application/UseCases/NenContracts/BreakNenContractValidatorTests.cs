@@ -17,7 +17,7 @@ public class BreakNenContractValidatorTests
 
     private BreakNenContractValidator CreateValidator() => new(_contracts);
 
-    private static NenContract Seal(bool allowCancellation, DateTime sealedAt) => NenContract.Seal(
+    private static NenContract Seal(bool allowCancellation, DateTime sealedAt) => TestContracts.Seal(
         id: Guid.NewGuid(),
         name: "Focused Week",
         goal: new NenContractGoal("Ship it"),

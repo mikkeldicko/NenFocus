@@ -32,6 +32,7 @@ public partial class ContractPresetCardViewModel : ViewModelBase
     public bool AllowCancellation { get; }
     public RedemptionPlacementPolicy RedemptionPlacementPolicy { get; }
     public bool KeepBlockingDuringBreaks { get; }
+    public bool BonusBlocksFollowStrictness { get; }
 
     public string FloorLabel => DailyFloorToLabelConverter.FormatFloor(DailyFloorHours);
     public string WorkHoursLabel => WorkHoursRangeToLabelConverter.FormatRange(WorkHoursStart, WorkHoursEnd);
@@ -42,6 +43,9 @@ public partial class ContractPresetCardViewModel : ViewModelBase
     public string BreakBlockingLabel => KeepBlockingDuringBreaks
         ? "Blocking stays on during breaks"
         : "Blocking pauses during breaks";
+    public string BonusBlocksLabel => BonusBlocksFollowStrictness
+        ? "Bonus blocks follow the strictness"
+        : "Bonus blocks are free";
 
     public ContractPresetCardViewModel(ContractPresetDto dto)
     {
@@ -54,6 +58,7 @@ public partial class ContractPresetCardViewModel : ViewModelBase
         AllowCancellation = dto.AllowCancellation;
         RedemptionPlacementPolicy = dto.RedemptionPlacementPolicy;
         KeepBlockingDuringBreaks = dto.KeepBlockingDuringBreaks;
+        BonusBlocksFollowStrictness = dto.BonusBlocksFollowStrictness;
     }
 }
 
@@ -84,6 +89,7 @@ public partial class ContractPresetPageViewModel : ViewModelBase
     [ObservableProperty] private string _dailyFloorHoursText = "3";
     [ObservableProperty] private bool _allowCancellation = true;
     [ObservableProperty] private bool _keepBlockingDuringBreaks;
+    [ObservableProperty] private bool _bonusBlocksFollowStrictness;
     [ObservableProperty] private bool _isWorkHoursEnabled;
     [ObservableProperty] private string _workHoursStartText = "09:00";
     [ObservableProperty] private string _workHoursEndText = "17:00";
@@ -133,6 +139,7 @@ public partial class ContractPresetPageViewModel : ViewModelBase
         WorkHoursEndText = "17:00";
         FormRedemptionPlacementPolicy = RedemptionPlacementPolicy.AnywhereInContract;
         KeepBlockingDuringBreaks = false;
+        BonusBlocksFollowStrictness = false;
         FormError = null;
     }
 
@@ -163,6 +170,7 @@ public partial class ContractPresetPageViewModel : ViewModelBase
         if (card.WorkHoursEnd.HasValue) WorkHoursEndText = FormatTime(card.WorkHoursEnd.Value);
         FormRedemptionPlacementPolicy = card.RedemptionPlacementPolicy;
         KeepBlockingDuringBreaks = card.KeepBlockingDuringBreaks;
+        BonusBlocksFollowStrictness = card.BonusBlocksFollowStrictness;
         IsFormVisible = true;
     }
 
@@ -208,7 +216,8 @@ public partial class ContractPresetPageViewModel : ViewModelBase
                 WorkHoursEnd = workHoursEnd,
                 AllowCancellation = AllowCancellation,
                 RedemptionPlacementPolicy = FormRedemptionPlacementPolicy,
-                KeepBlockingDuringBreaks = KeepBlockingDuringBreaks
+                KeepBlockingDuringBreaks = KeepBlockingDuringBreaks,
+                BonusBlocksFollowStrictness = BonusBlocksFollowStrictness
             });
             if (!result.Success) { FormError = result.ErrorMessage; return; }
         }
@@ -223,7 +232,8 @@ public partial class ContractPresetPageViewModel : ViewModelBase
                 WorkHoursEnd = workHoursEnd,
                 AllowCancellation = AllowCancellation,
                 RedemptionPlacementPolicy = FormRedemptionPlacementPolicy,
-                KeepBlockingDuringBreaks = KeepBlockingDuringBreaks
+                KeepBlockingDuringBreaks = KeepBlockingDuringBreaks,
+                BonusBlocksFollowStrictness = BonusBlocksFollowStrictness
             });
             if (!result.Success) { FormError = result.ErrorMessage; return; }
         }

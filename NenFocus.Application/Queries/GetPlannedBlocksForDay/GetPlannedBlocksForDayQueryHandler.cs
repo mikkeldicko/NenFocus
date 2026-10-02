@@ -15,19 +15,22 @@ public sealed class GetPlannedBlocksForDayQueryHandler
     private readonly INenContractRepository _contracts;
     private readonly ISystemClock _clock;
     private readonly IFocusBlockOutcomeClassifier _classifier;
+    private readonly IBlockChangeChecker _changes;
 
     public GetPlannedBlocksForDayQueryHandler(
         IPlannedBlockRepository blocks,
         IBlockPresetRepository presets,
         INenContractRepository contracts,
         ISystemClock clock,
-        IFocusBlockOutcomeClassifier classifier)
+        IFocusBlockOutcomeClassifier classifier,
+        IBlockChangeChecker changes)
     {
         _blocks = blocks;
         _presets = presets;
         _contracts = contracts;
         _clock = clock;
         _classifier = classifier;
+        _changes = changes;
     }
 
     public async Task<IReadOnlyList<PlannedBlockDto>> HandleAsync(
@@ -94,9 +97,8 @@ public sealed class GetPlannedBlocksForDayQueryHandler
                 ContractId = b.Membership?.ContractId,
                 IsCompleted = focusBlock?.RitualCompletedAt.HasValue ?? false,
                 HasEnded = b.HasEnded(now),
-                HasStarted = b.HasStarted(now),
-                IsUnderInEffectContract = b.Membership is { } membership && (contractsById.GetValueOrDefault(membership.ContractId)?.IsInEffect ?? false),
-                ContractStrictnessRule = b.Membership is { } governed ? contractsById.GetValueOrDefault(governed.ContractId)?.StrictnessRule : null,
+                Allowances = _changes.AllowancesFor(
+                    b, b.Membership is { } membership ? contractsById.GetValueOrDefault(membership.ContractId) : null, now),
                 Outcome = focusBlock is not null
                     ? _classifier.Classify(focusBlock, now)
                     : null,

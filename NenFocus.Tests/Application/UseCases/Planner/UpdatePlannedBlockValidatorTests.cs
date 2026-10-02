@@ -1,11 +1,11 @@
 using FluentAssertions;
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
-using NenFocus.Application.Queries.ComputePlannedFocusHours;
 using NenFocus.Application.Queries.GetBlockPlacementVerdict;
 using NenFocus.Application.UseCases.Planner.UpdatePlannedBlock;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
+using NenFocus.Domain.Services;
 using NenFocus.Domain.ValueObjects;
 using NSubstitute;
 
@@ -19,8 +19,10 @@ public class UpdatePlannedBlockValidatorTests
     private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
     private readonly INenContractRepository _contracts = Substitute.For<INenContractRepository>();
     private readonly ISystemClock _clock = TestClock.Create();
-    private readonly IQueryHandler<ComputePlannedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> _computePlannedFocusHours =
-        Substitute.For<IQueryHandler<ComputePlannedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>>>();
+    // The real permission answer (Gap 93) — a Domain service with no I/O. Its rules are tested on
+    // NenContract, PlannedBlock and BlockChangeChecker; here only that the validator asks it,
+    // hands it the right things, and passes its refusal on.
+    private readonly IBlockChangeChecker _changes = new BlockChangeChecker(new PlannedFocusHoursCalculator());
     // Placement (past, contract hours, free for Focus) is GetBlockPlacementVerdictQuery's answer
     // since Gap 88 phase 8 — tested in GetBlockPlacementVerdictQueryHandlerTests. Allowed by default here.
     private readonly IQueryHandler<GetBlockPlacementVerdictQuery, BlockPlacementVerdictDto> _placement =
@@ -30,14 +32,14 @@ public class UpdatePlannedBlockValidatorTests
     {
         _clock.SetNow(Now);
         _clock.SetTimeZoneOffset(TimeSpan.Zero);
-        _computePlannedFocusHours.HandleAsync(Arg.Any<ComputePlannedFocusHoursQuery>(), Arg.Any<CancellationToken>())
-            .Returns(new Dictionary<DateOnly, double>());
+        _blocks.GetForContractAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyList<PlannedBlock>)[]);
         _placement.HandleAsync(Arg.Any<GetBlockPlacementVerdictQuery>(), Arg.Any<CancellationToken>())
             .Returns(new BlockPlacementVerdictDto { Outcome = PlacementOutcome.Allowed });
     }
 
     private UpdatePlannedBlockValidator CreateValidator() =>
-        new(_blocks, _presets, _contracts, _clock, _computePlannedFocusHours, _placement);
+        new(_blocks, _presets, _contracts, _clock, _changes, _placement);
 
     private static UpdatePlannedBlockCommand ValidCommand(Guid blockId, Guid presetId) => new()
     {
@@ -240,7 +242,7 @@ public class UpdatePlannedBlockValidatorTests
     // ── Sealed-contract strictness guards ──────────────────────────────────────
 
     private static NenContract SealedContract(StrictnessRule rule, Guid id) =>
-        NenContract.Seal(
+        TestContracts.Seal(
             id: id,
             name: "Contract",
             goal: new NenContractGoal("Goal"),
@@ -253,7 +255,7 @@ public class UpdatePlannedBlockValidatorTests
             sealedAt: At.Utc(Now.Date), timeZone: At.UtcZone); // Active on seal
 
     [Fact]
-    public async Task Validate_LockedContract_AnyUpdateIsInvalid()
+    public async Task Validate_LockedContract_AMoveIsInvalid()
     {
         var blockId = Guid.NewGuid();
         var presetId = Guid.NewGuid();
@@ -265,11 +267,30 @@ public class UpdatePlannedBlockValidatorTests
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
             .Returns(SealedContract(StrictnessRule.Locked, contractId));
 
-        // Same preset, same Start/End — a no-op resubmission still fails; Locked rejects
-        // every edit outright, not just ones that would actually change something.
+        var command = ValidCommand(blockId, presetId) with { Slot = At.Slot(Now.AddHours(3), Now.AddHours(4)) };
+
+        var result = await CreateValidator().ValidateAsync(command);
+
+        result.Errors.Should().ContainSingle(e => e.ErrorMessage == "This block is locked by a Lockdown contract.");
+    }
+
+    [Fact]
+    public async Task Validate_LockedContract_SavingWithNothingChanged_IsValid()
+    {
+        // Only what changes is asked about (Gap 93) — an untouched form is not a move.
+        var blockId = Guid.NewGuid();
+        var presetId = Guid.NewGuid();
+        var contractId = Guid.NewGuid();
+        _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
+            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(2)), membership: TestContracts.Committed(contractId)));
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
+        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
+            .Returns(SealedContract(StrictnessRule.Locked, contractId));
+
         var result = await CreateValidator().ValidateAsync(ValidCommand(blockId, presetId));
 
-        result.IsValid.Should().BeFalse();
+        result.IsValid.Should().BeTrue();
     }
 
     [Fact]
@@ -396,7 +417,7 @@ public class UpdatePlannedBlockValidatorTests
     }
 
     [Fact]
-    public async Task Validate_ContractNotInEffect_GuardDoesNotApply()
+    public async Task Validate_ContractNotInEffect_ItsBlocksAreHistory()
     {
         var blockId = Guid.NewGuid();
         var presetId = Guid.NewGuid();
@@ -410,69 +431,60 @@ public class UpdatePlannedBlockValidatorTests
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
             .Returns(contract);
 
-        var result = await CreateValidator().ValidateAsync(ValidCommand(blockId, presetId));
+        var command = ValidCommand(blockId, presetId) with { Slot = At.Slot(Now.AddHours(3), Now.AddHours(4)) };
 
-        result.IsValid.Should().BeTrue();
+        var result = await CreateValidator().ValidateAsync(command);
+
+        result.Errors.Should().ContainSingle(e => e.ErrorMessage.Contains("finished Nen Contract"));
     }
 
-    // ── Daily Flexibility floor-protection ──────────────────────────────────────
+    // ── Floor protection, and the order of the two questions ───────────────────
 
-    // plannedFocusHoursByDay satisfies NenContract.Seal's own floor invariant for every day in
-    // range at construction time — unrelated to the validator's later _computePlannedFocusHours
-    // query, which is mocked separately per test to represent the state AFTER the edit.
     private static NenContract SealedContractWithFloor(StrictnessRule rule, Guid id, double floorHours) =>
         NenContract.Seal(
             id: id,
             name: "Contract",
             goal: new NenContractGoal("Goal"),
-            strictnessRule: rule,
+            rules: TestRules.Of(rule, new DailyFloor(floorHours)),
             calendar: TestCalendars.For(DateOnly.FromDateTime(Now), DateOnly.FromDateTime(Now).AddDays(7), new DailyFloorRule.Fixed(new DailyFloor(floorHours))),
-            floorRule: new DailyFloorRule.Fixed(new DailyFloor(floorHours)),
             changeWindow: null,
-            allowCancellation: false,
             plannedFocusHoursByDay: Enumerable.Range(0, 8).ToDictionary(i => DateOnly.FromDateTime(Now).AddDays(i), _ => floorHours),
             sealedAt: At.Utc(Now.Date), timeZone: At.UtcZone);
 
-    [Fact]
-    public async Task Validate_DailyFlexibility_ShrinkBelowFloor_IsInvalid()
+    /// <summary>One committed two-hour Focus block on each of the contract's eight days, the edited one on day 0.</summary>
+    private (FocusBlock Edited, Guid PresetId) ContractWithTwoHoursEveryDay(StrictnessRule rule)
     {
-        var blockId = Guid.NewGuid();
-        var presetId = Guid.NewGuid();
         var contractId = Guid.NewGuid();
-        _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(3)), membership: TestContracts.Committed(contractId))); // 2h originally
+        var presetId = Guid.NewGuid();
+        var blocks = Enumerable.Range(0, 8)
+            .Select(day => FocusBlock.Create(Guid.NewGuid(), presetId,
+                At.Slot(Now.AddDays(day).AddHours(1), Now.AddDays(day).AddHours(3)), membership: TestContracts.Committed(contractId)))
+            .ToList();
+        _blocks.GetByIdAsync(blocks[0].Id, Arg.Any<CancellationToken>()).Returns(blocks[0]);
+        _blocks.GetForContractAsync(contractId, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)blocks);
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
             .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
-            .Returns(SealedContractWithFloor(StrictnessRule.DailyFlexibility, contractId, floorHours: 2));
-        var command = ValidCommand(blockId, presetId) with { Slot = At.Slot(Now.AddHours(1), Now.AddHours(2))}; // shrunk to 1h
-        _computePlannedFocusHours.HandleAsync(
-                Arg.Is<ComputePlannedFocusHoursQuery>(q => q.ContractId == contractId && q.ExcludeBlockId == blockId),
-                Arg.Any<CancellationToken>())
-            .Returns(new Dictionary<DateOnly, double> { [DateOnly.FromDateTime(Now)] = 1 });
-
-        var result = await CreateValidator().ValidateAsync(command);
-
-        result.IsValid.Should().BeFalse();
+            .Returns(SealedContractWithFloor(rule, contractId, floorHours: 2));
+        return (blocks[0], presetId);
     }
 
     [Fact]
-    public async Task Validate_DailyFlexibility_ShrinkButStillMeetsFloor_IsValid()
+    public async Task Validate_ShrinkBelowTheDaysFloor_IsInvalidWithTheDayAndTheFloor()
     {
-        var blockId = Guid.NewGuid();
-        var presetId = Guid.NewGuid();
-        var contractId = Guid.NewGuid();
-        _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(4)), membership: TestContracts.Committed(contractId))); // 3h originally
-        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
-        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
-            .Returns(SealedContractWithFloor(StrictnessRule.DailyFlexibility, contractId, floorHours: 2));
-        var command = ValidCommand(blockId, presetId) with { Slot = At.Slot(Now.AddHours(1), Now.AddHours(3))}; // shrunk to 2h, exactly the floor
-        _computePlannedFocusHours.HandleAsync(
-                Arg.Is<ComputePlannedFocusHoursQuery>(q => q.ContractId == contractId && q.ExcludeBlockId == blockId),
-                Arg.Any<CancellationToken>())
-            .Returns(new Dictionary<DateOnly, double> { [DateOnly.FromDateTime(Now)] = 2 });
+        var (block, presetId) = ContractWithTwoHoursEveryDay(StrictnessRule.DailyFlexibility);
+        var command = ValidCommand(block.Id, presetId) with { Slot = At.Slot(Now.AddHours(1), Now.AddHours(2)) }; // shrunk to 1h
+
+        var result = await CreateValidator().ValidateAsync(command);
+
+        result.Errors.Should().ContainSingle(e => e.ErrorMessage == "This would drop Jan 1's total below its 2h daily floor.");
+    }
+
+    [Fact]
+    public async Task Validate_MoveWithinTheDayKeepingItsLength_IsValid()
+    {
+        var (block, presetId) = ContractWithTwoHoursEveryDay(StrictnessRule.DailyFlexibility);
+        var command = ValidCommand(block.Id, presetId) with { Slot = At.Slot(Now.AddHours(4), Now.AddHours(6)) };
 
         var result = await CreateValidator().ValidateAsync(command);
 
@@ -480,233 +492,51 @@ public class UpdatePlannedBlockValidatorTests
     }
 
     [Fact]
-    public async Task Validate_DailyFlexibility_BackgroundBlockShrink_SkipsFloorCheck()
+    public async Task Validate_MoveToAnotherDay_LeavingItsOwnDayShort_IsInvalid()
     {
-        var blockId = Guid.NewGuid();
-        var presetId = Guid.NewGuid();
-        var contractId = Guid.NewGuid();
-        _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(BackgroundBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(3)), membership: TestContracts.Committed(contractId)));
-        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Background", WebsiteFilterType.Blocklist, BlockPresetType.Background, At.Utc(Now)));
-        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
-            .Returns(SealedContractWithFloor(StrictnessRule.DailyFlexibility, contractId, floorHours: 2));
-        // Shrunk well below what would be the floor for a Focus block — irrelevant here,
-        // Background blocks never count toward the floor.
-        var command = ValidCommand(blockId, presetId) with { Slot = At.Slot(Now.AddHours(1), Now.AddHours(1).AddMinutes(10))};
+        // The day left behind is checked although the block no longer touches it.
+        var (block, presetId) = ContractWithTwoHoursEveryDay(StrictnessRule.PeriodTimeBudget);
+        var command = ValidCommand(block.Id, presetId) with { Slot = At.Slot(Now.AddDays(2).AddHours(5), Now.AddDays(2).AddHours(7)) };
 
         var result = await CreateValidator().ValidateAsync(command);
 
-        result.IsValid.Should().BeTrue();
+        result.Errors.Should().ContainSingle(e => e.ErrorMessage == "This would drop Jan 1's total below its 2h daily floor.");
     }
 
     [Fact]
-    public async Task Validate_PeriodTimeBudget_ShrinkToNearNothingElsewhereInPeriod_IsInvalid()
+    public async Task Validate_PermissionRefused_PlacementIsNotAsked()
     {
-        // Superseded expectation: Period Time Budget's per-day floor guard now covers
-        // ordinary (non-ContractFloor) contracts too, mirroring Daily Flexibility — moving
-        // hours across days is still fully allowed, but the landing day still has to meet
-        // its own floor once the move settles. Both the vacated origin day and this new,
-        // nearly-empty destination day are checked; the destination day alone (10 minutes
-        // against a 2h floor) already fails.
+        // A running block answers "it has started", not placement's "that time is in the past".
         var blockId = Guid.NewGuid();
         var presetId = Guid.NewGuid();
-        var contractId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(4)), membership: TestContracts.Committed(contractId)));
+            .Returns(FocusBlock.Create(blockId, presetId, At.Slot(Now.AddMinutes(-30), Now.AddHours(1))));
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
             .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
-        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
-            .Returns(SealedContractWithFloor(StrictnessRule.PeriodTimeBudget, contractId, floorHours: 2));
-        var command = ValidCommand(blockId, presetId) with
-        {
-            Slot = At.Slot(Now.AddDays(3), Now.AddDays(3).AddMinutes(10)) // shrunk to 10 minutes, elsewhere in the period
-        };
+        _placement.HandleAsync(Arg.Any<GetBlockPlacementVerdictQuery>(), Arg.Any<CancellationToken>())
+            .Returns(new BlockPlacementVerdictDto { Outcome = PlacementOutcome.InThePast, Message = "In the past." });
 
-        var result = await CreateValidator().ValidateAsync(command);
+        var result = await CreateValidator().ValidateAsync(ValidCommand(blockId, presetId));
 
-        result.IsValid.Should().BeFalse();
-    }
-
-    // ── Period Time Budget floor-protection (ContractFloor) ─────────────────────
-
-    private static NenContract SealedContractWithContractFloor(Guid id, double contractFloorHours) =>
-        NenContract.Seal(
-            id: id,
-            name: "Contract",
-            goal: new NenContractGoal("Goal"),
-            strictnessRule: StrictnessRule.PeriodTimeBudget,
-            calendar: TestCalendars.For(DateOnly.FromDateTime(Now), DateOnly.FromDateTime(Now).AddDays(7), new DailyFloorRule.None()),
-            floorRule: new DailyFloorRule.None(),
-            changeWindow: null,
-            allowCancellation: false,
-            plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-            sealedAt: At.Utc(Now.Date), timeZone: At.UtcZone,
-            contractFloor: new ContractFloor(contractFloorHours));
-
-    [Fact]
-    public async Task Validate_PeriodTimeBudget_ShrinkBelowContractFloor_IsInvalid()
-    {
-        var blockId = Guid.NewGuid();
-        var presetId = Guid.NewGuid();
-        var contractId = Guid.NewGuid();
-        _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(3)), membership: TestContracts.Committed(contractId))); // 2h originally
-        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
-        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
-            .Returns(SealedContractWithContractFloor(contractId, contractFloorHours: 2));
-        var command = ValidCommand(blockId, presetId) with { Slot = At.Slot(Now.AddHours(1), Now.AddHours(2))}; // shrunk to 1h
-        _computePlannedFocusHours.HandleAsync(
-                Arg.Is<ComputePlannedFocusHoursQuery>(q => q.ContractId == contractId && q.ExcludeBlockId == blockId),
-                Arg.Any<CancellationToken>())
-            .Returns(new Dictionary<DateOnly, double> { [DateOnly.FromDateTime(Now)] = 1 });
-
-        var result = await CreateValidator().ValidateAsync(command);
-
-        result.IsValid.Should().BeFalse();
+        result.Errors.Should().ContainSingle(e => e.ErrorMessage == "This block has already started — it cannot be changed.");
+        await _placement.DidNotReceive().HandleAsync(Arg.Any<GetBlockPlacementVerdictQuery>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task Validate_PeriodTimeBudget_ShrinkOneDayButOtherDaysCoverContractFloor_IsValid()
+    public async Task Validate_AFreeBonusBlock_MayChangeItsPreset_EvenUnderLockdown()
     {
         var blockId = Guid.NewGuid();
-        var presetId = Guid.NewGuid();
-        var contractId = Guid.NewGuid();
+        var originalPresetId = Guid.NewGuid();
+        var newPresetId = Guid.NewGuid();
+        var contract = SealedContract(StrictnessRule.Locked, Guid.NewGuid());
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(3)), membership: TestContracts.Committed(contractId))); // 2h originally
-        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
-        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
-            .Returns(SealedContractWithContractFloor(contractId, contractFloorHours: 2));
-        var command = ValidCommand(blockId, presetId) with { Slot = At.Slot(Now.AddHours(1), Now.AddHours(2))}; // shrunk to 1h here...
-        // ...but another day already has 1h scheduled, so the period total still meets the 2h floor.
-        _computePlannedFocusHours.HandleAsync(
-                Arg.Is<ComputePlannedFocusHoursQuery>(q => q.ContractId == contractId && q.ExcludeBlockId == blockId),
-                Arg.Any<CancellationToken>())
-            .Returns(new Dictionary<DateOnly, double>
-            {
-                [DateOnly.FromDateTime(Now)] = 1,
-                [DateOnly.FromDateTime(Now).AddDays(3)] = 1
-            });
+            .Returns(FocusBlock.Create(blockId, originalPresetId, At.Slot(Now.AddHours(1), Now.AddHours(2)),
+                membership: contract.MembershipForPlacedBlock(claimsDeficit: false)));
+        _presets.GetByIdAsync(newPresetId, Arg.Any<CancellationToken>())
+            .Returns(BlockPreset.Create(newPresetId, "Other", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
+        _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
 
-        var result = await CreateValidator().ValidateAsync(command);
-
-        result.IsValid.Should().BeTrue();
-    }
-
-    [Fact]
-    public async Task Validate_PeriodTimeBudget_NoContractFloorAndNoDailyFloor_GuardTriviallyPasses()
-    {
-        var blockId = Guid.NewGuid();
-        var presetId = Guid.NewGuid();
-        var contractId = Guid.NewGuid();
-        _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(3)), membership: TestContracts.Committed(contractId)));
-        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
-        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
-            .Returns(SealedContract(StrictnessRule.PeriodTimeBudget, contractId)); // floor = 0 every day, no ContractFloor
-        // Shrunk to almost nothing — the per-day guard still runs, but a 0h floor is
-        // always trivially satisfied regardless of total.
-        var command = ValidCommand(blockId, presetId) with { Slot = At.Slot(Now.AddHours(1), Now.AddHours(1).AddMinutes(5))};
-
-        var result = await CreateValidator().ValidateAsync(command);
-
-        result.IsValid.Should().BeTrue();
-    }
-
-    // ── Period Time Budget, ordinary per-day floor (not ContractFloor) ──────────
-
-    [Fact]
-    public async Task Validate_PeriodTimeBudgetFixedFloor_MoveVacatesOriginDayBelowFloor_IsInvalid()
-    {
-        var blockId = Guid.NewGuid();
-        var presetId = Guid.NewGuid();
-        var contractId = Guid.NewGuid();
-        _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(3)), membership: TestContracts.Committed(contractId)));
-        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
-        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
-            .Returns(SealedContractWithFloor(StrictnessRule.PeriodTimeBudget, contractId, floorHours: 2));
-        // Moved to a different day entirely — the origin day now has nothing scheduled.
-        var command = ValidCommand(blockId, presetId) with
-        {
-            Slot = At.Slot(Now.AddDays(3).AddHours(1), Now.AddDays(3).AddHours(3))
-        };
-        _computePlannedFocusHours.HandleAsync(
-                Arg.Is<ComputePlannedFocusHoursQuery>(q => q.ContractId == contractId && q.ExcludeBlockId == blockId),
-                Arg.Any<CancellationToken>())
-            .Returns(new Dictionary<DateOnly, double>
-            {
-                [DateOnly.FromDateTime(Now)] = 0, // vacated origin day — below its 2h floor
-                [DateOnly.FromDateTime(Now.AddDays(3))] = 2
-            });
-
-        var result = await CreateValidator().ValidateAsync(command);
-
-        result.IsValid.Should().BeFalse();
-    }
-
-    [Fact]
-    public async Task Validate_PeriodTimeBudgetFixedFloor_MoveLandsOnDayBelowItsFloor_IsInvalid()
-    {
-        var blockId = Guid.NewGuid();
-        var presetId = Guid.NewGuid();
-        var contractId = Guid.NewGuid();
-        _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(2)), membership: TestContracts.Committed(contractId))); // 1h
-        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
-        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
-            .Returns(SealedContractWithFloor(StrictnessRule.PeriodTimeBudget, contractId, floorHours: 2));
-        // Origin day still meets its floor via other blocks; destination day only gets
-        // this 1h block, which alone doesn't reach its own 2h floor.
-        var command = ValidCommand(blockId, presetId) with
-        {
-            Slot = At.Slot(Now.AddDays(3).AddHours(1), Now.AddDays(3).AddHours(2))
-        };
-        _computePlannedFocusHours.HandleAsync(
-                Arg.Is<ComputePlannedFocusHoursQuery>(q => q.ContractId == contractId && q.ExcludeBlockId == blockId),
-                Arg.Any<CancellationToken>())
-            .Returns(new Dictionary<DateOnly, double>
-            {
-                [DateOnly.FromDateTime(Now)] = 2,
-                [DateOnly.FromDateTime(Now.AddDays(3))] = 1 // destination day, below its 2h floor
-            });
-
-        var result = await CreateValidator().ValidateAsync(command);
-
-        result.IsValid.Should().BeFalse();
-    }
-
-    [Fact]
-    public async Task Validate_PeriodTimeBudgetFixedFloor_MoveBothDaysStillMeetTheirFloors_IsValid()
-    {
-        var blockId = Guid.NewGuid();
-        var presetId = Guid.NewGuid();
-        var contractId = Guid.NewGuid();
-        _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(3)), membership: TestContracts.Committed(contractId)));
-        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
-        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
-            .Returns(SealedContractWithFloor(StrictnessRule.PeriodTimeBudget, contractId, floorHours: 2));
-        var command = ValidCommand(blockId, presetId) with
-        {
-            Slot = At.Slot(Now.AddDays(3).AddHours(1), Now.AddDays(3).AddHours(3))
-        };
-        _computePlannedFocusHours.HandleAsync(
-                Arg.Is<ComputePlannedFocusHoursQuery>(q => q.ContractId == contractId && q.ExcludeBlockId == blockId),
-                Arg.Any<CancellationToken>())
-            .Returns(new Dictionary<DateOnly, double>
-            {
-                [DateOnly.FromDateTime(Now)] = 2, // origin still covered by another block
-                [DateOnly.FromDateTime(Now.AddDays(3))] = 2 // destination fully covered by the move
-            });
-
-        var result = await CreateValidator().ValidateAsync(command);
+        var result = await CreateValidator().ValidateAsync(ValidCommand(blockId, newPresetId));
 
         result.IsValid.Should().BeTrue();
     }

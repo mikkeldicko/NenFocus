@@ -28,7 +28,7 @@ public class EditNenContractValidatorTests
 
     private EditNenContractValidator CreateValidator() => new(_contracts, _presets, _contractPresets, _checkOverlap);
 
-    private static NenContract Seal(DateTime sealedAt) => NenContract.Seal(
+    private static NenContract Seal(DateTime sealedAt) => TestContracts.Seal(
         id: Guid.NewGuid(),
         name: "Original",
         goal: new NenContractGoal("Goal"),

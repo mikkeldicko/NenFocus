@@ -41,35 +41,40 @@ public class NenContract : AggregateRoot
     /// of the hours total.
     /// </summary>
     public DateOnly OriginalEndDate { get; private set; }
-    public StrictnessRule StrictnessRule { get; private set; }
+
+    /// <summary>
+    /// This contract's rules — every setting without dates, its own copy of what it was sealed
+    /// with (a preset is a template, never a live source). Gap 93.
+    /// </summary>
+    public ContractRules Rules { get; private set; } = null!;
+
+    public StrictnessRule StrictnessRule => Rules.Strictness;
 
     /// <summary>
     /// How this contract's days get their floor when generated — fixed, following the plan,
     /// or none. Read only when days are (re)generated (an Edit re-draft); each day's actual
     /// floor is answered by the day itself (IsRestDay / FloorHoursFor). Gap 65.
     /// </summary>
-    public DailyFloorRule FloorRule { get; private set; } = null!;
+    public DailyFloorRule FloorRule => Rules.FloorRule;
 
     public ChangeWindow? ChangeWindow { get; private set; }
-    public bool AllowCancellation { get; private set; }
+    public bool AllowCancellation => Rules.AllowCancellation;
     public NenContractStatus Status { get; private set; }
     public Guid? ContractPresetId { get; private set; }
 
     /// <summary>
     /// Whether sessions of this contract's Focus Blocks keep their preset enforced through
-    /// their breaks (Gap 64). Copied by value from ContractPresetId's preset at Seal, same as
-    /// every other ContractPreset-sourced field, and copied again onto each such session at
-    /// Start — a running session never looks it up here. It applies to every member's
-    /// session, Bonus blocks included (Gap 97).
+    /// their breaks (Gap 64). Copied onto each such session at Start — a running session never
+    /// looks it up here. It applies to every member's session, Bonus blocks included (Gap 97).
     /// </summary>
-    public bool KeepBlockingDuringBreaks { get; private set; }
+    public bool KeepBlockingDuringBreaks => Rules.KeepBlockingDuringBreaks;
 
     /// <summary>
     /// Which days a redemption block may originate a new deficit claim on — see
     /// CheckRedemptionEligibility. Independent of StrictnessRule, which only governs
-    /// whether an already-placed block can move afterward (AllowsBlockTimeChange).
+    /// whether an already-placed block can move afterward (CheckBlockMove).
     /// </summary>
-    public RedemptionPlacementPolicy RedemptionPlacementPolicy { get; private set; }
+    public RedemptionPlacementPolicy RedemptionPlacementPolicy => Rules.RedemptionPlacement;
 
     /// <summary>
     /// A whole-period minimum, as an alternative to per-day floors — mutually exclusive
@@ -121,18 +126,14 @@ public class NenContract : AggregateRoot
         Guid id,
         string name,
         NenContractGoal goal,
-        StrictnessRule strictnessRule,
+        ContractRules rules,
         ContractCalendar calendar,
-        DailyFloorRule floorRule,
         ChangeWindow? changeWindow,
-        bool allowCancellation,
         IReadOnlyDictionary<DateOnly, double> plannedFocusHoursByDay,
         Moment sealedAt,
         UserTimeZone timeZone,
         Guid? contractPresetId = null,
-        ContractFloor? contractFloor = null,
-        RedemptionPlacementPolicy redemptionPlacementPolicy = RedemptionPlacementPolicy.AnywhereInContract,
-        bool keepBlockingDuringBreaks = false)
+        ContractFloor? contractFloor = null)
     {
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Contract name cannot be empty.", nameof(name));
@@ -148,7 +149,7 @@ public class NenContract : AggregateRoot
             throw new ArgumentException(
                 "A contract cannot have both a daily floor and a whole-contract floor.");
 
-        if (floorRule is DailyFloorRule.None && calendar.HasAnyDailyFloor)
+        if (rules.FloorRule is DailyFloorRule.None && calendar.HasAnyDailyFloor)
             throw new ArgumentException("A contract without daily floors cannot have a day with a floor.");
 
         foreach (var day in calendar.Days)
@@ -170,14 +171,11 @@ public class NenContract : AggregateRoot
             Name = name.Trim(),
             Goal = goal,
             OriginalEndDate = calendar.LastDate,
-            StrictnessRule = strictnessRule,
-            FloorRule = floorRule,
+            // Its own copy: a stored value object belongs to one row (Gap 97's lesson).
+            Rules = rules with { },
             ChangeWindow = changeWindow,
-            AllowCancellation = allowCancellation,
             ContractPresetId = contractPresetId,
             ContractFloor = contractFloor,
-            RedemptionPlacementPolicy = redemptionPlacementPolicy,
-            KeepBlockingDuringBreaks = keepBlockingDuringBreaks,
             CommittedFocusHours = plannedFocusHoursByDay.Values.Sum(),
             Status = calendar.StartsAt <= localSealedAt
                 ? NenContractStatus.Active
@@ -360,7 +358,7 @@ public class NenContract : AggregateRoot
     /// entirely by RedemptionPlacementPolicy, never by which day the missed block was
     /// originally due (a deficit stays claimable no matter how long it's been outstanding)
     /// and never by StrictnessRule (which only governs whether an already-placed block can
-    /// move afterward — see AllowsBlockTimeChange). Deliberately not consulted again once a
+    /// move afterward — see CheckBlockMove). Deliberately not consulted again once a
     /// RedemptionEntry already exists — see ComputeRedemptionAttributionQueryHandler's
     /// carry-forward pass, which rescales an existing claim's amount without re-gating
     /// whether it's still allowed to exist.
@@ -455,25 +453,150 @@ public class NenContract : AggregateRoot
         return isResolved ? BlockFateOnBreak.Leave : BlockFateOnBreak.Cancel;
     }
 
+    // ── What may happen to one of this contract's blocks (Gap 93) ───────────────────────────
+
+    // Each question is about a block of this contract; asked about another's, it throws. A
+    // finished contract's blocks are history — nothing changes and nothing is deleted — so no
+    // caller needs to ask IsInEffect first.
+
     /// <summary>
-    /// Whether a block originally scheduled on <paramref name="originalDate"/> may be
-    /// rescheduled to a new window spanning <paramref name="newStartDate"/> through
-    /// <paramref name="newEndDate"/> (inclusive), per this contract's StrictnessRule.
-    /// All three dates are calendar days — callers resolve local time before calling;
-    /// this method only ever compares dates. Locked never allows a time change at all.
-    /// DailyFlexibility requires the new window to stay entirely on the block's original
-    /// day. PeriodTimeBudget requires the new window to stay within the contract's own
-    /// [StartDate, EndDate] range.
+    /// Whether this contract's rules hold the block to what was sealed: a Committed or Redemption
+    /// block always; a Bonus block only when the rules say Bonus blocks follow the strictness.
+    /// A block it doesn't bind is free, like a plain block — except that it never leaves the period.
     /// </summary>
-    public bool AllowsBlockTimeChange(DateOnly originalDate, DateOnly newStartDate, DateOnly newEndDate)
+    public bool Binds(PlannedBlock block)
     {
-        if (StrictnessRule == StrictnessRule.Locked)
-            return false;
-
-        if (StrictnessRule == StrictnessRule.DailyFlexibility)
-            return newStartDate == originalDate && newEndDate == originalDate;
-
-        return newStartDate >= StartDate && newEndDate <= EndDate; // PeriodTimeBudget
+        EnsureMine(block);
+        return !block.Membership!.IsBonus || Rules.BonusBlocksFollowStrictness;
     }
 
+    /// <summary>
+    /// May the block be moved or resized to <paramref name="newSlot"/>? No block of a contract
+    /// ever leaves its planned period — measured in real time, so the first day before the start
+    /// is outside. Inside it, a bound block moves as far as the rules' MovementRange allows; its
+    /// "own day" is every day it already sits on. Whether the slot fits the day's Work Hours and
+    /// is free is placement's question (BlockPlacementChecker), not this one.
+    /// </summary>
+    public ChangeVerdict CheckBlockMove(PlannedBlock block, TimeSlot newSlot, UserTimeZone timeZone)
+    {
+        EnsureMine(block);
+        if (!IsInEffect)
+            return ChangeVerdict.Refused(ChangeOutcome.ContractIsOver);
+
+        if (!PlannedPeriod(timeZone).Contains(newSlot))
+            return ChangeVerdict.Refused(ChangeOutcome.OutsideContractPeriod);
+
+        if (!Binds(block))
+            return ChangeVerdict.Allowed;
+
+        switch (Rules.MovementRange)
+        {
+            case MovementRange.None:
+                return CheckBlockMayMove(block);
+
+            case MovementRange.OwnDay:
+                var ownDays = timeZone.SplitByDay(block.Scheduled).Select(part => part.Date).ToHashSet();
+                return timeZone.SplitByDay(newSlot).All(part => ownDays.Contains(part.Date))
+                    ? ChangeVerdict.Allowed
+                    : ChangeVerdict.Refused(ChangeOutcome.OutsideOwnDay);
+
+            case MovementRange.WholePeriod:
+                return ChangeVerdict.Allowed;
+
+            default:
+                throw new InvalidOperationException($"No movement rule for {Rules.MovementRange}.");
+        }
+    }
+
+    /// <summary>
+    /// May the block move at all, wherever to? No, once the contract is over, or when it binds
+    /// the block and its rules allow no movement. What a screen needs before a target is chosen;
+    /// <see cref="CheckBlockMove"/> answers for a concrete slot.
+    /// </summary>
+    public ChangeVerdict CheckBlockMayMove(PlannedBlock block)
+    {
+        EnsureMine(block);
+        if (!IsInEffect)
+            return ChangeVerdict.Refused(ChangeOutcome.ContractIsOver);
+
+        return Binds(block) && Rules.MovementRange == MovementRange.None
+            ? ChangeVerdict.Refused(ChangeOutcome.NoMovementAllowed)
+            : ChangeVerdict.Allowed;
+    }
+
+    /// <summary>
+    /// May the block end up on another day than its own? Only while the contract is in effect,
+    /// and then for a block it doesn't bind, or where its rules let a bound block move across
+    /// the whole period. What a screen needs to know before it asks for a day at all.
+    /// </summary>
+    public bool AllowsBlockOnAnotherDay(PlannedBlock block)
+    {
+        EnsureMine(block);
+        return IsInEffect && (!Binds(block) || Rules.MovementRange == MovementRange.WholePeriod);
+    }
+
+    /// <summary>A bound block keeps the preset it has: deficits and redemptions are matched per preset.</summary>
+    public ChangeVerdict CheckBlockPresetChange(PlannedBlock block)
+    {
+        EnsureMine(block);
+        if (!IsInEffect)
+            return ChangeVerdict.Refused(ChangeOutcome.ContractIsOver);
+
+        return Binds(block) ? ChangeVerdict.Refused(ChangeOutcome.PresetFixed) : ChangeVerdict.Allowed;
+    }
+
+    /// <summary>
+    /// Split exists to divide hours that can't be deleted and re-created, so it is offered only
+    /// for a block this contract binds, and only where the rules let a block move at all. Where
+    /// each half may land is <see cref="CheckBlockMove"/>'s answer.
+    /// </summary>
+    public ChangeVerdict CheckBlockSplit(PlannedBlock block)
+    {
+        EnsureMine(block);
+        if (!IsInEffect)
+            return ChangeVerdict.Refused(ChangeOutcome.ContractIsOver);
+
+        return Binds(block) ? CheckBlockMayMove(block) : ChangeVerdict.Refused(ChangeOutcome.SplitNotOffered);
+    }
+
+    /// <summary>
+    /// A contract's block is part of its record: only a block it doesn't bind, that hasn't
+    /// started, of a contract still in effect, may be deleted — in practice a future free Bonus block.
+    /// </summary>
+    public ChangeVerdict CheckBlockDelete(PlannedBlock block, Moment asOf)
+    {
+        EnsureMine(block);
+        return IsInEffect && !Binds(block) && !block.HasStarted(asOf)
+            ? ChangeVerdict.Allowed
+            : ChangeVerdict.Refused(ChangeOutcome.ContractBlockNeverDeleted);
+    }
+
+    /// <summary>
+    /// Would the plan still meet this contract's floor? <paramref name="plannedFocusHoursByDay"/>
+    /// is the planned Focus hours per day as they would be after a change (only blocks that
+    /// count toward the floor). With a whole-period target the total is checked; otherwise every
+    /// day that has a floor, first short day first — every day, not only the ones the change
+    /// touched, so no day can be missed. The strictness plays no part: a day's floor is a day's floor.
+    /// </summary>
+    public ChangeVerdict CheckFloor(IReadOnlyDictionary<DateOnly, double> plannedFocusHoursByDay)
+    {
+        if (ContractFloor is { } target)
+            return target.IsSatisfiedBy(plannedFocusHoursByDay.Values.Sum())
+                ? ChangeVerdict.Allowed
+                : ChangeVerdict.BelowPeriodTarget(target.Hours);
+
+        foreach (var day in _calendar.Days)
+        {
+            if (day.Floor is { } floor && !floor.IsSatisfiedBy(plannedFocusHoursByDay.GetValueOrDefault(day.Date)))
+                return ChangeVerdict.BelowDailyFloor(day.Date, floor.Hours);
+        }
+
+        return ChangeVerdict.Allowed;
+    }
+
+    private void EnsureMine(PlannedBlock block)
+    {
+        if (block.Membership?.ContractId != Id)
+            throw new ArgumentException("This block does not belong to this contract.", nameof(block));
+    }
 }

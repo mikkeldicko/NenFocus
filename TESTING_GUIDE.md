@@ -236,6 +236,8 @@ public async Task HandleAsync_ValidDurations_AllSucceed(int durationMinutes)
 **Lessons from Gap 88 (for any test, not only architecture tests):**
 - **A test written after its fix proves nothing until probed:** break the code on purpose, watch the test fail, restore.
 - **An assertion can compile on the wrong type.** After a field became `Moment?`, `x.Should().Be(someDateTime)` still compiled (FluentAssertions' `Be(object)`) and failed only at runtime ("expected 12:00:00, found 12:00:00Z"). After a type change, compare with a value of the new type.
+- **A scripted edit fails in two ways:** a parse error runs none of it, a throw midway has already written the files before it. Check what was written before re-running (Gap 93).
+- **Manual app checks are for what tests can't prove** (architect, 2026-10-02): on-screen wiring (is the button hidden, the field disabled, the message shown), a migration on the real database, timing against the real clock. A rule case the Domain or validator tests already cover doesn't go on the list — a handful per phase, with a line saying what the tests cover.
 - **Scripted edits:** match the file's line endings (`\r?\n`; a `\n`-only deletion left an orphan `\r` that shifted every later line number); anchor text replacements to a word boundary (replacing `At.X(` also hit `TestAt.X(`); and delete exactly the member a plan names, not its type (read it first).
 
 ---

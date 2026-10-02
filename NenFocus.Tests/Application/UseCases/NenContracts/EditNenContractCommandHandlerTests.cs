@@ -37,7 +37,7 @@ public class EditNenContractCommandHandlerTests
     private EditNenContractCommandHandler CreateHandler() =>
         new(_contracts, _blocks, new ContractBlockBatchPreparer(_calculator), _sessions, new BlockPlacementChecker(), _clock);
 
-    private static NenContract ScheduledContract(Guid id) => NenContract.Seal(
+    private static NenContract ScheduledContract(Guid id) => TestContracts.Seal(
         id: id,
         name: "Original Name",
         goal: new NenContractGoal("Original goal"),
@@ -269,5 +269,31 @@ public class EditNenContractCommandHandlerTests
         result.Success.Should().BeTrue();
         await _contracts.Received(1).AddAsync(
             Arg.Is<NenContract>(c => c.KeepBlockingDuringBreaks), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task HandleAsync_EveryRuleOfTheCommand_IsCarriedIntoTheReSealedContract()
+    {
+        // The rules travel as one value (Gap 93), so a re-seal can't drop one of them.
+        var contract = ScheduledContract(Guid.NewGuid());
+        _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
+        NenContract? saved = null;
+        await _contracts.AddAsync(Arg.Do<NenContract>(c => saved = c), Arg.Any<CancellationToken>());
+        var command = BaseCommand(contract.Id) with
+        {
+            AllowCancellation = true,
+            KeepBlockingDuringBreaks = true,
+            RedemptionPlacementPolicy = RedemptionPlacementPolicy.CurrentDayOnly,
+            BonusBlocksFollowStrictness = true
+        };
+
+        var result = await CreateHandler().HandleAsync(command, CancellationToken.None);
+
+        result.Success.Should().BeTrue();
+        saved!.Rules.Should().Be(new ContractRules(
+            command.StrictnessRule,
+            command.FixedDailyFloorHours is { } hours ? new DailyFloor(hours) : null,
+            allowCancellation: true, keepBlockingDuringBreaks: true,
+            RedemptionPlacementPolicy.CurrentDayOnly, bonusBlocksFollowStrictness: true));
     }
 }

@@ -32,12 +32,14 @@ public sealed class UpdateContractPresetCommandHandler
 
             preset.Update(
                 command.Name,
-                command.StrictnessRule,
-                command.DailyFloorHours is { } floor ? new DailyFloor(floor) : null,
-                workHours,
-                command.AllowCancellation,
-                command.RedemptionPlacementPolicy,
-                command.KeepBlockingDuringBreaks);
+                new ContractRules(
+                    command.StrictnessRule,
+                    command.DailyFloorHours is { } floor ? new DailyFloor(floor) : null,
+                    command.AllowCancellation,
+                    command.KeepBlockingDuringBreaks,
+                    command.RedemptionPlacementPolicy,
+                    command.BonusBlocksFollowStrictness),
+                workHours);
         }
         catch (ArgumentException ex)
         {

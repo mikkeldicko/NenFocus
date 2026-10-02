@@ -71,7 +71,7 @@ public class SealNenContractValidatorTests
     {
         var presetId = Guid.NewGuid();
         _contractPresets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(ContractPreset.Create(presetId, "My Preset", StrictnessRule.Locked, null, null, true));
+            .Returns(ContractPreset.Create(presetId, "My Preset", TestRules.Of(allowCancellation: true), null));
 
         var result = await CreateValidator().ValidateAsync(ValidCommand() with { ContractPresetId = presetId });
 

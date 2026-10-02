@@ -28,7 +28,7 @@ public class CompleteNenContractCommandHandlerTests
 
     private CompleteNenContractCommandHandler CreateHandler() => new(_contracts, _clock, _recap);
 
-    private static NenContract ActiveContract() => NenContract.Seal(
+    private static NenContract ActiveContract() => TestContracts.Seal(
         id: Guid.NewGuid(),
         name: "Focused Week",
         goal: new NenContractGoal("Ship it"),

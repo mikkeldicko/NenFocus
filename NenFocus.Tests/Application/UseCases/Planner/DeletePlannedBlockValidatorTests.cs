@@ -3,6 +3,8 @@ using NenFocus.Domain.ValueObjects;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.UseCases.Planner.DeletePlannedBlock;
 using NenFocus.Domain.Entities;
+using NenFocus.Domain.Enums;
+using NenFocus.Domain.Services;
 using NSubstitute;
 
 namespace NenFocus.Tests.Application.UseCases.Planner;
@@ -12,15 +14,17 @@ public class DeletePlannedBlockValidatorTests
     private static readonly DateTime Now = new(2026, 1, 5, 12, 0, 0, DateTimeKind.Utc);
 
     private readonly IPlannedBlockRepository _blocks = Substitute.For<IPlannedBlockRepository>();
+    private readonly INenContractRepository _contracts = Substitute.For<INenContractRepository>();
     private readonly ISystemClock _clock = TestClock.Create();
 
     public DeletePlannedBlockValidatorTests()
     {
         _blocks.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((PlannedBlock?)null);
+        _contracts.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((NenContract?)null);
         _clock.SetNow(Now);
     }
 
-    private DeletePlannedBlockValidator CreateValidator() => new(_blocks, _clock);
+    private DeletePlannedBlockValidator CreateValidator() => new(_blocks, _contracts, _clock, new BlockChangeChecker(new PlannedFocusHoursCalculator()));
 
     [Fact]
     public async Task Validate_ValidBlockId_IsValid()
@@ -160,5 +164,67 @@ public class DeletePlannedBlockValidatorTests
         var result = await CreateValidator().ValidateAsync(new DeletePlannedBlockCommand { BlockId = block.Id });
 
         result.IsValid.Should().BeFalse();
+    }
+
+    // ── Bonus blocks: the contract's rules decide (Gap 93) ─────────────────────
+
+    private NenContract ContractInEffect(bool bonusBlocksFollowStrictness)
+    {
+        var rules = TestRules.Of(StrictnessRule.Locked, bonusBlocksFollowStrictness: bonusBlocksFollowStrictness);
+        var contract = NenContract.Seal(Guid.NewGuid(), "Contract", new NenContractGoal("Goal"), rules,
+            TestCalendars.For(DateOnly.FromDateTime(Now), DateOnly.FromDateTime(Now).AddDays(7), rules.FloorRule),
+            null, new Dictionary<DateOnly, double>(), At.Utc(Now.Date), At.UtcZone);
+        _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
+        return contract;
+    }
+
+    private FocusBlock BonusBlock(NenContract contract, DateTime from, DateTime to)
+    {
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(from, to),
+            membership: contract.MembershipForPlacedBlock(claimsDeficit: false));
+        _blocks.GetByIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns(block);
+        return block;
+    }
+
+    [Fact]
+    public async Task Validate_AFutureFreeBonusBlock_IsValid_EvenUnderLockdown()
+    {
+        var block = BonusBlock(ContractInEffect(bonusBlocksFollowStrictness: false), Now.AddHours(1), Now.AddHours(2));
+
+        var result = await CreateValidator().ValidateAsync(new DeletePlannedBlockCommand { BlockId = block.Id });
+
+        result.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Validate_ABindingBonusBlock_IsInvalid()
+    {
+        var block = BonusBlock(ContractInEffect(bonusBlocksFollowStrictness: true), Now.AddHours(1), Now.AddHours(2));
+
+        var result = await CreateValidator().ValidateAsync(new DeletePlannedBlockCommand { BlockId = block.Id });
+
+        result.Errors.Should().ContainSingle(e => e.ErrorMessage == "Cannot delete a block that belongs to a Nen Contract.");
+    }
+
+    [Fact]
+    public async Task Validate_AnEndedFreeBonusBlock_IsInvalid()
+    {
+        // Its Bonus hours are part of the contract's recap — deleting it would rewrite that.
+        var block = BonusBlock(ContractInEffect(bonusBlocksFollowStrictness: false), Now.AddHours(-3), Now.AddHours(-1));
+
+        var result = await CreateValidator().ValidateAsync(new DeletePlannedBlockCommand { BlockId = block.Id });
+
+        result.IsValid.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Validate_ARunningBlock_SaysItIsRunning()
+    {
+        var block = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Now.AddHours(-1), Now.AddHours(1)));
+        _blocks.GetByIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns(block);
+
+        var result = await CreateValidator().ValidateAsync(new DeletePlannedBlockCommand { BlockId = block.Id });
+
+        result.Errors.Should().ContainSingle(e => e.ErrorMessage == "This block is running and cannot be deleted until it ends.");
     }
 }

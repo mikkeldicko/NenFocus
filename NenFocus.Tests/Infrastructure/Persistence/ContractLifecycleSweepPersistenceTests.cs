@@ -18,7 +18,7 @@ public class ContractLifecycleSweepPersistenceTests : SqliteRepositoryTestBase
 {
     private static readonly DateOnly Tomorrow = new(2026, 9, 29);
 
-    private static NenContract ScheduledForTomorrowNineToSix() => NenContract.Seal(
+    private static NenContract ScheduledForTomorrowNineToSix() => TestContracts.Seal(
         id: Guid.NewGuid(),
         name: "Test contract",
         goal: new NenContractGoal("Goal"),

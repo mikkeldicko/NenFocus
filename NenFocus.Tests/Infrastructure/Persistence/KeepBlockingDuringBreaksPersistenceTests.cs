@@ -25,9 +25,8 @@ public class KeepBlockingDuringBreaksPersistenceTests : SqliteRepositoryTestBase
     [InlineData(false)]
     public async Task ContractPresetContractAndSession_RoundTripTheRule(bool keepBlocking)
     {
-        var preset = ContractPreset.Create(Guid.NewGuid(), "Strict", StrictnessRule.Locked, null, null, false,
-            keepBlockingDuringBreaks: keepBlocking);
-        var contract = NenContract.Seal(
+        var preset = ContractPreset.Create(Guid.NewGuid(), "Strict", TestRules.Of(keepBlockingDuringBreaks: keepBlocking), null);
+        var contract = TestContracts.Seal(
             id: Guid.NewGuid(),
             name: "Contract",
             goal: new NenContractGoal("Goal"),

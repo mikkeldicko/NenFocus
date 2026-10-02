@@ -39,7 +39,7 @@ public class GetNenContractForEditQueryHandlerTests
     [Fact]
     public async Task HandleAsync_FollowsPlanContract_NoFixedFloor_DaysCarryPlannedFloors()
     {
-        var contract = NenContract.Seal(
+        var contract = TestContracts.Seal(
             id: ContractId,
             name: "Study Week",
             goal: new NenContractGoal("Focus"),
@@ -71,7 +71,7 @@ public class GetNenContractForEditQueryHandlerTests
             .Select(StartDate.AddDays)
             .Where(d => d != restDay)
             .ToDictionary(d => d, _ => 3.0);
-        var contract = NenContract.Seal(
+        var contract = TestContracts.Seal(
             id: ContractId, name: "Advanced", goal: new NenContractGoal("Goal"),
             strictnessRule: StrictnessRule.Locked,
             calendar: TestCalendars.For(StartDate, EndDate, new DailyFloorRule.Fixed(new DailyFloor(3)),
@@ -97,7 +97,7 @@ public class GetNenContractForEditQueryHandlerTests
     [Fact]
     public async Task HandleAsync_WithBlocks_ResolvesPresetNamesAndOrdersByStart()
     {
-        var contract = NenContract.Seal(
+        var contract = TestContracts.Seal(
             id: ContractId,
             name: "Contract",
             goal: new NenContractGoal("Goal"),

@@ -36,7 +36,7 @@ public class GetNenContractCompletionReadinessQueryHandlerTests
     private GetNenContractCompletionReadinessQueryHandler CreateHandler() =>
         new(_contracts, _blocks, _completedHours, _clock, _outcomeClassifier);
 
-    private static NenContract ActiveContract(double committedHours = 4) => NenContract.Seal(
+    private static NenContract ActiveContract(double committedHours = 4) => TestContracts.Seal(
         id: ContractId,
         name: "Focused Week",
         goal: new NenContractGoal("Ship it"),

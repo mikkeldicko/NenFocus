@@ -20,7 +20,7 @@ public class SaveNenContractReflectionCommandHandlerTests
 
     private static NenContract CompletedContract()
     {
-        var contract = NenContract.Seal(
+        var contract = TestContracts.Seal(
             id: ContractId,
             name: "Focused Week",
             goal: new NenContractGoal("Ship it"),

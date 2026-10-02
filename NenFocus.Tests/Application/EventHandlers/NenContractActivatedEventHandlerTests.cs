@@ -20,7 +20,7 @@ public class NenContractActivatedEventHandlerTests
 
     private NenContractActivatedEventHandler CreateHandler() => new(_contracts, _notifier);
 
-    private static NenContract SealedContract(string name = "Focused Week") => NenContract.Seal(
+    private static NenContract SealedContract(string name = "Focused Week") => TestContracts.Seal(
         id: Guid.NewGuid(),
         name: name,
         goal: new NenContractGoal("Ship it"),

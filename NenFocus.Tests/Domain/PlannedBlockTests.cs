@@ -651,7 +651,7 @@ public class PlannedBlockTests
         ((Action)redemption.Leave).Should().Throw<InvalidOperationException>();
     }
 
-    private static NenContract ContractInEffect() => NenContract.Seal(
+    private static NenContract ContractInEffect() => TestContracts.Seal(
         id: Guid.NewGuid(),
         name: "Contract",
         goal: new NenContractGoal("Goal"),
@@ -675,26 +675,20 @@ public class PlannedBlockTests
     }
 
     [Fact]
-    public void PlaceUnder_BonusBlock_UnderNoContract_BecomesAPlainBlock()
+    public void PlaceUnder_BonusBlock_KeepsItsMembershipWhateverGoverns()
     {
-        var block = CreateFocusBlock();
-        block.PlaceUnder(ContractInEffect());
+        // No member leaves its contract by being moved (Gap 93) — only the contract releases it.
+        var contract = ContractInEffect();
+        var underNone = CreateFocusBlock();
+        var underAnother = CreateFocusBlock();
+        underNone.PlaceUnder(contract);
+        underAnother.PlaceUnder(contract);
 
-        block.PlaceUnder(null);
+        underNone.PlaceUnder(null);
+        underAnother.PlaceUnder(ContractInEffect());
 
-        block.Membership.Should().BeNull();
-    }
-
-    [Fact]
-    public void PlaceUnder_BonusBlock_UnderAnotherContract_BecomesThatContractsBonusBlock()
-    {
-        var block = CreateFocusBlock();
-        block.PlaceUnder(ContractInEffect());
-        var other = ContractInEffect();
-
-        block.PlaceUnder(other);
-
-        block.Membership.Should().Be(TestContracts.Bonus(other.Id));
+        underNone.Membership.Should().Be(TestContracts.Bonus(contract.Id));
+        underAnother.Membership.Should().Be(TestContracts.Bonus(contract.Id));
     }
 
     [Fact]

@@ -166,6 +166,7 @@
 										<TextBlock Text="{Binding CancellationLabel}" FontSize="12" Foreground="#AAAABC"/>
 										<TextBlock Text="{Binding RedemptionPlacementLabel}" FontSize="12" Foreground="#AAAABC"/>
 										<TextBlock Text="{Binding BreakBlockingLabel}" FontSize="12" Foreground="#AAAABC"/>
+										<TextBlock Text="{Binding BonusBlocksLabel}" FontSize="12" Foreground="#AAAABC"/>
 									</StackPanel>
 									<StackPanel Grid.Column="1" Classes="card-actions"
                                                 Orientation="Horizontal" Spacing="2"
@@ -238,6 +239,9 @@
 
 						<CheckBox Content="Keep blocking during breaks" IsChecked="{Binding KeepBlockingDuringBreaks}"
 						          ToolTip.Tip="Sessions under this contract keep their sites and apps blocked through their breaks."/>
+
+						<CheckBox Content="Bonus blocks follow the strictness" IsChecked="{Binding BonusBlocksFollowStrictness}"
+						          ToolTip.Tip="Off: extra blocks you add to a running contract stay free to move, change and delete. On: once placed they are bound like the blocks you committed to."/>
 
 						<StackPanel Spacing="6">
 							<CheckBox Content="Enforce a fixed daily floor" IsChecked="{Binding IsDailyFloorEnabled}"/>

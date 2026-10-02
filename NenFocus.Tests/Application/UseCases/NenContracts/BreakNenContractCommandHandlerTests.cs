@@ -50,7 +50,7 @@ public class BreakNenContractCommandHandlerTests
         return session;
     }
 
-    private static NenContract ActiveCancellableContract() => NenContract.Seal(
+    private static NenContract ActiveCancellableContract() => TestContracts.Seal(
         id: Guid.NewGuid(),
         name: "Focused Week",
         goal: new NenContractGoal("Ship it"),

@@ -50,7 +50,7 @@ public class GetBlockPlacementVerdictQueryHandlerTests
         new(slot, BlockPresetType.Focus, Guid.NewGuid(), declineRedemption);
 
     private static NenContract NineToFiveContract(Guid id) =>
-        NenContract.Seal(
+        TestContracts.Seal(
             id: id,
             name: "Contract",
             goal: new NenContractGoal("Goal"),
@@ -269,7 +269,7 @@ public class GetBlockPlacementVerdictQueryHandlerTests
         // at 09:00 tomorrow), and the deficit caps the block to 08:00–08:30 — entirely before
         // the period. A redemption block must sit inside the contract it redeems.
         var tomorrow = DateOnly.FromDateTime(Now).AddDays(1);
-        var contract = NenContract.Seal(
+        var contract = TestContracts.Seal(
             id: Guid.NewGuid(),
             name: "Contract",
             goal: new NenContractGoal("Goal"),

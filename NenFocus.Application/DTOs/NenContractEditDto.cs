@@ -17,7 +17,7 @@ public sealed record NenContractEditDto
     public StrictnessRule StrictnessRule { get; init; }
     public bool AllowCancellation { get; init; }
 
-    /// <summary>The contract's DailyFloorRule when it is Fixed — null when floors follow the plan or there are none.</summary>
+    /// <summary>The contract's fixed daily floor — null when floors follow the plan or there are none.</summary>
     public double? FixedDailyFloorHours { get; init; }
 
     /// <summary>One entry per contract day, first to last.</summary>
@@ -26,6 +26,7 @@ public sealed record NenContractEditDto
     public Guid? ContractPresetId { get; init; }
     public RedemptionPlacementPolicy RedemptionPlacementPolicy { get; init; }
     public bool KeepBlockingDuringBreaks { get; init; }
+    public bool BonusBlocksFollowStrictness { get; init; }
 
     public IReadOnlyList<NenContractEditBlockDto> Blocks { get; init; } = [];
 }

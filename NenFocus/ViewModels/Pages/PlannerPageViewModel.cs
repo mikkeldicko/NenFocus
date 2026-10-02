@@ -224,9 +224,11 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
     [ObservableProperty] private bool _isFocusBlock = true;
     [ObservableProperty] private BlockPresetDto? _selectedPreset;
-    [ObservableProperty] private bool _isEditingBlockStarted;
-    [ObservableProperty] private bool _isEditingBlockContractLocked;
-    [ObservableProperty] private bool _isEditingBlockContractAllowsSplit;
+
+    // What may be done to the saved block the form is editing — the block DTO's Allowances,
+    // BlockChangeChecker's answer (Gap 93). Null while the form is for a new block or a draft
+    // tile, which nothing restricts. The ViewModel never works a lock out itself.
+    [ObservableProperty] private BlockChangeAllowances? _editingAllowances;
     [ObservableProperty] private string? _dragError;
 
     [ObservableProperty] private bool _isSnapshotVisible;
@@ -237,6 +239,12 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
     // ── Split Block ────────────────────────────────────────────────────────────
     [ObservableProperty] private bool _isSplitDialogVisible;
+    // The day each split piece lands on — only shown, and only used, when the block's Allowances
+    // say a piece may change day (Gap 93); otherwise both pieces stay on the block's own day.
+    [ObservableProperty] private DateTimeOffset _splitFirstDate;
+    [ObservableProperty] private DateTimeOffset _splitSecondDate;
+    public bool ShowSplitDates => !_isCreatingRedemption && (EditingAllowances?.SplitPiecesMayChangeDay ?? false);
+
     [ObservableProperty] private string _splitFirstStartTime = "09:00";
     [ObservableProperty] private string _splitFirstEndTime = "10:00";
     [ObservableProperty] private string _splitSecondStartTime = "10:00";
@@ -591,7 +599,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         _editingBlockId = null;
         _editingIsDraft = false;
         IsEditing = false;
-        IsEditingBlockStarted = false;
+        EditingAllowances = null;
         FormTitle = "Cover Deficit";
         ResetForm();
 
@@ -657,23 +665,17 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
     public string SaveButtonLabel => IsEditing ? "Save Changes" : "Create Block";
 
-    // Mirrors DeletePlannedBlockValidator — contract-linked never, running (started, not ended)
-    // not until it ends. The form only opens for blocks that haven't ended (ended ones get the
-    // snapshot), so "started" is the whole running check here. Read off the DTO, never
-    // re-derived (Gap 88 phase 0).
-    public bool CanDeleteFromForm =>
-        IsEditing && !IsEditingBlockStarted && !IsEditingBlockContractLocked;
+    // The form's buttons and fields read EditingAllowances (Gap 93) — the same Domain answer the
+    // validators ask, so nothing is offered that will always be refused, and nothing is hidden
+    // that would work.
+    public bool CanDeleteFromForm => IsEditing && (EditingAllowances?.CanDelete ?? true);
 
-    // A started block is fully locked (Gap 88 phase 0) — this also covers a running session's
-    // block and a completed Ritual, both of which only happen once the block has started.
-    // Controls visibility of the Save button and disables form inputs.
-    public bool IsBlockLocked => IsEditing && IsEditingBlockStarted;
+    // Date and time fields: moving and resizing are one answer.
+    public bool CanRescheduleBlock => EditingAllowances?.CanReschedule ?? true;
 
-    public bool CanSaveBlock => !IsBlockLocked;
+    public bool CanSaveBlock => CanRescheduleBlock || CanChangePreset;
 
-    // Mirrors DeletePlannedBlockValidator's sole remaining rejection condition for a done
-    // block: any Nen Contract linkage, permanent, regardless of the contract's own status.
-    public bool CanDeleteSnapshotBlock => SnapshotBlock is not null && SnapshotBlock.ContractId is null;
+    public bool CanDeleteSnapshotBlock => SnapshotBlock?.Allowances.CanDelete ?? false;
 
     public bool HasSnapshotSession => SnapshotSession is not null;
 
@@ -689,28 +691,19 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     public DateTime SnapshotStart => SnapshotBlock is null ? default : _clock.TimeZone.ToCalendarTimes(SnapshotBlock.Shown).Start;
     public DateTime SnapshotEnd => SnapshotBlock is null ? default : _clock.TimeZone.ToCalendarTimes(SnapshotBlock.Shown).End;
 
-    // Mirrors SplitPlannedBlockValidator's gating conditions — sourced from
-    // dto.IsUnderInEffectContract + dto.ContractStrictnessRule (any rule but Lockdown, as the
-    // validator; this copy used to say Daily Flex only — Gap 93 finding 1, fixed 2026-10-01),
-    // IsEditingBlockStarted (only a block that hasn't started can be split — which also rules
-    // out a ran session and the running session's own block), and IsFocusBlock (Split is
-    // Focus-only — a Background block has no session and no Daily Floor relevance). The
-    // validator remains the sole authority; this only gates button visibility, same
-    // relationship CanDeleteFromForm has to its validator.
+    // Split is offered for a saved block its contract binds (EditingAllowances.CanSplit — a new
+    // block or a draft tile has no allowances, so no Split).
     //
     // The Cover Deficit path (_isCreatingRedemption) is a second, independent way in: the
-    // block doesn't exist yet, so none of SplitPlannedBlockValidator's rules apply at all —
+    // block doesn't exist yet, so none of the split permission rules apply at all —
     // OpenSplitDialog/ConfirmSplitAsync branch on _isCreatingRedemption and dispatch two
     // CreatePlannedBlockCommands instead of SplitPlannedBlockCommand.
-    public bool CanSplitBlock => _isCreatingRedemption || (
-        IsEditing && !_editingIsDraft && IsFocusBlock
-        && IsEditingBlockContractLocked && IsEditingBlockContractAllowsSplit
-        && !IsEditingBlockStarted);
+    public bool CanSplitBlock => _isCreatingRedemption || (EditingAllowances?.CanSplit ?? false);
 
     // Preset is locked to the deficit's own preset while creating a redemption block —
     // the popover already picked which preset this covers, so re-picking a different one
     // here would silently disconnect the placement from the deficit it exists to cover.
-    public bool CanChangePreset => !IsBlockLocked && !_isCreatingRedemption;
+    public bool CanChangePreset => (EditingAllowances?.CanChangePreset ?? true) && !_isCreatingRedemption;
 
     // Hidden once editing an already-placed block (type can't change after the fact — see
     // ARCHITECT_GOVERNANCE.md's sealed-contract enforcement notes) or while creating a
@@ -737,29 +730,17 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     {
         OnPropertyChanged(nameof(SaveButtonLabel));
         OnPropertyChanged(nameof(CanDeleteFromForm));
-        OnPropertyChanged(nameof(IsBlockLocked));
-        OnPropertyChanged(nameof(CanSaveBlock));
-        OnPropertyChanged(nameof(CanSplitBlock));
         OnPropertyChanged(nameof(ShowTypeToggle));
     }
 
-    partial void OnIsEditingBlockStartedChanged(bool value)
+    partial void OnEditingAllowancesChanged(BlockChangeAllowances? value)
     {
         OnPropertyChanged(nameof(CanDeleteFromForm));
-        OnPropertyChanged(nameof(IsBlockLocked));
+        OnPropertyChanged(nameof(CanRescheduleBlock));
+        OnPropertyChanged(nameof(CanChangePreset));
         OnPropertyChanged(nameof(CanSaveBlock));
         OnPropertyChanged(nameof(CanSplitBlock));
-    }
-
-    partial void OnIsEditingBlockContractLockedChanged(bool value)
-    {
-        OnPropertyChanged(nameof(CanDeleteFromForm));
-        OnPropertyChanged(nameof(CanSplitBlock));
-    }
-
-    partial void OnIsEditingBlockContractAllowsSplitChanged(bool value)
-    {
-        OnPropertyChanged(nameof(CanSplitBlock));
+        OnPropertyChanged(nameof(ShowSplitDates));
     }
 
     partial void OnIsFormVisibleChanged(bool value) => OnPropertyChanged(nameof(CanOpenContractWizard));
@@ -815,9 +796,8 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     {
         Dispatcher.UIThread.Post(() =>
         {
-            OnPropertyChanged(nameof(IsBlockLocked));
-            OnPropertyChanged(nameof(CanSaveBlock));
-            OnPropertyChanged(nameof(CanDeleteFromForm));
+            // A block's locks come from its own Allowances (reloaded below), never from the
+            // in-memory session (Gap 93, F2).
             OnPropertyChanged(nameof(CanOpenContractWizard));
             // Reload on both transitions: a session starting stamps the originating block's
             // RitualCompletedAt (its Outcome/tile display changes even though the block
@@ -1365,7 +1345,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         _editingBlockId = null;
         _editingIsDraft = false;
         IsEditing = false;
-        IsEditingBlockStarted = false;
+        EditingAllowances = null;
         FormTitle = "New Block";
         ResetForm();
 
@@ -1388,9 +1368,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
             _editingBlockId = draft.Id;
             _editingIsDraft = true;
             IsEditing = true;
-            IsEditingBlockStarted = false;
-            IsEditingBlockContractLocked = false;
-            IsEditingBlockContractAllowsSplit = false;
+            EditingAllowances = null;
             FormTitle = "Edit Draft Block";
             ResetForm();
 
@@ -1423,9 +1401,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         _editingBlockId = dto.Id;
         _editingIsDraft = false;
         IsEditing = true;
-        IsEditingBlockStarted = dto.HasStarted;
-        IsEditingBlockContractLocked = dto.IsUnderInEffectContract;
-        IsEditingBlockContractAllowsSplit = dto.ContractStrictnessRule is { } strictness && strictness != StrictnessRule.Locked;
+        EditingAllowances = dto.Allowances;
         FormTitle = "Edit Block";
         ResetForm();
 
@@ -1719,6 +1695,9 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         }
 
         SplitError = null;
+        SplitFirstDate = FormDate;
+        SplitSecondDate = FormDate;
+        OnPropertyChanged(nameof(ShowSplitDates));
         var midpoint = localStart + TimeSpan.FromTicks((localEnd - localStart).Ticks / 2);
 
         _isPopulatingSplitTimes = true;
@@ -1809,10 +1788,11 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        var dayDate = FormDate.Date;
-        var firstSlot = TimeSlot.TryCreate(_clock.TimeZone.ToMoment(dayDate.Add(firstStart)), _clock.TimeZone.ToMoment(dayDate.Add(firstEnd)));
+        var firstDay = ShowSplitDates ? SplitFirstDate.Date : FormDate.Date;
+        var secondDay = ShowSplitDates ? SplitSecondDate.Date : FormDate.Date;
+        var firstSlot = TimeSlot.TryCreate(_clock.TimeZone.ToMoment(firstDay.Add(firstStart)), _clock.TimeZone.ToMoment(firstDay.Add(firstEnd)));
         if (firstSlot is null) { SplitError = "First block's end time must be after its start time."; return; }
-        var secondSlot = TimeSlot.TryCreate(_clock.TimeZone.ToMoment(dayDate.Add(secondStart)), _clock.TimeZone.ToMoment(dayDate.Add(secondEnd)));
+        var secondSlot = TimeSlot.TryCreate(_clock.TimeZone.ToMoment(secondDay.Add(secondStart)), _clock.TimeZone.ToMoment(secondDay.Add(secondEnd)));
         if (secondSlot is null) { SplitError = "Second block's end time must be after its start time."; return; }
 
         if (_isCreatingRedemption)
@@ -1875,9 +1855,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     {
         IsFormVisible = false;
         FormError = null;
-        IsEditingBlockStarted = false;
-        IsEditingBlockContractLocked = false;
-        IsEditingBlockContractAllowsSplit = false;
+        EditingAllowances = null;
         IsSplitDialogVisible = false;
         SplitError = null;
         _editingBlockId = null;
@@ -1901,16 +1879,15 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     // ── Drag lock checks (called from code-behind before starting a drag) ──────
 
     /// <summary>
-    /// True when the tile must not be dragged at all — no move, no resize of either edge. A
-    /// started block is locked (Gap 88 phase 0); that covers a completed Ritual, an ended block
-    /// and the running session's block, all of which only exist once the block has started.
-    /// Draft blocks are never locked.
+    /// True when the tile must not be dragged at all — no move, no resize of either edge: the
+    /// block's Allowances say it can't be rescheduled (started, or bound by a contract that
+    /// allows no movement — Gap 93). Draft blocks are never locked.
     /// </summary>
     public bool IsTileFullyLocked(Guid blockId)
     {
         if (_draftBlocks.Any(d => d.Id == blockId)) return false;
         if (!_blocksInWeek.TryGetValue(blockId, out var dto)) return true;
-        return dto.HasStarted;
+        return !dto.Allowances.CanReschedule;
     }
 
     // ── Drag-create: open the form pre-filled with the dragged range ──────────
@@ -1922,7 +1899,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         _editingBlockId = null;
         _editingIsDraft = false;
         IsEditing = false;
-        IsEditingBlockStarted = false;
+        EditingAllowances = null;
         FormTitle = "New Block";
         ResetForm();
 
@@ -2096,7 +2073,9 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
                 BlockPresetType = blockPresetType,
                 Shown = draft.Slot,
                 IsCompleted = false,
-                HasEnded = false
+                HasEnded = false,
+                // A draft tile isn't saved yet: nothing restricts it, and Split is for sealed blocks.
+                Allowances = new BlockChangeAllowances(CanReschedule: true, CanChangePreset: true, CanSplit: false, CanDelete: true)
             };
 
             Tiles.Add(new PlannedBlockTileViewModel(
@@ -2210,7 +2189,8 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
                     Blocks = blocks,
                     ContractPresetId = _draftRules.ContractPresetId,
                     RedemptionPlacementPolicy = _draftRules.RedemptionPlacementPolicy,
-                    KeepBlockingDuringBreaks = _draftRules.KeepBlockingDuringBreaks
+                    KeepBlockingDuringBreaks = _draftRules.KeepBlockingDuringBreaks,
+                    BonusBlocksFollowStrictness = _draftRules.BonusBlocksFollowStrictness
                 });
                 success = editResult.Success;
                 errorMessage = editResult.ErrorMessage;
@@ -2232,7 +2212,8 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
                     Blocks = blocks,
                     ContractPresetId = _draftRules.ContractPresetId,
                     RedemptionPlacementPolicy = _draftRules.RedemptionPlacementPolicy,
-                    KeepBlockingDuringBreaks = _draftRules.KeepBlockingDuringBreaks
+                    KeepBlockingDuringBreaks = _draftRules.KeepBlockingDuringBreaks,
+                    BonusBlocksFollowStrictness = _draftRules.BonusBlocksFollowStrictness
                 });
                 success = sealResult.Success;
                 errorMessage = sealResult.ErrorMessage;

@@ -92,7 +92,7 @@ public class UpdateContractPresetTests
     public async Task HandleAsync_InvalidDailyFloorBypassingValidator_FailsCleanlyInsteadOfThrowing()
     {
         var presetId = Guid.NewGuid();
-        var existing = ContractPreset.Create(presetId, "Original", StrictnessRule.Locked, new DailyFloor(4), null, false);
+        var existing = ContractPreset.Create(presetId, "Original", TestRules.Of(fixedDailyFloor: new DailyFloor(4)), null);
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>()).Returns(existing);
         var command = ValidCommand(presetId) with { DailyFloorHours = 99 };
 
@@ -116,7 +116,7 @@ public class UpdateContractPresetTests
     public async Task HandleAsync_NameAlreadyExistsOnAnotherPreset_Fails()
     {
         var presetId = Guid.NewGuid();
-        var existing = ContractPreset.Create(presetId, "Original", StrictnessRule.Locked, new DailyFloor(4), null, false);
+        var existing = ContractPreset.Create(presetId, "Original", TestRules.Of(fixedDailyFloor: new DailyFloor(4)), null);
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>()).Returns(existing);
         _presets.ExistsWithNameAsync("Renamed", excludeId: presetId, cancellationToken: Arg.Any<CancellationToken>()).Returns(true);
 
@@ -130,7 +130,7 @@ public class UpdateContractPresetTests
     public async Task HandleAsync_ValidCommand_UpdatesEveryField()
     {
         var presetId = Guid.NewGuid();
-        var existing = ContractPreset.Create(presetId, "Original", StrictnessRule.Locked, new DailyFloor(4), null, false);
+        var existing = ContractPreset.Create(presetId, "Original", TestRules.Of(fixedDailyFloor: new DailyFloor(4)), null);
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>()).Returns(existing);
         var command = ValidCommand(presetId) with
         {
@@ -153,7 +153,7 @@ public class UpdateContractPresetTests
     public async Task HandleAsync_ExcludesSelfFromUniquenessCheck()
     {
         var presetId = Guid.NewGuid();
-        var existing = ContractPreset.Create(presetId, "Original", StrictnessRule.Locked, new DailyFloor(4), null, false);
+        var existing = ContractPreset.Create(presetId, "Original", TestRules.Of(fixedDailyFloor: new DailyFloor(4)), null);
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>()).Returns(existing);
 
         await CreateHandler().HandleAsync(ValidCommand(presetId), CancellationToken.None);
@@ -167,7 +167,7 @@ public class UpdateContractPresetTests
         // Regression (Gap 64, trap 1): the handler never passed this rule to Update, which
         // defaulted it — so editing any preset silently reset it to breaks lifting blocking.
         var presetId = Guid.NewGuid();
-        var existing = ContractPreset.Create(presetId, "Original", StrictnessRule.Locked, new DailyFloor(4), null, false);
+        var existing = ContractPreset.Create(presetId, "Original", TestRules.Of(fixedDailyFloor: new DailyFloor(4)), null);
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>()).Returns(existing);
 
         await CreateHandler().HandleAsync(ValidCommand(presetId) with { KeepBlockingDuringBreaks = true }, CancellationToken.None);
@@ -175,5 +175,17 @@ public class UpdateContractPresetTests
 
         await CreateHandler().HandleAsync(ValidCommand(presetId) with { Name = "Renamed again", KeepBlockingDuringBreaks = true }, CancellationToken.None);
         existing.KeepBlockingDuringBreaks.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task HandleAsync_BonusBlocksFollowStrictness_IsSaved()
+    {
+        var presetId = Guid.NewGuid();
+        var existing = ContractPreset.Create(presetId, "Original", TestRules.Of(fixedDailyFloor: new DailyFloor(4)), null);
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>()).Returns(existing);
+
+        await CreateHandler().HandleAsync(ValidCommand(presetId) with { BonusBlocksFollowStrictness = true }, CancellationToken.None);
+
+        existing.Rules.BonusBlocksFollowStrictness.Should().BeTrue();
     }
 }

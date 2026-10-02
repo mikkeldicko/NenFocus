@@ -506,14 +506,14 @@
 							<StackPanel Spacing="4" IsVisible="{Binding ShowTypeToggle}">
 								<TextBlock Text="Type" FontSize="12" Foreground="#7A7A8C"/>
 								<StackPanel Orientation="Horizontal" Spacing="8">
-									<Button Classes="typePill" Classes.active="{Binding IsFocusBlock}" Content="Focus" Command="{Binding SetFocusBlockCommand}" IsEnabled="{Binding !IsBlockLocked}"/>
-									<Button Classes="typePill" Classes.active="{Binding !IsFocusBlock}" Content="Background" Command="{Binding SetBackgroundBlockCommand}" IsEnabled="{Binding !IsBlockLocked}"/>
+									<Button Classes="typePill" Classes.active="{Binding IsFocusBlock}" Content="Focus" Command="{Binding SetFocusBlockCommand}" IsEnabled="{Binding CanRescheduleBlock}"/>
+									<Button Classes="typePill" Classes.active="{Binding !IsFocusBlock}" Content="Background" Command="{Binding SetBackgroundBlockCommand}" IsEnabled="{Binding CanRescheduleBlock}"/>
 								</StackPanel>
 							</StackPanel>
 
 							<StackPanel Spacing="4">
 								<TextBlock Text="Date" FontSize="12" Foreground="#7A7A8C"/>
-								<DatePicker SelectedDate="{Binding FormDate}" IsEnabled="{Binding !IsBlockLocked}"/>
+								<DatePicker SelectedDate="{Binding FormDate}" IsEnabled="{Binding CanRescheduleBlock}"/>
 							</StackPanel>
 
 							<Grid ColumnDefinitions="*,12,*">
@@ -523,7 +523,7 @@
 										<TextBox Name="FormStartTimeBox"
                                                  Text="{Binding FormStartTime, Mode=TwoWay}"
                                                  Watermark="HH:mm"
-                                                 IsEnabled="{Binding !IsBlockLocked}"/>
+                                                 IsEnabled="{Binding CanRescheduleBlock}"/>
 									</Border>
 									<Popup Name="FormStartTimePopup"
                                            IsOpen="{Binding IsStartTimeDropDownOpen, Mode=TwoWay}"
@@ -553,7 +553,7 @@
 										<TextBox Name="FormEndTimeBox"
                                                  Text="{Binding FormEndTime, Mode=TwoWay}"
                                                  Watermark="HH:mm"
-                                                 IsEnabled="{Binding !IsBlockLocked}"/>
+                                                 IsEnabled="{Binding CanRescheduleBlock}"/>
 									</Border>
 									<Popup Name="FormEndTimePopup"
                                            IsOpen="{Binding IsEndTimeDropDownOpen, Mode=TwoWay}"
@@ -762,7 +762,7 @@
 						<TextBlock FontSize="12" Foreground="#7A7A8C" TextWrapping="Wrap">
 							<Run Text="This block is"/>
 							<Run Text="{Binding SplitOriginalDuration, Converter={StaticResource DurationLabelConverter}, Mode=OneWay}" FontWeight="SemiBold" Foreground="#1A1A2E"/>
-							<Run Text="- the two pieces can be placed anywhere on the day, they just need to add up to that total."/>
+							<Run Text="- the two pieces need to add up to that total."/>
 						</TextBlock>
 					</StackPanel>
 
@@ -772,6 +772,7 @@
 							<TextBlock Text="{Binding SplitFirstBlockDuration, Converter={StaticResource DurationLabelConverter}}"
                                        FontSize="12" Foreground="#7A7A8C" FontWeight="SemiBold"/>
 						</StackPanel>
+						<DatePicker SelectedDate="{Binding SplitFirstDate}" IsVisible="{Binding ShowSplitDates}"/>
 						<Grid ColumnDefinitions="*,12,*">
 							<StackPanel Grid.Column="0" Spacing="4">
 								<TextBox Name="SplitFirstStartTimeBox" Text="{Binding SplitFirstStartTime, Mode=TwoWay}" Watermark="HH:mm"/>
@@ -827,6 +828,7 @@
 							<TextBlock Text="{Binding SplitSecondBlockDuration, Converter={StaticResource DurationLabelConverter}}"
                                        FontSize="12" Foreground="#7A7A8C" FontWeight="SemiBold"/>
 						</StackPanel>
+						<DatePicker SelectedDate="{Binding SplitSecondDate}" IsVisible="{Binding ShowSplitDates}"/>
 						<Grid ColumnDefinitions="*,12,*">
 							<StackPanel Grid.Column="0" Spacing="4">
 								<TextBox Name="SplitSecondStartTimeBox" Text="{Binding SplitSecondStartTime, Mode=TwoWay}" Watermark="HH:mm"/>

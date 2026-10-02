@@ -70,11 +70,12 @@ public sealed class GetNenContractForEditQueryHandler
             EndDate = contract.EndDate,
             StrictnessRule = contract.StrictnessRule,
             AllowCancellation = contract.AllowCancellation,
-            FixedDailyFloorHours = (contract.FloorRule as DailyFloorRule.Fixed)?.Floor.Hours,
+            FixedDailyFloorHours = contract.Rules.FixedDailyFloor?.Hours,
             Days = days,
             ContractPresetId = contract.ContractPresetId,
             RedemptionPlacementPolicy = contract.RedemptionPlacementPolicy,
             KeepBlockingDuringBreaks = contract.KeepBlockingDuringBreaks,
+            BonusBlocksFollowStrictness = contract.Rules.BonusBlocksFollowStrictness,
             Blocks = blockDtos
         };
     }

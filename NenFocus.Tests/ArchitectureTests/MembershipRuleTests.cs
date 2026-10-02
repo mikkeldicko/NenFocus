@@ -24,15 +24,6 @@ public class MembershipRuleTests
 
     private static readonly string[] KnownDecisions =
     [
-        // Gap 93: the three permission validators still decide by "has a contract id" — so a Bonus
-        // block can't be deleted and is bound by its contract's strictness until Gap 93 gives
-        // permissions one home that reads the role.
-        "NenFocus.Application/UseCases/Planner/DeletePlannedBlock/DeletePlannedBlockValidator.cs has 1",
-        "NenFocus.Application/UseCases/Planner/SplitPlannedBlock/SplitPlannedBlockValidator.cs has 3",
-        "NenFocus.Application/UseCases/Planner/UpdatePlannedBlock/UpdatePlannedBlockValidator.cs has 1",
-        // Gap 93: the Planner's own copy of the Delete rule (CanDeleteSnapshotBlock).
-        "NenFocus/ViewModels/Pages/PlannerPageViewModel.cs has 1",
-
         // Gap 68: Edit leaves the contract's own old blocks out of its overlap check, since the
         // re-draft replaces them; adoption rewrites that exclusion.
         "NenFocus.Application/UseCases/NenContracts/Edit/EditNenContractCommandHandler.cs has 1",

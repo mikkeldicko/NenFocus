@@ -156,31 +156,11 @@ namespace NenFocus.Infrastructure.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("TEXT");
 
-                    b.Property<bool>("AllowCancellation")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<double?>("DailyFloor")
-                        .HasColumnType("REAL")
-                        .HasColumnName("DailyFloorHours");
-
-                    b.Property<bool>("KeepBlockingDuringBreaks")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER")
-                        .HasDefaultValue(false);
-
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(60)
                         .HasColumnType("TEXT")
                         .UseCollation("NOCASE");
-
-                    b.Property<string>("RedemptionPlacementPolicy")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("StrictnessRule")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
@@ -193,30 +173,17 @@ namespace NenFocus.Infrastructure.Migrations
                         new
                         {
                             Id = new Guid("c0000003-0000-0000-0000-000000000001"),
-                            AllowCancellation = false,
-                            DailyFloor = 4.0,
-                            KeepBlockingDuringBreaks = true,
-                            Name = "Lockdown",
-                            RedemptionPlacementPolicy = "AnywhereInContract",
-                            StrictnessRule = "Locked"
+                            Name = "Lockdown"
                         },
                         new
                         {
                             Id = new Guid("c0000003-0000-0000-0000-000000000002"),
-                            AllowCancellation = true,
-                            KeepBlockingDuringBreaks = false,
-                            Name = "Daily Flex",
-                            RedemptionPlacementPolicy = "AnywhereInContract",
-                            StrictnessRule = "DailyFlexibility"
+                            Name = "Daily Flex"
                         },
                         new
                         {
                             Id = new Guid("c0000003-0000-0000-0000-000000000003"),
-                            AllowCancellation = true,
-                            KeepBlockingDuringBreaks = false,
-                            Name = "Period Study",
-                            RedemptionPlacementPolicy = "AnywhereInContract",
-                            StrictnessRule = "PeriodTimeBudget"
+                            Name = "Period Study"
                         });
                 });
 
@@ -224,9 +191,6 @@ namespace NenFocus.Infrastructure.Migrations
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("TEXT");
-
-                    b.Property<bool>("AllowCancellation")
-                        .HasColumnType("INTEGER");
 
                     b.Property<double>("CommittedFocusHours")
                         .HasColumnType("REAL");
@@ -241,20 +205,10 @@ namespace NenFocus.Infrastructure.Migrations
                     b.Property<DateOnly>("EndDate")
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("FloorRule")
-                        .IsRequired()
-                        .HasColumnType("TEXT")
-                        .HasColumnName("FloorRule");
-
                     b.Property<string>("Goal")
                         .IsRequired()
                         .HasColumnType("TEXT")
                         .HasColumnName("Goal");
-
-                    b.Property<bool>("KeepBlockingDuringBreaks")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER")
-                        .HasDefaultValue(false);
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -267,10 +221,6 @@ namespace NenFocus.Infrastructure.Migrations
                     b.Property<DateTime?>("PostContractAcknowledgedAt")
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("RedemptionPlacementPolicy")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
                     b.Property<string>("Reflection")
                         .HasMaxLength(2000)
                         .HasColumnType("TEXT");
@@ -279,10 +229,6 @@ namespace NenFocus.Infrastructure.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Status")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("StrictnessRule")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
@@ -625,6 +571,79 @@ namespace NenFocus.Infrastructure.Migrations
 
             modelBuilder.Entity("NenFocus.Domain.Entities.ContractPreset", b =>
                 {
+                    b.OwnsOne("NenFocus.Domain.ValueObjects.ContractRules", "Rules", b1 =>
+                        {
+                            b1.Property<Guid>("ContractPresetId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<bool>("AllowCancellation")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("AllowCancellation");
+
+                            b1.Property<bool>("BonusBlocksFollowStrictness")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("INTEGER")
+                                .HasDefaultValue(false)
+                                .HasColumnName("BonusBlocksFollowStrictness");
+
+                            b1.Property<double?>("FixedDailyFloor")
+                                .HasColumnType("REAL")
+                                .HasColumnName("DailyFloorHours");
+
+                            b1.Property<bool>("KeepBlockingDuringBreaks")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("INTEGER")
+                                .HasDefaultValue(false)
+                                .HasColumnName("KeepBlockingDuringBreaks");
+
+                            b1.Property<string>("RedemptionPlacement")
+                                .IsRequired()
+                                .HasColumnType("TEXT")
+                                .HasColumnName("RedemptionPlacementPolicy");
+
+                            b1.Property<string>("Strictness")
+                                .IsRequired()
+                                .HasColumnType("TEXT")
+                                .HasColumnName("StrictnessRule");
+
+                            b1.HasKey("ContractPresetId");
+
+                            b1.ToTable("ContractPresets");
+
+                            b1.WithOwner()
+                                .HasForeignKey("ContractPresetId");
+
+                            b1.HasData(
+                                new
+                                {
+                                    ContractPresetId = new Guid("c0000003-0000-0000-0000-000000000001"),
+                                    AllowCancellation = false,
+                                    BonusBlocksFollowStrictness = false,
+                                    FixedDailyFloor = 4.0,
+                                    KeepBlockingDuringBreaks = true,
+                                    RedemptionPlacement = "AnywhereInContract",
+                                    Strictness = "Locked"
+                                },
+                                new
+                                {
+                                    ContractPresetId = new Guid("c0000003-0000-0000-0000-000000000002"),
+                                    AllowCancellation = true,
+                                    BonusBlocksFollowStrictness = false,
+                                    KeepBlockingDuringBreaks = false,
+                                    RedemptionPlacement = "AnywhereInContract",
+                                    Strictness = "DailyFlexibility"
+                                },
+                                new
+                                {
+                                    ContractPresetId = new Guid("c0000003-0000-0000-0000-000000000003"),
+                                    AllowCancellation = true,
+                                    BonusBlocksFollowStrictness = false,
+                                    KeepBlockingDuringBreaks = false,
+                                    RedemptionPlacement = "AnywhereInContract",
+                                    Strictness = "PeriodTimeBudget"
+                                });
+                        });
+
                     b.OwnsOne("NenFocus.Domain.ValueObjects.WorkHours", "WorkHours", b1 =>
                         {
                             b1.Property<Guid>("ContractPresetId")
@@ -666,7 +685,59 @@ namespace NenFocus.Infrastructure.Migrations
                                 });
                         });
 
+                    b.Navigation("Rules")
+                        .IsRequired();
+
                     b.Navigation("WorkHours");
+                });
+
+            modelBuilder.Entity("NenFocus.Domain.Entities.NenContract", b =>
+                {
+                    b.OwnsOne("NenFocus.Domain.ValueObjects.ContractRules", "Rules", b1 =>
+                        {
+                            b1.Property<Guid>("NenContractId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<bool>("AllowCancellation")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("AllowCancellation");
+
+                            b1.Property<bool>("BonusBlocksFollowStrictness")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("INTEGER")
+                                .HasDefaultValue(false)
+                                .HasColumnName("BonusBlocksFollowStrictness");
+
+                            b1.Property<double?>("FixedDailyFloor")
+                                .HasColumnType("REAL")
+                                .HasColumnName("DailyFloorHours");
+
+                            b1.Property<bool>("KeepBlockingDuringBreaks")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("INTEGER")
+                                .HasDefaultValue(false)
+                                .HasColumnName("KeepBlockingDuringBreaks");
+
+                            b1.Property<string>("RedemptionPlacement")
+                                .IsRequired()
+                                .HasColumnType("TEXT")
+                                .HasColumnName("RedemptionPlacementPolicy");
+
+                            b1.Property<string>("Strictness")
+                                .IsRequired()
+                                .HasColumnType("TEXT")
+                                .HasColumnName("StrictnessRule");
+
+                            b1.HasKey("NenContractId");
+
+                            b1.ToTable("NenContracts");
+
+                            b1.WithOwner()
+                                .HasForeignKey("NenContractId");
+                        });
+
+                    b.Navigation("Rules")
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("NenFocus.Domain.Entities.PlannedBlock", b =>

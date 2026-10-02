@@ -370,4 +370,29 @@ public class SealNenContractCommandHandlerTests
         result.Success.Should().BeFalse();
         await _contracts.DidNotReceive().AddAsync(Arg.Any<NenContract>(), Arg.Any<CancellationToken>());
     }
+
+    [Fact]
+    public async Task HandleAsync_EveryRuleOfTheCommand_IsCarriedIntoTheContract()
+    {
+        // The rules travel as one value (Gap 93), so Seal can't drop one of them.
+        _calculator.Calculate(Arg.Any<IEnumerable<TimeSlot>>(), Arg.Any<UserTimeZone>())
+            .Returns(new Dictionary<DateOnly, double>());
+        NenContract? saved = null;
+        await _contracts.AddAsync(Arg.Do<NenContract>(c => saved = c), Arg.Any<CancellationToken>());
+        var command = BaseCommand(fixedFloor: 0) with
+        {
+            StrictnessRule = StrictnessRule.DailyFlexibility,
+            AllowCancellation = true,
+            KeepBlockingDuringBreaks = true,
+            RedemptionPlacementPolicy = RedemptionPlacementPolicy.CurrentDayOnly,
+            BonusBlocksFollowStrictness = true
+        };
+
+        var result = await CreateHandler().HandleAsync(command, CancellationToken.None);
+
+        result.Success.Should().BeTrue();
+        saved!.Rules.Should().Be(new ContractRules(
+            StrictnessRule.DailyFlexibility, new DailyFloor(0), allowCancellation: true, keepBlockingDuringBreaks: true,
+            RedemptionPlacementPolicy.CurrentDayOnly, bonusBlocksFollowStrictness: true));
+    }
 }

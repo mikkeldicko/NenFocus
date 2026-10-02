@@ -14,7 +14,8 @@ public class ContractPresetTests
         WorkHours? workHours = null,
         bool allowCancellation = false,
         bool omitDailyFloor = false)
-        => ContractPreset.Create(Guid.NewGuid(), name, strictnessRule, omitDailyFloor ? null : dailyFloor ?? new DailyFloor(4), workHours, allowCancellation);
+        => ContractPreset.Create(Guid.NewGuid(), name,
+            TestRules.Of(strictnessRule, omitDailyFloor ? null : dailyFloor ?? new DailyFloor(4), allowCancellation), workHours);
 
     [Fact]
     public void Create_ValidInputs_Succeeds()
@@ -68,14 +69,19 @@ public class ContractPresetTests
         var preset = Create();
         var newWorkHours = new WorkHours(new TimeOnly(9, 0), new TimeOnly(17, 0));
 
-        preset.Update("Renamed", StrictnessRule.PeriodTimeBudget, new DailyFloor(6), newWorkHours, allowCancellation: true,
-            RedemptionPlacementPolicy.CurrentDayOnly, keepBlockingDuringBreaks: true);
+        preset.Update("Renamed",
+            TestRules.Of(StrictnessRule.PeriodTimeBudget, new DailyFloor(6), allowCancellation: true, keepBlockingDuringBreaks: true,
+                RedemptionPlacementPolicy.CurrentDayOnly, bonusBlocksFollowStrictness: true),
+            newWorkHours);
 
         preset.Name.Should().Be("Renamed");
         preset.StrictnessRule.Should().Be(StrictnessRule.PeriodTimeBudget);
         preset.DailyFloor!.Hours.Should().Be(6);
         preset.WorkHours.Should().Be(newWorkHours);
         preset.AllowCancellation.Should().BeTrue();
+        preset.KeepBlockingDuringBreaks.Should().BeTrue();
+        preset.RedemptionPlacementPolicy.Should().Be(RedemptionPlacementPolicy.CurrentDayOnly);
+        preset.Rules.BonusBlocksFollowStrictness.Should().BeTrue();
     }
 
     [Fact]
@@ -83,7 +89,7 @@ public class ContractPresetTests
     {
         var preset = Create();
 
-        preset.Update("Renamed", StrictnessRule.PeriodTimeBudget, null, null, false, RedemptionPlacementPolicy.AnywhereInContract, keepBlockingDuringBreaks: false);
+        preset.Update("Renamed", TestRules.Of(StrictnessRule.PeriodTimeBudget), null);
 
         preset.DailyFloor.Should().BeNull();
     }
@@ -93,7 +99,7 @@ public class ContractPresetTests
     {
         var preset = Create();
 
-        var act = () => preset.Update("  ", StrictnessRule.Locked, new DailyFloor(4), null, false, RedemptionPlacementPolicy.AnywhereInContract, keepBlockingDuringBreaks: false);
+        var act = () => preset.Update("  ", TestRules.Of(fixedDailyFloor: new DailyFloor(4)), null);
 
         act.Should().Throw<ArgumentException>();
     }
@@ -103,7 +109,7 @@ public class ContractPresetTests
     {
         var preset = Create();
 
-        preset.Update("  Renamed  ", StrictnessRule.Locked, new DailyFloor(4), null, false, RedemptionPlacementPolicy.AnywhereInContract, keepBlockingDuringBreaks: false);
+        preset.Update("  Renamed  ", TestRules.Of(fixedDailyFloor: new DailyFloor(4)), null);
 
         preset.Name.Should().Be("Renamed");
     }

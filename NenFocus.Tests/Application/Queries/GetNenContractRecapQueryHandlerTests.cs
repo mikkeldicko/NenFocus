@@ -45,7 +45,7 @@ public class GetNenContractRecapQueryHandlerTests
         new(_contracts, _blocks, _classifier, _completedHours, _bonusHours, _clock);
 
     private static NenContract CompletedContract(double committedHours = 4, StrictnessRule strictness = StrictnessRule.Locked) =>
-        NenContract.Seal(
+        TestContracts.Seal(
             id: ContractId,
             name: "Focused Week",
             goal: new NenContractGoal("Ship it"),
@@ -59,7 +59,7 @@ public class GetNenContractRecapQueryHandlerTests
 
     // StartDate..EndDate is a 7-day range (Jan 1-7). A fixed 4h/day floor everywhere by
     // default; individual tests mark specific days as rest days.
-    private static NenContract FloorContract(IReadOnlyCollection<DateOnly>? restDays = null) => NenContract.Seal(
+    private static NenContract FloorContract(IReadOnlyCollection<DateOnly>? restDays = null) => TestContracts.Seal(
         id: ContractId, name: "Focused Week", goal: new NenContractGoal("Ship it"),
         strictnessRule: StrictnessRule.Locked,
         calendar: TestCalendars.For(StartDate, EndDate, new DailyFloorRule.Fixed(new DailyFloor(4)), restDays: restDays),
@@ -268,7 +268,7 @@ public class GetNenContractRecapQueryHandlerTests
     public async Task HandleAsync_NothingEverCommitted_GradeAndPercentageAreNull()
     {
         // CommittedFocusHours == 0 (nothing was ever planned at Seal) — can't be graded.
-        var contract = NenContract.Seal(
+        var contract = TestContracts.Seal(
             id: ContractId,
             name: "Empty",
             goal: new NenContractGoal("Ship it"),

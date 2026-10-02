@@ -32,7 +32,7 @@ public class ComputeRedemptionAttributionQueryHandlerTests
     private ComputeRedemptionAttributionQueryHandler CreateHandler() => new(_contracts, _deficits, _clock);
 
     private static NenContract SameDayContract(Guid id) =>
-        NenContract.Seal(
+        TestContracts.Seal(
             id: id,
             name: "Contract",
             goal: new NenContractGoal("Goal"),
@@ -46,7 +46,7 @@ public class ComputeRedemptionAttributionQueryHandlerTests
             redemptionPlacementPolicy: RedemptionPlacementPolicy.CurrentDayOnly);
 
     private static NenContract AnyDayContract(Guid id) =>
-        NenContract.Seal(
+        TestContracts.Seal(
             id: id,
             name: "Contract",
             goal: new NenContractGoal("Goal"),

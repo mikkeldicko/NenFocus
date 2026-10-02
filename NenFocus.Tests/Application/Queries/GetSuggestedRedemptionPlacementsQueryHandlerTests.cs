@@ -26,7 +26,7 @@ public class GetSuggestedRedemptionPlacementsQueryHandlerTests
     private GetSuggestedRedemptionPlacementsQueryHandler CreateHandler() => new(_contracts, _deficits, _presets, _clock);
 
     private static NenContract SameDayContract(Guid id, WorkHours? workHours = null) =>
-        NenContract.Seal(
+        TestContracts.Seal(
             id: id,
             name: "Contract",
             goal: new NenContractGoal("Goal"),
@@ -102,7 +102,7 @@ public class GetSuggestedRedemptionPlacementsQueryHandlerTests
     {
         var contractId = Guid.NewGuid();
         var presetId = Guid.NewGuid();
-        var contract = NenContract.Seal(
+        var contract = TestContracts.Seal(
             id: contractId,
             name: "Contract",
             goal: new NenContractGoal("Goal"),
