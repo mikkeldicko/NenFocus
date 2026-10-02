@@ -4,6 +4,7 @@ using NenFocus.Application.Queries.ComputeRedemptionAttribution;
 using NenFocus.Application.UseCases.Planner.UpdatePlannedBlock;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
+using NenFocus.Domain.Services;
 using NenFocus.Domain.ValueObjects;
 using NSubstitute;
 
@@ -19,22 +20,28 @@ public class UpdatePlannedBlockCommandHandlerTests
 
     private readonly IPlannedBlockRepository _blocks = Substitute.For<IPlannedBlockRepository>();
     private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
+    private readonly INenContractRepository _contracts = Substitute.For<INenContractRepository>();
     private readonly IQueryHandler<ComputeRedemptionAttributionQuery, RedemptionAttributionResult> _computeRedemptionAttribution =
         Substitute.For<IQueryHandler<ComputeRedemptionAttributionQuery, RedemptionAttributionResult>>();
+    private readonly ISystemClock _clock = TestClock.Create();
 
     public UpdatePlannedBlockCommandHandlerTests()
     {
+        _clock.SetNow(Start.AddDays(-3));
+        _clock.SetTimeZoneOffset(TimeSpan.Zero);
+        _contracts.GetAllInEffectAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<NenContract>)[]);
+
         // Default: no entries, the requested slot unchanged.
         _computeRedemptionAttribution
             .HandleAsync(Arg.Any<ComputeRedemptionAttributionQuery>(), Arg.Any<CancellationToken>())
             .Returns(ci =>
             {
                 var query = (ComputeRedemptionAttributionQuery)ci[0];
-                return new RedemptionAttributionResult(query.ContractId, [], query.Block);
+                return new RedemptionAttributionResult([], query.Block);
             });
     }
 
-    private UpdatePlannedBlockCommandHandler CreateHandler() => new(_blocks, _presets, _computeRedemptionAttribution);
+    private UpdatePlannedBlockCommandHandler CreateHandler() => new(_blocks, _presets, _contracts, _computeRedemptionAttribution, new BlockPlacementChecker(), _clock);
 
     private static UpdatePlannedBlockCommand ValidCommand(Guid blockId, Guid presetId) => new()
     {
@@ -106,12 +113,12 @@ public class UpdatePlannedBlockCommandHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_FocusBlock_WithContractId_RecomputesRedemptionEntriesFromAttribution()
+    public async Task HandleAsync_RedemptionBlock_RecomputesItsEntriesFromAttribution()
     {
         var blockId = Guid.NewGuid();
         var presetId = Guid.NewGuid();
         var contractId = Guid.NewGuid();
-        var block = FocusBlock.Create(blockId, presetId,At.Slot(Start, End), contractId: contractId,
+        var block = FocusBlock.Create(blockId, presetId,At.Slot(Start, End), membership: TestContracts.Redemption(contractId),
             redemptionEntries: [new RedemptionEntry(Guid.NewGuid(), 20)]);
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns(block);
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>()).Returns(FocusPreset(presetId));
@@ -119,7 +126,7 @@ public class UpdatePlannedBlockCommandHandlerTests
         _computeRedemptionAttribution
             .HandleAsync(Arg.Is<ComputeRedemptionAttributionQuery>(q => q.ContractId == contractId && q.ExcludeBlockId == blockId),
                 Arg.Any<CancellationToken>())
-            .Returns(new RedemptionAttributionResult(contractId, [new(newMissedBlockId, 60)], At.Slot(Start, End)));
+            .Returns(new RedemptionAttributionResult([new(newMissedBlockId, 60)], At.Slot(Start, End)));
 
         var result = await CreateHandler().HandleAsync(ValidCommand(blockId, presetId));
 
@@ -128,12 +135,12 @@ public class UpdatePlannedBlockCommandHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_FocusBlock_WithContractId_NoLongerEligible_ClearsExistingEntries()
+    public async Task HandleAsync_RedemptionBlock_NoLongerEligible_ClearsItsEntriesButStaysARedemptionBlock()
     {
         var blockId = Guid.NewGuid();
         var presetId = Guid.NewGuid();
         var contractId = Guid.NewGuid();
-        var block = FocusBlock.Create(blockId, presetId,At.Slot(Start, End), contractId: contractId,
+        var block = FocusBlock.Create(blockId, presetId,At.Slot(Start, End), membership: TestContracts.Redemption(contractId),
             redemptionEntries: [new RedemptionEntry(Guid.NewGuid(), 20)]);
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns(block);
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>()).Returns(FocusPreset(presetId));
@@ -141,6 +148,7 @@ public class UpdatePlannedBlockCommandHandlerTests
         await CreateHandler().HandleAsync(ValidCommand(blockId, presetId));
 
         block.RedemptionEntries.Should().BeEmpty();
+        block.IsRedemption.Should().BeTrue("a role is set once and never changes");
     }
 
     [Fact]
@@ -161,19 +169,95 @@ public class UpdatePlannedBlockCommandHandlerTests
             Arg.Any<ComputeRedemptionAttributionQuery>(), Arg.Any<CancellationToken>());
     }
 
+    // ── Membership on a move (Gap 97) ────────────────────────────────────────
+
+    /// <summary>A contract in effect covering the whole of 2–9 January — the command's slot is inside it.</summary>
+    private Guid SetUpContractAroundTheSlot()
+    {
+        var contract = NenContract.Seal(
+            id: Guid.NewGuid(),
+            name: "Contract",
+            goal: new NenContractGoal("Goal"),
+            strictnessRule: StrictnessRule.PeriodTimeBudget,
+            calendar: TestCalendars.For(DateOnly.FromDateTime(Start), DateOnly.FromDateTime(Start).AddDays(7), new DailyFloorRule.None()),
+            floorRule: new DailyFloorRule.None(),
+            changeWindow: null,
+            allowCancellation: false,
+            plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
+            sealedAt: At.Utc(Start.Date), timeZone: At.UtcZone);
+        _contracts.GetAllInEffectAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<NenContract>)[contract]);
+        return contract.Id;
+    }
+
+    private FocusBlock SetUpBlock(TimeSlot scheduled, ContractMembership? membership, Guid presetId)
+    {
+        var block = FocusBlock.Create(Guid.NewGuid(), presetId, scheduled, membership: membership);
+        _blocks.GetByIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns(block);
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>()).Returns(FocusPreset(presetId));
+        return block;
+    }
+
+    [Fact]
+    public async Task HandleAsync_PlainBlockMovedIntoAContract_BecomesItsBonusBlock_AndClaimsNothing()
+    {
+        var contractId = SetUpContractAroundTheSlot();
+        var presetId = Guid.NewGuid();
+        var block = SetUpBlock(At.Slot(Start.AddDays(-1), End.AddDays(-1)), membership: null, presetId); // the day before the contract
+
+        await CreateHandler().HandleAsync(ValidCommand(block.Id, presetId));
+
+        block.Membership.Should().Be(TestContracts.Bonus(contractId));
+        block.RedemptionEntries.Should().BeEmpty();
+        await _computeRedemptionAttribution.DidNotReceive().HandleAsync(
+            Arg.Any<ComputeRedemptionAttributionQuery>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task HandleAsync_BonusBlockMovedOutOfItsContract_BecomesAPlainBlock()
+    {
+        var contractId = SetUpContractAroundTheSlot();
+        var presetId = Guid.NewGuid();
+        var block = SetUpBlock(At.Slot(Start, End), TestContracts.Bonus(contractId), presetId);
+        var afterTheContract = At.Slot(Start.AddDays(20), End.AddDays(20));
+
+        await CreateHandler().HandleAsync(ValidCommand(block.Id, presetId) with { Slot = afterTheContract });
+
+        block.Membership.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task HandleAsync_CommittedBlockEdited_KeepsItsMembership_AndNeverClaimsADeficit()
+    {
+        // Before Gap 97 any block with a contract id had its attribution recomputed, new
+        // claims included — so an edit could turn committed hours into redemption coverage.
+        var contractId = SetUpContractAroundTheSlot();
+        var presetId = Guid.NewGuid();
+        var block = SetUpBlock(At.Slot(Start.AddHours(3), End.AddHours(3)), TestContracts.Committed(contractId), presetId);
+        _computeRedemptionAttribution
+            .HandleAsync(Arg.Any<ComputeRedemptionAttributionQuery>(), Arg.Any<CancellationToken>())
+            .Returns(new RedemptionAttributionResult([new(Guid.NewGuid(), 60)], At.Slot(Start, End)));
+
+        await CreateHandler().HandleAsync(ValidCommand(block.Id, presetId));
+
+        block.Membership.Should().Be(TestContracts.Committed(contractId));
+        block.RedemptionEntries.Should().BeEmpty();
+        await _computeRedemptionAttribution.DidNotReceive().HandleAsync(
+            Arg.Any<ComputeRedemptionAttributionQuery>(), Arg.Any<CancellationToken>());
+    }
+
     [Fact]
     public async Task HandleAsync_FocusBlock_AttributionReturnsACappedSlot_SavesItAndReportsCapped()
     {
         var blockId = Guid.NewGuid();
         var presetId = Guid.NewGuid();
         var contractId = Guid.NewGuid();
-        var block = FocusBlock.Create(blockId, presetId,At.Slot(Start, End), contractId: contractId,
+        var block = FocusBlock.Create(blockId, presetId,At.Slot(Start, End), membership: TestContracts.Redemption(contractId),
             redemptionEntries: [new RedemptionEntry(Guid.NewGuid(), 60)]);
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns(block);
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>()).Returns(FocusPreset(presetId));
         _computeRedemptionAttribution
             .HandleAsync(Arg.Any<ComputeRedemptionAttributionQuery>(), Arg.Any<CancellationToken>())
-            .Returns(new RedemptionAttributionResult(contractId, [new(Guid.NewGuid(), 45)], At.Slot(Start, Start.AddMinutes(45)), true));
+            .Returns(new RedemptionAttributionResult([new(Guid.NewGuid(), 45)], At.Slot(Start, Start.AddMinutes(45)), true));
 
         var command = ValidCommand(blockId, presetId) with { Slot = At.Slot(Start, Start.AddHours(2)) };
         var result = await CreateHandler().HandleAsync(command);
@@ -189,13 +273,13 @@ public class UpdatePlannedBlockCommandHandlerTests
         var blockId = Guid.NewGuid();
         var presetId = Guid.NewGuid();
         var contractId = Guid.NewGuid();
-        var block = FocusBlock.Create(blockId, presetId,At.Slot(Start, Start.AddHours(2)), contractId: contractId,
+        var block = FocusBlock.Create(blockId, presetId,At.Slot(Start, Start.AddHours(2)), membership: TestContracts.Redemption(contractId),
             redemptionEntries: [new RedemptionEntry(Guid.NewGuid(), 120)]);
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns(block);
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>()).Returns(FocusPreset(presetId));
         _computeRedemptionAttribution
             .HandleAsync(Arg.Any<ComputeRedemptionAttributionQuery>(), Arg.Any<CancellationToken>())
-            .Returns(new RedemptionAttributionResult(contractId, [new(Guid.NewGuid(), 30)], At.Slot(Start, Start.AddMinutes(30))));
+            .Returns(new RedemptionAttributionResult([new(Guid.NewGuid(), 30)], At.Slot(Start, Start.AddMinutes(30))));
 
         var command = ValidCommand(blockId, presetId) with { Slot = At.Slot(Start, Start.AddMinutes(30)) };
         var result = await CreateHandler().HandleAsync(command);

@@ -116,7 +116,7 @@ public sealed class SealNenContractCommandHandler : ICommandHandler<SealNenContr
         foreach (var block in preparation.Blocks)
         {
             var calendar = await _blocks.GetForRangeAsync(block.Scheduled, ct);
-            var verdict = _placement.Check(block.Scheduled, block.PresetType, contract, calendar, running, now, _clock.TimeZone);
+            var verdict = _placement.Check(block.Scheduled, block.PresetType, block.Membership, [contract], calendar, running, now, _clock.TimeZone);
             if (verdict.Outcome == PlacementOutcome.TimeTaken)
                 return SealNenContractResult.Fail("A Focus block already exists here.");
             if (verdict.Outcome != PlacementOutcome.Allowed)

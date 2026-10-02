@@ -92,7 +92,7 @@ public sealed class UpdatePlannedBlockValidator : AbstractValidator<UpdatePlanne
             .CustomAsync(async (command, context, ct) =>
             {
                 var block = await _blocks.GetByIdAsync(command.BlockId, ct);
-                if (block?.ContractId is not { } contractId) return;
+                if (block?.Membership?.ContractId is not { } contractId) return;
 
                 var contract = await contracts.GetByIdAsync(contractId, ct);
                 if (contract is null || !contract.IsInEffect) return;

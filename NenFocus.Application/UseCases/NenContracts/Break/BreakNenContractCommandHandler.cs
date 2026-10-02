@@ -2,6 +2,7 @@ using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.GetNenContractRecap;
 using NenFocus.Domain.Entities;
+using NenFocus.Domain.Enums;
 using NenFocus.Domain.Services;
 using NenFocus.Domain.ValueObjects;
 
@@ -45,17 +46,33 @@ public sealed class BreakNenContractCommandHandler : ICommandHandler<BreakNenCon
         var linkedBlocks = await _blocks.GetForContractAsync(command.ContractId, ct);
         var cancelledFocusBlockIds = new HashSet<Guid>();
 
+        // The contract answers what happens to each of its blocks (Gap 97); this only does it.
         // IsResolved (not raw HasEnded) so a FocusBlock whose session already ended early
         // keeps its real outcome (EndedEarly/CompletedOnTime/StartedLate) instead of being
         // retroactively relabeled Cancelled just because its raw scheduled End hadn't
-        // arrived yet — see PlannedBlockResolutionExtensions.
-        foreach (var block in linkedBlocks.Where(b => !b.IsResolved(_outcomeClassifier, now)))
+        // arrived yet — see PlannedBlockResolutionExtensions. Bonus blocks are kept until
+        // Gap 108 lets the user choose.
+        foreach (var block in linkedBlocks)
         {
-            block.MarkCancelled(now);
-            await _blocks.SaveAsync(block, ct);
+            var fate = contract.FateWhenBroken(
+                block, block.IsResolved(_outcomeClassifier, now), now, keepBonusBlocks: true);
 
-            if (block is FocusBlock focusBlock)
-                cancelledFocusBlockIds.Add(focusBlock.Id);
+            if (fate == BlockFateOnBreak.Cancel)
+            {
+                block.MarkCancelled(now);
+                if (block is FocusBlock focusBlock)
+                    cancelledFocusBlockIds.Add(focusBlock.Id);
+            }
+            else if (fate == BlockFateOnBreak.Release)
+            {
+                block.Leave();
+            }
+            else
+            {
+                continue;
+            }
+
+            await _blocks.SaveAsync(block, ct);
         }
 
         var activeSession = await _sessions.GetActiveAsync(ct);

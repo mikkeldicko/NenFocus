@@ -30,6 +30,25 @@ public sealed record UserTimeZone
     /// <summary>The user's calendar date at this moment.</summary>
     public DateOnly DateOf(Moment moment) => DateOnly.FromDateTime(ToCalendarTime(moment));
 
+    /// <summary>
+    /// The real time the user's calendar days <paramref name="firstDay"/> to
+    /// <paramref name="lastDay"/> cover: local midnight to the local midnight after the last day
+    /// — the mirror of <see cref="SplitByDay"/>, so a daylight-saving day is 23 or 25 hours.
+    /// What a "these days" query hands a repository, which only knows moments (Gap 97).
+    /// </summary>
+    public TimeSlot SlotCovering(DateOnly firstDay, DateOnly lastDay)
+    {
+        if (lastDay < firstDay)
+            throw new ArgumentException("The last day can't be before the first.", nameof(lastDay));
+
+        return new TimeSlot(
+            ToMoment(firstDay.ToDateTime(TimeOnly.MinValue)),
+            ToMoment(lastDay.AddDays(1).ToDateTime(TimeOnly.MinValue)));
+    }
+
+    /// <summary>The real time one calendar day covers — see <see cref="SlotCovering(DateOnly, DateOnly)"/>.</summary>
+    public TimeSlot SlotCovering(DateOnly day) => SlotCovering(day, day);
+
     /// <summary>Both ends of a slot as the user's clock shows them — for display; a slot's own Start/End are Domain-only.</summary>
     public (DateTime Start, DateTime End) ToCalendarTimes(TimeSlot slot) => (ToCalendarTime(slot.Start), ToCalendarTime(slot.End));
 

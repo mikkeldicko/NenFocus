@@ -115,6 +115,132 @@ public class BlockPlacementCheckerTests
     public void SeveralInTheWay_ReportsTheEarliest()
         => CheckFree(Slot(10, 14), [Focus(12, 13), Focus(10.5, 11)]).Conflict.Should().Be(Slot(10.5, 11));
 
+    // ── Which contract governs (Gap 97) ──────────────────────────────────────
+    // Day is the first of three contract days, each 09:00–17:00; "now" is 08:00 on Day.
+
+    private static NenContract Contract(DateOnly? firstDay = null) => NenContract.Seal(
+        id: Guid.NewGuid(),
+        name: "Contract",
+        goal: new NenContractGoal("Goal"),
+        strictnessRule: StrictnessRule.Locked,
+        calendar: TestCalendars.For(firstDay ?? DateOnly.FromDateTime(Day), (firstDay ?? DateOnly.FromDateTime(Day)).AddDays(2),
+            new DailyFloorRule.None(), workHours: new WorkHours(new TimeOnly(9, 0), new TimeOnly(17, 0))),
+        floorRule: new DailyFloorRule.None(),
+        changeWindow: null,
+        allowCancellation: true,
+        plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
+        sealedAt: Now, timeZone: At.UtcZone);
+
+    private PlacementVerdict Check(TimeSlot slot, ContractMembership? membership, params NenContract[] contracts) =>
+        _checker.Check(slot, BlockPresetType.Focus, membership, contracts, [], [], Now, At.UtcZone);
+
+    [Fact]
+    public void Check_SlotAlreadyStarted_IsInThePast()
+        => Check(Slot(7, 9), null).Outcome.Should().Be(PlacementOutcome.InThePast);
+
+    [Fact]
+    public void Check_PlainBlock_InsideThePeriodAndTheDaysWindow_IsAllowedUnderThatContract()
+    {
+        var contract = Contract();
+
+        var verdict = Check(Slot(10, 11), null, contract);
+
+        verdict.Outcome.Should().Be(PlacementOutcome.Allowed);
+        verdict.GoverningContractId.Should().Be(contract.Id);
+    }
+
+    [Fact]
+    public void Check_PlainBlock_InsideThePeriodButOutsideADaysWindow_IsRefused()
+        // 19:00 on the second day: the contract is running, Work Hours are over.
+        => Check(Slot(24 + 19, 24 + 20), null, Contract()).Outcome.Should().Be(PlacementOutcome.OutsideContractHours);
+
+    [Theory]
+    [InlineData(8.5, 9.5)]            // straddles the period's start (day 1, 09:00)
+    [InlineData(48 + 16.5, 48 + 17.5)] // straddles the period's end (day 3, 17:00)
+    public void Check_PlainBlock_StraddlingThePeriodsStartOrEnd_IsRefused(double from, double to)
+        => Check(Slot(from, to), null, Contract()).Outcome.Should().Be(PlacementOutcome.OutsideContractHours);
+
+    [Theory]
+    [InlineData(8.25, 9)]             // day 1, entirely before the period starts
+    [InlineData(48 + 19, 48 + 20)]    // day 3, entirely after the period ends
+    [InlineData(96 + 10, 96 + 11)]    // two days after the contract
+    public void Check_PlainBlock_EntirelyOutsideThePeriod_IsAPlainAllowedBlock(double from, double to)
+    {
+        var verdict = Check(Slot(from, to), null, Contract());
+
+        verdict.Should().Be(PlacementVerdict.Allowed);
+        verdict.GoverningContractId.Should().BeNull();
+    }
+
+    [Fact]
+    public void Check_FinishedContract_GovernsNothing()
+    {
+        var broken = Contract();
+        broken.Break(Now, At.UtcZone);
+
+        Check(Slot(19, 20), null, broken).Should().Be(PlacementVerdict.Allowed);
+    }
+
+    [Theory]
+    [InlineData(48 + 19, 48 + 20)]    // after its contract's period — fine for a plain block
+    [InlineData(96 + 10, 96 + 11)]    // days after its contract
+    public void Check_CommittedOrRedemptionBlock_NeverLeavesItsContract(double from, double to)
+    {
+        var contract = Contract();
+
+        Check(Slot(from, to), TestContracts.Committed(contract.Id), contract).Outcome.Should().Be(PlacementOutcome.OutsideContractHours);
+        Check(Slot(from, to), TestContracts.Redemption(contract.Id), contract).Outcome.Should().Be(PlacementOutcome.OutsideContractHours);
+    }
+
+    [Fact]
+    public void Check_CommittedBlock_IsHeldToItsOwnContract_NotTheOneTheSlotSitsIn()
+    {
+        var own = Contract();
+        var next = Contract(DateOnly.FromDateTime(Day).AddDays(5));
+
+        Check(Slot(120 + 10, 120 + 11), TestContracts.Committed(own.Id), own, next).Outcome
+            .Should().Be(PlacementOutcome.OutsideContractHours);
+    }
+
+    [Fact]
+    public void Check_CommittedBlock_InsideItsContract_IsAllowedUnderIt()
+    {
+        var contract = Contract();
+
+        Check(Slot(24 + 10, 24 + 11), TestContracts.Committed(contract.Id), contract).GoverningContractId.Should().Be(contract.Id);
+    }
+
+    [Fact]
+    public void Check_BonusBlock_FollowsWhereItIsPlaced()
+    {
+        var contract = Contract();
+        var bonus = TestContracts.Bonus(contract.Id);
+
+        Check(Slot(48 + 19, 48 + 20), bonus, contract).Should().Be(PlacementVerdict.Allowed, "moved out: a plain block again");
+        Check(Slot(24 + 10, 24 + 11), bonus, contract).GoverningContractId.Should().Be(contract.Id);
+        Check(Slot(24 + 19, 24 + 20), bonus, contract).Outcome.Should().Be(PlacementOutcome.OutsideContractHours);
+    }
+
+    [Fact]
+    public void Check_TimeTaken_WinsAfterTheContractAllows()
+    {
+        var verdict = _checker.Check(Slot(10, 11), BlockPresetType.Focus, null, [Contract()], [Focus(10.5, 12)], [], Now, At.UtcZone);
+
+        verdict.Outcome.Should().Be(PlacementOutcome.TimeTaken);
+        verdict.GoverningContractId.Should().BeNull();
+    }
+
+    [Fact]
+    public void Check_BackgroundBlock_IsHeldToContractHoursButNeverClashes()
+    {
+        var contract = Contract();
+
+        _checker.Check(Slot(10, 11), BlockPresetType.Background, null, [contract], [Focus(10, 11)], [], Now, At.UtcZone)
+            .GoverningContractId.Should().Be(contract.Id);
+        _checker.Check(Slot(24 + 19, 24 + 20), BlockPresetType.Background, null, [contract], [], [], Now, At.UtcZone)
+            .Outcome.Should().Be(PlacementOutcome.OutsideContractHours);
+    }
+
     [Fact]
     public void Verdict_ConflictExactlyWhenTimeTaken()
     {

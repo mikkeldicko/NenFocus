@@ -11,6 +11,43 @@ public class UserTimeZoneTests
 {
     private static readonly UserTimeZone Copenhagen = new(TimeZoneInfo.FindSystemTimeZoneById("Europe/Copenhagen"));
 
+    // ── SlotCovering: the real time a calendar day covers (Gap 97) ───────────
+
+    [Fact]
+    public void SlotCovering_ADay_IsLocalMidnightToTheNextLocalMidnight()
+        => Copenhagen.SlotCovering(new DateOnly(2026, 1, 15))
+            .Should().Be(new TimeSlot(At.Utc(2026, 1, 14, 23), At.Utc(2026, 1, 15, 23)));
+
+    [Fact]
+    public void SlotCovering_TheDayClocksGoForward_Is23Hours()
+        => Copenhagen.SlotCovering(new DateOnly(2026, 3, 29)).Length.Should().Be(TimeSpan.FromHours(23));
+
+    [Fact]
+    public void SlotCovering_TheDayClocksGoBack_Is25Hours()
+        => Copenhagen.SlotCovering(new DateOnly(2026, 10, 25)).Length.Should().Be(TimeSpan.FromHours(25));
+
+    [Fact]
+    public void SlotCovering_ARangeOfDays_RunsFromTheFirstMidnightToTheMidnightAfterTheLast()
+        => Copenhagen.SlotCovering(new DateOnly(2026, 1, 15), new DateOnly(2026, 1, 17))
+            .Should().Be(new TimeSlot(At.Utc(2026, 1, 14, 23), At.Utc(2026, 1, 17, 23)));
+
+    [Fact]
+    public void SlotCovering_IsTheMirrorOfSplitByDay()
+    {
+        var days = Copenhagen.SplitByDay(Copenhagen.SlotCovering(new DateOnly(2026, 3, 28), new DateOnly(2026, 3, 30))).ToList();
+
+        days.Select(d => d.Date).Should().Equal(new DateOnly(2026, 3, 28), new DateOnly(2026, 3, 29), new DateOnly(2026, 3, 30));
+        days.Should().OnlyContain(d => d.Part == Copenhagen.SlotCovering(d.Date));
+    }
+
+    [Fact]
+    public void SlotCovering_LastDayBeforeTheFirst_Throws()
+    {
+        var act = () => Copenhagen.SlotCovering(new DateOnly(2026, 1, 17), new DateOnly(2026, 1, 15));
+
+        act.Should().Throw<ArgumentException>();
+    }
+
     [Fact]
     public void ToCalendarTime_Winter_AddsOneHour()
         => Copenhagen.ToCalendarTime(At.Utc(2026, 1, 15, 12)).Should().Be(new DateTime(2026, 1, 15, 13, 0, 0));

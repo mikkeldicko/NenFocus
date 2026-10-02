@@ -25,9 +25,9 @@ public sealed class GetSessionHistoryQueryHandler
         GetSessionHistoryQuery query,
         CancellationToken cancellationToken = default)
     {
+        // From/To are the user's calendar days; the time zone turns them into real time (Gap 97).
         var sessions = await _sessions.GetHistoryAsync(
-            query.From,
-            query.To,
+            _clock.TimeZone.SlotCovering(query.From, query.To),
             query.PresetId,
             cancellationToken);
 

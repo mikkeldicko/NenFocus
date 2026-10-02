@@ -39,10 +39,27 @@ public class ComputePlannedFocusHoursQueryHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_BonusBlockOfTheContract_AddsNothingToPlannedHours()
+    {
+        // Gap 97: planned hours are measured against the floor, and a Bonus block never counts toward it.
+        var committed = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(new DateTime(2026, 1, 2, 9, 0, 0), new DateTime(2026, 1, 2, 10, 0, 0)), membership: TestContracts.Committed(ContractId));
+        var redemption = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(new DateTime(2026, 1, 2, 11, 0, 0), new DateTime(2026, 1, 2, 12, 0, 0)), membership: TestContracts.Redemption(ContractId));
+        var bonus = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(new DateTime(2026, 1, 2, 14, 0, 0), new DateTime(2026, 1, 2, 16, 0, 0)), membership: TestContracts.Bonus(ContractId));
+        _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyList<PlannedBlock>)[committed, redemption, bonus]);
+
+        await CreateHandler().HandleAsync(new ComputePlannedFocusHoursQuery(ContractId, []), CancellationToken.None);
+
+        _calculator.Received(1).Calculate(
+            Arg.Is<IEnumerable<TimeSlot>>(r => r.Count() == 2 && r.Contains(committed.Scheduled) && r.Contains(redemption.Scheduled)),
+            Arg.Any<UserTimeZone>());
+    }
+
+    [Fact]
     public async Task HandleAsync_WithContractId_MergesPersistedFocusBlocksWithDrafts()
     {
-        var persistedFocus = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(new DateTime(2026, 1, 2, 9, 0, 0), new DateTime(2026, 1, 2, 10, 0, 0)), contractId: ContractId);
-        var persistedBackground = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(new DateTime(2026, 1, 2, 12, 0, 0), new DateTime(2026, 1, 2, 13, 0, 0)), contractId: ContractId);
+        var persistedFocus = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(new DateTime(2026, 1, 2, 9, 0, 0), new DateTime(2026, 1, 2, 10, 0, 0)), membership: TestContracts.Committed(ContractId));
+        var persistedBackground = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(new DateTime(2026, 1, 2, 12, 0, 0), new DateTime(2026, 1, 2, 13, 0, 0)), membership: TestContracts.Committed(ContractId));
 
         _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[persistedFocus, persistedBackground]);
@@ -63,7 +80,7 @@ public class ComputePlannedFocusHoursQueryHandlerTests
     [Fact]
     public async Task HandleAsync_ExcludeBlockId_OmitsThatPersistedBlock()
     {
-        var editingBlock = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(new DateTime(2026, 1, 2, 9, 0, 0), new DateTime(2026, 1, 2, 10, 0, 0)), contractId: ContractId);
+        var editingBlock = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(new DateTime(2026, 1, 2, 9, 0, 0), new DateTime(2026, 1, 2, 10, 0, 0)), membership: TestContracts.Committed(ContractId));
 
         _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[editingBlock]);

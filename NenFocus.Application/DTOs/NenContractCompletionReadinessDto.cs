@@ -14,7 +14,7 @@ public sealed record NenContractCompletionReadinessDto
     /// over-delivered contract still reports 0 remaining, not a negative surplus).</summary>
     public double RemainingHours { get; init; }
 
-    /// <summary>Still-open blocks anywhere in the contract's window — committed, or an
-    /// unlinked Bonus-eligible block within [StartsAt, EndsAt]. Zero when ready.</summary>
+    /// <summary>Still-open blocks of the contract — every member, Bonus blocks included.
+    /// Zero when ready.</summary>
     public int PendingBlockCount { get; init; }
 }

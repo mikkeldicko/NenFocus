@@ -139,7 +139,7 @@ public class DeletePlannedBlockValidatorTests
     public async Task Validate_BlockUnderActiveContract_IsInvalid()
     {
         var contractId = Guid.NewGuid();
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now.AddHours(1), Now.AddHours(2)), contractId: contractId);
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now.AddHours(1), Now.AddHours(2)), membership: TestContracts.Committed(contractId));
         _blocks.GetByIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns(block);
 
         var result = await CreateValidator().ValidateAsync(new DeletePlannedBlockCommand { BlockId = block.Id });
@@ -154,7 +154,7 @@ public class DeletePlannedBlockValidatorTests
         // stays undeletable forever, even after the contract itself has concluded, so a
         // contract's historical stats can never silently change.
         var contractId = Guid.NewGuid();
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now.AddHours(-3), Now.AddHours(-1)), contractId: contractId);
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now.AddHours(-3), Now.AddHours(-1)), membership: TestContracts.Committed(contractId));
         _blocks.GetByIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns(block);
 
         var result = await CreateValidator().ValidateAsync(new DeletePlannedBlockCommand { BlockId = block.Id });

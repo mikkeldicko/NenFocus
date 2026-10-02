@@ -16,8 +16,18 @@ public abstract class PlannedBlock : AggregateRoot
 
     public string? Title { get; protected set; }
 
-    /// <summary>Null means an ordinary, uncommitted block; set means the block is under that Nen Contract.</summary>
-    public Guid? ContractId { get; protected set; }
+    private ContractMembership? _membership;
+
+    /// <summary>
+    /// Null means a plain block; set means it belongs to that Nen Contract, in that role (Gap 97).
+    /// Each block keeps its own copy: the membership is stored as part of the block's row, and
+    /// one instance can't be part of two rows (a split's halves, a drafted batch).
+    /// </summary>
+    public ContractMembership? Membership
+    {
+        get => _membership;
+        protected set => _membership = value is null ? null : value with { };
+    }
 
     /// <summary>Null means still scheduled/live; set means the owning Nen Contract was broken and this
     /// block was cut short before it ran. Applies uniformly to FocusBlock and BackgroundBlock.</summary>
@@ -154,9 +164,39 @@ public abstract class PlannedBlock : AggregateRoot
         BlockPresetId = presetId;
     }
 
-    public void AssignContract(Guid? contractId)
+    /// <summary>A plain block becomes a member. A block is in one contract at most, and its role never changes.</summary>
+    public void Join(ContractMembership membership)
     {
-        ContractId = contractId;
+        if (Membership is not null)
+            throw new InvalidOperationException("This block already belongs to a contract.");
+
+        Membership = membership;
+    }
+
+    /// <summary>
+    /// A Bonus block becomes a plain block again. Committed and Redemption blocks never leave
+    /// their contract.
+    /// </summary>
+    public void Leave()
+    {
+        if (Membership is not { IsBonus: true })
+            throw new InvalidOperationException("Only a Bonus block can leave its contract.");
+
+        Membership = null;
+    }
+
+    /// <summary>
+    /// After being placed or moved: a plain or Bonus block's membership follows where it sits —
+    /// under <paramref name="governing"/> it is that contract's Bonus block, under none it is a
+    /// plain block. A Committed or Redemption block is unaffected: it never leaves its contract.
+    /// </summary>
+    public void PlaceUnder(NenContract? governing)
+    {
+        if (Membership is { IsBonus: false }) return;
+        if (Membership?.ContractId == governing?.Id) return;
+
+        if (Membership is not null) Leave();
+        if (governing is not null) Join(governing.MembershipForPlacedBlock(claimsDeficit: false));
     }
 
     public void MarkCancelled(Moment cancelledAt)

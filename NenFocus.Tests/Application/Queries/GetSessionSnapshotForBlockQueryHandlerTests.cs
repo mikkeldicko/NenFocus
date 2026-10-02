@@ -85,7 +85,7 @@ public class GetSessionSnapshotForBlockQueryHandlerTests
         var coveringBlockId = Guid.NewGuid();
         var coveringPresetId = Guid.NewGuid();
         var coveringBlock = FocusBlock.Create(coveringBlockId, coveringPresetId,At.Slot(Start, End),
-            redemptionEntries: [new RedemptionEntry(missedBlockId, 30)]);
+            membership: TestContracts.Redemption(Guid.NewGuid()), redemptionEntries: [new RedemptionEntry(missedBlockId, 30)]);
 
         var session = CreateCompletedSession(coveringBlockId);
         _sessions.GetByOriginatingBlockIdAsync(coveringBlockId, Arg.Any<CancellationToken>()).Returns(session);
@@ -115,7 +115,7 @@ public class GetSessionSnapshotForBlockQueryHandlerTests
 
         var coveringBlockId = Guid.NewGuid();
         var coveringBlock = FocusBlock.Create(coveringBlockId, Guid.NewGuid(),At.Slot(Start, End),
-            redemptionEntries: [new RedemptionEntry(missedBlockId, 30)]);
+            membership: TestContracts.Redemption(Guid.NewGuid()), redemptionEntries: [new RedemptionEntry(missedBlockId, 30)]);
 
         var session = CreateCompletedSession(coveringBlockId);
         _sessions.GetByOriginatingBlockIdAsync(coveringBlockId, Arg.Any<CancellationToken>()).Returns(session);

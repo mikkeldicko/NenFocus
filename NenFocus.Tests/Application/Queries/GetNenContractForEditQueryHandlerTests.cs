@@ -112,8 +112,8 @@ public class GetNenContractForEditQueryHandlerTests
 
         var focusPresetId = Guid.NewGuid();
         var backgroundPresetId = Guid.NewGuid();
-        var later = FocusBlock.Create(Guid.NewGuid(), focusPresetId,At.Slot(StartDate.ToDateTime(new TimeOnly(14, 0)), StartDate.ToDateTime(new TimeOnly(16, 0))), contractId: ContractId);
-        var earlier = BackgroundBlock.Create(Guid.NewGuid(), backgroundPresetId,At.Slot(StartDate.ToDateTime(new TimeOnly(9, 0)), StartDate.ToDateTime(new TimeOnly(10, 0))), contractId: ContractId);
+        var later = FocusBlock.Create(Guid.NewGuid(), focusPresetId,At.Slot(StartDate.ToDateTime(new TimeOnly(14, 0)), StartDate.ToDateTime(new TimeOnly(16, 0))), membership: TestContracts.Committed(ContractId));
+        var earlier = BackgroundBlock.Create(Guid.NewGuid(), backgroundPresetId,At.Slot(StartDate.ToDateTime(new TimeOnly(9, 0)), StartDate.ToDateTime(new TimeOnly(10, 0))), membership: TestContracts.Committed(ContractId));
         _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[later, earlier]);
 
         _presets.GetByIdAsync(focusPresetId, Arg.Any<CancellationToken>())

@@ -749,6 +749,16 @@ public partial class PlannerPageView : UserControl
 
         switch (tile.ContractBadge)
         {
+            case PlannedBlockContractBadge.Committed:
+                stack.Children.Add(new TextBlock
+                {
+                    Text       = "COMMITTED",
+                    FontSize   = 9,
+                    FontWeight = FontWeight.Bold,
+                    Opacity    = 0.9
+                });
+                break;
+
             // A redemption block stays in its normal outcome/preset color family — a small
             // "REDEMPTION" tag is the only distinguishing mark, no border treatment.
             case PlannedBlockContractBadge.Redemption:

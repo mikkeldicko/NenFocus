@@ -122,11 +122,11 @@ public sealed class StartSessionCommandHandler
             breakPresetName = breakTimerPreset.Name;
         }
 
-        // Resolved once, here, and copied onto the session (Gap 64): only a planned block
-        // committed to a contract inherits that contract's rule; a Spontaneous session or a
-        // Bonus block (no ContractId) keeps today's default of lifting blocking on breaks. The
-        // one place a future global Settings default would plug in.
-        var keepBlockingDuringBreaks = originatingBlock?.ContractId is { } contractId
+        // Resolved once, here, and copied onto the session (Gap 64): a planned block that
+        // belongs to a contract — Bonus blocks included (Gap 97) — inherits that contract's
+        // rule; a Spontaneous session or a plain block keeps the default of lifting blocking
+        // on breaks. The one place a future global Settings default would plug in.
+        var keepBlockingDuringBreaks = originatingBlock?.Membership?.ContractId is { } contractId
             && (await _contracts.GetByIdAsync(contractId, ct))?.KeepBlockingDuringBreaks == true;
 
         session.Start(now, originatingBlock?.Scheduled, breakSchedule, breakPresetName, keepBlockingDuringBreaks);

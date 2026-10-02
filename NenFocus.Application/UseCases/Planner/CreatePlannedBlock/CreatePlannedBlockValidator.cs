@@ -40,13 +40,13 @@ public sealed class CreatePlannedBlockValidator : AbstractValidator<CreatePlanne
             .WithMessage($"A Focus block cannot exceed {FocusBlock.MaxDurationHours} hours.");
 
         // The one placement rule (Gap 88 phase 8): not in the past → inside the contract's
-        // window → free for Focus. The query resolves the contract (through attribution for
-        // a Focus block) and owns the wording, so preview and save agree.
+        // window → free for Focus. The query finds the contract the slot sits in and owns the
+        // wording, so preview and save agree.
         RuleFor(x => x)
             .CustomAsync(async (command, context, ct) =>
             {
                 var verdict = await placement.HandleAsync(
-                    new GetBlockPlacementVerdictQuery(command.Slot, command.BlockPresetType, command.PresetId, command.ContractId),
+                    new GetBlockPlacementVerdictQuery(command.Slot, command.BlockPresetType, command.PresetId, command.DeclineRedemption),
                     ct);
                 if (verdict.Outcome != PlacementOutcome.Allowed && verdict.Message is not null)
                     context.AddFailure(nameof(CreatePlannedBlockCommand.Slot), verdict.Message);

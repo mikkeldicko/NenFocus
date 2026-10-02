@@ -41,24 +41,11 @@ public sealed class GetNenContractBonusFocusHoursQueryHandler
 
         var now = _clock.Now;
 
-        // Coarse pre-filter (a day either side, so no boundary block is missed) — the
-        // precise "is this block's Start actually within the contract's range" check
-        // below is what actually matters, same rule GetPlannedBlocksForDayQueryHandler's
-        // tile-level Bonus resolution already uses.
-        var rangeStart = contract.StartDate.AddDays(-1).ToDateTime(TimeOnly.MinValue);
-        var rangeEnd = contract.EndDate.AddDays(1).ToDateTime(TimeOnly.MinValue);
-        var blocksInRange = await _blocks.GetForRangeAsync(
-            new TimeSlot(_clock.TimeZone.ToMoment(rangeStart), _clock.TimeZone.ToMoment(rangeEnd)), ct);
-
-        // StartsAt/EndsAt, not a date-only truncation of Start — a Work-Hours contract's
-        // true boundary isn't midnight, so a block placed after Work Hours close on the
-        // last day (or before they open on the first) must not still count as Bonus just
-        // because it shares the calendar day. b.Start is UTC; StartsAt/EndsAt are local
-        // wall-clock instants, so the comparison must happen in local time.
-        var bonusBlocks = blocksInRange
+        // The contract's Bonus blocks are the ones that say so themselves (Gap 97) — the role is
+        // stored when the block is placed, never worked out here from dates.
+        var bonusBlocks = (await _blocks.GetForContractAsync(contract.Id, ct))
             .OfType<FocusBlock>()
-            .Where(b => b.ContractId is null)
-            .Where(b => contract.Covers(_clock.TimeZone.ToCalendarTimes(b.Scheduled).Start))
+            .Where(b => b.IsBonus)
             .ToList();
 
         var creditedWindows = new List<TimeSlot>();

@@ -4,6 +4,7 @@ using NenFocus.Application.Queries.ComputeRedemptionAttribution;
 using NenFocus.Application.UseCases.Planner.CreatePlannedBlock;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
+using NenFocus.Domain.Services;
 using NenFocus.Domain.ValueObjects;
 using NSubstitute;
 
@@ -12,7 +13,8 @@ namespace NenFocus.Tests.Application.UseCases.Planner;
 // Placement ("is this time free", "in the past", "inside the contract's hours") is the
 // validator's job via GetBlockPlacementVerdictQuery since Gap 88 phase 8 — tested in
 // GetBlockPlacementVerdictQueryHandlerTests. The cap is attribution's (its own tests).
-// The handler only saves what attribution returns.
+// The handler saves what attribution returns, with the membership the contract the slot sits
+// in hands out (Gap 97).
 public class CreatePlannedBlockCommandHandlerTests
 {
     private static readonly DateTime Start = new(2026, 1, 2, 10, 0, 0, DateTimeKind.Utc);
@@ -20,23 +22,58 @@ public class CreatePlannedBlockCommandHandlerTests
 
     private readonly IPlannedBlockRepository _blocks = Substitute.For<IPlannedBlockRepository>();
     private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
+    private readonly INenContractRepository _contracts = Substitute.For<INenContractRepository>();
     private readonly IQueryHandler<ComputeRedemptionAttributionQuery, RedemptionAttributionResult> _computeRedemptionAttribution =
         Substitute.For<IQueryHandler<ComputeRedemptionAttributionQuery, RedemptionAttributionResult>>();
+    private readonly ISystemClock _clock = TestClock.Create();
 
     public CreatePlannedBlockCommandHandlerTests()
     {
-        // Default: echoes back whatever ContractId was passed in, no redemption entries, the
-        // requested slot unchanged — the real query's answer when nothing is eligible to cover.
+        _clock.SetNow(Start.AddHours(-1));
+        _clock.SetTimeZoneOffset(TimeSpan.Zero);
+        _contracts.GetAllInEffectAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<NenContract>)[]);
+
+        // Default: no redemption entries, the requested slot unchanged — the real query's
+        // answer when nothing is eligible to cover.
         _computeRedemptionAttribution
             .HandleAsync(Arg.Any<ComputeRedemptionAttributionQuery>(), Arg.Any<CancellationToken>())
             .Returns(ci =>
             {
                 var query = (ComputeRedemptionAttributionQuery)ci[0];
-                return new RedemptionAttributionResult(query.ContractId, [], query.Block);
+                return new RedemptionAttributionResult([], query.Block);
             });
     }
 
-    private CreatePlannedBlockCommandHandler CreateHandler() => new(_blocks, _presets, _computeRedemptionAttribution);
+    private CreatePlannedBlockCommandHandler CreateHandler() =>
+        new(_blocks, _presets, _contracts, _computeRedemptionAttribution, new BlockPlacementChecker(), _clock);
+
+    /// <summary>A contract in effect whose period (the whole of 2–9 January) contains the command's slot.</summary>
+    private Guid SetUpContractAroundTheSlot()
+    {
+        var contract = NenContract.Seal(
+            id: Guid.NewGuid(),
+            name: "Contract",
+            goal: new NenContractGoal("Goal"),
+            strictnessRule: StrictnessRule.Locked,
+            calendar: TestCalendars.For(DateOnly.FromDateTime(Start), DateOnly.FromDateTime(Start).AddDays(7), new DailyFloorRule.None()),
+            floorRule: new DailyFloorRule.None(),
+            changeWindow: null,
+            allowCancellation: false,
+            plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
+            sealedAt: At.Utc(Start.Date), timeZone: At.UtcZone);
+        _contracts.GetAllInEffectAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<NenContract>)[contract]);
+        return contract.Id;
+    }
+
+    private async Task<PlannedBlock> SavedBlockAsync(CreatePlannedBlockCommand command)
+    {
+        PlannedBlock? saved = null;
+        await _blocks.AddAsync(Arg.Do<PlannedBlock>(b => saved = b), Arg.Any<CancellationToken>());
+
+        (await CreateHandler().HandleAsync(command)).Success.Should().BeTrue();
+
+        return saved!;
+    }
 
     private static CreatePlannedBlockCommand FocusCommand(Guid presetId) => new()
     {
@@ -48,6 +85,13 @@ public class CreatePlannedBlockCommandHandlerTests
     private void SetUpPreset(Guid presetId, BlockPresetType type) =>
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
             .Returns(BlockPreset.Create(presetId, "Preset", WebsiteFilterType.Blocklist, type, At.Utc(Start.AddDays(-1))));
+
+    private Guid FocusPreset()
+    {
+        var presetId = Guid.NewGuid();
+        SetUpPreset(presetId, BlockPresetType.Focus);
+        return presetId;
+    }
 
     [Fact]
     public async Task HandleAsync_PresetNotFound_Fails()
@@ -63,10 +107,7 @@ public class CreatePlannedBlockCommandHandlerTests
     [Fact]
     public async Task HandleAsync_Focus_HappyPath_CreatesFocusBlock()
     {
-        var presetId = Guid.NewGuid();
-        SetUpPreset(presetId, BlockPresetType.Focus);
-
-        var result = await CreateHandler().HandleAsync(FocusCommand(presetId));
+        var result = await CreateHandler().HandleAsync(FocusCommand(FocusPreset()));
 
         result.Success.Should().BeTrue();
         result.BlockId.Should().NotBeNull();
@@ -86,93 +127,92 @@ public class CreatePlannedBlockCommandHandlerTests
         await _blocks.Received(1).AddAsync(Arg.Is<PlannedBlock>(b => b is BackgroundBlock), Arg.Any<CancellationToken>());
     }
 
+    // ── Membership comes from where the slot sits (Gap 97) ───────────────────
+
     [Fact]
-    public async Task HandleAsync_WithContractId_LinksTheCreatedBlock()
+    public async Task HandleAsync_InsideNoContract_IsAPlainBlock_AndAttributionIsNeverAsked()
     {
-        var presetId = Guid.NewGuid();
-        SetUpPreset(presetId, BlockPresetType.Focus);
-        var contractId = Guid.NewGuid();
+        var saved = await SavedBlockAsync(FocusCommand(FocusPreset()));
 
-        PlannedBlock? saved = null;
-        await _blocks.AddAsync(Arg.Do<PlannedBlock>(b => saved = b), Arg.Any<CancellationToken>());
-
-        await CreateHandler().HandleAsync(FocusCommand(presetId) with { ContractId = contractId });
-
-        saved!.ContractId.Should().Be(contractId);
+        saved.Membership.Should().BeNull();
+        await _computeRedemptionAttribution.DidNotReceive().HandleAsync(
+            Arg.Any<ComputeRedemptionAttributionQuery>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task HandleAsync_Focus_AttributionFindsADeficit_SetsRedemptionEntriesAndContractId()
+    public async Task HandleAsync_InsideAContract_NoDeficitCovered_IsABonusBlock()
     {
-        var presetId = Guid.NewGuid();
-        SetUpPreset(presetId, BlockPresetType.Focus);
+        var contractId = SetUpContractAroundTheSlot();
+
+        var saved = await SavedBlockAsync(FocusCommand(FocusPreset()));
+
+        saved.Membership.Should().Be(TestContracts.Bonus(contractId));
+    }
+
+    [Fact]
+    public async Task HandleAsync_InsideAContract_CoversADeficit_IsARedemptionBlock_AskingOnlyThatContract()
+    {
+        var contractId = SetUpContractAroundTheSlot();
         var missedBlockId = Guid.NewGuid();
-        var discoveredContractId = Guid.NewGuid();
         _computeRedemptionAttribution
-            .HandleAsync(Arg.Any<ComputeRedemptionAttributionQuery>(), Arg.Any<CancellationToken>())
-            .Returns(new RedemptionAttributionResult(discoveredContractId, [new(missedBlockId, 60)], At.Slot(Start, End)));
+            .HandleAsync(Arg.Is<ComputeRedemptionAttributionQuery>(q => q.ContractId == contractId), Arg.Any<CancellationToken>())
+            .Returns(new RedemptionAttributionResult([new(missedBlockId, 60)], At.Slot(Start, End)));
 
-        PlannedBlock? saved = null;
-        await _blocks.AddAsync(Arg.Do<PlannedBlock>(b => saved = b), Arg.Any<CancellationToken>());
-
-        await CreateHandler().HandleAsync(FocusCommand(presetId));
+        var saved = await SavedBlockAsync(FocusCommand(FocusPreset()));
 
         var focusBlock = saved.Should().BeOfType<FocusBlock>().Subject;
-        focusBlock.ContractId.Should().Be(discoveredContractId);
+        focusBlock.Membership.Should().Be(TestContracts.Redemption(contractId));
         focusBlock.RedemptionEntries.Should().ContainSingle(e => e.MissedBlockId == missedBlockId && e.MinutesCovered == 60);
     }
 
     [Fact]
-    public async Task HandleAsync_Background_NeverConsultsRedemptionAttribution()
+    public async Task HandleAsync_InsideAContract_DeclineRedemption_SkipsAttribution_IsABonusBlockAtTheRequestedSlot()
     {
-        var presetId = Guid.NewGuid();
-        SetUpPreset(presetId, BlockPresetType.Background);
-        var command = FocusCommand(presetId) with { BlockPresetType = BlockPresetType.Background };
-
-        await CreateHandler().HandleAsync(command);
-
-        await _computeRedemptionAttribution.DidNotReceive().HandleAsync(
-            Arg.Any<ComputeRedemptionAttributionQuery>(), Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
-    public async Task HandleAsync_Focus_DeclineRedemptionTrue_SkipsAttributionAndCreatesUnlinkedBlock()
-    {
-        var presetId = Guid.NewGuid();
-        SetUpPreset(presetId, BlockPresetType.Focus);
+        var contractId = SetUpContractAroundTheSlot();
         // A real match exists — proves DeclineRedemption skips it rather than the match
         // simply not being found.
         _computeRedemptionAttribution
             .HandleAsync(Arg.Any<ComputeRedemptionAttributionQuery>(), Arg.Any<CancellationToken>())
-            .Returns(new RedemptionAttributionResult(Guid.NewGuid(), [new(Guid.NewGuid(), 45)], At.Slot(Start, Start.AddMinutes(45)), true));
+            .Returns(new RedemptionAttributionResult([new(Guid.NewGuid(), 45)], At.Slot(Start, Start.AddMinutes(45)), true));
 
-        PlannedBlock? saved = null;
-        await _blocks.AddAsync(Arg.Do<PlannedBlock>(b => saved = b), Arg.Any<CancellationToken>());
+        var saved = await SavedBlockAsync(FocusCommand(FocusPreset()) with { DeclineRedemption = true });
 
-        var result = await CreateHandler().HandleAsync(FocusCommand(presetId) with { DeclineRedemption = true });
-
-        result.Success.Should().BeTrue();
         await _computeRedemptionAttribution.DidNotReceive().HandleAsync(
             Arg.Any<ComputeRedemptionAttributionQuery>(), Arg.Any<CancellationToken>());
         var focusBlock = saved.Should().BeOfType<FocusBlock>().Subject;
-        focusBlock.ContractId.Should().BeNull();
+        focusBlock.Membership.Should().Be(TestContracts.Bonus(contractId));
         focusBlock.RedemptionEntries.Should().BeEmpty();
         focusBlock.Scheduled.Should().Be(At.Slot(Start, End));
     }
 
     [Fact]
+    public async Task HandleAsync_Background_InsideAContract_IsABonusBlock_AndNeverConsultsAttribution()
+    {
+        var contractId = SetUpContractAroundTheSlot();
+        var presetId = Guid.NewGuid();
+        SetUpPreset(presetId, BlockPresetType.Background);
+
+        var saved = await SavedBlockAsync(FocusCommand(presetId) with { BlockPresetType = BlockPresetType.Background });
+
+        saved.Membership.Should().Be(TestContracts.Bonus(contractId));
+        await _computeRedemptionAttribution.DidNotReceive().HandleAsync(
+            Arg.Any<ComputeRedemptionAttributionQuery>(), Arg.Any<CancellationToken>());
+    }
+
+    // ── The slot saved ───────────────────────────────────────────────────────
+
+    [Fact]
     public async Task HandleAsync_Focus_AttributionReturnsACappedSlot_SavesItAndReportsCapped()
     {
-        var presetId = Guid.NewGuid();
-        SetUpPreset(presetId, BlockPresetType.Focus);
+        SetUpContractAroundTheSlot();
         _computeRedemptionAttribution
             .HandleAsync(Arg.Any<ComputeRedemptionAttributionQuery>(), Arg.Any<CancellationToken>())
-            .Returns(new RedemptionAttributionResult(Guid.NewGuid(), [new(Guid.NewGuid(), 45)], At.Slot(Start, Start.AddMinutes(45)), true));
+            .Returns(new RedemptionAttributionResult([new(Guid.NewGuid(), 45)], At.Slot(Start, Start.AddMinutes(45)), true));
 
         PlannedBlock? saved = null;
         await _blocks.AddAsync(Arg.Do<PlannedBlock>(b => saved = b), Arg.Any<CancellationToken>());
 
-        var command = FocusCommand(presetId) with { Slot = At.Slot(Start, Start.AddHours(2)) };
+        var command = FocusCommand(FocusPreset()) with { Slot = At.Slot(Start, Start.AddHours(2)) };
         var result = await CreateHandler().HandleAsync(command);
 
         result.Success.Should().BeTrue();
@@ -183,16 +223,15 @@ public class CreatePlannedBlockCommandHandlerTests
     [Fact]
     public async Task HandleAsync_Focus_AttributionReturnsTheRequestedSlot_DoesNotReportCapped()
     {
-        var presetId = Guid.NewGuid();
-        SetUpPreset(presetId, BlockPresetType.Focus);
+        SetUpContractAroundTheSlot();
         _computeRedemptionAttribution
             .HandleAsync(Arg.Any<ComputeRedemptionAttributionQuery>(), Arg.Any<CancellationToken>())
-            .Returns(new RedemptionAttributionResult(Guid.NewGuid(), [new(Guid.NewGuid(), 60)], At.Slot(Start, End)));
+            .Returns(new RedemptionAttributionResult([new(Guid.NewGuid(), 60)], At.Slot(Start, End)));
 
         PlannedBlock? saved = null;
         await _blocks.AddAsync(Arg.Do<PlannedBlock>(b => saved = b), Arg.Any<CancellationToken>());
 
-        var result = await CreateHandler().HandleAsync(FocusCommand(presetId));
+        var result = await CreateHandler().HandleAsync(FocusCommand(FocusPreset()));
 
         result.RedemptionCapped.Should().BeFalse();
         saved!.Scheduled.Should().Be(At.Slot(Start, End));

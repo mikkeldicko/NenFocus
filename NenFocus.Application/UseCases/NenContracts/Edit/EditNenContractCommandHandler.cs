@@ -132,8 +132,8 @@ public sealed class EditNenContractCommandHandler : ICommandHandler<EditNenContr
         var running = await _sessions.GetActiveSessionsAsync(ct);
         foreach (var block in preparation.Blocks)
         {
-            var calendar = (await _blocks.GetForRangeAsync(block.Scheduled, ct)).Where(b => b.ContractId != contractId);
-            var verdict = _placement.Check(block.Scheduled, block.PresetType, newContract, calendar, running, now, _clock.TimeZone);
+            var calendar = (await _blocks.GetForRangeAsync(block.Scheduled, ct)).Where(b => b.Membership?.ContractId != contractId);
+            var verdict = _placement.Check(block.Scheduled, block.PresetType, block.Membership, [newContract], calendar, running, now, _clock.TimeZone);
             if (verdict.Outcome == PlacementOutcome.TimeTaken)
                 return EditNenContractResult.Fail("A Focus block already exists here.");
             if (verdict.Outcome != PlacementOutcome.Allowed)
@@ -141,6 +141,8 @@ public sealed class EditNenContractCommandHandler : ICommandHandler<EditNenContr
         }
 
         // Only now, after every fallible construction has already succeeded, mutate anything.
+        // Every member is replaced, Bonus blocks included — a bridge until Gap 68's adoption
+        // (Gap 97, decision 17); the drafting seed carries them all, so none is lost unseen.
         var oldLinkedBlocks = await _blocks.GetForContractAsync(command.ContractId, ct);
         foreach (var block in oldLinkedBlocks)
             await _blocks.DeleteAsync(block.Id, ct);

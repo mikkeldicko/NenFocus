@@ -32,8 +32,11 @@ public sealed class GetNenContractDeficitsQueryHandler
         CancellationToken ct = default)
     {
         var now = _clock.Now;
+        // Only the blocks that count toward the floor: a missed Bonus block owes nothing and
+        // covers nothing (Gap 97).
         var focusBlocks = (await _blocks.GetForContractAsync(query.ContractId, ct))
             .OfType<FocusBlock>()
+            .Where(b => b.CountsTowardFloor)
             .ToList();
 
         // Every block's own outcome + credited minutes, resolved once up front — not just

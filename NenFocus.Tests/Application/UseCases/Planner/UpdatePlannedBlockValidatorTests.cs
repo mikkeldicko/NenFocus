@@ -259,7 +259,7 @@ public class UpdatePlannedBlockValidatorTests
         var presetId = Guid.NewGuid();
         var contractId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(2)), contractId: contractId));
+            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(2)), membership: TestContracts.Committed(contractId)));
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
             .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
@@ -279,7 +279,7 @@ public class UpdatePlannedBlockValidatorTests
         var presetId = Guid.NewGuid();
         var contractId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(2)), contractId: contractId));
+            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(2)), membership: TestContracts.Committed(contractId)));
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
             .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
@@ -305,7 +305,7 @@ public class UpdatePlannedBlockValidatorTests
         DateTime AtLocal(double hours) => DateTime.SpecifyKind(localDay.AddHours(hours), DateTimeKind.Local).ToUniversalTime();
 
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(AtLocal(14), AtLocal(16)), contractId: contractId));
+            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(AtLocal(14), AtLocal(16)), membership: TestContracts.Committed(contractId)));
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
             .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
@@ -324,7 +324,7 @@ public class UpdatePlannedBlockValidatorTests
         var presetId = Guid.NewGuid();
         var contractId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(2)), contractId: contractId));
+            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(2)), membership: TestContracts.Committed(contractId)));
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
             .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
@@ -343,7 +343,7 @@ public class UpdatePlannedBlockValidatorTests
         var presetId = Guid.NewGuid();
         var contractId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(2)), contractId: contractId));
+            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(2)), membership: TestContracts.Committed(contractId)));
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
             .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
@@ -362,7 +362,7 @@ public class UpdatePlannedBlockValidatorTests
         var presetId = Guid.NewGuid();
         var contractId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(2)), contractId: contractId));
+            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(2)), membership: TestContracts.Committed(contractId)));
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
             .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
@@ -382,7 +382,7 @@ public class UpdatePlannedBlockValidatorTests
         var newPresetId = Guid.NewGuid();
         var contractId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, originalPresetId,At.Slot(Now.AddHours(1), Now.AddHours(2)), contractId: contractId));
+            .Returns(FocusBlock.Create(blockId, originalPresetId,At.Slot(Now.AddHours(1), Now.AddHours(2)), membership: TestContracts.Committed(contractId)));
         _presets.GetByIdAsync(newPresetId, Arg.Any<CancellationToken>())
             .Returns(BlockPreset.Create(newPresetId, "Other", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
@@ -402,7 +402,7 @@ public class UpdatePlannedBlockValidatorTests
         var presetId = Guid.NewGuid();
         var contractId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(2)), contractId: contractId));
+            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(2)), membership: TestContracts.Committed(contractId)));
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
             .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
         var contract = SealedContract(StrictnessRule.Locked, contractId);
@@ -440,7 +440,7 @@ public class UpdatePlannedBlockValidatorTests
         var presetId = Guid.NewGuid();
         var contractId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(3)), contractId: contractId)); // 2h originally
+            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(3)), membership: TestContracts.Committed(contractId))); // 2h originally
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
             .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
@@ -463,7 +463,7 @@ public class UpdatePlannedBlockValidatorTests
         var presetId = Guid.NewGuid();
         var contractId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(4)), contractId: contractId)); // 3h originally
+            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(4)), membership: TestContracts.Committed(contractId))); // 3h originally
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
             .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
@@ -486,7 +486,7 @@ public class UpdatePlannedBlockValidatorTests
         var presetId = Guid.NewGuid();
         var contractId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(BackgroundBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(3)), contractId: contractId));
+            .Returns(BackgroundBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(3)), membership: TestContracts.Committed(contractId)));
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
             .Returns(BlockPreset.Create(presetId, "Background", WebsiteFilterType.Blocklist, BlockPresetType.Background, At.Utc(Now)));
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
@@ -513,7 +513,7 @@ public class UpdatePlannedBlockValidatorTests
         var presetId = Guid.NewGuid();
         var contractId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(4)), contractId: contractId));
+            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(4)), membership: TestContracts.Committed(contractId)));
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
             .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
@@ -551,7 +551,7 @@ public class UpdatePlannedBlockValidatorTests
         var presetId = Guid.NewGuid();
         var contractId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(3)), contractId: contractId)); // 2h originally
+            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(3)), membership: TestContracts.Committed(contractId))); // 2h originally
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
             .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
@@ -574,7 +574,7 @@ public class UpdatePlannedBlockValidatorTests
         var presetId = Guid.NewGuid();
         var contractId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(3)), contractId: contractId)); // 2h originally
+            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(3)), membership: TestContracts.Committed(contractId))); // 2h originally
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
             .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
@@ -602,7 +602,7 @@ public class UpdatePlannedBlockValidatorTests
         var presetId = Guid.NewGuid();
         var contractId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(3)), contractId: contractId));
+            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(3)), membership: TestContracts.Committed(contractId)));
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
             .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
@@ -625,7 +625,7 @@ public class UpdatePlannedBlockValidatorTests
         var presetId = Guid.NewGuid();
         var contractId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(3)), contractId: contractId));
+            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(3)), membership: TestContracts.Committed(contractId)));
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
             .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
@@ -656,7 +656,7 @@ public class UpdatePlannedBlockValidatorTests
         var presetId = Guid.NewGuid();
         var contractId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(2)), contractId: contractId)); // 1h
+            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(2)), membership: TestContracts.Committed(contractId))); // 1h
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
             .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
@@ -688,7 +688,7 @@ public class UpdatePlannedBlockValidatorTests
         var presetId = Guid.NewGuid();
         var contractId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(3)), contractId: contractId));
+            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(3)), membership: TestContracts.Committed(contractId)));
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
             .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())

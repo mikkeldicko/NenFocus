@@ -36,6 +36,9 @@ public sealed record TimeSlot : IComparable<TimeSlot>
 
     public bool Contains(Moment moment) => Start <= moment && moment < End;
 
+    /// <summary>True when the whole of <paramref name="other"/> lies inside this slot; sharing a start or an end is inside.</summary>
+    public bool Contains(TimeSlot other) => Start <= other.Start && other.End <= End;
+
     /// <summary>The one "has it started / is it in the past" rule.</summary>
     public bool HasStarted(Moment asOf) => Start <= asOf;
 
@@ -95,6 +98,18 @@ public sealed record TimeSlot : IComparable<TimeSlot>
             var otherStart = other.Start;
             var otherEnd = other.End;
             return slot => slot.Start < otherEnd && otherStart < slot.End;
+        }
+
+        /// <summary>
+        /// SQL form of <see cref="TimeSlot.Contains(Moment)"/>, for a moment an entity holds
+        /// on its own (a session's start): true when it falls inside <paramref name="slot"/>.
+        /// A moment that isn't set is never inside.
+        /// </summary>
+        public static Expression<Func<Moment?, bool>> Contains(TimeSlot slot)
+        {
+            var start = slot.Start;
+            var end = slot.End;
+            return moment => moment >= start && moment < end;
         }
 
         /// <summary>SQL form of <see cref="TimeSlot.HasEnded"/>.</summary>

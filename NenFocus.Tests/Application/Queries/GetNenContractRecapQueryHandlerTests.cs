@@ -164,13 +164,13 @@ public class GetNenContractRecapQueryHandlerTests
 
         // Distinct Start times — the classifier is stubbed by (Start, End), so identical
         // windows across blocks would collide and only the last stub would ever match.
-        var completedOnTime = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now.AddHours(-10), Now.AddHours(-9)), contractId: ContractId);
-        var startedLate = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now.AddHours(-8), Now.AddHours(-7)), contractId: ContractId);
-        var endedEarly = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now.AddHours(-6), Now.AddHours(-5)), contractId: ContractId);
-        var missed = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now.AddHours(-4), Now.AddHours(-3)), contractId: ContractId);
-        var redemption = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now.AddHours(-2), Now.AddHours(-1)), contractId: ContractId,
+        var completedOnTime = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now.AddHours(-10), Now.AddHours(-9)), membership: TestContracts.Committed(ContractId));
+        var startedLate = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now.AddHours(-8), Now.AddHours(-7)), membership: TestContracts.Committed(ContractId));
+        var endedEarly = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now.AddHours(-6), Now.AddHours(-5)), membership: TestContracts.Committed(ContractId));
+        var missed = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now.AddHours(-4), Now.AddHours(-3)), membership: TestContracts.Committed(ContractId));
+        var redemption = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now.AddHours(-2), Now.AddHours(-1)), membership: TestContracts.Redemption(ContractId),
             redemptionEntries: [new RedemptionEntry(Guid.NewGuid(), 30)]);
-        var background = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now, Now.AddHours(1)), contractId: ContractId);
+        var background = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now, Now.AddHours(1)), membership: TestContracts.Committed(ContractId));
 
         _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[completedOnTime, startedLate, endedEarly, missed, redemption, background]);
@@ -203,7 +203,7 @@ public class GetNenContractRecapQueryHandlerTests
         var contract = CompletedContract();
         _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(contract);
 
-        var cancelled = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now, Now.AddHours(1)), contractId: ContractId);
+        var cancelled = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now, Now.AddHours(1)), membership: TestContracts.Committed(ContractId));
         cancelled.MarkCancelled(At.Utc(Now));
         _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[cancelled]);
 
@@ -218,45 +218,31 @@ public class GetNenContractRecapQueryHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_BonusBlockCount_MatchesBonusResolutionRule()
+    public async Task HandleAsync_BonusBlocks_AreCountedApart_AndChangeNoOtherNumber()
     {
+        // Gap 97: Bonus blocks carry the contract's id now, so they come back with its members —
+        // and must stay out of every total and outcome. Only Focus ones are Bonus blocks; a
+        // removed (cancelled) one never happened.
         var contract = CompletedContract();
         _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(contract);
-        _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[]);
 
-        var inRangeDay = StartDate.AddDays(2).ToDateTime(new TimeOnly(9, 0), DateTimeKind.Utc);
-        var bonusInRange = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(inRangeDay, inRangeDay.AddHours(1))); // no ContractId
-        var outsideRangeDay = EndDate.AddDays(5).ToDateTime(new TimeOnly(9, 0), DateTimeKind.Utc);
-        var bonusOutsideRange = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(outsideRangeDay, outsideRangeDay.AddHours(1)));
-
-        _blocks.GetForRangeAsync(Arg.Any<TimeSlot>(), Arg.Any<CancellationToken>())
-            .Returns((IReadOnlyList<PlannedBlock>)[bonusInRange, bonusOutsideRange]);
+        var committed = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Now.AddHours(-10), Now.AddHours(-9)), membership: TestContracts.Committed(ContractId));
+        var bonus = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Now.AddHours(-8), Now.AddHours(-7)), membership: TestContracts.Bonus(ContractId));
+        var removedBonus = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Now.AddHours(2), Now.AddHours(3)), membership: TestContracts.Bonus(ContractId));
+        removedBonus.MarkCancelled(At.Utc(Now));
+        var bonusBackground = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Now.AddHours(-6), Now.AddHours(-5)), membership: TestContracts.Bonus(ContractId));
+        _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyList<PlannedBlock>)[committed, bonus, removedBonus, bonusBackground]);
+        _classifier.Classify(committed, At.Utc(Now)).Returns(FocusBlockOutcome.CompletedOnTime);
 
         var result = await CreateHandler().HandleAsync(new GetNenContractRecapQuery(ContractId), CancellationToken.None);
 
         result!.BonusBlockCount.Should().Be(1);
-    }
-
-    [Fact]
-    public async Task HandleAsync_BonusBlockCount_IgnoresBackgroundBlocks()
-    {
-        // Bonus hours only ever come from Focus blocks (GetNenContractBonusFocusHoursQueryHandler),
-        // so the count of Bonus blocks must come from the same set — an unlinked Background
-        // block inside the contract's range earns nothing and is not a Bonus block.
-        var contract = CompletedContract();
-        _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(contract);
-        _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[]);
-
-        var inRangeDay = StartDate.AddDays(2).ToDateTime(new TimeOnly(9, 0), DateTimeKind.Utc);
-        var focusBonus = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(inRangeDay, inRangeDay.AddHours(1)));
-        var unlinkedBackground = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(inRangeDay.AddHours(2), inRangeDay.AddHours(3)));
-
-        _blocks.GetForRangeAsync(Arg.Any<TimeSlot>(), Arg.Any<CancellationToken>())
-            .Returns((IReadOnlyList<PlannedBlock>)[focusBonus, unlinkedBackground]);
-
-        var result = await CreateHandler().HandleAsync(new GetNenContractRecapQuery(ContractId), CancellationToken.None);
-
-        result!.BonusBlockCount.Should().Be(1);
+        result.TotalFocusBlocks.Should().Be(1);
+        result.TotalBackgroundBlocks.Should().Be(0);
+        result.CompletedOnTimeBlocks.Should().Be(1);
+        result.CancelledBlocks.Should().Be(0);
+        _classifier.DidNotReceive().Classify(bonus, Arg.Any<Moment>());
     }
 
     [Theory]

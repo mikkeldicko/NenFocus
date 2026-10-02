@@ -29,8 +29,20 @@ public sealed class FocusBlock : PlannedBlock
 
     public override BlockPresetType PresetType => BlockPresetType.Focus;
 
-    /// <summary>Whether this block redeems other blocks' deficits — it carries redemption entries.</summary>
-    public bool IsRedemption => RedemptionEntries.Count > 0;
+    /// <summary>
+    /// Whether this block was placed to redeem other blocks' deficits — its role in its contract,
+    /// set when it was made (Gap 97). The entries only say what it covers, and may drop to none.
+    /// </summary>
+    public bool IsRedemption => Membership is { IsRedemption: true };
+
+    /// <summary>Drafted and sealed as part of its contract — the hours the contract was sealed on.</summary>
+    public bool IsCommitted => Membership is { IsCommitted: true };
+
+    /// <summary>Placed on a contract without being drafted or redeeming: its hours are Bonus hours, never floor hours.</summary>
+    public bool IsBonus => Membership is { IsBonus: true };
+
+    /// <summary>Whether this block's hours count toward its contract's floor — Committed and Redemption do.</summary>
+    public bool CountsTowardFloor => Membership is { CountsTowardFloor: true };
 
     /// <summary>
     /// Window closed, Ritual never completed, not cancelled — what the missed-block sweep looks
@@ -48,10 +60,12 @@ public sealed class FocusBlock : PlannedBlock
         Guid blockPresetId,
         TimeSlot scheduled,
         string? title = null,
-        Guid? contractId = null,
+        ContractMembership? membership = null,
         IReadOnlyList<RedemptionEntry>? redemptionEntries = null)
     {
         ValidateDuration(scheduled);
+        if (redemptionEntries is { Count: > 0 } && membership is not { IsRedemption: true })
+            throw new ArgumentException("Only a redemption block can cover a deficit.", nameof(redemptionEntries));
 
         return new FocusBlock
         {
@@ -59,7 +73,7 @@ public sealed class FocusBlock : PlannedBlock
             BlockPresetId = blockPresetId,
             Scheduled = scheduled,
             Title = title,
-            ContractId = contractId,
+            Membership = membership,
             RedemptionEntries = redemptionEntries ?? Array.Empty<RedemptionEntry>()
         };
     }
@@ -120,12 +134,16 @@ public sealed class FocusBlock : PlannedBlock
     }
 
     /// <summary>
-    /// Replaces which missed/late blocks this redemption block covers. A plain setter, same
-    /// as AssignPreset/AssignContract — same-preset, uncovered-deficit, and same-day
-    /// constraints are Application-layer concerns, not enforced here.
+    /// Replaces which missed/late blocks this redemption block covers. Only a block whose role
+    /// is Redemption may cover anything (Gap 97) — a Committed or Bonus block never claims a
+    /// deficit. Same-preset, uncovered-deficit, and same-day constraints are Application-layer
+    /// concerns, not enforced here.
     /// </summary>
     public void AssignRedemptionEntries(IReadOnlyList<RedemptionEntry> entries)
     {
+        if (entries.Count > 0 && !IsRedemption)
+            throw new InvalidOperationException("Only a redemption block can cover a deficit.");
+
         RedemptionEntries = entries;
     }
 

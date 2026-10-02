@@ -69,13 +69,11 @@ public sealed record PlannedBlockDto
     public bool WasStartedLate { get; init; }
 
     /// <summary>
-    /// Redemption (a Focus block created to cover another block's deficit — RedemptionEntries
-    /// non-empty, always linked) or Bonus (ContractId null but Start's date falls within some
-    /// contract's [StartDate, EndDate], regardless of that contract's status — a purely
-    /// read-time label, never counts toward that contract's floor/Day-Met scoring). The two
-    /// are mutually exclusive by construction, so null covers both an ordinary committed
-    /// block and one with no contract relation at all — both already fully distinguished by
-    /// ContractId's own nullability. Drives the Planner tile's badge.
+    /// The Focus block's stored role in its contract (Gap 97): Committed (drafted and sealed),
+    /// Redemption (placed to cover another block's deficit) or Bonus (placed on the contract
+    /// for any other reason — never counts toward its floor/Day-Met scoring). A block has one
+    /// role, so only one applies; null is a block of no contract, or a Background block.
+    /// Drives the Planner tile's badge.
     /// </summary>
     public PlannedBlockContractBadge? ContractBadge { get; init; }
 

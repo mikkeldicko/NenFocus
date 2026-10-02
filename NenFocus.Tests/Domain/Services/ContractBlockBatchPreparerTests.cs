@@ -40,7 +40,7 @@ public class ContractBlockBatchPreparerTests
 
         result.Success.Should().BeTrue();
         result.Blocks.Should().ContainSingle().Which.Should().BeOfType<FocusBlock>();
-        result.Blocks[0].ContractId.Should().Be(ContractId);
+        result.Blocks[0].Membership!.ContractId.Should().Be(ContractId);
         result.Blocks[0].Scheduled.Should().Be(At.Slot(start, end));
         result.Blocks.OfType<FocusBlock>().Should().ContainSingle();
     }
@@ -66,7 +66,7 @@ public class ContractBlockBatchPreparerTests
 
         var result = _preparer.Prepare([(PresetId, At.Slot(start, end), true, null)], contractId: null, UtcZone);
 
-        result.Blocks[0].ContractId.Should().BeNull();
+        result.Blocks[0].Membership.Should().BeNull();
     }
 
     [Fact]

@@ -66,7 +66,7 @@ public class SplitPlannedBlockValidatorTests
     private void SetUpDailyFlexBlock(Guid blockId, Guid contractId)
     {
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, Guid.NewGuid(),TestAt.Slot(OriginalStart, OriginalEnd), contractId: contractId));
+            .Returns(FocusBlock.Create(blockId, Guid.NewGuid(),TestAt.Slot(OriginalStart, OriginalEnd), membership: TestContracts.Committed(contractId)));
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
             .Returns(SealedContract(StrictnessRule.DailyFlexibility, contractId));
     }
@@ -120,7 +120,7 @@ public class SplitPlannedBlockValidatorTests
         var blockId = Guid.NewGuid();
         var contractId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, Guid.NewGuid(),TestAt.Slot(OriginalStart, OriginalEnd), contractId: contractId));
+            .Returns(FocusBlock.Create(blockId, Guid.NewGuid(),TestAt.Slot(OriginalStart, OriginalEnd), membership: TestContracts.Committed(contractId)));
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
             .Returns(SealedContract(StrictnessRule.Locked, contractId));
 
@@ -137,7 +137,7 @@ public class SplitPlannedBlockValidatorTests
         var blockId = Guid.NewGuid();
         var contractId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, Guid.NewGuid(),TestAt.Slot(OriginalStart, OriginalEnd), contractId: contractId));
+            .Returns(FocusBlock.Create(blockId, Guid.NewGuid(),TestAt.Slot(OriginalStart, OriginalEnd), membership: TestContracts.Committed(contractId)));
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
             .Returns(SealedContract(StrictnessRule.PeriodTimeBudget, contractId));
 
@@ -151,7 +151,7 @@ public class SplitPlannedBlockValidatorTests
     {
         var blockId = Guid.NewGuid();
         var contractId = Guid.NewGuid();
-        var block = FocusBlock.Create(blockId, Guid.NewGuid(),TestAt.Slot(OriginalStart, OriginalEnd), contractId: contractId);
+        var block = FocusBlock.Create(blockId, Guid.NewGuid(),TestAt.Slot(OriginalStart, OriginalEnd), membership: TestContracts.Committed(contractId));
         block.MarkCancelled(TestAt.Utc(Now));
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns(block);
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
@@ -186,7 +186,7 @@ public class SplitPlannedBlockValidatorTests
         var pastStart = Now.AddHours(-3);
         var pastEnd = Now.AddHours(-1);
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, Guid.NewGuid(),TestAt.Slot(pastStart, pastEnd), contractId: contractId));
+            .Returns(FocusBlock.Create(blockId, Guid.NewGuid(),TestAt.Slot(pastStart, pastEnd), membership: TestContracts.Committed(contractId)));
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
             .Returns(SealedContract(StrictnessRule.DailyFlexibility, contractId));
         var command = new SplitPlannedBlockCommand
@@ -274,7 +274,7 @@ public class SplitPlannedBlockValidatorTests
         DateTime At(double hours) => day.AddHours(hours);
 
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, Guid.NewGuid(),TestAt.Slot(At(22), At(24)), contractId: contractId));
+            .Returns(FocusBlock.Create(blockId, Guid.NewGuid(),TestAt.Slot(At(22), At(24)), membership: TestContracts.Committed(contractId)));
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
             .Returns(SealedContract(StrictnessRule.DailyFlexibility, contractId));
         var command = new SplitPlannedBlockCommand
@@ -297,7 +297,7 @@ public class SplitPlannedBlockValidatorTests
         var blockId = Guid.NewGuid();
         var contractId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(BackgroundBlock.Create(blockId, Guid.NewGuid(),TestAt.Slot(OriginalStart, OriginalEnd), contractId: contractId));
+            .Returns(BackgroundBlock.Create(blockId, Guid.NewGuid(),TestAt.Slot(OriginalStart, OriginalEnd), membership: TestContracts.Committed(contractId)));
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
             .Returns(SealedContract(StrictnessRule.DailyFlexibility, contractId));
 
@@ -318,7 +318,7 @@ public class SplitPlannedBlockValidatorTests
         var day2 = day1.AddDays(1);
 
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, Guid.NewGuid(),TestAt.Slot(day1.AddHours(23), day2.AddHours(1)), contractId: contractId));
+            .Returns(FocusBlock.Create(blockId, Guid.NewGuid(),TestAt.Slot(day1.AddHours(23), day2.AddHours(1)), membership: TestContracts.Committed(contractId)));
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
             .Returns(SealedContract(StrictnessRule.DailyFlexibility, contractId));
         var command = new SplitPlannedBlockCommand
@@ -346,7 +346,7 @@ public class SplitPlannedBlockValidatorTests
         var day2 = day1.AddDays(1);
 
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, Guid.NewGuid(),TestAt.Slot(day1.AddHours(23), day2.AddHours(1)), contractId: contractId));
+            .Returns(FocusBlock.Create(blockId, Guid.NewGuid(),TestAt.Slot(day1.AddHours(23), day2.AddHours(1)), membership: TestContracts.Committed(contractId)));
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
             .Returns(SealedContract(StrictnessRule.DailyFlexibility, contractId));
         var command = new SplitPlannedBlockCommand
@@ -394,7 +394,7 @@ public class SplitPlannedBlockValidatorTests
         var day2 = day1.AddDays(1);
 
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, Guid.NewGuid(),TestAt.Slot(day1.AddHours(23), day2.AddHours(1)), contractId: contractId));
+            .Returns(FocusBlock.Create(blockId, Guid.NewGuid(),TestAt.Slot(day1.AddHours(23), day2.AddHours(1)), membership: TestContracts.Committed(contractId)));
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
             .Returns(SealedContractWithFloor(contractId, floorHours: 2, DateOnly.FromDateTime(day1), DateOnly.FromDateTime(day2)));
         _computePlannedFocusHours.HandleAsync(Arg.Any<ComputePlannedFocusHoursQuery>(), Arg.Any<CancellationToken>())
@@ -420,7 +420,7 @@ public class SplitPlannedBlockValidatorTests
         var day2 = day1.AddDays(1);
 
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, Guid.NewGuid(),TestAt.Slot(day1.AddHours(23), day2.AddHours(1)), contractId: contractId));
+            .Returns(FocusBlock.Create(blockId, Guid.NewGuid(),TestAt.Slot(day1.AddHours(23), day2.AddHours(1)), membership: TestContracts.Committed(contractId)));
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
             .Returns(SealedContractWithFloor(contractId, floorHours: 0.5, DateOnly.FromDateTime(day1), DateOnly.FromDateTime(day2)));
         _computePlannedFocusHours.HandleAsync(Arg.Any<ComputePlannedFocusHoursQuery>(), Arg.Any<CancellationToken>())
@@ -509,7 +509,7 @@ public class SplitPlannedBlockValidatorTests
         var day2 = day1.AddDays(1);
 
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, Guid.NewGuid(),TestAt.Slot(day1.ToDateTime(TimeOnly.MinValue).AddHours(23), day2.ToDateTime(TimeOnly.MinValue).AddHours(1)), contractId: contractId));
+            .Returns(FocusBlock.Create(blockId, Guid.NewGuid(),TestAt.Slot(day1.ToDateTime(TimeOnly.MinValue).AddHours(23), day2.ToDateTime(TimeOnly.MinValue).AddHours(1)), membership: TestContracts.Committed(contractId)));
         // The contract's own DailyFloorPolicy carries a real per-day floor (2h) even though
         // StrictnessRule is PeriodTimeBudget — this is the "hybrid" shape: no ContractFloor,
         // so the validator's live check falls back to per-day IsDayMet, same as Daily Flex.
@@ -548,9 +548,8 @@ public class SplitPlannedBlockValidatorTests
         var blockId = Guid.NewGuid();
         var contractId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, Guid.NewGuid(),TestAt.Slot(OriginalStart, OriginalEnd), contractId: contractId));
-        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
-            .Returns(NenContract.Seal(
+            .Returns(FocusBlock.Create(blockId, Guid.NewGuid(),TestAt.Slot(OriginalStart, OriginalEnd), membership: TestContracts.Committed(contractId)));
+        var contract = NenContract.Seal(
                 id: contractId,
                 name: "Contract",
                 goal: new NenContractGoal("Goal"),
@@ -560,7 +559,9 @@ public class SplitPlannedBlockValidatorTests
                 changeWindow: null,
                 allowCancellation: false,
                 plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-                sealedAt: TestAt.Utc(Now), timeZone: TestAt.UtcZone));
+                sealedAt: TestAt.Utc(Now), timeZone: TestAt.UtcZone);
+        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>()).Returns(contract);
+        _contracts.GetAllInEffectAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<NenContract>)[contract]);
 
         var result = await CreateValidator().ValidateAsync(ValidCommand(blockId));
 
@@ -575,9 +576,8 @@ public class SplitPlannedBlockValidatorTests
         var blockId = Guid.NewGuid();
         var contractId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, Guid.NewGuid(),TestAt.Slot(OriginalStart, OriginalEnd), contractId: contractId));
-        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
-            .Returns(NenContract.Seal(
+            .Returns(FocusBlock.Create(blockId, Guid.NewGuid(),TestAt.Slot(OriginalStart, OriginalEnd), membership: TestContracts.Committed(contractId)));
+        var contract = NenContract.Seal(
                 id: contractId,
                 name: "Contract",
                 goal: new NenContractGoal("Goal"),
@@ -587,7 +587,9 @@ public class SplitPlannedBlockValidatorTests
                 changeWindow: null,
                 allowCancellation: false,
                 plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-                sealedAt: TestAt.Utc(Now), timeZone: TestAt.UtcZone));
+                sealedAt: TestAt.Utc(Now), timeZone: TestAt.UtcZone);
+        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>()).Returns(contract);
+        _contracts.GetAllInEffectAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<NenContract>)[contract]);
 
         var result = await CreateValidator().ValidateAsync(ValidCommand(blockId));
 
@@ -600,7 +602,7 @@ public class SplitPlannedBlockValidatorTests
         var blockId = Guid.NewGuid();
         var contractId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, Guid.NewGuid(),TestAt.Slot(OriginalStart, OriginalEnd), contractId: contractId));
+            .Returns(FocusBlock.Create(blockId, Guid.NewGuid(),TestAt.Slot(OriginalStart, OriginalEnd), membership: TestContracts.Committed(contractId)));
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
             .Returns(NenContract.Seal(
                 id: contractId,
@@ -629,7 +631,7 @@ public class SplitPlannedBlockValidatorTests
         var day2 = day1.AddDays(1);
 
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, Guid.NewGuid(),TestAt.Slot(day1.AddHours(22), day2.AddHours(2)), contractId: contractId)); // 4h
+            .Returns(FocusBlock.Create(blockId, Guid.NewGuid(),TestAt.Slot(day1.AddHours(22), day2.AddHours(2)), membership: TestContracts.Committed(contractId))); // 4h
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>())
             .Returns(SealedContract(StrictnessRule.DailyFlexibility, contractId));
         var command = new SplitPlannedBlockCommand

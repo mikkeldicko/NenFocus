@@ -6,14 +6,8 @@ namespace NenFocus.Application.Interfaces;
 public interface IPlannedBlockRepository
 {
     /// <summary>
-    /// Returns all planned blocks whose time window intersects the given date.
-    /// </summary>
-    Task<IReadOnlyList<PlannedBlock>> GetForDayAsync(
-        DateOnly date,
-        CancellationToken cancellationToken = default);
-
-    /// <summary>
     /// Returns all non-cancelled planned blocks whose scheduled slot overlaps <paramref name="range"/>, by start.
+    /// For "the blocks on these days", the caller asks <c>UserTimeZone.SlotCovering</c> for the range.
     /// </summary>
     Task<IReadOnlyList<PlannedBlock>> GetForRangeAsync(
         TimeSlot range,

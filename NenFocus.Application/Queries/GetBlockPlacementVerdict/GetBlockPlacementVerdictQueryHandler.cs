@@ -39,44 +39,48 @@ public sealed class GetBlockPlacementVerdictQueryHandler
         CancellationToken ct = default)
     {
         var slot = query.Slot;
-        NenContract? contract = null;
+        ContractMembership? membership = null;
+        var contractsInEffect = await _contracts.GetAllInEffectAsync(ct);
 
+        // The same three steps the Create/Update handlers take, so the slot and membership
+        // checked here are the ones saved (Gap 97; one Domain answer after Gap 106): who governs
+        // → attribution may shorten the slot → placement on the final slot.
         if (query.ExistingBlockId is { } existingId)
         {
-            // An existing block keeps its own contract; a Focus block's edit also recomputes
-            // attribution (scoped to that contract) so the checked window is the final,
-            // capped one — the same one the handler will persist.
+            // Only a redemption block's coverage is recomputed on an edit, against its own contract.
             var existing = await _blocks.GetByIdAsync(existingId, ct);
-            if (existing?.ContractId is { } contractId)
+            membership = existing?.Membership;
+            if (existing is FocusBlock { IsRedemption: true } redemption)
             {
-                contract = await _contracts.GetByIdAsync(contractId, ct);
-                if (query.Type == BlockPresetType.Focus && existing is FocusBlock focus)
-                {
-                    var existingEntries = focus.RedemptionEntries
-                        .Select(RedemptionEntryDto.From)
-                        .ToList();
-                    var attribution = await _attribution.HandleAsync(
-                        new ComputeRedemptionAttributionQuery(contractId, query.PresetId, query.Slot, existingId, existingEntries), ct);
-                    slot = attribution.Slot;
-                }
+                var existingEntries = redemption.RedemptionEntries
+                    .Select(RedemptionEntryDto.From)
+                    .ToList();
+                var attribution = await _attribution.HandleAsync(
+                    new ComputeRedemptionAttributionQuery(membership!.ContractId, query.PresetId, query.Slot, existingId, existingEntries), ct);
+                slot = attribution.Slot;
             }
         }
-        else if (query.Type == BlockPresetType.Focus)
+        else if (_checker.GoverningContract(query.Slot, contractsInEffect, _clock.TimeZone) is { } governing)
         {
-            // A new Focus block may pick up a contract through a deficit — attribution
-            // searches (scoped to ContractId when set) and returns the final, capped window.
-            var attribution = await _attribution.HandleAsync(
-                new ComputeRedemptionAttributionQuery(query.ContractId, query.PresetId, query.Slot, null), ct);
-            slot = attribution.Slot;
-            if (attribution.ContractId is { } contractId)
-                contract = await _contracts.GetByIdAsync(contractId, ct);
+            // A new block inside a contract: Redemption if it covers a deficit there, else Bonus.
+            var claimsDeficit = false;
+            if (query.Type == BlockPresetType.Focus && !query.DeclineRedemption)
+            {
+                var attribution = await _attribution.HandleAsync(
+                    new ComputeRedemptionAttributionQuery(governing.Id, query.PresetId, query.Slot, null), ct);
+                slot = attribution.Slot;
+                claimsDeficit = attribution.Entries.Count > 0;
+            }
+            membership = governing.MembershipForPlacedBlock(claimsDeficit);
         }
 
         // The calendar as it will be — without the block being moved/split.
         var calendar = (await _blocks.GetForRangeAsync(slot, ct)).Where(b => b.Id != query.ExistingBlockId);
         var sessions = await _sessions.GetActiveSessionsAsync(ct);
 
-        var verdict = _checker.Check(slot, query.Type, contract, calendar, sessions, _clock.Now, _clock.TimeZone);
+        // The checker decides which contract governs: a Committed or Redemption block's own, or
+        // the one whose period the slot sits in.
+        var verdict = _checker.Check(slot, query.Type, membership, contractsInEffect, calendar, sessions, _clock.Now, _clock.TimeZone);
 
         return BlockPlacementVerdictDto.From(verdict);
     }

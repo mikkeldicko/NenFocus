@@ -11,20 +11,10 @@ public sealed record CreatePlannedBlockCommand : ICommand<CreatePlannedBlockResu
     public required TimeSlot Slot { get; init; }
 
     /// <summary>
-    /// Set when this block is created directly under an already-known contract (e.g. the
-    /// type-changed delete-then-recreate path preserving the original block's contract),
-    /// outside Seal/Extend's own atomic batch. Null for an ordinary new Focus block — the
-    /// handler auto-discovers whether it should attach to a contract and cover a deficit
-    /// via ComputeRedemptionAttributionQuery; there is no client-driven selection.
-    /// </summary>
-    public Guid? ContractId { get; init; }
-
-    /// <summary>
-    /// True when the user, shown a match against an open deficit at create time, chose
-    /// "Create as Bonus Block instead" rather than "Link as Redemption." When true, the
-    /// handler skips ComputeRedemptionAttributionQuery entirely — the block is created with
-    /// ContractId null and no RedemptionEntries, regardless of what a match would have found.
-    /// Focus-only in practice; Background blocks never surface the confirm gate that sets this.
+    /// True when the block must not cover a deficit — every manual creation; only the Cover
+    /// Deficit flow leaves it false. The handler then skips ComputeRedemptionAttributionQuery:
+    /// inside a contract in effect the block is a Bonus block, elsewhere a plain one. Which
+    /// contract that is comes from where the slot sits, never from the client (Gap 97).
     /// </summary>
     public bool DeclineRedemption { get; init; }
 }

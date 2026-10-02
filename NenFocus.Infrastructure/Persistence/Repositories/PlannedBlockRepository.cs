@@ -18,37 +18,6 @@ public sealed class PlannedBlockRepository : IPlannedBlockRepository
     private static readonly System.Linq.Expressions.Expression<Func<PlannedBlock, Moment>> ByStart =
         OnSlot<PlannedBlock, Moment>(b => b.Scheduled, TimeSlot.Filters.ByStart);
 
-    private static System.Linq.Expressions.Expression<Func<PlannedBlock, bool>> Overlapping(DateTime start, DateTime end) =>
-        OnSlot<PlannedBlock, bool>(b => b.Scheduled, TimeSlot.Filters.Overlaps(new TimeSlot(AsMoment(start), AsMoment(end))));
-
-    // Gap 88 bridge, removed in phase 6 when this interface takes Moments: callers pass UTC
-    // DateTimes. A local one is a mix-up and throws rather than being read as UTC.
-    private static Moment AsMoment(DateTime utc) => utc.Kind == DateTimeKind.Local
-        ? throw new ArgumentException("Expected a UTC time, got a local one.", nameof(utc))
-        : Moment.FromStorage(DateTime.SpecifyKind(utc, DateTimeKind.Utc));
-
-    public async Task<IReadOnlyList<PlannedBlock>> GetForDayAsync(
-        DateOnly date,
-        CancellationToken cancellationToken = default)
-    {
-        // date is the user's LOCAL calendar day (every caller derives it from a local
-        // DateTime — e.g. PlannerPageViewModel.LoadWeekAsync's WeekStart.AddDays(i)) — but
-        // b.Start/b.End are stored UTC. Anchoring the boundary with DateTimeKind.Utc
-        // directly on that local date (the previous bug here) silently mis-windowed every
-        // query for any non-UTC user: a cross-midnight block's tail could fall on the
-        // wrong side of the query's UTC-anchored boundary and never surface on the day it
-        // actually occupies. Exclusive upper bound (next local midnight) rather than
-        // TimeOnly.MaxValue, matching the [start, end) semantics used everywhere else in
-        // this domain — also sidesteps TimeOnly's own inability to represent "24:00".
-        var dayStart = date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Local).ToUniversalTime();
-        var dayEnd = date.AddDays(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Local).ToUniversalTime();
-
-        return await _context.PlannedBlocks
-            .Where(Overlapping(dayStart, dayEnd))
-            .OrderBy(ByStart)
-            .ToListAsync(cancellationToken);
-    }
-
     public async Task<IReadOnlyList<PlannedBlock>> GetForRangeAsync(
         TimeSlot range,
         CancellationToken ct = default)
@@ -148,7 +117,7 @@ public sealed class PlannedBlockRepository : IPlannedBlockRepository
         CancellationToken cancellationToken = default)
     {
         return await _context.PlannedBlocks
-            .Where(b => b.ContractId == contractId)
+            .Where(b => b.Membership!.ContractId == contractId)
             .OrderBy(ByStart)
             .ToListAsync(cancellationToken);
     }

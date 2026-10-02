@@ -146,9 +146,46 @@ public class SessionRepositoryTests : SqliteRepositoryTestBase
         await Context.SaveChangesAsync();
 
         var result = await CreateRepository().GetHistoryAsync(
-            new DateOnly(2026, 1, 1), new DateOnly(2026, 1, 31));
+            At.UtcZone.SlotCovering(new DateOnly(2026, 1, 1), new DateOnly(2026, 1, 31)));
 
         result.Should().ContainSingle(s => s.Id == inRange.Id);
+    }
+
+    [Fact]
+    public async Task GetHistoryAsync_AUsersDay_IsTheirLocalDay_NotTheUtcDay()
+    {
+        // The trap Gap 97 removed: this used to read its dates as UTC days. In Copenhagen
+        // (UTC+1 in January) 15 January runs from 14 Jan 23:00 UTC to 15 Jan 23:00 UTC.
+        var copenhagen = new UserTimeZone(TimeZoneInfo.FindSystemTimeZoneById("Europe/Copenhagen"));
+        var repo = CreateRepository();
+        var justAfterLocalMidnight = CreateSession(startedAt: new DateTime(2026, 1, 14, 23, 30, 0, DateTimeKind.Utc)); // 15 Jan 00:30 local
+        var lateOnTheUtcDay = CreateSession(startedAt: new DateTime(2026, 1, 15, 23, 30, 0, DateTimeKind.Utc));       // 16 Jan 00:30 local
+        await repo.SaveAsync(justAfterLocalMidnight);
+        await repo.SaveAsync(lateOnTheUtcDay);
+        await Context.SaveChangesAsync();
+
+        var result = await CreateRepository().GetHistoryAsync(copenhagen.SlotCovering(new DateOnly(2026, 1, 15)));
+
+        result.Should().ContainSingle(s => s.Id == justAfterLocalMidnight.Id);
+    }
+
+    [Fact]
+    public async Task GetHistoryAsync_IsHalfOpen_AndLeavesOutASessionThatNeverStarted()
+    {
+        var slot = At.Slot(new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc), new DateTime(2026, 1, 16, 0, 0, 0, DateTimeKind.Utc));
+        var repo = CreateRepository();
+        var atStart = CreateSession(startedAt: new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc));
+        var atEnd = CreateSession(startedAt: new DateTime(2026, 1, 16, 0, 0, 0, DateTimeKind.Utc));
+        var neverStarted = Session.Create(
+            Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(30)), Guid.NewGuid(), SessionOrigin.Spontaneous);
+        await repo.SaveAsync(atStart);
+        await repo.SaveAsync(atEnd);
+        await repo.SaveAsync(neverStarted);
+        await Context.SaveChangesAsync();
+
+        var result = await CreateRepository().GetHistoryAsync(slot);
+
+        result.Should().ContainSingle(s => s.Id == atStart.Id);
     }
 
     [Fact]
@@ -163,7 +200,7 @@ public class SessionRepositoryTests : SqliteRepositoryTestBase
         await Context.SaveChangesAsync();
 
         var result = await CreateRepository().GetHistoryAsync(
-            new DateOnly(2026, 1, 1), new DateOnly(2026, 1, 31), presetId);
+            At.UtcZone.SlotCovering(new DateOnly(2026, 1, 1), new DateOnly(2026, 1, 31)), presetId);
 
         result.Should().ContainSingle(s => s.Id == matching.Id);
     }
@@ -178,7 +215,7 @@ public class SessionRepositoryTests : SqliteRepositoryTestBase
         await repo.SaveAsync(later);
         await Context.SaveChangesAsync();
 
-        var result = await CreateRepository().GetHistoryAsync(new DateOnly(2026, 1, 1), new DateOnly(2026, 1, 31));
+        var result = await CreateRepository().GetHistoryAsync(At.UtcZone.SlotCovering(new DateOnly(2026, 1, 1), new DateOnly(2026, 1, 31)));
 
         result.Select(s => s.Id).Should().Equal(later.Id, earlier.Id);
     }

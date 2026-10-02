@@ -199,6 +199,7 @@ public async Task HandleAsync_ValidDurations_AllSucceed(int durationMinutes)
 | Value object construction | Verify invalid inputs throw `ArgumentException` |
 | Policy computation logic | The `ComputeActivePolicySliceQuery` merge logic is complex enough to need tests |
 | EF Core repositories | **Built** — `Infrastructure/Persistence/Repositories/` tests each repository against a real SQLite database (via `SqliteRepositoryTestBase`'s in-memory connection), not mocks. This row was previously listed under "Do not test these"; corrected 2026-08-18 now that the suite exists. |
+| A new stored value object | It gets a round-trip test: save through one database context, load through a second. Handler tests on mocks can't see storage — one membership handed to several blocks was saved on only one of them while every Seal and Split handler test passed (Gap 97). Example: `Infrastructure/Persistence/ContractMembershipPersistenceTests.cs`. |
 | DI composition | `Infrastructure/CompositionRootTests.cs` resolves every registered handler/service to catch missing DI registrations before runtime. |
 
 ### Do not test these:
@@ -229,6 +230,7 @@ public async Task HandleAsync_ValidDurations_AllSucceed(int durationMinutes)
 - **Generated code** (EF migrations, Avalonia's compiled XAML) is out of scope, matched narrowly so a change on their side fails red rather than passing silently.
 - **What these can't check** — whether a module is deep, whether a rule is in the right home — stays with the interface-first sign-off (`MODULE_STANDARDS.md` → Guard Hierarchy).
 - **Probe with the shapes people actually write.** A probe using a fully qualified name (`Substitute.For<NenFocus.Application.Interfaces.ISystemClock>()`) got past the first version of `TestsMakeFakeClocksOnlyThroughTestClock`; the pattern was widened. Try at least the short and the qualified form.
+- **A text scan sees only the shapes it lists.** `MembershipRuleTests` matches comparisons of a block's contract id; `PlannerPageViewModel` filters draft tiles with `b.ContractId is { } id && id == editingId`, which it doesn't match (Gap 97; left for Gap 89 area 2 / Gap 93). Where the compiler can own the rule instead, prefer that (`MODULE_STANDARDS.md` → Guard Hierarchy).
 - **Restore a probed file from a backup copy, never `git checkout`.** Checkout also throws away the file's uncommitted work (it nearly did during Gap 88's close-out).
 
 **Lessons from Gap 88 (for any test, not only architecture tests):**

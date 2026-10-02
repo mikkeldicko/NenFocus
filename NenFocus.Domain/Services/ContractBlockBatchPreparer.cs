@@ -18,10 +18,13 @@ public sealed class ContractBlockBatchPreparer : IContractBlockBatchPreparer
         Guid? contractId,
         UserTimeZone timeZone)
     {
+        // Drafted blocks are the only Committed ones (Gap 97); no contract yet means a preview.
+        var membership = contractId is { } id ? new ContractMembership(id, ContractRole.Committed) : null;
+
         var blocks = specs
             .Select(spec => spec.IsFocus
-                ? (PlannedBlock)FocusBlock.Create(Guid.NewGuid(), spec.PresetId, spec.Slot, spec.Title, contractId)
-                : BackgroundBlock.Create(Guid.NewGuid(), spec.PresetId, spec.Slot, spec.Title, contractId))
+                ? (PlannedBlock)FocusBlock.Create(Guid.NewGuid(), spec.PresetId, spec.Slot, spec.Title, membership)
+                : BackgroundBlock.Create(Guid.NewGuid(), spec.PresetId, spec.Slot, spec.Title, membership))
             .ToList();
 
         var focusBlocks = blocks.OfType<FocusBlock>().OrderBy(b => b.Scheduled).ToList();

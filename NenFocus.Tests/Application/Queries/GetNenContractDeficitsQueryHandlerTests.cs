@@ -28,7 +28,7 @@ public class GetNenContractDeficitsQueryHandlerTests
     private GetNenContractDeficitsQueryHandler CreateHandler() => new(_blocks, _sessions, _classifier, _clock);
 
     private static FocusBlock MissedBlock(DateTime start, DateTime end, Guid? presetId = null) =>
-        FocusBlock.Create(Guid.NewGuid(), presetId ?? Guid.NewGuid(),At.Slot(start, end), contractId: ContractId);
+        FocusBlock.Create(Guid.NewGuid(), presetId ?? Guid.NewGuid(),At.Slot(start, end), membership: TestContracts.Committed(ContractId));
 
     /// <summary>A genuinely finished Missed session — the state MarkFocusBlockMissedCommandHandler
     /// produces in real usage. Deficits now require the block's session to have actually
@@ -45,6 +45,22 @@ public class GetNenContractDeficitsQueryHandlerTests
     public async Task HandleAsync_NoFocusBlocks_ReturnsEmpty()
     {
         _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[]);
+
+        var result = await CreateHandler().HandleAsync(new GetNenContractDeficitsQuery(ContractId), CancellationToken.None);
+
+        result.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task HandleAsync_MissedBonusBlock_OwesNothing()
+    {
+        // Gap 97: a Bonus block carries the contract's id but never counts toward its floor,
+        // so missing one creates no deficit.
+        var bonus = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Now.AddHours(-3), Now.AddHours(-1)),
+            membership: TestContracts.Bonus(ContractId));
+        _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[bonus]);
+        _sessions.GetByOriginatingBlockIdAsync(bonus.Id, Arg.Any<CancellationToken>()).Returns(EndedMissedSession(bonus));
+        _classifier.Classify(bonus, At.Utc(Now)).Returns(FocusBlockOutcome.Missed);
 
         var result = await CreateHandler().HandleAsync(new GetNenContractDeficitsQuery(ContractId), CancellationToken.None);
 
@@ -219,7 +235,7 @@ public class GetNenContractDeficitsQueryHandlerTests
         var missed = MissedBlock(Now.AddHours(-3), Now.AddHours(-1)); // 120 min deficit
         var presetId = missed.BlockPresetId;
         var redemption = FocusBlock.Create(Guid.NewGuid(), presetId,At.Slot(Now.AddHours(1), Now.AddHours(3)),
-            contractId: ContractId, redemptionEntries: [new RedemptionEntry(missed.Id, 120)]);
+            membership: TestContracts.Redemption(ContractId), redemptionEntries: [new RedemptionEntry(missed.Id, 120)]);
 
         _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[missed, redemption]);
@@ -242,7 +258,7 @@ public class GetNenContractDeficitsQueryHandlerTests
         var missed = MissedBlock(Now.AddHours(-3), Now.AddHours(-1)); // 120 min deficit
         var presetId = missed.BlockPresetId;
         var redemption = FocusBlock.Create(Guid.NewGuid(), presetId,At.Slot(Now.AddHours(-2), Now),
-            contractId: ContractId, redemptionEntries: [new RedemptionEntry(missed.Id, 120)]);
+            membership: TestContracts.Redemption(ContractId), redemptionEntries: [new RedemptionEntry(missed.Id, 120)]);
 
         _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[missed, redemption]);
@@ -278,7 +294,7 @@ public class GetNenContractDeficitsQueryHandlerTests
         var presetId = missed.BlockPresetId;
         var editingBlockId = Guid.NewGuid();
         var redemption = FocusBlock.Create(editingBlockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(3)),
-            contractId: ContractId, redemptionEntries: [new RedemptionEntry(missed.Id, 120)]);
+            membership: TestContracts.Redemption(ContractId), redemptionEntries: [new RedemptionEntry(missed.Id, 120)]);
 
         _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[missed, redemption]);
@@ -297,7 +313,7 @@ public class GetNenContractDeficitsQueryHandlerTests
         var missed = MissedBlock(Now.AddHours(-3), Now.AddHours(-1)); // 120 min deficit
         var presetId = missed.BlockPresetId;
         var redemption = FocusBlock.Create(Guid.NewGuid(), presetId,At.Slot(Now.AddHours(1), Now.AddHours(2)),
-            contractId: ContractId, redemptionEntries: [new RedemptionEntry(missed.Id, 50)]);
+            membership: TestContracts.Redemption(ContractId), redemptionEntries: [new RedemptionEntry(missed.Id, 50)]);
 
         _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[missed, redemption]);
@@ -319,7 +335,7 @@ public class GetNenContractDeficitsQueryHandlerTests
         var missed = MissedBlock(Now.AddHours(-5), Now.AddHours(-3)); // 120 min deficit
         var presetId = missed.BlockPresetId;
         var redemption = FocusBlock.Create(Guid.NewGuid(), presetId,At.Slot(Now.AddHours(-2), Now.AddHours(-1)),
-            contractId: ContractId, redemptionEntries: [new RedemptionEntry(missed.Id, 60)]);
+            membership: TestContracts.Redemption(ContractId), redemptionEntries: [new RedemptionEntry(missed.Id, 60)]);
 
         _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[missed, redemption]);
@@ -342,7 +358,7 @@ public class GetNenContractDeficitsQueryHandlerTests
         var missed = MissedBlock(Now.AddHours(-5), Now.AddHours(-3)); // 120 min deficit
         var presetId = missed.BlockPresetId;
         var redemption = FocusBlock.Create(Guid.NewGuid(), presetId,At.Slot(Now.AddHours(-2), Now.AddHours(-1)),
-            contractId: ContractId, redemptionEntries: [new RedemptionEntry(missed.Id, 60)]);
+            membership: TestContracts.Redemption(ContractId), redemptionEntries: [new RedemptionEntry(missed.Id, 60)]);
 
         _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[missed, redemption]);
@@ -372,7 +388,7 @@ public class GetNenContractDeficitsQueryHandlerTests
         var missed = MissedBlock(Now.AddHours(-3), Now.AddHours(-1)); // 120 min deficit
         var presetId = missed.BlockPresetId;
         var redemption = FocusBlock.Create(Guid.NewGuid(), presetId,At.Slot(Now.AddHours(1), Now.AddHours(3)),
-            contractId: ContractId, redemptionEntries: [new RedemptionEntry(missed.Id, 120)]);
+            membership: TestContracts.Redemption(ContractId), redemptionEntries: [new RedemptionEntry(missed.Id, 120)]);
 
         _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[missed, redemption]);
@@ -399,7 +415,7 @@ public class GetNenContractDeficitsQueryHandlerTests
         // 1.7e-9 minutes short of the real 120-minute deficit — exactly the kind of residual
         // the double -> DateTime -> double round-trip through tick quantization produces.
         var redemption = FocusBlock.Create(Guid.NewGuid(), presetId,At.Slot(Now.AddHours(1), Now.AddHours(3)),
-            contractId: ContractId, redemptionEntries: [new RedemptionEntry(missed.Id, 120 - 1.7e-9)]);
+            membership: TestContracts.Redemption(ContractId), redemptionEntries: [new RedemptionEntry(missed.Id, 120 - 1.7e-9)]);
 
         _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[missed, redemption]);

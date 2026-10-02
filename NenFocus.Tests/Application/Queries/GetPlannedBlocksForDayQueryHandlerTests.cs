@@ -1,4 +1,5 @@
 using FluentAssertions;
+using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.GetPlannedBlocksForDay;
 using NenFocus.Domain.Entities;
@@ -37,7 +38,7 @@ public class GetPlannedBlocksForDayQueryHandlerTests
     {
         var presetId = Guid.NewGuid();
         var block = FocusBlock.Create(Guid.NewGuid(), presetId,At.Slot(Start, End));
-        _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
+        _blocks.GetForRangeAsync(At.UtcZone.SlotCovering(Day), Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
         _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns(
             (IReadOnlyList<BlockPreset>)[BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Allowlist, BlockPresetType.Focus, At.Utc(Start))]);
 
@@ -58,8 +59,8 @@ public class GetPlannedBlocksForDayQueryHandlerTests
     {
         var presetId = Guid.NewGuid();
         var block = FocusBlock.Create(Guid.NewGuid(), presetId,At.Slot(Start, End),
-            redemptionEntries: [new RedemptionEntry(Guid.NewGuid(), 30)]);
-        _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
+            membership: TestContracts.Redemption(Guid.NewGuid()), redemptionEntries: [new RedemptionEntry(Guid.NewGuid(), 30)]);
+        _blocks.GetForRangeAsync(At.UtcZone.SlotCovering(Day), Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
         _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
 
         var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
@@ -72,7 +73,7 @@ public class GetPlannedBlocksForDayQueryHandlerTests
     {
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End));
         block.MarkSessionEnded(At.Utc(Start.AddMinutes(20)));
-        _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
+        _blocks.GetForRangeAsync(At.UtcZone.SlotCovering(Day), Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
         _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
 
         var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
@@ -88,7 +89,7 @@ public class GetPlannedBlocksForDayQueryHandlerTests
         var ritualCompletedAt = Start.AddMinutes(FocusBlockOutcomeClassifier.GracePeriodMinutes + 1);
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End));
         block.MarkRitualCompleted(At.Utc(ritualCompletedAt));
-        _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
+        _blocks.GetForRangeAsync(At.UtcZone.SlotCovering(Day), Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
         _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
 
         var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
@@ -104,7 +105,7 @@ public class GetPlannedBlocksForDayQueryHandlerTests
         var ritualCompletedAt = Start.AddMinutes(FocusBlockOutcomeClassifier.GracePeriodMinutes);
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End));
         block.MarkRitualCompleted(At.Utc(ritualCompletedAt));
-        _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
+        _blocks.GetForRangeAsync(At.UtcZone.SlotCovering(Day), Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
         _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
 
         var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
@@ -121,7 +122,7 @@ public class GetPlannedBlocksForDayQueryHandlerTests
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End));
         block.MarkRitualCompleted(At.Utc(ritualCompletedAt));
         block.MarkSessionEnded(At.Utc(sessionEndedAt));
-        _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
+        _blocks.GetForRangeAsync(At.UtcZone.SlotCovering(Day), Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
         _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
 
         var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
@@ -140,7 +141,7 @@ public class GetPlannedBlocksForDayQueryHandlerTests
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End));
         block.MarkRitualCompleted(At.Utc(Start));
         block.MarkSessionEnded(At.Utc(Start.AddMinutes(20)));
-        _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
+        _blocks.GetForRangeAsync(At.UtcZone.SlotCovering(Day), Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
         _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
 
         var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
@@ -151,23 +152,25 @@ public class GetPlannedBlocksForDayQueryHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_CancelledBlock_ExcludedFromResults()
+    public async Task HandleAsync_AsksForTheUsersLocalDay_NotTheUtcDay()
     {
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End));
-        block.MarkCancelled(At.Utc(Start));
-        _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
+        // Gap 97: the day is the user's calendar day, turned into real time by the time zone.
+        // At UTC+2 it starts at 22:00 UTC the evening before. (Cancelled blocks are left out
+        // by the repository — PlannedBlockRepositoryTests.)
+        _clock.SetTimeZoneOffset(TimeSpan.FromHours(2));
         _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
+        var dayStartUtc = Day.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc).AddHours(-2);
 
-        var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
+        await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
 
-        result.Should().BeEmpty();
+        await _blocks.Received(1).GetForRangeAsync(At.Slot(dayStartUtc, dayStartUtc.AddDays(1)), Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task HandleAsync_FocusBlockWithoutSessionEnded_DisplayEndIsScheduledEnd()
     {
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End));
-        _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
+        _blocks.GetForRangeAsync(At.UtcZone.SlotCovering(Day), Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
         _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
 
         var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
@@ -180,7 +183,7 @@ public class GetPlannedBlocksForDayQueryHandlerTests
     {
         _clock.SetNow(Start);
         var block = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End));
-        _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
+        _blocks.GetForRangeAsync(At.UtcZone.SlotCovering(Day), Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
         _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
 
         var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
@@ -193,7 +196,7 @@ public class GetPlannedBlocksForDayQueryHandlerTests
     {
         _clock.SetNow(End.AddMinutes(1));
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End));
-        _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
+        _blocks.GetForRangeAsync(At.UtcZone.SlotCovering(Day), Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
         _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
 
         var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
@@ -206,7 +209,7 @@ public class GetPlannedBlocksForDayQueryHandlerTests
     {
         _clock.SetNow(End.AddMinutes(1));
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End));
-        _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
+        _blocks.GetForRangeAsync(At.UtcZone.SlotCovering(Day), Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
         _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
 
         var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
@@ -222,7 +225,7 @@ public class GetPlannedBlocksForDayQueryHandlerTests
         _clock.SetNow(End.AddMinutes(1));
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End));
         block.MarkRitualCompleted(At.Utc(Start));
-        _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
+        _blocks.GetForRangeAsync(At.UtcZone.SlotCovering(Day), Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
         _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
 
         var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
@@ -235,7 +238,7 @@ public class GetPlannedBlocksForDayQueryHandlerTests
     {
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End));
         block.MarkRitualCompleted(At.Utc(Start.AddMinutes(FocusBlockOutcomeClassifier.GracePeriodMinutes + 1)));
-        _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
+        _blocks.GetForRangeAsync(At.UtcZone.SlotCovering(Day), Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
         _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
 
         var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
@@ -249,7 +252,7 @@ public class GetPlannedBlocksForDayQueryHandlerTests
     public async Task HandleAsync_FocusBlockStillPending_WindowNotYetClosed_OutcomeIsNull()
     {
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End));
-        _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
+        _blocks.GetForRangeAsync(At.UtcZone.SlotCovering(Day), Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
         _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
 
         var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
@@ -262,7 +265,7 @@ public class GetPlannedBlocksForDayQueryHandlerTests
     {
         _clock.SetNow(End.AddMinutes(1));
         var block = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End));
-        _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
+        _blocks.GetForRangeAsync(At.UtcZone.SlotCovering(Day), Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
         _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
 
         var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
@@ -274,7 +277,7 @@ public class GetPlannedBlocksForDayQueryHandlerTests
     public async Task HandleAsync_BackgroundBlock_MapsBlockPresetType()
     {
         var block = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End));
-        _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
+        _blocks.GetForRangeAsync(At.UtcZone.SlotCovering(Day), Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
         _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
 
         var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
@@ -286,7 +289,7 @@ public class GetPlannedBlocksForDayQueryHandlerTests
     public async Task HandleAsync_PresetNotFound_UsesUnknownNameAndBlocklistDefault()
     {
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End));
-        _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
+        _blocks.GetForRangeAsync(At.UtcZone.SlotCovering(Day), Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
         _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
 
         var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
@@ -301,7 +304,7 @@ public class GetPlannedBlocksForDayQueryHandlerTests
     {
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End));
         block.MarkRitualCompleted(At.Utc(Start));
-        _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
+        _blocks.GetForRangeAsync(At.UtcZone.SlotCovering(Day), Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
         _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
 
         var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
@@ -313,8 +316,8 @@ public class GetPlannedBlocksForDayQueryHandlerTests
     public async Task HandleAsync_BlockUnderActiveContract_IsUnderInEffectContractIsTrue()
     {
         var contractId = Guid.NewGuid();
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End), contractId: contractId);
-        _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End), membership: TestContracts.Committed(contractId));
+        _blocks.GetForRangeAsync(At.UtcZone.SlotCovering(Day), Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
         _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>()).Returns(
             NenContract.Seal(
@@ -338,7 +341,7 @@ public class GetPlannedBlocksForDayQueryHandlerTests
     public async Task HandleAsync_BlockWithNoContract_IsUnderInEffectContractIsFalse()
     {
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End));
-        _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
+        _blocks.GetForRangeAsync(At.UtcZone.SlotCovering(Day), Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
         _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
 
         var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
@@ -350,8 +353,8 @@ public class GetPlannedBlocksForDayQueryHandlerTests
     public async Task HandleAsync_BlockUnderCompletedContract_IsUnderInEffectContractIsFalse()
     {
         var contractId = Guid.NewGuid();
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End), contractId: contractId);
-        _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End), membership: TestContracts.Committed(contractId));
+        _blocks.GetForRangeAsync(At.UtcZone.SlotCovering(Day), Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
         _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
         var contract = NenContract.Seal(
             id: contractId,
@@ -376,8 +379,8 @@ public class GetPlannedBlocksForDayQueryHandlerTests
     public async Task HandleAsync_BlockUnderDailyFlexibilityContract_ContractStrictnessRuleIsDailyFlexibility()
     {
         var contractId = Guid.NewGuid();
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End), contractId: contractId);
-        _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End), membership: TestContracts.Committed(contractId));
+        _blocks.GetForRangeAsync(At.UtcZone.SlotCovering(Day), Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
         _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>()).Returns(
             NenContract.Seal(
@@ -401,7 +404,7 @@ public class GetPlannedBlocksForDayQueryHandlerTests
     public async Task HandleAsync_BlockWithNoContract_ContractStrictnessRuleIsNull()
     {
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End));
-        _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
+        _blocks.GetForRangeAsync(At.UtcZone.SlotCovering(Day), Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
         _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
 
         var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
@@ -409,121 +412,12 @@ public class GetPlannedBlocksForDayQueryHandlerTests
         result.Should().ContainSingle().Subject.ContractStrictnessRule.Should().BeNull();
     }
 
-    [Fact]
-    public async Task HandleAsync_UnlinkedBlockWithinAnActiveContractRange_ContractBadgeIsBonusWithContractName()
+    // ── Contract badge: the block's own stored role (Gap 97) ─────────────────
+
+    private NenContract SetUpStudyMonth(Guid contractId, bool broken = false)
     {
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End)); // ContractId null
-        _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
-        _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
-        var contract = NenContract.Seal(
-            id: Guid.NewGuid(),
-            name: "Study Month",
-            goal: new NenContractGoal("Goal"),
-            strictnessRule: StrictnessRule.Locked,
-            calendar: TestCalendars.For(Day.AddDays(-1), Day.AddDays(5), new DailyFloorRule.Fixed(DailyFloor.None)),
-            floorRule: new DailyFloorRule.Fixed(DailyFloor.None),
-            changeWindow: null,
-            allowCancellation: false,
-            plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-            sealedAt: At.Utc(Start.Date.AddDays(-1)), timeZone: At.UtcZone);
-        _contracts.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<NenContract>)[contract]);
-
-        var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
-
-        var dto = result.Should().ContainSingle().Subject;
-        dto.ContractBadge.Should().Be(PlannedBlockContractBadge.Bonus);
-        dto.BonusContractName.Should().Be("Study Month");
-    }
-
-    [Fact]
-    public async Task HandleAsync_UnlinkedBackgroundBlockWithinAContractRange_HasNoBonusBadge()
-    {
-        // Bonus hours only ever come from Focus blocks, so a Background block inside a
-        // contract's range is not a Bonus block and must not be badged as one.
-        var block = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End)); // ContractId null
-        _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
-        _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
-        var contract = NenContract.Seal(
-            id: Guid.NewGuid(),
-            name: "Study Month",
-            goal: new NenContractGoal("Goal"),
-            strictnessRule: StrictnessRule.Locked,
-            calendar: TestCalendars.For(Day.AddDays(-1), Day.AddDays(5), new DailyFloorRule.Fixed(DailyFloor.None)),
-            floorRule: new DailyFloorRule.Fixed(DailyFloor.None),
-            changeWindow: null,
-            allowCancellation: false,
-            plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-            sealedAt: At.Utc(Start.Date.AddDays(-1)), timeZone: At.UtcZone);
-        _contracts.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<NenContract>)[contract]);
-
-        var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
-
-        var dto = result.Should().ContainSingle().Subject;
-        dto.ContractBadge.Should().BeNull();
-        dto.BonusContractName.Should().BeNull();
-    }
-
-    [Fact]
-    public async Task HandleAsync_UnlinkedBlockOutsideAnyContractRange_ContractBadgeIsNull()
-    {
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End)); // ContractId null
-        _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
-        _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
-        var contract = NenContract.Seal(
-            id: Guid.NewGuid(),
-            name: "Study Month",
-            goal: new NenContractGoal("Goal"),
-            strictnessRule: StrictnessRule.Locked,
-            calendar: TestCalendars.For(Day.AddDays(10), Day.AddDays(20), new DailyFloorRule.Fixed(DailyFloor.None)),
-            floorRule: new DailyFloorRule.Fixed(DailyFloor.None),
-            changeWindow: null,
-            allowCancellation: false,
-            plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-            sealedAt: At.Utc(Start.Date.AddDays(10)), timeZone: At.UtcZone);
-        _contracts.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<NenContract>)[contract]);
-
-        var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
-
-        var dto = result.Should().ContainSingle().Subject;
-        dto.ContractBadge.Should().BeNull();
-        dto.BonusContractName.Should().BeNull();
-    }
-
-    [Fact]
-    public async Task HandleAsync_LinkedBlockWithinAContractRange_ContractBadgeIsNull()
-    {
-        var contractId = Guid.NewGuid();
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End), contractId: contractId);
-        _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
-        _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
         var contract = NenContract.Seal(
             id: contractId,
-            name: "Study Month",
-            goal: new NenContractGoal("Goal"),
-            strictnessRule: StrictnessRule.Locked,
-            calendar: TestCalendars.For(Day.AddDays(-1), Day.AddDays(5), new DailyFloorRule.Fixed(DailyFloor.None)),
-            floorRule: new DailyFloorRule.Fixed(DailyFloor.None),
-            changeWindow: null,
-            allowCancellation: false,
-            plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-            sealedAt: At.Utc(Start.Date.AddDays(-1)), timeZone: At.UtcZone);
-        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>()).Returns(contract);
-        _contracts.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<NenContract>)[contract]);
-
-        var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
-
-        // Already committed to its own contract — never also labeled Bonus.
-        result.Should().ContainSingle().Subject.ContractBadge.Should().BeNull();
-    }
-
-    [Fact]
-    public async Task HandleAsync_UnlinkedBlockWithinABrokenContractRange_ContractBadgeIsBonus()
-    {
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End)); // ContractId null
-        _blocks.GetForDayAsync(Day, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
-        _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
-        var contract = NenContract.Seal(
-            id: Guid.NewGuid(),
             name: "Study Month",
             goal: new NenContractGoal("Goal"),
             strictnessRule: StrictnessRule.Locked,
@@ -533,12 +427,110 @@ public class GetPlannedBlocksForDayQueryHandlerTests
             allowCancellation: true,
             plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
             sealedAt: At.Utc(Start.Date.AddDays(-1)), timeZone: At.UtcZone);
-        contract.Break(At.Utc(Start), At.UtcZone);
-        _contracts.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<NenContract>)[contract]);
+        if (broken) contract.Break(At.Utc(Start), At.UtcZone);
+        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>()).Returns(contract);
+        return contract;
+    }
+
+    private async Task<PlannedBlockDto> SingleDtoAsync(PlannedBlock block)
+    {
+        _blocks.GetForRangeAsync(At.UtcZone.SlotCovering(Day), Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
+        _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
 
         var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
 
-        // Bonus status is regardless of the covering contract's current status.
-        result.Should().ContainSingle().Subject.ContractBadge.Should().Be(PlannedBlockContractBadge.Bonus);
+        return result.Should().ContainSingle().Subject;
+    }
+
+    [Fact]
+    public async Task HandleAsync_BonusFocusBlock_ContractBadgeIsBonusWithContractName()
+    {
+        var contractId = Guid.NewGuid();
+        SetUpStudyMonth(contractId);
+
+        var dto = await SingleDtoAsync(
+            FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Start, End), membership: TestContracts.Bonus(contractId)));
+
+        dto.ContractBadge.Should().Be(PlannedBlockContractBadge.Bonus);
+        dto.BonusContractName.Should().Be("Study Month");
+    }
+
+    [Fact]
+    public async Task HandleAsync_BonusBackgroundBlock_HasNoBonusBadge()
+    {
+        // Bonus hours only ever come from Focus blocks, so a Background block that belongs to
+        // a contract as Bonus must not be badged as one.
+        var contractId = Guid.NewGuid();
+        SetUpStudyMonth(contractId);
+
+        var dto = await SingleDtoAsync(
+            BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Start, End), membership: TestContracts.Bonus(contractId)));
+
+        dto.ContractBadge.Should().BeNull();
+        dto.BonusContractName.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task HandleAsync_PlainBlock_ContractBadgeIsNull_EvenInsideAContractsDates()
+    {
+        // No membership means no badge — the dates are never consulted. (A block made before
+        // the contract was sealed sits inside its dates without belonging to it.)
+        SetUpStudyMonth(Guid.NewGuid());
+
+        var dto = await SingleDtoAsync(FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Start, End)));
+
+        dto.ContractBadge.Should().BeNull();
+        dto.BonusContractName.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task HandleAsync_CommittedFocusBlock_ContractBadgeIsCommitted()
+    {
+        var contractId = Guid.NewGuid();
+        SetUpStudyMonth(contractId);
+
+        var dto = await SingleDtoAsync(
+            FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Start, End), membership: TestContracts.Committed(contractId)));
+
+        dto.ContractBadge.Should().Be(PlannedBlockContractBadge.Committed);
+    }
+
+    [Fact]
+    public async Task HandleAsync_CommittedBackgroundBlock_HasNoBadge()
+    {
+        // The floor is Focus-only, so a drafted Background block has nothing to tell apart.
+        var contractId = Guid.NewGuid();
+        SetUpStudyMonth(contractId);
+
+        var dto = await SingleDtoAsync(
+            BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Start, End), membership: TestContracts.Committed(contractId)));
+
+        dto.ContractBadge.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task HandleAsync_RedemptionBlockThatCoversNothingAnyMore_ContractBadgeIsStillRedemption()
+    {
+        // The role is the answer, not the entries: coverage can drop to zero on an edit.
+        var contractId = Guid.NewGuid();
+        SetUpStudyMonth(contractId);
+
+        var dto = await SingleDtoAsync(
+            FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Start, End), membership: TestContracts.Redemption(contractId)));
+
+        dto.ContractBadge.Should().Be(PlannedBlockContractBadge.Redemption);
+    }
+
+    [Fact]
+    public async Task HandleAsync_BonusBlockOfABrokenContract_ContractBadgeIsStillBonus()
+    {
+        // A Bonus block that ran keeps its membership when its contract is broken.
+        var contractId = Guid.NewGuid();
+        SetUpStudyMonth(contractId, broken: true);
+
+        var dto = await SingleDtoAsync(
+            FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Start, End), membership: TestContracts.Bonus(contractId)));
+
+        dto.ContractBadge.Should().Be(PlannedBlockContractBadge.Bonus);
     }
 }

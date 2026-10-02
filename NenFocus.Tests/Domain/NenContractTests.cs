@@ -511,14 +511,101 @@ public class NenContractTests
     }
 
     [Fact]
-    public void Covers_IsTheHalfOpenPeriodFromStartsAtToEndsAt()
+    public void Governs_IsTouchingTheHalfOpenPeriodFromStartsAtToEndsAt()
     {
         var contract = Seal(workHours: NineToFive);
+        TimeSlot Minute(DateOnly date, int hour, int minute) =>
+            At.Slot(date.ToDateTime(new TimeOnly(hour, minute)), date.ToDateTime(new TimeOnly(hour, minute)).AddMinutes(1));
 
-        contract.Covers(StartDate.ToDateTime(new TimeOnly(8, 59))).Should().BeFalse();
-        contract.Covers(StartDate.ToDateTime(new TimeOnly(9, 0))).Should().BeTrue();
-        contract.Covers(EndDate.ToDateTime(new TimeOnly(16, 59))).Should().BeTrue();
-        contract.Covers(EndDate.ToDateTime(new TimeOnly(17, 0))).Should().BeFalse();
+        contract.Governs(Minute(StartDate, 8, 59), At.UtcZone).Should().BeFalse();
+        contract.Governs(Minute(StartDate, 9, 0), At.UtcZone).Should().BeTrue();
+        contract.Governs(Minute(EndDate, 16, 59), At.UtcZone).Should().BeTrue();
+        contract.Governs(Minute(EndDate, 17, 0), At.UtcZone).Should().BeFalse();
+    }
+
+    [Fact]
+    public void Governs_AFinishedContract_GovernsNothing()
+    {
+        var contract = Seal(workHours: NineToFive);
+        var inside = At.Slot(StartDate.ToDateTime(new TimeOnly(10, 0)), StartDate.ToDateTime(new TimeOnly(11, 0)));
+        contract.Governs(inside, At.UtcZone).Should().BeTrue();
+
+        contract.Break(At.Utc(StartDate.ToDateTime(new TimeOnly(9, 30))), At.UtcZone);
+
+        contract.Governs(inside, At.UtcZone).Should().BeFalse();
+    }
+
+    // ── What breaking does to a block (Gap 97) ───────────────────────────────
+
+    private static readonly DateTime BrokenAt = StartDate.ToDateTime(new TimeOnly(12, 0));
+
+    private static FocusBlock BlockAt(int fromHour, int toHour, ContractMembership? membership) =>
+        FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),
+            At.Slot(StartDate.ToDateTime(new TimeOnly(fromHour, 0)), StartDate.ToDateTime(new TimeOnly(toHour, 0))), membership: membership);
+
+    [Theory]
+    [InlineData(false, BlockFateOnBreak.Cancel)]
+    [InlineData(true, BlockFateOnBreak.Leave)]
+    public void FateWhenBroken_CommittedOrRedemptionBlock_CancelledUnlessFinished_WhateverTheBonusChoice(bool isResolved, BlockFateOnBreak expected)
+    {
+        var contract = Seal();
+        var committed = BlockAt(14, 15, TestContracts.Committed(contract.Id));
+        var redemption = BlockAt(15, 16, TestContracts.Redemption(contract.Id));
+
+        foreach (var keepBonus in new[] { true, false })
+        {
+            contract.FateWhenBroken(committed, isResolved, At.Utc(BrokenAt), keepBonus).Should().Be(expected);
+            contract.FateWhenBroken(redemption, isResolved, At.Utc(BrokenAt), keepBonus).Should().Be(expected);
+        }
+    }
+
+    [Theory]
+    [InlineData(true, BlockFateOnBreak.Release)]
+    [InlineData(false, BlockFateOnBreak.Cancel)]
+    public void FateWhenBroken_BonusBlockNotYetStarted_FollowsTheUsersChoice(bool keepBonusBlocks, BlockFateOnBreak expected)
+    {
+        var contract = Seal();
+        var upcoming = BlockAt(14, 15, TestContracts.Bonus(contract.Id));
+
+        contract.FateWhenBroken(upcoming, isResolved: false, At.Utc(BrokenAt), keepBonusBlocks).Should().Be(expected);
+    }
+
+    [Fact]
+    public void FateWhenBroken_BonusBlockStartedOrFinished_IsLeft_WhateverTheChoice()
+    {
+        var contract = Seal();
+        var running = BlockAt(11, 13, TestContracts.Bonus(contract.Id));
+        var startingNow = BlockAt(12, 13, TestContracts.Bonus(contract.Id));
+        var finished = BlockAt(9, 10, TestContracts.Bonus(contract.Id));
+
+        foreach (var keepBonus in new[] { true, false })
+        {
+            contract.FateWhenBroken(running, false, At.Utc(BrokenAt), keepBonus).Should().Be(BlockFateOnBreak.Leave);
+            contract.FateWhenBroken(startingNow, false, At.Utc(BrokenAt), keepBonus).Should().Be(BlockFateOnBreak.Leave);
+            contract.FateWhenBroken(finished, true, At.Utc(BrokenAt), keepBonus).Should().Be(BlockFateOnBreak.Leave);
+        }
+    }
+
+    [Fact]
+    public void FateWhenBroken_BlockOfAnotherContractOrOfNone_Throws()
+    {
+        var contract = Seal();
+        var foreign = () => contract.FateWhenBroken(BlockAt(14, 15, TestContracts.Committed(Guid.NewGuid())), false, At.Utc(BrokenAt), true);
+        var plain = () => contract.FateWhenBroken(BlockAt(14, 15, null), false, At.Utc(BrokenAt), true);
+
+        foreign.Should().Throw<ArgumentException>();
+        plain.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
+    public void MembershipForPlacedBlock_AFinishedContract_Throws()
+    {
+        var contract = Seal(workHours: NineToFive);
+        contract.Break(At.Utc(StartDate.ToDateTime(new TimeOnly(9, 30))), At.UtcZone);
+
+        var act = () => contract.MembershipForPlacedBlock(claimsDeficit: false);
+
+        act.Should().Throw<InvalidOperationException>();
     }
 
     [Fact]

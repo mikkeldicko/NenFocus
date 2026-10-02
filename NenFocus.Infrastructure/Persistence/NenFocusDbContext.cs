@@ -328,7 +328,14 @@ public class NenFocusDbContext : DbContext
             entity.Property(b => b.Title)
                 .HasMaxLength(100);
 
-            entity.Property(b => b.ContractId);
+            // Gap 97: the block's membership in a contract — id and role together or not at all,
+            // stored on the block's own row. The role is Domain-only, so it's mapped by name.
+            // A row with an id but no role would load as no membership.
+            entity.OwnsOne(b => b.Membership, membership =>
+            {
+                membership.Property(m => m.ContractId).HasColumnName("ContractId").IsRequired();
+                membership.Property<ContractRole>("Role").HasColumnName("ContractRole").HasConversion<string>().IsRequired();
+            });
 
             entity.Property(b => b.CancelledAt);
 
@@ -404,10 +411,20 @@ public class NenFocusDbContext : DbContext
                     v => v == null ? null : new DailyFloor(v.Value))
                 .HasColumnName("DailyFloorHours");
 
+            var lockdownId = new Guid("c0000003-0000-0000-0000-000000000001");
+            var dailyFlexId = new Guid("c0000003-0000-0000-0000-000000000002");
+            var periodStudyId = new Guid("c0000003-0000-0000-0000-000000000003");
+
             entity.OwnsOne(p => p.WorkHours, w =>
             {
                 w.Property(x => x.Start).HasColumnName("WorkHoursStart");
                 w.Property(x => x.End).HasColumnName("WorkHoursEnd");
+
+                w.HasData(
+                    new { ContractPresetId = lockdownId, Start = new TimeOnly(9, 0), End = new TimeOnly(17, 0) },
+                    new { ContractPresetId = dailyFlexId, Start = new TimeOnly(8, 0), End = new TimeOnly(20, 0) },
+                    new { ContractPresetId = periodStudyId, Start = new TimeOnly(7, 0), End = new TimeOnly(23, 0) }
+                );
             });
 
             entity.Property(p => p.AllowCancellation)
@@ -420,6 +437,30 @@ public class NenFocusDbContext : DbContext
             entity.Property(p => p.KeepBlockingDuringBreaks)
                 .IsRequired()
                 .HasDefaultValue(false);
+
+            // One ordinary seeded row per strictness rule — freely editable/deletable like
+            // the seeded block and break timer presets. Only Lockdown sets its own daily
+            // floor; the other two derive it from the scheduled blocks.
+            entity.HasData(
+                new
+                {
+                    Id = lockdownId, Name = "Lockdown", StrictnessRule = StrictnessRule.Locked,
+                    DailyFloor = new DailyFloor(4), AllowCancellation = false,
+                    RedemptionPlacementPolicy = RedemptionPlacementPolicy.AnywhereInContract, KeepBlockingDuringBreaks = true
+                },
+                new
+                {
+                    Id = dailyFlexId, Name = "Daily Flex", StrictnessRule = StrictnessRule.DailyFlexibility,
+                    AllowCancellation = true,
+                    RedemptionPlacementPolicy = RedemptionPlacementPolicy.AnywhereInContract, KeepBlockingDuringBreaks = false
+                },
+                new
+                {
+                    Id = periodStudyId, Name = "Period Study", StrictnessRule = StrictnessRule.PeriodTimeBudget,
+                    AllowCancellation = true,
+                    RedemptionPlacementPolicy = RedemptionPlacementPolicy.AnywhereInContract, KeepBlockingDuringBreaks = false
+                }
+            );
         });
 
         modelBuilder.Entity<BreakTimerPreset>(entity =>

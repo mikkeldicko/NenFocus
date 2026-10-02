@@ -28,8 +28,11 @@ public sealed class ComputePlannedFocusHoursQueryHandler
         if (query.ContractId.HasValue)
         {
             var persisted = await _blocks.GetForContractAsync(query.ContractId.Value, ct);
+            // Planned hours are measured against the floor, so only the blocks that count toward
+            // it — never a Bonus block (Gap 97).
             focusTime.AddRange(persisted
                 .OfType<FocusBlock>()
+                .Where(b => b.CountsTowardFloor)
                 .Where(b => b.Id != query.ExcludeBlockId)
                 .Select(b => b.Scheduled));
         }

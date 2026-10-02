@@ -36,6 +36,9 @@ public sealed class GetNenContractForEditQueryHandler
             days.Add(new NenContractEditDayDto(date, window.Start, window.End, contract.FloorHoursFor(date)));
         }
 
+        // Every member, Bonus blocks included (Gap 97): Edit replaces all of them with the
+        // re-draft, so each must be in the draft or it would be lost. A kept Bonus block is
+        // sealed as Committed — the same result Gap 68's adoption will give.
         var linkedBlocks = await _blocks.GetForContractAsync(query.ContractId, cancellationToken);
 
         var presetIds = linkedBlocks.Select(b => b.BlockPresetId).Distinct();

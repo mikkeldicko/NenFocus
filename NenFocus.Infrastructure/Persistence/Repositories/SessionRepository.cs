@@ -28,17 +28,15 @@ public sealed class SessionRepository : ISessionRepository
     }
 
     public async Task<IReadOnlyList<Session>> GetHistoryAsync(
-        DateOnly from,
-        DateOnly to,
+        TimeSlot startedWithin,
         Guid? presetId = null,
         CancellationToken cancellationToken = default)
     {
-        // UTC days, not the user's — the trap Gap 97 fixes; storage bridge until then.
-        var fromDate = Moment.FromStorage(from.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
-        var toDate = Moment.FromStorage(to.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc));
-
+        // "Started inside the slot" is the Domain's own filter, so the SQL can't drift from
+        // TimeSlot.Contains; which days the slot covers is the caller's, through UserTimeZone
+        // (Gap 97 — this used to read its dates as UTC days).
         var query = _context.Sessions
-            .Where(s => s.StartedAt >= fromDate && s.StartedAt <= toDate);
+            .Where(SlotQuery.OnMoment<Session>(s => s.StartedAt, TimeSlot.Filters.Contains(startedWithin)));
 
         if (presetId.HasValue)
             query = query.Where(s => s.BlockPresetId == presetId.Value);

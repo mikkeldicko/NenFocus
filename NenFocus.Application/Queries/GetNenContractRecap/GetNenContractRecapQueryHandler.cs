@@ -51,9 +51,19 @@ public sealed class GetNenContractRecapQueryHandler : IQueryHandler<GetNenContra
         var endedEarly = 0;
         var missed = 0;
         var cancelled = 0;
+        var bonusBlockCount = 0;
 
         foreach (var block in linkedBlocks)
         {
+            // Bonus blocks are counted apart from the contract's own (Gap 97): never in the
+            // totals or outcomes, and a removed (cancelled) one not at all. Same set as
+            // GetNenContractBonusFocusHoursQueryHandler's hours.
+            if (block.Membership is { IsBonus: true })
+            {
+                if (block is FocusBlock && !block.CancelledAt.HasValue) bonusBlockCount++;
+                continue;
+            }
+
             if (block is BackgroundBlock)
             {
                 totalBackgroundBlocks++;
@@ -90,17 +100,6 @@ public sealed class GetNenContractRecapQueryHandler : IQueryHandler<GetNenContra
 
         var totalCompletedHours = completedHoursByDay.Values.Sum();
         var totalBonusHours = bonusHoursByDay.Values.Sum();
-
-        // Bonus block count, mirroring GetNenContractBonusFocusHoursQueryHandler's own
-        // block-sourcing exactly, so "how many Bonus blocks" and "how many Bonus hours"
-        // are always answered from the same underlying set.
-        var rangeStart = contract.StartDate.AddDays(-1).ToDateTime(TimeOnly.MinValue);
-        var rangeEnd = contract.EndDate.AddDays(1).ToDateTime(TimeOnly.MinValue);
-        var blocksInRange = await _blocks.GetForRangeAsync(
-            new TimeSlot(_clock.TimeZone.ToMoment(rangeStart), _clock.TimeZone.ToMoment(rangeEnd)), ct);
-        var bonusBlockCount = blocksInRange.OfType<FocusBlock>().Count(b =>
-            b.ContractId is null &&
-            contract.Covers(_clock.TimeZone.ToCalendarTimes(b.Scheduled).Start));
 
         var dailyBreakdown = new List<NenContractDailyRecapEntryDto>();
         var bestStreakDays = 0;

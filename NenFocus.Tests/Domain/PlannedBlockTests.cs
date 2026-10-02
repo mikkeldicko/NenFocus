@@ -543,57 +543,209 @@ public class PlannedBlockTests
     }
 
     [Fact]
-    public void FocusBlock_Create_WithoutContractId_DefaultsToNull()
+    public void FocusBlock_Create_WithoutMembership_IsAPlainBlock()
     {
-        CreateFocusBlock().ContractId.Should().BeNull();
+        CreateFocusBlock().Membership.Should().BeNull();
     }
 
     [Fact]
-    public void FocusBlock_Create_WithContractId_SetsIt()
-    {
-        var contractId = Guid.NewGuid();
-
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End), contractId: contractId);
-
-        block.ContractId.Should().Be(contractId);
-    }
-
-    [Fact]
-    public void BackgroundBlock_Create_WithoutContractId_DefaultsToNull()
-    {
-        CreateBackgroundBlock().ContractId.Should().BeNull();
-    }
-
-    [Fact]
-    public void BackgroundBlock_Create_WithContractId_SetsIt()
+    public void FocusBlock_Create_WithMembership_SetsIt()
     {
         var contractId = Guid.NewGuid();
 
-        var block = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End), contractId: contractId);
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End), membership: TestContracts.Committed(contractId));
 
-        block.ContractId.Should().Be(contractId);
+        block.Membership!.ContractId.Should().Be(contractId);
     }
 
     [Fact]
-    public void AssignContract_UpdatesContractId()
+    public void BackgroundBlock_Create_WithoutMembership_IsAPlainBlock()
+    {
+        CreateBackgroundBlock().Membership.Should().BeNull();
+    }
+
+    [Fact]
+    public void BackgroundBlock_Create_WithMembership_SetsIt()
+    {
+        var contractId = Guid.NewGuid();
+
+        var block = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End), membership: TestContracts.Committed(contractId));
+
+        block.Membership!.ContractId.Should().Be(contractId);
+    }
+
+    // ── Membership in a contract (Gap 97) ────────────────────────────────────
+
+    [Fact]
+    public void Membership_OnlyCommittedAndRedemptionCountTowardTheFloor()
+    {
+        var contractId = Guid.NewGuid();
+
+        TestContracts.Committed(contractId).CountsTowardFloor.Should().BeTrue();
+        TestContracts.Redemption(contractId).CountsTowardFloor.Should().BeTrue();
+        TestContracts.Bonus(contractId).CountsTowardFloor.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Membership_NamesItsRole()
+    {
+        var contractId = Guid.NewGuid();
+
+        TestContracts.Redemption(contractId).IsRedemption.Should().BeTrue();
+        TestContracts.Redemption(contractId).IsBonus.Should().BeFalse();
+        TestContracts.Bonus(contractId).IsBonus.Should().BeTrue();
+        TestContracts.Committed(contractId).IsRedemption.Should().BeFalse();
+        TestContracts.Committed(contractId).IsBonus.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Membership_SameContractDifferentRole_IsNotTheSameMembership()
+    {
+        var contractId = Guid.NewGuid();
+
+        TestContracts.Bonus(contractId).Should().Be(TestContracts.Bonus(contractId));
+        TestContracts.Bonus(contractId).Should().NotBe(TestContracts.Committed(contractId));
+    }
+
+    [Fact]
+    public void Join_PlainBlock_BecomesAMember()
     {
         var block = CreateFocusBlock();
-        var contractId = Guid.NewGuid();
+        var membership = TestContracts.Bonus(Guid.NewGuid());
 
-        block.AssignContract(contractId);
+        block.Join(membership);
 
-        block.ContractId.Should().Be(contractId);
+        block.Membership.Should().Be(membership);
     }
 
     [Fact]
-    public void AssignContract_Null_ClearsContractId()
+    public void Join_AlreadyAMember_Throws()
     {
         var block = CreateFocusBlock();
-        block.AssignContract(Guid.NewGuid());
+        block.Join(TestContracts.Bonus(Guid.NewGuid()));
 
-        block.AssignContract(null);
+        var act = () => block.Join(TestContracts.Bonus(Guid.NewGuid()));
 
-        block.ContractId.Should().BeNull();
+        act.Should().Throw<InvalidOperationException>();
+    }
+
+    [Fact]
+    public void Leave_BonusBlock_BecomesAPlainBlock()
+    {
+        var block = CreateFocusBlock();
+        block.Join(TestContracts.Bonus(Guid.NewGuid()));
+
+        block.Leave();
+
+        block.Membership.Should().BeNull();
+    }
+
+    [Fact]
+    public void Leave_CommittedOrRedemptionBlock_Throws()
+    {
+        var contractId = Guid.NewGuid();
+        var committed = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Start, End), membership: TestContracts.Committed(contractId));
+        var redemption = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Start, End), membership: TestContracts.Redemption(contractId));
+
+        ((Action)committed.Leave).Should().Throw<InvalidOperationException>();
+        ((Action)redemption.Leave).Should().Throw<InvalidOperationException>();
+    }
+
+    private static NenContract ContractInEffect() => NenContract.Seal(
+        id: Guid.NewGuid(),
+        name: "Contract",
+        goal: new NenContractGoal("Goal"),
+        strictnessRule: StrictnessRule.Locked,
+        calendar: TestCalendars.For(DateOnly.FromDateTime(Start), DateOnly.FromDateTime(Start).AddDays(7), new DailyFloorRule.None()),
+        floorRule: new DailyFloorRule.None(),
+        changeWindow: null,
+        allowCancellation: true,
+        plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
+        sealedAt: At.Utc(Start.Date), timeZone: At.UtcZone);
+
+    [Fact]
+    public void PlaceUnder_PlainBlock_UnderAContract_BecomesItsBonusBlock()
+    {
+        var block = CreateFocusBlock();
+        var contract = ContractInEffect();
+
+        block.PlaceUnder(contract);
+
+        block.Membership.Should().Be(TestContracts.Bonus(contract.Id));
+    }
+
+    [Fact]
+    public void PlaceUnder_BonusBlock_UnderNoContract_BecomesAPlainBlock()
+    {
+        var block = CreateFocusBlock();
+        block.PlaceUnder(ContractInEffect());
+
+        block.PlaceUnder(null);
+
+        block.Membership.Should().BeNull();
+    }
+
+    [Fact]
+    public void PlaceUnder_BonusBlock_UnderAnotherContract_BecomesThatContractsBonusBlock()
+    {
+        var block = CreateFocusBlock();
+        block.PlaceUnder(ContractInEffect());
+        var other = ContractInEffect();
+
+        block.PlaceUnder(other);
+
+        block.Membership.Should().Be(TestContracts.Bonus(other.Id));
+    }
+
+    [Fact]
+    public void PlaceUnder_CommittedOrRedemptionBlock_KeepsItsMembershipWhateverGoverns()
+    {
+        var contractId = Guid.NewGuid();
+        var committed = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Start, End), membership: TestContracts.Committed(contractId));
+        var redemption = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Start, End), membership: TestContracts.Redemption(contractId));
+
+        committed.PlaceUnder(null);
+        redemption.PlaceUnder(ContractInEffect());
+
+        committed.Membership.Should().Be(TestContracts.Committed(contractId));
+        redemption.Membership.Should().Be(TestContracts.Redemption(contractId));
+    }
+
+    [Fact]
+    public void IsRedemption_IsTheRole_NotWhetherTheBlockCoversAnything()
+    {
+        var contractId = Guid.NewGuid();
+        var redemption = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Start, End), membership: TestContracts.Redemption(contractId));
+
+        redemption.RedemptionEntries.Should().BeEmpty();
+        redemption.IsRedemption.Should().BeTrue();
+        redemption.CountsTowardFloor.Should().BeTrue();
+        redemption.IsBonus.Should().BeFalse();
+    }
+
+    [Fact]
+    public void RedemptionEntries_AreRefused_UnlessTheBlockIsARedemptionBlock()
+    {
+        var contractId = Guid.NewGuid();
+        RedemptionEntry[] entries = [new(Guid.NewGuid(), 30)];
+        var createPlain = () => FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Start, End), redemptionEntries: entries);
+        var createCommitted = () => FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Start, End),
+            membership: TestContracts.Committed(contractId), redemptionEntries: entries);
+        var bonus = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Start, End), membership: TestContracts.Bonus(contractId));
+        var assignToBonus = () => bonus.AssignRedemptionEntries(entries);
+
+        createPlain.Should().Throw<ArgumentException>();
+        createCommitted.Should().Throw<ArgumentException>();
+        assignToBonus.Should().Throw<InvalidOperationException>();
+        bonus.AssignRedemptionEntries([]); // clearing is always fine
+    }
+
+    [Fact]
+    public void Leave_PlainBlock_Throws()
+    {
+        var act = () => CreateFocusBlock().Leave();
+
+        act.Should().Throw<InvalidOperationException>();
     }
 
     [Fact]
@@ -607,7 +759,7 @@ public class PlannedBlockTests
     {
         var entries = new[] { new RedemptionEntry(Guid.NewGuid(), 30) };
 
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End), redemptionEntries: entries);
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End), membership: TestContracts.Redemption(Guid.NewGuid()), redemptionEntries: entries);
 
         block.RedemptionEntries.Should().BeEquivalentTo(entries);
     }
@@ -622,7 +774,7 @@ public class PlannedBlockTests
     public void FocusBlock_AssignRedemptionEntries_ReplacesExisting()
     {
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End),
-            redemptionEntries: [new RedemptionEntry(Guid.NewGuid(), 30)]);
+            membership: TestContracts.Redemption(Guid.NewGuid()), redemptionEntries: [new RedemptionEntry(Guid.NewGuid(), 30)]);
         var newEntries = new[] { new RedemptionEntry(Guid.NewGuid(), 45), new RedemptionEntry(Guid.NewGuid(), 15) };
 
         block.AssignRedemptionEntries(newEntries);
@@ -634,7 +786,7 @@ public class PlannedBlockTests
     public void FocusBlock_AssignRedemptionEntries_Empty_ClearsExisting()
     {
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End),
-            redemptionEntries: [new RedemptionEntry(Guid.NewGuid(), 30)]);
+            membership: TestContracts.Redemption(Guid.NewGuid()), redemptionEntries: [new RedemptionEntry(Guid.NewGuid(), 30)]);
 
         block.AssignRedemptionEntries([]);
 
@@ -673,7 +825,7 @@ public class PlannedBlockTests
         // "Cover Deficit" flow used to hit: a redemption block that ran a few minutes past
         // its own grace period would otherwise spawn a fresh, uncoverable deficit.
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End),
-            redemptionEntries: [new RedemptionEntry(Guid.NewGuid(), 30)]);
+            membership: TestContracts.Redemption(Guid.NewGuid()), redemptionEntries: [new RedemptionEntry(Guid.NewGuid(), 30)]);
 
         block.CanContributeOwnDeficit(outcome).Should().BeFalse();
     }

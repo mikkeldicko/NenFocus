@@ -14,7 +14,7 @@ public sealed class BackgroundBlock : PlannedBlock
         Guid blockPresetId,
         TimeSlot scheduled,
         string? title = null,
-        Guid? contractId = null)
+        ContractMembership? membership = null)
     {
         return new BackgroundBlock
         {
@@ -22,7 +22,7 @@ public sealed class BackgroundBlock : PlannedBlock
             BlockPresetId = blockPresetId,
             Scheduled = scheduled,
             Title = title,
-            ContractId = contractId
+            Membership = membership
         };
     }
 }

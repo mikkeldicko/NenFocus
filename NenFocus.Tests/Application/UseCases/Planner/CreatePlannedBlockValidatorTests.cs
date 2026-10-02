@@ -150,13 +150,12 @@ public class CreatePlannedBlockValidatorTests
     public async Task Validate_AsksThePlacementQueryWithTheCommandsValues()
     {
         var presetId = FocusPreset();
-        var contractId = Guid.NewGuid();
-        var command = ValidCommand(presetId) with { ContractId = contractId };
+        var command = ValidCommand(presetId) with { DeclineRedemption = true };
 
         await CreateValidator().ValidateAsync(command);
 
         await _placement.Received(1).HandleAsync(
-            new GetBlockPlacementVerdictQuery(command.Slot, BlockPresetType.Focus, presetId, contractId),
+            new GetBlockPlacementVerdictQuery(command.Slot, BlockPresetType.Focus, presetId, DeclineRedemption: true),
             Arg.Any<CancellationToken>());
     }
 }

@@ -73,32 +73,28 @@ public class ComputeRedemptionAttributionQueryHandlerTests
         };
 
     [Fact]
-    public async Task HandleAsync_AutoDiscover_NoInEffectContracts_ReturnsNone()
+    public async Task HandleAsync_ContractNotFound_ReturnsNone()
     {
-        _contracts.GetAllInEffectAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<NenContract>)[]);
-
         var result = await CreateHandler().HandleAsync(
-            new ComputeRedemptionAttributionQuery(null, Guid.NewGuid(),At.Slot(Now, Now.AddHours(1)), null), CancellationToken.None);
+            new ComputeRedemptionAttributionQuery(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now, Now.AddHours(1)), null), CancellationToken.None);
 
-        result.ContractId.Should().BeNull();
         result.Entries.Should().BeEmpty();
     }
 
     [Fact]
-    public async Task HandleAsync_AutoDiscover_EligibleSameDayDeficit_AttachesToThatContract()
+    public async Task HandleAsync_EligibleSameDayDeficit_IsCovered()
     {
         var contractId = Guid.NewGuid();
         var presetId = Guid.NewGuid();
         var contract = SameDayContract(contractId);
         var deficit = Deficit(presetId, Now, remaining: 40);
-        _contracts.GetAllInEffectAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<NenContract>)[contract]);
+        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>()).Returns(contract);
         _deficits.HandleAsync(new GetNenContractDeficitsQuery(contractId), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<FocusBlockDeficitDto>)[deficit]);
 
         var result = await CreateHandler().HandleAsync(
-            new ComputeRedemptionAttributionQuery(null, presetId,At.Slot(Now, Now.AddHours(1)), null), CancellationToken.None);
+            new ComputeRedemptionAttributionQuery(contractId, presetId,At.Slot(Now, Now.AddHours(1)), null), CancellationToken.None);
 
-        result.ContractId.Should().Be(contractId);
         result.Entries.Should().ContainSingle(e => e.MissedBlockId == deficit.FocusBlockId && e.MinutesCovered == 40);
     }
 
@@ -108,14 +104,13 @@ public class ComputeRedemptionAttributionQueryHandlerTests
         var contractId = Guid.NewGuid();
         var contract = SameDayContract(contractId);
         var deficit = Deficit(Guid.NewGuid(), Now, remaining: 40);
-        _contracts.GetAllInEffectAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<NenContract>)[contract]);
+        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>()).Returns(contract);
         _deficits.HandleAsync(new GetNenContractDeficitsQuery(contractId), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<FocusBlockDeficitDto>)[deficit]);
 
         var result = await CreateHandler().HandleAsync(
-            new ComputeRedemptionAttributionQuery(null, Guid.NewGuid(),At.Slot(Now, Now.AddHours(1)), null), CancellationToken.None);
+            new ComputeRedemptionAttributionQuery(contractId, Guid.NewGuid(),At.Slot(Now, Now.AddHours(1)), null), CancellationToken.None);
 
-        result.ContractId.Should().BeNull();
         result.Entries.Should().BeEmpty();
     }
 
@@ -129,14 +124,13 @@ public class ComputeRedemptionAttributionQueryHandlerTests
         var presetId = Guid.NewGuid();
         var contract = SameDayContract(contractId);
         var deficit = Deficit(presetId, Now.AddDays(-1), remaining: 40); // missed yesterday
-        _contracts.GetAllInEffectAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<NenContract>)[contract]);
+        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>()).Returns(contract);
         _deficits.HandleAsync(new GetNenContractDeficitsQuery(contractId), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<FocusBlockDeficitDto>)[deficit]);
 
         var result = await CreateHandler().HandleAsync(
-            new ComputeRedemptionAttributionQuery(null, presetId,At.Slot(Now, Now.AddHours(1)), null), CancellationToken.None);
+            new ComputeRedemptionAttributionQuery(contractId, presetId,At.Slot(Now, Now.AddHours(1)), null), CancellationToken.None);
 
-        result.ContractId.Should().Be(contractId);
         result.Entries.Should().ContainSingle(e => e.MissedBlockId == deficit.FocusBlockId && e.MinutesCovered == 40);
     }
 
@@ -147,16 +141,15 @@ public class ComputeRedemptionAttributionQueryHandlerTests
         var presetId = Guid.NewGuid();
         var contract = SameDayContract(contractId);
         var deficit = Deficit(presetId, Now, remaining: 40);
-        _contracts.GetAllInEffectAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<NenContract>)[contract]);
+        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>()).Returns(contract);
         _deficits.HandleAsync(new GetNenContractDeficitsQuery(contractId), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<FocusBlockDeficitDto>)[deficit]);
 
         // Proposing the block for tomorrow, even though "now" (today) is still today.
         var result = await CreateHandler().HandleAsync(
-            new ComputeRedemptionAttributionQuery(null, presetId,At.Slot(Now.AddDays(1), Now.AddDays(1).AddHours(1)), null),
+            new ComputeRedemptionAttributionQuery(contractId, presetId,At.Slot(Now.AddDays(1), Now.AddDays(1).AddHours(1)), null),
             CancellationToken.None);
 
-        result.ContractId.Should().BeNull();
         result.Entries.Should().BeEmpty();
     }
 
@@ -179,15 +172,14 @@ public class ComputeRedemptionAttributionQueryHandlerTests
         _clock.SetTimeZoneOffset(TimeSpan.FromHours(-5));
         _clock.SetTimeZoneOffset(TimeSpan.FromHours(-5));
         _clock.SetNow(nowUtc);
-        _contracts.GetAllInEffectAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<NenContract>)[contract]);
+        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>()).Returns(contract);
         _deficits.HandleAsync(new GetNenContractDeficitsQuery(contractId), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<FocusBlockDeficitDto>)[deficit]);
 
         var result = await CreateHandler().HandleAsync(
-            new ComputeRedemptionAttributionQuery(null, presetId,At.Slot(proposedStartUtc, proposedStartUtc.AddHours(1)), null),
+            new ComputeRedemptionAttributionQuery(contractId, presetId,At.Slot(proposedStartUtc, proposedStartUtc.AddHours(1)), null),
             CancellationToken.None);
 
-        result.ContractId.Should().Be(contractId);
         result.Entries.Should().ContainSingle(e => e.MissedBlockId == deficit.FocusBlockId);
     }
 
@@ -198,14 +190,13 @@ public class ComputeRedemptionAttributionQueryHandlerTests
         var presetId = Guid.NewGuid();
         var contract = SameDayContract(contractId);
         var deficit = Deficit(presetId, Now, remaining: 40);
-        _contracts.GetAllInEffectAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<NenContract>)[contract]);
+        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>()).Returns(contract);
         _deficits.HandleAsync(new GetNenContractDeficitsQuery(contractId, ExcludeCoverageFromBlockId: deficit.FocusBlockId), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<FocusBlockDeficitDto>)[deficit]);
 
         var result = await CreateHandler().HandleAsync(
-            new ComputeRedemptionAttributionQuery(null, presetId,At.Slot(Now, Now.AddHours(1)), deficit.FocusBlockId), CancellationToken.None);
+            new ComputeRedemptionAttributionQuery(contractId, presetId,At.Slot(Now, Now.AddHours(1)), deficit.FocusBlockId), CancellationToken.None);
 
-        result.ContractId.Should().BeNull();
         result.Entries.Should().BeEmpty();
     }
 
@@ -222,12 +213,12 @@ public class ComputeRedemptionAttributionQueryHandlerTests
         var editingBlockId = Guid.NewGuid();
         var contract = SameDayContract(contractId);
         var deficit = Deficit(presetId, Now, remaining: 40);
-        _contracts.GetAllInEffectAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<NenContract>)[contract]);
+        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>()).Returns(contract);
         _deficits.HandleAsync(new GetNenContractDeficitsQuery(contractId, ExcludeCoverageFromBlockId: editingBlockId), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<FocusBlockDeficitDto>)[deficit]);
 
         var result = await CreateHandler().HandleAsync(
-            new ComputeRedemptionAttributionQuery(null, presetId,At.Slot(Now, Now.AddMinutes(8)), editingBlockId), CancellationToken.None);
+            new ComputeRedemptionAttributionQuery(contractId, presetId,At.Slot(Now, Now.AddMinutes(8)), editingBlockId), CancellationToken.None);
 
         result.Entries.Should().ContainSingle(e => e.MissedBlockId == deficit.FocusBlockId && e.MinutesCovered == 8);
     }
@@ -240,16 +231,15 @@ public class ComputeRedemptionAttributionQueryHandlerTests
         var contract = SameDayContract(contractId);
         var older = Deficit(presetId, Now.AddHours(-3), remaining: 30);
         var newer = Deficit(presetId, Now.AddHours(-1), remaining: 50);
-        _contracts.GetAllInEffectAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<NenContract>)[contract]);
+        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>()).Returns(contract);
         _deficits.HandleAsync(new GetNenContractDeficitsQuery(contractId), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<FocusBlockDeficitDto>)[newer, older]); // deliberately out of order
 
         // A 100-minute block: fully covers the 30-min older deficit, spills 50 into the
         // newer one, and the remaining 20 minutes of surplus attributes to nothing further.
         var result = await CreateHandler().HandleAsync(
-            new ComputeRedemptionAttributionQuery(null, presetId,At.Slot(Now, Now.AddMinutes(100)), null), CancellationToken.None);
+            new ComputeRedemptionAttributionQuery(contractId, presetId,At.Slot(Now, Now.AddMinutes(100)), null), CancellationToken.None);
 
-        result.ContractId.Should().Be(contractId);
         result.Entries.Should().HaveCount(2);
         result.Entries.Should().ContainSingle(e => e.MissedBlockId == older.FocusBlockId && e.MinutesCovered == 30);
         result.Entries.Should().ContainSingle(e => e.MissedBlockId == newer.FocusBlockId && e.MinutesCovered == 50);
@@ -262,12 +252,12 @@ public class ComputeRedemptionAttributionQueryHandlerTests
     {
         var contractId = Guid.NewGuid();
         var presetId = Guid.NewGuid();
-        _contracts.GetAllInEffectAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<NenContract>)[SameDayContract(contractId)]);
+        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>()).Returns(SameDayContract(contractId));
         _deficits.HandleAsync(new GetNenContractDeficitsQuery(contractId), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<FocusBlockDeficitDto>)[Deficit(presetId, Now.AddHours(-2), remaining: 45)]);
 
         var result = await CreateHandler().HandleAsync(
-            new ComputeRedemptionAttributionQuery(null, presetId, At.Slot(Now, Now.AddHours(2)), null), CancellationToken.None);
+            new ComputeRedemptionAttributionQuery(contractId, presetId, At.Slot(Now, Now.AddHours(2)), null), CancellationToken.None);
 
         result.Slot.Should().Be(At.Slot(Now, Now.AddMinutes(45)));
         result.WasCapped.Should().BeTrue();
@@ -278,12 +268,12 @@ public class ComputeRedemptionAttributionQueryHandlerTests
     {
         var contractId = Guid.NewGuid();
         var presetId = Guid.NewGuid();
-        _contracts.GetAllInEffectAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<NenContract>)[SameDayContract(contractId)]);
+        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>()).Returns(SameDayContract(contractId));
         _deficits.HandleAsync(new GetNenContractDeficitsQuery(contractId), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<FocusBlockDeficitDto>)[Deficit(presetId, Now.AddHours(-2), remaining: 90)]);
 
         var result = await CreateHandler().HandleAsync(
-            new ComputeRedemptionAttributionQuery(null, presetId, At.Slot(Now, Now.AddHours(1)), null), CancellationToken.None);
+            new ComputeRedemptionAttributionQuery(contractId, presetId, At.Slot(Now, Now.AddHours(1)), null), CancellationToken.None);
 
         result.Slot.Should().Be(At.Slot(Now, Now.AddHours(1)));
         result.WasCapped.Should().BeFalse();
@@ -292,41 +282,15 @@ public class ComputeRedemptionAttributionQueryHandlerTests
     [Fact]
     public async Task HandleAsync_NoEligibleDeficit_KeepsTheRequestedSlot()
     {
-        _contracts.GetAllInEffectAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<NenContract>)[]);
-
         var result = await CreateHandler().HandleAsync(
-            new ComputeRedemptionAttributionQuery(null, Guid.NewGuid(), At.Slot(Now, Now.AddHours(2)), null), CancellationToken.None);
+            new ComputeRedemptionAttributionQuery(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Now, Now.AddHours(2)), null), CancellationToken.None);
 
         result.Slot.Should().Be(At.Slot(Now, Now.AddHours(2)));
         result.WasCapped.Should().BeFalse();
     }
 
     [Fact]
-    public async Task HandleAsync_MultipleInEffectContracts_OnlyOneHasAnEligibleDeficit_ResolvesToIt()
-    {
-        var presetId = Guid.NewGuid();
-        var eligibleContractId = Guid.NewGuid();
-        var otherContractId = Guid.NewGuid();
-        var eligibleContract = SameDayContract(eligibleContractId);
-        var otherContract = SameDayContract(otherContractId);
-        var deficit = Deficit(presetId, Now, remaining: 25);
-
-        _contracts.GetAllInEffectAsync(Arg.Any<CancellationToken>())
-            .Returns((IReadOnlyList<NenContract>)[otherContract, eligibleContract]);
-        _deficits.HandleAsync(new GetNenContractDeficitsQuery(otherContractId), Arg.Any<CancellationToken>())
-            .Returns((IReadOnlyList<FocusBlockDeficitDto>)[]);
-        _deficits.HandleAsync(new GetNenContractDeficitsQuery(eligibleContractId), Arg.Any<CancellationToken>())
-            .Returns((IReadOnlyList<FocusBlockDeficitDto>)[deficit]);
-
-        var result = await CreateHandler().HandleAsync(
-            new ComputeRedemptionAttributionQuery(null, presetId,At.Slot(Now, Now.AddHours(1)), null), CancellationToken.None);
-
-        result.ContractId.Should().Be(eligibleContractId);
-        result.Entries.Should().ContainSingle(e => e.MissedBlockId == deficit.FocusBlockId);
-    }
-
-    [Fact]
-    public async Task HandleAsync_ExplicitContractId_NoEligibleDeficit_EchoesContractIdBack()
+    public async Task HandleAsync_NoDeficitInTheContract_CoversNothing()
     {
         // Editing a block that's already tied to a contract but doesn't happen to cover
         // anything right now must not silently lose its contract association.
@@ -340,12 +304,11 @@ public class ComputeRedemptionAttributionQueryHandlerTests
         var result = await CreateHandler().HandleAsync(
             new ComputeRedemptionAttributionQuery(contractId, presetId,At.Slot(Now, Now.AddHours(1)), null), CancellationToken.None);
 
-        result.ContractId.Should().Be(contractId);
         result.Entries.Should().BeEmpty();
     }
 
     [Fact]
-    public async Task HandleAsync_ExplicitContractId_ScopesSearchToJustThatContract()
+    public async Task HandleAsync_AsksOnlyTheContractItIsGiven()
     {
         // Even though another in-effect contract would have an eligible match, an explicit
         // ContractId must never search outside of it.
@@ -363,7 +326,6 @@ public class ComputeRedemptionAttributionQueryHandlerTests
         var result = await CreateHandler().HandleAsync(
             new ComputeRedemptionAttributionQuery(scopedContractId, presetId,At.Slot(Now, Now.AddHours(1)), null), CancellationToken.None);
 
-        result.ContractId.Should().Be(scopedContractId);
         result.Entries.Should().BeEmpty();
         await _contracts.DidNotReceive().GetAllInEffectAsync(Arg.Any<CancellationToken>());
     }
@@ -391,7 +353,6 @@ public class ComputeRedemptionAttributionQueryHandlerTests
             new ComputeRedemptionAttributionQuery(contractId, presetId,At.Slot(proposedStart, proposedStart.AddMinutes(25)), null, existingEntries),
             CancellationToken.None);
 
-        result.ContractId.Should().Be(contractId);
         result.Entries.Should().ContainSingle(e => e.MissedBlockId == missedBlockId && e.MinutesCovered == 25);
     }
 
@@ -469,14 +430,13 @@ public class ComputeRedemptionAttributionQueryHandlerTests
         var presetId = Guid.NewGuid();
         var contract = AnyDayContract(contractId);
         var deficit = Deficit(presetId, Now.AddDays(-3), remaining: 40);
-        _contracts.GetAllInEffectAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<NenContract>)[contract]);
+        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>()).Returns(contract);
         _deficits.HandleAsync(new GetNenContractDeficitsQuery(contractId), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<FocusBlockDeficitDto>)[deficit]);
 
         var result = await CreateHandler().HandleAsync(
-            new ComputeRedemptionAttributionQuery(null, presetId,At.Slot(Now, Now.AddHours(1)), null), CancellationToken.None);
+            new ComputeRedemptionAttributionQuery(contractId, presetId,At.Slot(Now, Now.AddHours(1)), null), CancellationToken.None);
 
-        result.ContractId.Should().Be(contractId);
         result.Entries.Should().ContainSingle(e => e.MissedBlockId == deficit.FocusBlockId);
     }
 }

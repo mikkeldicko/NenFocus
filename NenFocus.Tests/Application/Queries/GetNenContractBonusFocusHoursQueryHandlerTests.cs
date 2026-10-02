@@ -56,13 +56,13 @@ public class GetNenContractBonusFocusHoursQueryHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_UnlinkedBlockWithinContractRange_CreditsAsBonus()
+    public async Task HandleAsync_BonusBlock_IsCreditedAsBonus()
     {
         _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(ActiveContract());
         var day = new DateTime(2026, 1, 2, 9, 0, 0, DateTimeKind.Utc);
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(day, day.AddHours(1))); // no ContractId — Bonus
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(day, day.AddHours(1)), membership: TestContracts.Bonus(ContractId));
         block.MarkRitualCompleted(At.Utc(day));
-        _blocks.GetForRangeAsync(Arg.Any<TimeSlot>(), Arg.Any<CancellationToken>())
+        _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[block]);
         _classifier.CreditedWindow(block.Scheduled, Arg.Any<Moment?>(), Arg.Any<Moment?>(), 0)
             .Returns((TimeSlot?)block.Scheduled);
@@ -73,15 +73,15 @@ public class GetNenContractBonusFocusHoursQueryHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_BlockAlreadyLinkedToAContract_ExcludedFromBonus()
+    public async Task HandleAsync_CommittedBlock_ExcludedFromBonus()
     {
-        // Committed/redemption blocks (ContractId set) are counted by
+        // Committed/redemption blocks count toward the floor and are counted by
         // GetNenContractCompletedFocusHoursQuery instead — never double-counted here.
         _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(ActiveContract());
         var day = new DateTime(2026, 1, 2, 9, 0, 0, DateTimeKind.Utc);
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(day, day.AddHours(1)), contractId: ContractId);
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(day, day.AddHours(1)), membership: TestContracts.Committed(ContractId));
         block.MarkRitualCompleted(At.Utc(day));
-        _blocks.GetForRangeAsync(Arg.Any<TimeSlot>(), Arg.Any<CancellationToken>())
+        _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[block]);
 
         var result = await CreateHandler().HandleAsync(new GetNenContractBonusFocusHoursQuery(ContractId), CancellationToken.None);
@@ -91,63 +91,12 @@ public class GetNenContractBonusFocusHoursQueryHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_UnlinkedBlockOutsideContractDateRange_Excluded()
-    {
-        // Unlinked and within the *repository's* returned range, but its Start falls
-        // outside this specific contract's own [StartDate, EndDate] — belongs to no
-        // contract's Bonus total, or possibly a different contract's.
-        _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(ActiveContract());
-        var outsideDay = EndDate.AddDays(5).ToDateTime(new TimeOnly(9, 0), DateTimeKind.Utc);
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(outsideDay, outsideDay.AddHours(1)));
-        _blocks.GetForRangeAsync(Arg.Any<TimeSlot>(), Arg.Any<CancellationToken>())
-            .Returns((IReadOnlyList<PlannedBlock>)[block]);
-
-        var result = await CreateHandler().HandleAsync(new GetNenContractBonusFocusHoursQuery(ContractId), CancellationToken.None);
-
-        result.Should().BeEmpty();
-    }
-
-    [Fact]
-    public async Task HandleAsync_UnlinkedBlockAfterWorkHoursCloseOnLastDay_Excluded()
-    {
-        // Same calendar day as EndDate, but after Work Hours close — under the old
-        // date-only truncation this counted as Bonus; EndsAt correctly excludes it.
-        var policy = new WorkHours(new TimeOnly(9, 0), new TimeOnly(17, 0));
-        _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(ActiveContract(policy));
-        var afterClose = EndDate.ToDateTime(new TimeOnly(18, 0), DateTimeKind.Utc);
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(afterClose, afterClose.AddHours(1)));
-        _blocks.GetForRangeAsync(Arg.Any<TimeSlot>(), Arg.Any<CancellationToken>())
-            .Returns((IReadOnlyList<PlannedBlock>)[block]);
-
-        var result = await CreateHandler().HandleAsync(new GetNenContractBonusFocusHoursQuery(ContractId), CancellationToken.None);
-
-        result.Should().BeEmpty();
-    }
-
-    [Fact]
-    public async Task HandleAsync_UnlinkedBlockBeforeWorkHoursOpenOnFirstDay_Excluded()
-    {
-        // Same calendar day as StartDate, but before Work Hours open — StartsAt correctly
-        // excludes it, unlike the old date-only truncation.
-        var policy = new WorkHours(new TimeOnly(9, 0), new TimeOnly(17, 0));
-        _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(ActiveContract(policy));
-        var beforeOpen = StartDate.ToDateTime(new TimeOnly(7, 0), DateTimeKind.Utc);
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(beforeOpen, beforeOpen.AddHours(1)));
-        _blocks.GetForRangeAsync(Arg.Any<TimeSlot>(), Arg.Any<CancellationToken>())
-            .Returns((IReadOnlyList<PlannedBlock>)[block]);
-
-        var result = await CreateHandler().HandleAsync(new GetNenContractBonusFocusHoursQuery(ContractId), CancellationToken.None);
-
-        result.Should().BeEmpty();
-    }
-
-    [Fact]
     public async Task HandleAsync_BackgroundBlock_Excluded()
     {
         _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(ActiveContract());
         var day = new DateTime(2026, 1, 2, 9, 0, 0, DateTimeKind.Utc);
-        var block = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(day, day.AddHours(1)));
-        _blocks.GetForRangeAsync(Arg.Any<TimeSlot>(), Arg.Any<CancellationToken>())
+        var block = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(day, day.AddHours(1)), membership: TestContracts.Bonus(ContractId));
+        _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[block]);
 
         var result = await CreateHandler().HandleAsync(new GetNenContractBonusFocusHoursQuery(ContractId), CancellationToken.None);

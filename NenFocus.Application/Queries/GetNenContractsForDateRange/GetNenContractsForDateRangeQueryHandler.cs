@@ -238,8 +238,11 @@ public sealed class GetNenContractsForDateRangeQueryHandler
     private async Task<IReadOnlyDictionary<DateOnly, double>> ComputeRedemptionDedupAdjustmentByDayAsync(
         NenContract contract, CancellationToken cancellationToken)
     {
+        // Redemption blocks and the missed blocks they cover — all of them count toward the
+        // floor, so a Bonus block is never part of this (Gap 97).
         var focusBlocks = (await _blocks.GetForContractAsync(contract.Id, cancellationToken))
             .OfType<FocusBlock>()
+            .Where(b => b.CountsTowardFloor)
             .ToList();
         var blocksById = focusBlocks.ToDictionary(b => b.Id);
         var now = _clock.Now;

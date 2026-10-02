@@ -42,7 +42,8 @@ public sealed class GetNenContractCompletedFocusHoursQueryHandler
 
         var now = _clock.Now;
         var contractBlocks = await _blocks.GetForContractAsync(query.ContractId, ct);
-        var focusBlocks = contractBlocks.OfType<FocusBlock>().ToList();
+        // Only the blocks that count toward the floor — a Bonus block's hours are Bonus hours.
+        var focusBlocks = contractBlocks.OfType<FocusBlock>().Where(b => b.CountsTowardFloor).ToList();
 
         // Only Focus presets, not Background — a Spontaneous session's BlockPresetId can
         // only ever be a Focus preset (Ren only offers Focus-type presets), so matching
@@ -67,19 +68,15 @@ public sealed class GetNenContractCompletedFocusHoursQueryHandler
                 creditedWindows.Add(w);
         }
 
-        // The contract's dates are local, but GetHistoryAsync reads its dates as UTC days — so
-        // fetch a day either side and decide on the session's own local date here, or a session
-        // just after local midnight on the first day (still the previous UTC day) is missed and
-        // one just after the last day (still its UTC day) is counted.
+        // Spontaneous sessions that started on one of the contract's local days — whole dates,
+        // until Gap 67 stops counting them. The time zone says which real time those days are.
         var spontaneousSessions = await _sessions.GetHistoryAsync(
-            contract.StartDate.AddDays(-1), contract.EndDate.AddDays(1), presetId: null, ct);
+            _clock.TimeZone.SlotCovering(contract.StartDate, contract.EndDate), presetId: null, ct);
         foreach (var session in spontaneousSessions)
         {
             if (session.Origin != SessionOrigin.Spontaneous) continue;
             if (!focusPresetIds.Contains(session.BlockPresetId)) continue;
             if (session.StartedAt is not { } startedAt) continue;
-            var localDate = _clock.TimeZone.DateOf(startedAt);
-            if (localDate < contract.StartDate || localDate > contract.EndDate) continue;
 
             var minutes = session.GetElapsedTime(now)?.TotalMinutes ?? 0;
             if (minutes <= 0) continue;

@@ -23,7 +23,7 @@ public sealed record NenContractRecapDto
     /// <summary>Live sum of every contract-linked (committed or redemption) block's credited hours.</summary>
     public double TotalCompletedHours { get; init; }
 
-    /// <summary>Completed hours from Bonus blocks (ContractId null) within the contract's window.</summary>
+    /// <summary>Completed hours from the contract's Bonus blocks.</summary>
     public double TotalBonusHours { get; init; }
 
     /// <summary>
@@ -51,7 +51,7 @@ public sealed record NenContractRecapDto
     public int MissedBlocks { get; init; }
     public int CancelledBlocks { get; init; }
 
-    /// <summary>Bonus blocks (ContractId null) whose Start falls within the contract's window.</summary>
+    /// <summary>The contract's Bonus Focus blocks — counted apart from its own blocks; a removed one is not counted.</summary>
     public int BonusBlockCount { get; init; }
 
     /// <summary>One entry per day in [StartDate, EndDate] — the day-strip for the recap

@@ -22,7 +22,7 @@ public class SplitPlannedBlockCommandHandlerTests
     {
         _computeRedemptionAttribution
             .HandleAsync(Arg.Any<ComputeRedemptionAttributionQuery>(), Arg.Any<CancellationToken>())
-            .Returns(ci => new RedemptionAttributionResult(((ComputeRedemptionAttributionQuery)ci[0]).ContractId, [], ((ComputeRedemptionAttributionQuery)ci[0]).Block));
+            .Returns(ci => new RedemptionAttributionResult([], ((ComputeRedemptionAttributionQuery)ci[0]).Block));
     }
 
     private SplitPlannedBlockCommandHandler CreateHandler() => new(_blocks, _computeRedemptionAttribution);
@@ -51,7 +51,7 @@ public class SplitPlannedBlockCommandHandlerTests
         var presetId = Guid.NewGuid();
         var contractId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(OriginalStart, OriginalEnd), "My Block", contractId));
+            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(OriginalStart, OriginalEnd), "My Block", TestContracts.Committed(contractId)));
 
         var result = await CreateHandler().HandleAsync(ValidCommand(blockId));
 
@@ -70,7 +70,7 @@ public class SplitPlannedBlockCommandHandlerTests
                 b is FocusBlock
                 && b.Id == result.FirstBlockId
                 && b.BlockPresetId == presetId
-                && b.ContractId == contractId
+                && b.Membership == TestContracts.Committed(contractId)
                 && b.Scheduled == At.Slot(OriginalStart, OriginalStart.AddHours(2))
                 && b.Title == "My Block"),
             Arg.Any<CancellationToken>());
@@ -80,7 +80,7 @@ public class SplitPlannedBlockCommandHandlerTests
                 b is FocusBlock
                 && b.Id == result.SecondBlockId
                 && b.BlockPresetId == presetId
-                && b.ContractId == contractId
+                && b.Membership == TestContracts.Committed(contractId)
                 && b.Scheduled == At.Slot(OriginalStart.AddHours(2), OriginalEnd)),
             Arg.Any<CancellationToken>());
     }
@@ -92,7 +92,7 @@ public class SplitPlannedBlockCommandHandlerTests
         var presetId = Guid.NewGuid();
         var contractId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(OriginalStart, OriginalEnd), "My Block", contractId));
+            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(OriginalStart, OriginalEnd), "My Block", TestContracts.Redemption(contractId)));
 
         await CreateHandler().HandleAsync(ValidCommand(blockId));
 
@@ -115,10 +115,10 @@ public class SplitPlannedBlockCommandHandlerTests
         var contractId = Guid.NewGuid();
         var missedBlockId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(OriginalStart, OriginalEnd), "My Block", contractId));
+            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(OriginalStart, OriginalEnd), "My Block", TestContracts.Redemption(contractId)));
         _computeRedemptionAttribution
             .HandleAsync(Arg.Any<ComputeRedemptionAttributionQuery>(), Arg.Any<CancellationToken>())
-            .Returns(new RedemptionAttributionResult(contractId, [new RedemptionEntryDto(missedBlockId, 15)], At.Slot(OriginalStart, OriginalEnd)));
+            .Returns(new RedemptionAttributionResult([new RedemptionEntryDto(missedBlockId, 15)], At.Slot(OriginalStart, OriginalEnd)));
 
         var result = await CreateHandler().HandleAsync(ValidCommand(blockId));
 
@@ -143,10 +143,10 @@ public class SplitPlannedBlockCommandHandlerTests
         var contractId = Guid.NewGuid();
         var missedBlockId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(OriginalStart, OriginalEnd), "My Block", contractId));
+            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(OriginalStart, OriginalEnd), "My Block", TestContracts.Redemption(contractId)));
         _computeRedemptionAttribution
             .HandleAsync(Arg.Any<ComputeRedemptionAttributionQuery>(), Arg.Any<CancellationToken>())
-            .Returns(new RedemptionAttributionResult(contractId, [new RedemptionEntryDto(missedBlockId, 150)], At.Slot(OriginalStart, OriginalEnd)));
+            .Returns(new RedemptionAttributionResult([new RedemptionEntryDto(missedBlockId, 150)], At.Slot(OriginalStart, OriginalEnd)));
 
         var result = await CreateHandler().HandleAsync(ValidCommand(blockId));
 
@@ -176,10 +176,10 @@ public class SplitPlannedBlockCommandHandlerTests
         var contractId = Guid.NewGuid();
         var missedBlockId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(OriginalStart, OriginalEnd), "My Block", contractId));
+            .Returns(FocusBlock.Create(blockId, presetId,At.Slot(OriginalStart, OriginalEnd), "My Block", TestContracts.Redemption(contractId)));
         _computeRedemptionAttribution
             .HandleAsync(Arg.Any<ComputeRedemptionAttributionQuery>(), Arg.Any<CancellationToken>())
-            .Returns(new RedemptionAttributionResult(contractId, [new RedemptionEntryDto(missedBlockId, 90)], At.Slot(OriginalStart, OriginalEnd)));
+            .Returns(new RedemptionAttributionResult([new RedemptionEntryDto(missedBlockId, 90)], At.Slot(OriginalStart, OriginalEnd)));
 
         var result = await CreateHandler().HandleAsync(ValidCommand(blockId));
 

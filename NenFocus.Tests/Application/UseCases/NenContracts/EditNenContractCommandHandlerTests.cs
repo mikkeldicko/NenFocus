@@ -112,8 +112,8 @@ public class EditNenContractCommandHandlerTests
         var contract = ScheduledContract(Guid.NewGuid());
         _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
 
-        var oldBlock1 = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(StartDate.ToDateTime(new TimeOnly(9, 0)), StartDate.ToDateTime(new TimeOnly(10, 0))), contractId: contract.Id);
-        var oldBlock2 = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(StartDate.ToDateTime(new TimeOnly(11, 0)), StartDate.ToDateTime(new TimeOnly(12, 0))), contractId: contract.Id);
+        var oldBlock1 = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(StartDate.ToDateTime(new TimeOnly(9, 0)), StartDate.ToDateTime(new TimeOnly(10, 0))), membership: TestContracts.Committed(contract.Id));
+        var oldBlock2 = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(StartDate.ToDateTime(new TimeOnly(11, 0)), StartDate.ToDateTime(new TimeOnly(12, 0))), membership: TestContracts.Committed(contract.Id));
         _blocks.GetForContractAsync(contract.Id, Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[oldBlock1, oldBlock2]);
 
@@ -141,7 +141,7 @@ public class EditNenContractCommandHandlerTests
 
         result.Success.Should().BeTrue();
         savedBlock.Should().NotBeNull();
-        savedBlock!.ContractId.Should().Be(contract.Id);
+        savedBlock!.Membership.Should().Be(TestContracts.Committed(contract.Id));
     }
 
     [Fact]
@@ -156,7 +156,7 @@ public class EditNenContractCommandHandlerTests
 
         // The old block, still in the database while the edit runs, is left out of the calendar.
         _blocks.GetForRangeAsync(Arg.Any<TimeSlot>(), Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)
-            [FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(StartDate.ToDateTime(new TimeOnly(9, 0)), StartDate.ToDateTime(new TimeOnly(10, 0))), contractId: contract.Id)]);
+            [FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(StartDate.ToDateTime(new TimeOnly(9, 0)), StartDate.ToDateTime(new TimeOnly(10, 0))), membership: TestContracts.Committed(contract.Id))]);
 
         var result = await CreateHandler().HandleAsync(
             BaseCommand(contract.Id, blocks: [sameSlotSpec]), CancellationToken.None);
@@ -188,7 +188,7 @@ public class EditNenContractCommandHandlerTests
         var contract = ScheduledContract(Guid.NewGuid());
         _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
         _blocks.GetForRangeAsync(Arg.Any<TimeSlot>(), Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)
-            [FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(StartDate.ToDateTime(new TimeOnly(9, 30)), StartDate.ToDateTime(new TimeOnly(10, 30))), contractId: Guid.NewGuid())]);
+            [FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(StartDate.ToDateTime(new TimeOnly(9, 30)), StartDate.ToDateTime(new TimeOnly(10, 30))), membership: TestContracts.Committed(Guid.NewGuid()))]);
 
         var block = new NenContractBlockSpec(Guid.NewGuid(), At.Slot(StartDate.ToDateTime(new TimeOnly(9, 0)), StartDate.ToDateTime(new TimeOnly(10, 0))), IsFocus: true);
 
@@ -206,7 +206,7 @@ public class EditNenContractCommandHandlerTests
         var contract = ScheduledContract(Guid.NewGuid());
         _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
         _blocks.GetForContractAsync(contract.Id, Arg.Any<CancellationToken>())
-            .Returns((IReadOnlyList<PlannedBlock>)[FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(StartDate.ToDateTime(new TimeOnly(9, 0)), StartDate.ToDateTime(new TimeOnly(10, 0))), contractId: contract.Id)]);
+            .Returns((IReadOnlyList<PlannedBlock>)[FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(StartDate.ToDateTime(new TimeOnly(9, 0)), StartDate.ToDateTime(new TimeOnly(10, 0))), membership: TestContracts.Committed(contract.Id))]);
         _calculator.Calculate(Arg.Any<IEnumerable<TimeSlot>>(), Arg.Any<UserTimeZone>())
             .Returns(new Dictionary<DateOnly, double> { [StartDate] = 1 });
 

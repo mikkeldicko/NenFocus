@@ -29,10 +29,10 @@ public sealed class SplitPlannedBlockValidator : AbstractValidator<SplitPlannedB
         {
             var block = await blocks.GetByIdAsync(originalId, ct);
             if (block is not FocusBlock) return; // reported by the "only a Focus block" rule
-            var contract = block.ContractId is { } contractId ? await contracts.GetByIdAsync(contractId, ct) : null;
+            var contractsInEffect = await contracts.GetAllInEffectAsync(ct);
             var calendar = (await blocks.GetForRangeAsync(slot, ct)).Where(b => b.Id != originalId);
             var running = await sessions.GetActiveSessionsAsync(ct);
-            var verdict = placement.Check(slot, BlockPresetType.Focus, contract, calendar, running, clock.Now, clock.TimeZone);
+            var verdict = placement.Check(slot, BlockPresetType.Focus, block.Membership, contractsInEffect, calendar, running, clock.Now, clock.TimeZone);
             if (verdict.Outcome != PlacementOutcome.Allowed)
                 context.AddFailure(property, $"{label}: {BlockPlacementVerdictDto.From(verdict).Message}");
         }
@@ -96,7 +96,7 @@ public sealed class SplitPlannedBlockValidator : AbstractValidator<SplitPlannedB
             .MustAsync(async (command, ct) =>
             {
                 var block = await blocks.GetByIdAsync(command.OriginalBlockId, ct);
-                return block?.ContractId is not null;
+                return block?.Membership?.ContractId is not null;
             })
             .WithMessage("Only a block belonging to a sealed contract can be split.");
 
@@ -104,7 +104,7 @@ public sealed class SplitPlannedBlockValidator : AbstractValidator<SplitPlannedB
             .MustAsync(async (command, ct) =>
             {
                 var block = await blocks.GetByIdAsync(command.OriginalBlockId, ct);
-                if (block?.ContractId is not { } contractId) return true; // reported above
+                if (block?.Membership?.ContractId is not { } contractId) return true; // reported above
                 var contract = await contracts.GetByIdAsync(contractId, ct);
                 return contract is not null && contract.StrictnessRule != StrictnessRule.Locked;
             })
@@ -187,7 +187,7 @@ public sealed class SplitPlannedBlockValidator : AbstractValidator<SplitPlannedB
             .CustomAsync(async (command, context, ct) =>
             {
                 var block = await blocks.GetByIdAsync(command.OriginalBlockId, ct);
-                if (block?.ContractId is not { } contractId) return; // reported above
+                if (block?.Membership?.ContractId is not { } contractId) return; // reported above
 
                 var contract = await contracts.GetByIdAsync(contractId, ct);
                 if (contract is null || contract.StrictnessRule == StrictnessRule.Locked) return; // reported above

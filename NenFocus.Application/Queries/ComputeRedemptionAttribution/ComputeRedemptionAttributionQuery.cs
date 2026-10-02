@@ -10,10 +10,10 @@ namespace NenFocus.Application.Queries.ComputeRedemptionAttribution;
 /// truth both CreatePlannedBlockCommandHandler and UpdatePlannedBlockCommandHandler use
 /// to attach RedemptionEntries automatically, with no client-driven selection involved.
 ///
-/// ContractId null means "search every currently in-effect contract for an eligible
-/// match" (the ordinary new-block case); a value scopes the search to that one contract
-/// only (an edit recomputing against a block's own already-known contract, or a caller
-/// that already knows which contract applies). ExcludeBlockId serves two purposes on an
+/// ContractId is the one contract asked about deficits (Gap 97): the contract the block sits
+/// in for a new block (the caller asks IBlockPlacementChecker.GoverningContract first), or a
+/// redemption block's own contract on an edit. A block inside no contract redeems nothing, so
+/// this query is never asked for it. ExcludeBlockId serves two purposes on an
 /// edit: it keeps the block being edited from ever matching itself as a missed candidate,
 /// and — passed through as GetNenContractDeficitsQuery.ExcludeCoverageFromBlockId — it
 /// excludes the block's own stale, pre-edit RedemptionEntries from the "already covered"
@@ -29,7 +29,7 @@ namespace NenFocus.Application.Queries.ComputeRedemptionAttribution;
 /// see the handler.
 /// </summary>
 public sealed record ComputeRedemptionAttributionQuery(
-    Guid? ContractId,
+    Guid ContractId,
     Guid PresetId,
     TimeSlot Block,
     Guid? ExcludeBlockId,

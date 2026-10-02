@@ -616,14 +616,14 @@ public class GetNenContractsForDateRangeQueryHandlerTests
         var contract = Contract(floorRule: new DailyFloorRule.None());
         SetInEffect(contract);
 
-        var missed = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(missedDay.ToDateTime(new TimeOnly(9, 0)), missedDay.ToDateTime(new TimeOnly(10, 0))), contractId: contract.Id);
+        var missed = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(missedDay.ToDateTime(new TimeOnly(9, 0)), missedDay.ToDateTime(new TimeOnly(10, 0))), membership: TestContracts.Committed(contract.Id));
         // First attempt: claimed the full 60-minute deficit, ended early after 20 minutes.
         var attempt1 = FocusBlock.Create(Guid.NewGuid(), missed.BlockPresetId,At.Slot(redemptionDay.ToDateTime(new TimeOnly(9, 0)), redemptionDay.ToDateTime(new TimeOnly(10, 0))),
-            contractId: contract.Id, redemptionEntries: [new RedemptionEntry(missed.Id, 60)]);
+            membership: TestContracts.Redemption(contract.Id), redemptionEntries: [new RedemptionEntry(missed.Id, 60)]);
         // Second attempt, same day: claims exactly what's left after the first attempt's
         // real 20-minute credit (40 minutes), and completes it fully.
         var attempt2 = FocusBlock.Create(Guid.NewGuid(), missed.BlockPresetId,At.Slot(redemptionDay.ToDateTime(new TimeOnly(11, 0)), redemptionDay.ToDateTime(new TimeOnly(11, 40))),
-            contractId: contract.Id, redemptionEntries: [new RedemptionEntry(missed.Id, 40)]);
+            membership: TestContracts.Redemption(contract.Id), redemptionEntries: [new RedemptionEntry(missed.Id, 40)]);
 
         _blocks.GetForContractAsync(contract.Id, Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[missed, attempt1, attempt2]);
@@ -660,11 +660,11 @@ public class GetNenContractsForDateRangeQueryHandlerTests
         var contract = Contract(floorRule: new DailyFloorRule.None());
         SetInEffect(contract);
 
-        var missed = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(missedDay.ToDateTime(new TimeOnly(9, 0)), missedDay.ToDateTime(new TimeOnly(10, 0))), contractId: contract.Id);
+        var missed = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(missedDay.ToDateTime(new TimeOnly(9, 0)), missedDay.ToDateTime(new TimeOnly(10, 0))), membership: TestContracts.Committed(contract.Id));
         var attempt1 = FocusBlock.Create(Guid.NewGuid(), missed.BlockPresetId,At.Slot(firstAttemptDay.ToDateTime(new TimeOnly(9, 0)), firstAttemptDay.ToDateTime(new TimeOnly(10, 0))),
-            contractId: contract.Id, redemptionEntries: [new RedemptionEntry(missed.Id, 60)]);
+            membership: TestContracts.Redemption(contract.Id), redemptionEntries: [new RedemptionEntry(missed.Id, 60)]);
         var attempt2 = FocusBlock.Create(Guid.NewGuid(), missed.BlockPresetId,At.Slot(secondAttemptDay.ToDateTime(new TimeOnly(9, 0)), secondAttemptDay.ToDateTime(new TimeOnly(9, 30))),
-            contractId: contract.Id, redemptionEntries: [new RedemptionEntry(missed.Id, 30)]);
+            membership: TestContracts.Redemption(contract.Id), redemptionEntries: [new RedemptionEntry(missed.Id, 30)]);
 
         _blocks.GetForContractAsync(contract.Id, Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[missed, attempt1, attempt2]);

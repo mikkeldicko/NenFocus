@@ -50,22 +50,15 @@ public sealed class GetNenContractCompletionReadinessQueryHandler
         var remainingHours = Math.Max(0, contract.CommittedFocusHours - totalCompleted);
 
         var now = _clock.Now;
-        var rangeStart = contract.StartDate.AddDays(-1).ToDateTime(TimeOnly.MinValue);
-        var rangeEnd = contract.EndDate.AddDays(1).ToDateTime(TimeOnly.MinValue);
-        var blocksInRange = await _blocks.GetForRangeAsync(
-            new TimeSlot(_clock.TimeZone.ToMoment(rangeStart), _clock.TimeZone.ToMoment(rangeEnd)), ct);
-
-        // Covers (the exact start/end moments), not a date-only truncation, for the unlinked-Bonus half — a
-        // contract's true boundary isn't midnight (see NenContract.Covers).
+        // Every member, Bonus blocks included (Gap 97): the contract can't complete early while
+        // any block of its own is unfinished.
         // IsResolved (not raw HasEnded) so a FocusBlock whose session ended early doesn't
         // keep blocking readiness until its original scheduled End arrives — see
         // PlannedBlockResolutionExtensions.
-        var pendingBlockCount = blocksInRange.Count(b =>
+        var members = await _blocks.GetForContractAsync(contract.Id, ct);
+        var pendingBlockCount = members.Count(b =>
             !b.CancelledAt.HasValue &&
-            !b.IsResolved(_outcomeClassifier, now) &&
-            (b.ContractId == contract.Id ||
-                (b.ContractId is null &&
-                 contract.Covers(_clock.TimeZone.ToCalendarTimes(b.Scheduled).Start))));
+            !b.IsResolved(_outcomeClassifier, now));
 
         return new NenContractCompletionReadinessDto
         {

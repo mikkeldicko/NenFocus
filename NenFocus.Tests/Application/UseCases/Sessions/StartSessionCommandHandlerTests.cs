@@ -379,8 +379,8 @@ public class StartSessionCommandHandlerTests
     {
         var contract = SealContract(keepBlocking);
         _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now, Now.AddHours(1)));
-        block.AssignContract(contract.Id);
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now, Now.AddHours(1)),
+            membership: TestContracts.Committed(contract.Id));
 
         var result = await CreateHandler().HandleAsync(PlannedCommandFor(block), CancellationToken.None);
 
@@ -391,7 +391,22 @@ public class StartSessionCommandHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_BonusBlockWithoutContract_DoesNotKeepBlockingAndNeverLooksUpAContract()
+    public async Task HandleAsync_BonusBlockOfAContract_FollowsTheContractsRuleToo()
+    {
+        // Gap 97: the rule applies to every member's session, not only committed blocks.
+        var contract = SealContract(keepBlockingDuringBreaks: true);
+        _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Now, Now.AddHours(1)),
+            membership: TestContracts.Bonus(contract.Id));
+
+        await CreateHandler().HandleAsync(PlannedCommandFor(block), CancellationToken.None);
+
+        await _sessions.Received(1).SaveAsync(
+            Arg.Is<Session>(s => s.KeepBlockingDuringBreaks), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task HandleAsync_PlainBlock_DoesNotKeepBlockingAndNeverLooksUpAContract()
     {
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now, Now.AddHours(1)));
 

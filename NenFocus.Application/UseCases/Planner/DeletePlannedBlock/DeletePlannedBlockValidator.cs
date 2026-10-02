@@ -22,7 +22,7 @@ public sealed class DeletePlannedBlockValidator : AbstractValidator<DeletePlanne
             {
                 if (command.BlockId == Guid.Empty) return true;
                 var block = await blocks.GetByIdAsync(command.BlockId, ct);
-                return block?.ContractId is null;
+                return block?.Membership?.ContractId is null;
             })
             .WithMessage("Cannot delete a block that belongs to a Nen Contract.");
 

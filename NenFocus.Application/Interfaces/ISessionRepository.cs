@@ -1,5 +1,6 @@
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
+using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Application.Interfaces;
 
@@ -9,9 +10,12 @@ public interface ISessionRepository
 
     Task<Session?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Sessions that started inside <paramref name="startedWithin"/>, newest first. For "these
+    /// days", the caller asks <c>UserTimeZone.SlotCovering</c> — the repository only knows moments.
+    /// </summary>
     Task<IReadOnlyList<Session>> GetHistoryAsync(
-        DateOnly from,
-        DateOnly to,
+        TimeSlot startedWithin,
         Guid? presetId = null,
         CancellationToken cancellationToken = default);
 

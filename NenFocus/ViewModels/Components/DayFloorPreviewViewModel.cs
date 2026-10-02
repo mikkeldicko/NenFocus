@@ -32,7 +32,7 @@ namespace NenFocus.ViewModels.Components;
 /// already says.
 /// </param>
 /// <param name="BonusHours">
-/// Completed hours from Bonus blocks (ContractId null) on this day — genuinely separate
+/// Completed hours from the contract's Bonus blocks on this day — genuinely separate
 /// from CurrentHours/RequiredFloorHours above, never folded into the floor badge itself.
 /// Zero while drafting (a brand-new contract has no blocks yet to be Bonus to).
 /// </param>

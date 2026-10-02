@@ -6,20 +6,32 @@ namespace NenFocus.Domain.Services;
 
 public sealed class BlockPlacementChecker : IBlockPlacementChecker
 {
-    public PlacementVerdict Check(TimeSlot slot, BlockPresetType type, NenContract? contract,
+    public PlacementVerdict Check(TimeSlot slot, BlockPresetType type, ContractMembership? membership,
+        IEnumerable<NenContract> contractsInEffect,
         IEnumerable<PlannedBlock> blocks, IEnumerable<Session> sessions, Moment asOf, UserTimeZone timeZone)
     {
         if (slot.HasStarted(asOf))
             return PlacementVerdict.Refused(PlacementOutcome.InThePast);
 
-        if (contract is not null && !contract.AllowsBlockPlacement(slot, timeZone))
+        var contracts = contractsInEffect.Where(c => c.IsInEffect).ToList();
+
+        // A Committed or Redemption block stays with its own contract wherever it is moved; a
+        // contract no longer in effect governs nothing.
+        var governing = membership is { IsBonus: false }
+            ? contracts.FirstOrDefault(c => c.Id == membership.ContractId)
+            : GoverningContract(slot, contracts, timeZone);
+
+        if (governing is not null && !governing.AllowsBlockPlacement(slot, timeZone))
             return PlacementVerdict.Refused(PlacementOutcome.OutsideContractHours);
 
-        if (type == BlockPresetType.Focus)
-            return CheckFree(slot, blocks, sessions, asOf);
+        if (type == BlockPresetType.Focus && CheckFree(slot, blocks, sessions, asOf) is { Outcome: not PlacementOutcome.Allowed } taken)
+            return taken;
 
-        return PlacementVerdict.Allowed;
+        return PlacementVerdict.AllowedUnder(governing?.Id);
     }
+
+    public NenContract? GoverningContract(TimeSlot slot, IEnumerable<NenContract> contractsInEffect, UserTimeZone timeZone)
+        => contractsInEffect.FirstOrDefault(c => c.Governs(slot, timeZone));
 
     public PlacementVerdict CheckFree(TimeSlot slot, IEnumerable<PlannedBlock> blocks, IEnumerable<Session> sessions, Moment asOf)
     {

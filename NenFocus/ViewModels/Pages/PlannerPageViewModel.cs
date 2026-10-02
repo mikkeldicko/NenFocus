@@ -1575,12 +1575,10 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
                     PresetId = SelectedPreset.Id,
                     BlockPresetType = blockPresetType,
                     Slot = slot,
-                    ContractId = originalDto!.ContractId,
-                    // A type change is still an edit, not a new manual placement — only an
-                    // already-redemption-linked block (non-null ContractId) gets its
-                    // attribution recomputed against the same contract; an ordinary block
-                    // never gets newly linked just because its type changed.
-                    DeclineRedemption = originalDto.ContractId is null
+                    // A type change is still an edit, not a Cover Deficit placement, so the
+                    // re-created block never claims a deficit. (Only a block outside any
+                    // contract reaches this: deleting a contract's block is refused above.)
+                    DeclineRedemption = true
                 };
                 var createResult = await _commandDispatcher.DispatchAsync(createCmd);
                 if (!createResult.Success) { FormError = createResult.ErrorMessage; return; }

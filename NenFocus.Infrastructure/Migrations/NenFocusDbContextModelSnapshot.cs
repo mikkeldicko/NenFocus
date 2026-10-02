@@ -15,7 +15,7 @@ namespace NenFocus.Infrastructure.Migrations
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "9.0.2");
+            modelBuilder.HasAnnotation("ProductVersion", "9.0.20");
 
             modelBuilder.Entity("NenFocus.Domain.Entities.BlockPreset", b =>
                 {
@@ -188,6 +188,36 @@ namespace NenFocus.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("ContractPresets", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("c0000003-0000-0000-0000-000000000001"),
+                            AllowCancellation = false,
+                            DailyFloor = 4.0,
+                            KeepBlockingDuringBreaks = true,
+                            Name = "Lockdown",
+                            RedemptionPlacementPolicy = "AnywhereInContract",
+                            StrictnessRule = "Locked"
+                        },
+                        new
+                        {
+                            Id = new Guid("c0000003-0000-0000-0000-000000000002"),
+                            AllowCancellation = true,
+                            KeepBlockingDuringBreaks = false,
+                            Name = "Daily Flex",
+                            RedemptionPlacementPolicy = "AnywhereInContract",
+                            StrictnessRule = "DailyFlexibility"
+                        },
+                        new
+                        {
+                            Id = new Guid("c0000003-0000-0000-0000-000000000003"),
+                            AllowCancellation = true,
+                            KeepBlockingDuringBreaks = false,
+                            Name = "Period Study",
+                            RedemptionPlacementPolicy = "AnywhereInContract",
+                            StrictnessRule = "PeriodTimeBudget"
+                        });
                 });
 
             modelBuilder.Entity("NenFocus.Domain.Entities.NenContract", b =>
@@ -282,21 +312,12 @@ namespace NenFocus.Infrastructure.Migrations
                     b.Property<DateTime?>("CancelledAt")
                         .HasColumnType("TEXT");
 
-                    b.Property<Guid?>("ContractId")
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime>("End")
-                        .HasColumnType("TEXT");
-
                     b.Property<string>("RedemptionEntries")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT")
                         .HasColumnName("RedemptionEntries")
                         .HasDefaultValueSql("'[]'");
-
-                    b.Property<DateTime>("Start")
-                        .HasColumnType("TEXT");
 
                     b.Property<string>("Title")
                         .HasMaxLength(100)
@@ -623,9 +644,80 @@ namespace NenFocus.Infrastructure.Migrations
 
                             b1.WithOwner()
                                 .HasForeignKey("ContractPresetId");
+
+                            b1.HasData(
+                                new
+                                {
+                                    ContractPresetId = new Guid("c0000003-0000-0000-0000-000000000001"),
+                                    End = new TimeOnly(17, 0, 0),
+                                    Start = new TimeOnly(9, 0, 0)
+                                },
+                                new
+                                {
+                                    ContractPresetId = new Guid("c0000003-0000-0000-0000-000000000002"),
+                                    End = new TimeOnly(20, 0, 0),
+                                    Start = new TimeOnly(8, 0, 0)
+                                },
+                                new
+                                {
+                                    ContractPresetId = new Guid("c0000003-0000-0000-0000-000000000003"),
+                                    End = new TimeOnly(23, 0, 0),
+                                    Start = new TimeOnly(7, 0, 0)
+                                });
                         });
 
                     b.Navigation("WorkHours");
+                });
+
+            modelBuilder.Entity("NenFocus.Domain.Entities.PlannedBlock", b =>
+                {
+                    b.OwnsOne("NenFocus.Domain.ValueObjects.ContractMembership", "Membership", b1 =>
+                        {
+                            b1.Property<Guid>("PlannedBlockId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<Guid>("ContractId")
+                                .HasColumnType("TEXT")
+                                .HasColumnName("ContractId");
+
+                            b1.Property<string>("Role")
+                                .IsRequired()
+                                .HasColumnType("TEXT")
+                                .HasColumnName("ContractRole");
+
+                            b1.HasKey("PlannedBlockId");
+
+                            b1.ToTable("PlannedBlocks");
+
+                            b1.WithOwner()
+                                .HasForeignKey("PlannedBlockId");
+                        });
+
+                    b.OwnsOne("NenFocus.Domain.ValueObjects.TimeSlot", "Scheduled", b1 =>
+                        {
+                            b1.Property<Guid>("PlannedBlockId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<DateTime>("End")
+                                .HasColumnType("TEXT")
+                                .HasColumnName("End");
+
+                            b1.Property<DateTime>("Start")
+                                .HasColumnType("TEXT")
+                                .HasColumnName("Start");
+
+                            b1.HasKey("PlannedBlockId");
+
+                            b1.ToTable("PlannedBlocks");
+
+                            b1.WithOwner()
+                                .HasForeignKey("PlannedBlockId");
+                        });
+
+                    b.Navigation("Membership");
+
+                    b.Navigation("Scheduled")
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("NenFocus.Domain.Entities.Session", b =>

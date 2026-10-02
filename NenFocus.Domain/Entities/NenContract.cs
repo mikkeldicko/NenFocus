@@ -8,8 +8,8 @@ namespace NenFocus.Domain.Entities;
 
 /// <summary>
 /// A sealed, time-bound commitment over a contiguous date range. Does not own
-/// PlannedBlocks — blocks remain their own aggregate and link back via the
-/// nullable PlannedBlock.ContractId. The daily floor is a soft, tracked
+/// PlannedBlocks — blocks remain their own aggregate and link back via
+/// PlannedBlock.Membership. The daily floor is a soft, tracked
 /// invariant: enforcement and scoring are computed by Application-layer
 /// guards that load this contract and the blocks separately.
 /// </summary>
@@ -56,13 +56,11 @@ public class NenContract : AggregateRoot
     public Guid? ContractPresetId { get; private set; }
 
     /// <summary>
-    /// Whether sessions of Focus Blocks committed to this contract (PlannedBlock.ContractId
-    /// matches this contract's Id) keep their preset enforced through their breaks
-    /// (Gap 64). Copied by value from ContractPresetId's preset at Seal, same as every
-    /// other ContractPreset-sourced field, and copied again onto each such session at
-    /// Start — a running session never looks it up here. A Bonus block (ContractId ==
-    /// null, even one whose Start falls inside this contract's date range) never
-    /// inherits it, since it was never actually committed to the contract.
+    /// Whether sessions of this contract's Focus Blocks keep their preset enforced through
+    /// their breaks (Gap 64). Copied by value from ContractPresetId's preset at Seal, same as
+    /// every other ContractPreset-sourced field, and copied again onto each such session at
+    /// Start — a running session never looks it up here. It applies to every member's
+    /// session, Bonus blocks included (Gap 97).
     /// </summary>
     public bool KeepBlockingDuringBreaks { get; private set; }
 
@@ -244,14 +242,6 @@ public class NenContract : AggregateRoot
     public (DateTime Start, DateTime End)? WindowOn(DateOnly date)
         => _calendar.DayOn(date) is { } day ? (day.WindowStart, day.WindowEnd) : null;
 
-    /// <summary>
-    /// Whether a local moment falls inside this contract's period — [StartsAt, EndsAt).
-    /// The one definition of "does a block starting here belong to this contract's period"
-    /// (Bonus classification), so no caller compares against StartsAt/EndsAt itself.
-    /// </summary>
-    public bool Covers(DateTime localMoment)
-        => localMoment >= StartsAt && localMoment < EndsAt;
-
     public void Activate(Moment activatedAt)
     {
         if (Status != NenContractStatus.Scheduled)
@@ -390,26 +380,79 @@ public class NenContract : AggregateRoot
     }
 
     /// <summary>
-    /// Whether a block occupying <paramref name="slot"/> may be placed under this contract,
-    /// per each day it touches' own window — cut at the user's local midnights so a block
+    /// The planned period in real time — the first day's window start to the last day's window
+    /// end. Worked out from the calendar when asked, never stored (Gap 97).
+    /// </summary>
+    private TimeSlot PlannedPeriod(UserTimeZone timeZone)
+        => new(timeZone.ToMoment(StartsAt), timeZone.ToMoment(EndsAt));
+
+    /// <summary>
+    /// Whether a block placed at <paramref name="slot"/> is this contract's business: the
+    /// contract is in effect and the slot touches its planned period. A slot entirely before or
+    /// after the period — even on the first or last day — is not, and a finished contract
+    /// governs nothing. The one meaning of "placed on the contract's range" (Gap 97).
+    /// </summary>
+    public bool Governs(TimeSlot slot, UserTimeZone timeZone)
+        => IsInEffect && PlannedPeriod(timeZone).Overlaps(slot);
+
+    /// <summary>
+    /// Whether a block occupying <paramref name="slot"/> may be placed under this contract: the
+    /// whole slot lies inside the planned period (one straddling its start or end doesn't), and
+    /// each day it touches allows its part — cut at the user's local midnights so a block
     /// spanning midnight is checked against both days' windows independently. Every contract
-    /// day has a window (a full day when there are no Work Hours), so day 1 before the
-    /// contract's start and the last day after its end are outside. Dates outside the
-    /// contract are not this method's concern. The time zone does the local conversion
-    /// (Gap 88) — callers no longer convert first.
+    /// day has a window (a full day when there are no Work Hours). The time zone does the local
+    /// conversion (Gap 88) — callers no longer convert first.
     /// </summary>
     public bool AllowsBlockPlacement(TimeSlot slot, UserTimeZone timeZone)
     {
+        if (!PlannedPeriod(timeZone).Contains(slot))
+            return false;
+
         foreach (var (date, part) in timeZone.SplitByDay(slot))
         {
             var day = _calendar.DayOn(date);
-            if (day is null) continue;
+            if (day is null) return false;
 
             var (localStart, localEnd) = timeZone.ToCalendarTimes(part);
             if (!day.Contains(localStart, localEnd))
                 return false;
         }
         return true;
+    }
+
+    /// <summary>
+    /// The membership a block placed on this contract gets: Redemption when it claims a deficit,
+    /// otherwise Bonus. Committed is never handed out here — only drafting (Seal, or an Edit's
+    /// re-draft) commits a block (Gap 97).
+    /// </summary>
+    public ContractMembership MembershipForPlacedBlock(bool claimsDeficit)
+    {
+        if (!IsInEffect)
+            throw new InvalidOperationException("A finished contract takes no new blocks.");
+
+        return new(Id, claimsDeficit ? ContractRole.Redemption : ContractRole.Bonus);
+    }
+
+    /// <summary>
+    /// What breaking this contract does to one of its blocks (Gap 97). A Committed or Redemption
+    /// block that isn't finished (<paramref name="isResolved"/> false) is cancelled; a finished
+    /// one is left as it is. A Bonus block that hasn't started is the user's choice
+    /// (<paramref name="keepBonusBlocks"/>): released to a plain block, or cancelled with the
+    /// rest; one that has started or finished is left with its membership, so the recap's Bonus
+    /// hours stay true. Whether a block is resolved needs its session, so the caller supplies it.
+    /// </summary>
+    public BlockFateOnBreak FateWhenBroken(PlannedBlock block, bool isResolved, Moment brokenAt, bool keepBonusBlocks)
+    {
+        if (block.Membership?.ContractId != Id)
+            throw new ArgumentException("This block does not belong to this contract.", nameof(block));
+
+        if (block.Membership.IsBonus)
+        {
+            if (block.HasStarted(brokenAt)) return BlockFateOnBreak.Leave;
+            return keepBonusBlocks ? BlockFateOnBreak.Release : BlockFateOnBreak.Cancel;
+        }
+
+        return isResolved ? BlockFateOnBreak.Leave : BlockFateOnBreak.Cancel;
     }
 
     /// <summary>

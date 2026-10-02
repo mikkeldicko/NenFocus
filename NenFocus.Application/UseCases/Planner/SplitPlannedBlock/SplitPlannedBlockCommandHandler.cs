@@ -38,13 +38,14 @@ public sealed class SplitPlannedBlockCommandHandler : ICommandHandler<SplitPlann
             // partitioning the result by each half's own duration keeps the total minutes
             // covered identical to what the un-split block would have covered — computing
             // each half separately would have both halves independently re-claim against
-            // the same still-unpersisted deficit and double-count it.
-            var attribution = focusOriginal.ContractId is { } contractId
+            // the same still-unpersisted deficit and double-count it. Only a redemption
+            // block covers anything (Gap 97) — any other block's halves cover nothing.
+            var attribution = focusOriginal.IsRedemption
                 ? await _computeRedemptionAttribution.HandleAsync(
                     new ComputeRedemptionAttributionQuery(
-                        contractId, focusOriginal.BlockPresetId, TimeSlot.Enclosing(command.First, command.Second), original.Id),
+                        focusOriginal.Membership!.ContractId, focusOriginal.BlockPresetId, TimeSlot.Enclosing(command.First, command.Second), original.Id),
                     cancellationToken)
-                : new RedemptionAttributionResult(null, [], TimeSlot.Enclosing(command.First, command.Second));
+                : new RedemptionAttributionResult([], TimeSlot.Enclosing(command.First, command.Second));
 
             var firstDurationMinutes = command.First.Length.TotalMinutes;
             var (firstEntries, secondEntries) = SplitEntriesAcrossHalves(attribution.Entries, firstDurationMinutes);
@@ -57,21 +58,22 @@ public sealed class SplitPlannedBlockCommandHandler : ICommandHandler<SplitPlann
             var firstSlot = FocusBlock.CapEndToRedemptionCoverage(command.First, firstEntries);
             var secondSlot = FocusBlock.CapEndToRedemptionCoverage(command.Second, secondEntries);
 
+            // Both halves keep the original's membership (Gap 97); how coverage divides is Gap 106's.
             first = FocusBlock.Create(
                 firstId, focusOriginal.BlockPresetId, firstSlot,
-                focusOriginal.Title, attribution.ContractId, firstEntries);
+                focusOriginal.Title, focusOriginal.Membership, firstEntries);
             second = FocusBlock.Create(
                 secondId, focusOriginal.BlockPresetId, secondSlot,
-                focusOriginal.Title, attribution.ContractId, secondEntries);
+                focusOriginal.Title, focusOriginal.Membership, secondEntries);
         }
         else
         {
             first = BackgroundBlock.Create(
                 firstId, original.BlockPresetId, command.First,
-                original.Title, original.ContractId);
+                original.Title, original.Membership);
             second = BackgroundBlock.Create(
                 secondId, original.BlockPresetId, command.Second,
-                original.Title, original.ContractId);
+                original.Title, original.Membership);
         }
 
         await _blocks.DeleteAsync(original.Id, cancellationToken);

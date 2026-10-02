@@ -234,7 +234,7 @@ public class SealNenContractCommandHandlerTests
         var result = await CreateHandler().HandleAsync(BaseCommand(blocks: [block]), CancellationToken.None);
 
         saved.Should().NotBeNull();
-        saved!.ContractId.Should().Be(result.ContractId);
+        saved!.Membership.Should().Be(TestContracts.Committed(result.ContractId!.Value));
     }
 
     // ── Period Time Budget: no fixed floor -> ContractFloor ─────────────────────

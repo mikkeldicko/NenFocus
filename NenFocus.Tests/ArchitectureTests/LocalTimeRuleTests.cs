@@ -15,9 +15,6 @@ public class LocalTimeRuleTests
 
     private static readonly string[] Exceptions =
     [
-        // Gap 97: "which UTC window is this local day" re-derived in the repository (the UTC-days trap).
-        "NenFocus.Infrastructure/Persistence/Repositories/PlannedBlockRepository.cs",
-
         // Gap 89: the debug clock converts a user-typed time to UTC for SetTo.
         "NenFocus/ViewModels/DevTools/DebugClockViewModel.cs",
     ];

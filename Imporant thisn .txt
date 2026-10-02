@@ -15,8 +15,6 @@ dotnet restore --force
 Delete Databse	
 Remove-Item "$env:APPDATA\NenFocus\NenFocus.db*" -Force
 
-
-
 Prefer DTOs with Typed Reasons: Continue returning 
 strongly-typed refusal reasons (e.g., RefusalReason.SessionActive) 
 rather than hardcoded UI strings. This allows SwiftUI to map those 

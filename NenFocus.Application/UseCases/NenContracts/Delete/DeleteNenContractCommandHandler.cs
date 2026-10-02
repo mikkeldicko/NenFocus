@@ -20,12 +20,23 @@ public sealed class DeleteNenContractCommandHandler : ICommandHandler<DeleteNenC
             return DeleteNenContractResult.Fail("Contract not found.");
 
         // A Scheduled contract's StartDate hasn't arrived yet, so none of its blocks can
-        // have already ended — every linked block was drafted for this contract and never
-        // ran; all of them are deleted, no HasEnded distinction needed (unlike Break's
-        // cleanup of an Active contract's already-elapsed history).
+        // have already ended — its drafted blocks never ran and are deleted with it, no
+        // HasEnded distinction needed (unlike Break's cleanup of an Active contract's
+        // already-elapsed history). A Bonus block was added on its own, not drafted: deleting
+        // the contract never destroys it — it stays as a plain block (Gap 97).
         var linkedBlocks = await _blocks.GetForContractAsync(command.ContractId, ct);
         foreach (var block in linkedBlocks)
-            await _blocks.DeleteAsync(block.Id, ct);
+        {
+            if (block.Membership is { IsBonus: true })
+            {
+                block.Leave();
+                await _blocks.UpdateAsync(block, ct);
+            }
+            else
+            {
+                await _blocks.DeleteAsync(block.Id, ct);
+            }
+        }
 
         await _contracts.DeleteAsync(command.ContractId, ct);
 
