@@ -2,7 +2,6 @@ using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
-using NenFocus.Domain.Services;
 
 namespace NenFocus.Application.Queries.GetUnacknowledgedPostSessions;
 
@@ -48,46 +47,11 @@ public sealed class GetUnacknowledgedPostSessionsQueryHandler
         var presetName = await ResolvePresetNameAsync(session.BlockPresetId, presetNames, ct);
 
         var attempts = await _attemptTracker.GetAttemptsForSessionAsync(session.Id);
-        var appAttempts = attempts
-            .Where(a => a.AttemptType == BlockedAttemptType.App)
-            .GroupBy(a => a.ResourceName)
-            .ToDictionary(g => g.Key, g => g.Count());
-        var websiteAttempts = attempts
-            .Where(a => a.AttemptType == BlockedAttemptType.Website)
-            .GroupBy(a => a.ResourceName)
-            .ToDictionary(g => g.Key, g => g.Count());
+        var originatingBlock = session.OriginatingBlockId is { } blockId
+            ? await _plannedBlocks.GetByIdAsync(blockId, ct) as FocusBlock
+            : null;
 
-        var actualDurationMinutes = await ResolveActualDurationMinutesAsync(session, ct);
-
-        return new PostSessionDto
-        {
-            SessionId = session.Id,
-            Status = session.Status,
-            Goal = session.Goal.Value,
-            PresetName = presetName,
-            StartedAt = session.StartedAt!.Value,
-            EndedAt = session.EndedAt!.Value,
-            PlannedDurationMinutes = session.Duration.Value.TotalMinutes,
-            ActualDurationMinutes = actualDurationMinutes,
-            BreaksTaken = session.BreaksTaken,
-            BlockedAppAttempts = appAttempts,
-            BlockedWebsiteAttempts = websiteAttempts,
-            TotalBlockedAttempts = attempts.Count
-        };
-    }
-
-    private async Task<double> ResolveActualDurationMinutesAsync(Session session, CancellationToken ct)
-    {
-        var actualElapsedMinutes = session.GetElapsedTime(session.EndedAt!.Value)?.TotalMinutes ?? 0;
-
-        if (session.Status != SessionStatus.Completed || !session.OriginatingBlockId.HasValue)
-            return actualElapsedMinutes;
-
-        var block = await _plannedBlocks.GetByIdAsync(session.OriginatingBlockId.Value, ct);
-        if (block is not FocusBlock focusBlock)
-            return actualElapsedMinutes;
-
-        return focusBlock.CreditedSlot(session.EndedAt!.Value)?.Length.TotalMinutes ?? 0;
+        return PostSessionDto.From(session, originatingBlock, presetName, attempts);
     }
 
     private async Task<string> ResolvePresetNameAsync(

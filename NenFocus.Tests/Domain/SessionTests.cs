@@ -615,4 +615,94 @@ public class SessionTests
 
         session.ReservedSlot.Should().BeNull("a finished session occupies nothing any more");
     }
+
+    // ── CountedTime: how long an ended session counted for (Gap 95, decision 13) ──
+
+    private static readonly DateTime BlockStart = new(2026, 1, 5, 13, 0, 0, DateTimeKind.Utc);
+
+    private static FocusBlock BlockOf2Hours() =>
+        FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(BlockStart, BlockStart.AddHours(2)));
+
+    /// <summary>A planned session for <paramref name="block"/>, started and ended the way
+    /// StartSession and EndSession leave both: the block carries the same two stamps.</summary>
+    private static Session PlannedRun(FocusBlock block, double startMinutes, double endMinutes)
+    {
+        var session = CreatePlannedSession(block.Id);
+        var startedAt = At.Utc(BlockStart.AddMinutes(startMinutes));
+        session.Start(startedAt, block.Scheduled);
+        block.MarkRitualCompleted(startedAt);
+        session.Complete(At.Utc(BlockStart.AddMinutes(endMinutes)));
+        block.MarkSessionEnded(session.EndedAt!.Value);
+        return session;
+    }
+
+    [Fact]
+    public void CountedTime_Spontaneous_IsTheWholeMinutesItRan()
+    {
+        var session = CreateSpontaneousSession();
+        session.Start(At.Utc(BlockStart));
+        session.Complete(At.Utc(BlockStart.AddMinutes(20).AddSeconds(40)));
+
+        session.CountedTime(originatingBlock: null).Should().Be(TimeSpan.FromMinutes(20));
+    }
+
+    [Fact]
+    public void CountedTime_PlannedWithinGrace_CountsTheBlocksCredit_NotTheMinutesItRan()
+    {
+        // Ritual 3 minutes in, ran to the end: grace credits the full 120, though it ran 117.
+        var block = BlockOf2Hours();
+        var session = PlannedRun(block, startMinutes: 3, endMinutes: 120);
+
+        session.CountedTime(block).Should().Be(TimeSpan.FromMinutes(120));
+    }
+
+    [Fact]
+    public void CountedTime_PlannedLateAndEndedEarly_CountsTheBlocksCredit()
+    {
+        var block = BlockOf2Hours();
+        var session = PlannedRun(block, startMinutes: 20, endMinutes: 80);
+
+        session.CountedTime(block).Should().Be(TimeSpan.FromMinutes(60));
+    }
+
+    [Fact]
+    public void CountedTime_Missed_IsZero()
+    {
+        var block = BlockOf2Hours();
+        var session = CreatePlannedSession(block.Id);
+        session.Miss(block.Scheduled);
+
+        session.CountedTime(block).Should().Be(TimeSpan.Zero);
+    }
+
+    [Fact]
+    public void CountedTime_PlannedWhoseBlockIsGone_FallsBackToTheMinutesItRan()
+    {
+        var session = CreatePlannedSession(Guid.NewGuid());
+        session.Start(At.Utc(BlockStart));
+        session.Complete(At.Utc(BlockStart.AddMinutes(25)));
+
+        session.CountedTime(originatingBlock: null).Should().Be(TimeSpan.FromMinutes(25));
+    }
+
+    [Fact]
+    public void CountedTime_OfASessionNotEnded_Throws()
+    {
+        var session = CreateSpontaneousSession();
+        session.Start(At.Utc(BlockStart));
+
+        var act = () => session.CountedTime(originatingBlock: null);
+
+        act.Should().Throw<InvalidOperationException>();
+    }
+
+    [Fact]
+    public void CountedTime_WithABlockThatIsNotItsOwn_Throws()
+    {
+        var session = PlannedRun(BlockOf2Hours(), startMinutes: 0, endMinutes: 60);
+
+        var act = () => session.CountedTime(BlockOf2Hours());
+
+        act.Should().Throw<ArgumentException>();
+    }
 }

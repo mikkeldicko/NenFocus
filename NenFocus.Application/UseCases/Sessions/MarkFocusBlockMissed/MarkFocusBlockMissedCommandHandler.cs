@@ -50,19 +50,7 @@ public sealed class MarkFocusBlockMissedCommandHandler
             presetName = preset?.Name ?? string.Empty;
         }
 
-        var postSession = new PostSessionDto
-        {
-            SessionId = session.Id,
-            Status = session.Status,
-            Goal = session.Goal.Value,
-            PresetName = presetName,
-            StartedAt = session.StartedAt!.Value,
-            EndedAt = session.EndedAt!.Value,
-            PlannedDurationMinutes = session.Duration.Value.TotalMinutes,
-            ActualDurationMinutes = session.GetElapsedTime(session.EndedAt.Value)?.TotalMinutes ?? 0,
-            BreaksTaken = 0
-        };
-
-        return MarkFocusBlockMissedResult.Ok(session.Id, postSession);
+        // A missed session tracked no attempts: nothing ran to attempt anything against.
+        return MarkFocusBlockMissedResult.Ok(session.Id, PostSessionDto.From(session, block, presetName, []));
     }
 }

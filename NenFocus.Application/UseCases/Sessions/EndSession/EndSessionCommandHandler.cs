@@ -42,16 +42,6 @@ public sealed class EndSessionCommandHandler
 
         var attempts = await _attemptTracker.GetAttemptsForSessionAsync(session.Id);
 
-        var appAttempts = attempts
-            .Where(a => a.AttemptType == BlockedAttemptType.App)
-            .GroupBy(a => a.ResourceName)
-            .ToDictionary(g => g.Key, g => g.Count());
-
-        var websiteAttempts = attempts
-            .Where(a => a.AttemptType == BlockedAttemptType.Website)
-            .GroupBy(a => a.ResourceName)
-            .ToDictionary(g => g.Key, g => g.Count());
-
         session.Complete(_clock.Now);
         // Capped at the planned end by Complete itself (Gap 63). Everything below reads the
         // recorded end, never "now", so an end noticed late can't leak past the plan.
@@ -81,34 +71,6 @@ public sealed class EndSessionCommandHandler
             presetName = preset?.Name ?? string.Empty;
         }
 
-        var actualElapsedMinutes = session.GetElapsedTime(session.EndedAt!.Value)?.TotalMinutes ?? 0;
-
-        // Reuses the exact same rule Daily Floor credit already applies (Gap H) — a
-        // ritual completed within the grace period credits the block's full scheduled
-        // duration, not (EndTime - RitualCompletedAt); one source of truth for "how much
-        // focus time does this session count for," not a second copy of the rule invented
-        // for display. Only applies to a Planned session with a resolved originating
-        // block — an impromptu session has no scheduled window to be graced against.
-        var creditedMinutes = originatingFocusBlock is not null
-            ? originatingFocusBlock.CreditedSlot(session.EndedAt!.Value)?.Length.TotalMinutes ?? 0
-            : actualElapsedMinutes;
-
-        var postSession = new PostSessionDto
-        {
-            SessionId = session.Id,
-            Status = session.Status,
-            Goal = session.Goal.Value,
-            PresetName = presetName,
-            StartedAt = session.StartedAt!.Value,
-            EndedAt = session.EndedAt!.Value,
-            PlannedDurationMinutes = session.Duration.Value.TotalMinutes,
-            ActualDurationMinutes = creditedMinutes,
-            BreaksTaken = session.BreaksTaken,
-            BlockedAppAttempts = appAttempts,
-            BlockedWebsiteAttempts = websiteAttempts,
-            TotalBlockedAttempts = attempts.Count
-        };
-
-        return EndSessionResult.Ok(postSession);
+        return EndSessionResult.Ok(PostSessionDto.From(session, originatingFocusBlock, presetName, attempts));
     }
 }

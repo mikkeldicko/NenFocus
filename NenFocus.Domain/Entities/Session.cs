@@ -249,6 +249,25 @@ public class Session : AggregateRoot
         return TimeSpan.FromMinutes(Math.Floor(raw.TotalMinutes));
     }
 
+    /// <summary>
+    /// How long this ended session counted for (Gap 95): a planned session counts its block's
+    /// credit (<see cref="FocusBlock.CreditedSlot"/> at this session's end — grace included,
+    /// nothing for a missed block), so Post-Session shows the same number the contract counts;
+    /// otherwise the whole minutes it ran. A planned session whose block is gone counts what it
+    /// ran. Asked only of an ended session; the block passed must be its own.
+    /// </summary>
+    public TimeSpan CountedTime(FocusBlock? originatingBlock)
+    {
+        if (EndedAt is not { } endedAt)
+            throw new InvalidOperationException("Only an ended session has a counted time.");
+        if (originatingBlock is not null && originatingBlock.Id != OriginatingBlockId)
+            throw new ArgumentException("This block is not the one this session was started for.", nameof(originatingBlock));
+
+        return originatingBlock is not null
+            ? originatingBlock.CreditedSlot(endedAt)?.Length ?? TimeSpan.Zero
+            : GetElapsedTime(endedAt) ?? TimeSpan.Zero;
+    }
+
     public TimeSpan? GetRemainingTime(Moment asOf)
     {
         if (EndAt is null) return null;

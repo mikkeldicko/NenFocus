@@ -16,8 +16,6 @@ public class DtoBuilderRuleTests
     [
         // → Gap 89 area 4: StartSession, SessionStateService's restart path, GetActiveSessionQuery (dead) — already drifted (F1–F3).
         "SessionDto built in 3 files",
-        // → Gap 95: EndSession, MarkFocusBlockMissed, GetUnacknowledgedPostSessions assemble credited minutes each (F6).
-        "PostSessionDto built in 3 files",
         // → Gap 89 area 2: the Planner builds draft tiles as PlannedBlockDtos beside the day query.
         "PlannedBlockDto built in 2 files",
     ];
