@@ -18,6 +18,6 @@ public abstract record DailyFloorRule
     /// <summary>Each day's floor is that day's planned Focus hours; a day with none planned is a rest day.</summary>
     public sealed record FollowsPlan : DailyFloorRule;
 
-    /// <summary>No per-day obligation at all — a Period Time Budget contract with only a ContractFloor.</summary>
+    /// <summary>No per-day obligation at all — a Period Time Budget contract held to a whole-period target (NenContract.HasPeriodTarget).</summary>
     public sealed record None : DailyFloorRule;
 }

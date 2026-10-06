@@ -396,7 +396,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
     // One format for every strictness rule — total completed vs. total committed hours,
     // plus outstanding deficit. Uniform across Locked/DailyFlexibility/PeriodTimeBudget
-    // (with or without ContractFloor) since TotalFloorHours/TotalCompletedHours are
+    // (with or without a whole-period target) since TotalFloorHours/TotalCompletedHours are
     // already computed the same way for all of them.
     public string SelectedContractBannerText => SelectedContract is not { } c
         ? string.Empty
@@ -531,7 +531,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
             {
                 merged[d.Date] = new DayFloorPreviewViewModel(
                     d.Date, d.CurrentHours, d.IsRestDay ? null : d.FloorHours, d.IsRestDay, d.Timing,
-                    contract.StrictnessRule, contract.ContractFloorHours.HasValue, d.BonusHours,
+                    contract.StrictnessRule, contract.HasPeriodTarget, d.BonusHours,
                     contract.Status, d.IsMet);
             }
         }
@@ -1569,7 +1569,6 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
                     Slot = slot
                 });
                 if (!result.Success) { FormError = result.ErrorMessage; return; }
-                if (result.RedemptionCapped) DragError = RedemptionCapMessage;
             }
         }
         else
@@ -1964,8 +1963,6 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
         if (!updateResult.Success)
             DragError = updateResult.ErrorMessage;
-        else if (updateResult.RedemptionCapped)
-            DragError = RedemptionCapMessage;
 
         // Reload either way: on success to reflect the committed change, on failure so the
         // tile snaps back to its actual (unchanged) position — the drag gesture already

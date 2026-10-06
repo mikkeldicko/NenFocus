@@ -12,12 +12,6 @@ namespace NenFocus.Application.Queries.ComputePlannedFocusHours;
 /// </summary>
 /// <param name="ContractId">Null when the contract doesn't exist yet (the Seal wizard).</param>
 /// <param name="DraftFocusBlockRanges">Not-yet-persisted Focus block ranges to include.</param>
-/// <param name="ExcludeBlockId">
-/// A persisted block to omit from the contract's saved blocks — set this to the block
-/// being actively edited so its in-progress draft range isn't double-counted alongside
-/// its still-saved original.
-/// </param>
 public sealed record ComputePlannedFocusHoursQuery(
     Guid? ContractId,
-    IReadOnlyList<TimeSlot> DraftFocusBlockRanges,
-    Guid? ExcludeBlockId = null) : IQuery<IReadOnlyDictionary<DateOnly, double>>;
+    IReadOnlyList<TimeSlot> DraftFocusBlockRanges) : IQuery<IReadOnlyDictionary<DateOnly, double>>;

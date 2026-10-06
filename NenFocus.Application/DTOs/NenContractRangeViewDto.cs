@@ -33,7 +33,7 @@ public sealed record NenContractRangeViewDto
     public int TotalDays { get; init; }
 
     /// <summary>Non-rest-day count from StartDate through today (or EndDate) with IsDayMet false.
-    /// Zero for a ContractFloor contract (see below) — Day-Met has no meaning there. No longer
+    /// Zero for a period-target contract (see HasPeriodTarget) — Day-Met has no meaning there. No longer
     /// shown in the banner text, but kept for any future per-day-scoring consumer (e.g. streaks).</summary>
     public int DaysBehind { get; init; }
 
@@ -46,26 +46,22 @@ public sealed record NenContractRangeViewDto
     public bool AllowCancellation { get; init; }
 
     /// <summary>
-    /// Non-null only for a Period Time Budget contract using a whole-period ContractFloor
-    /// instead of a per-day floor — the total Focus hours committed at Seal. Also drives
-    /// DayStatuses' per-day badge behavior (no rest days, Past shows a single completed-hours
-    /// number instead of "completed/planned"). TotalFloorHours/TotalCompletedHours below
-    /// already fold this contract's numbers in for the banner — this field exists purely as
-    /// the mode discriminator for badge rendering, not a second source of the same total.
+    /// True for a Period Time Budget contract held to a whole-period target instead of per-day
+    /// floors (<c>NenContract.HasPeriodTarget</c>, Gap 95). Drives DayStatuses' per-day badge behavior
+    /// (no rest days, Past shows a single completed-hours number). The target itself is
+    /// TotalFloorHours below — this is only the mode.
     /// </summary>
-    public double? ContractFloorHours { get; init; }
+    public bool HasPeriodTarget { get; init; }
 
     /// <summary>
-    /// The banner's denominator for every contract, not just ContractFloor ones: that
-    /// contract's ContractFloorHours when set, otherwise the sum of every day's resolved
-    /// floor across [StartDate, EndDate] (rest days contribute 0) — the total minimum
-    /// commitment across the whole contract, computed the same way regardless of strictness.
+    /// The banner's denominator for every contract: CommittedFocusHours, what was planned at
+    /// Seal — computed the same way regardless of strictness.
     /// </summary>
     public double TotalFloorHours { get; init; }
 
     /// <summary>Total completed Focus hours across the whole contract so far — the banner's
     /// numerator, paired with TotalFloorHours. Same value for every contract regardless of
-    /// strictness or ContractFloor mode — a straight sum of completed hours per day.</summary>
+    /// strictness or period-target mode — a straight sum of completed hours per day.</summary>
     public double TotalCompletedHours { get; init; }
 
     /// <summary>Completed hours from Bonus blocks across the whole contract — never part of

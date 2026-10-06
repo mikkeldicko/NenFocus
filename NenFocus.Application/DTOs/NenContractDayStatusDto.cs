@@ -12,7 +12,7 @@ namespace NenFocus.Application.DTOs;
 /// isn't over yet, so it isn't a real miss — without allowing the impossible
 /// Today-and-Past combination two loose bools would.
 ///
-/// For a Period Time Budget contract using ContractFloor (see NenContractRangeViewDto),
+/// For a Period Time Budget contract with a whole-period target (NenContractRangeViewDto.HasPeriodTarget),
 /// there is no real per-day floor — FloorHours instead carries that day's currently-
 /// planned hours (a comparison baseline, not an obligation) and IsMet compares
 /// CurrentHours directly against it rather than through IsDayMet, which would trivially

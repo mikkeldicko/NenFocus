@@ -58,11 +58,10 @@ internal static class TestContracts
         Moment sealedAt,
         UserTimeZone timeZone,
         Guid? contractPresetId = null,
-        ContractFloor? contractFloor = null,
         RedemptionPlacementPolicy redemptionPlacementPolicy = RedemptionPlacementPolicy.AnywhereInContract,
         bool keepBlockingDuringBreaks = false)
         => NenContract.Seal(id, name, goal,
             TestRules.Of(strictnessRule, (floorRule as DailyFloorRule.Fixed)?.Floor, allowCancellation,
                 keepBlockingDuringBreaks, redemptionPlacementPolicy),
-            calendar, changeWindow, plannedFocusHoursByDay, sealedAt, timeZone, contractPresetId, contractFloor);
+            calendar, changeWindow, plannedFocusHoursByDay, sealedAt, timeZone, contractPresetId);
 }

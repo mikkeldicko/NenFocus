@@ -23,8 +23,8 @@ namespace NenFocus.ViewModels.Components;
 /// floor-protection guards make every future day provably safe by the time it's shown.
 /// </param>
 /// <param name="IsContractFloorMode">
-/// True only for a Period Time Budget contract using a whole-period ContractFloor
-/// instead of a per-day floor (see NenContractRangeViewDto.ContractFloorHours). RequiredFloorHours
+/// True only for a Period Time Budget contract held to a whole-period target
+/// instead of a per-day floor (see NenContractRangeViewDto.HasPeriodTarget). RequiredFloorHours
 /// still carries a comparison number in this mode — that day's currently-planned hours,
 /// not a real obligation — which is why Past drops the "/planned" half entirely: a day's
 /// shortfall there isn't a boolean pass/fail the way a real floor is, it's "this many

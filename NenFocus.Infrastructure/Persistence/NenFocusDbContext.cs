@@ -576,14 +576,6 @@ public class NenFocusDbContext : DbContext
                 .IsRequired();
 
 
-            // Single-value object — a direct double? conversion needs no JSON, unlike
-            // the days, which carry a shape worth serializing.
-            entity.Property(c => c.ContractFloor)
-                .HasConversion(
-                    floor => floor == null ? (double?)null : floor.Hours,
-                    hours => hours == null ? null : new ContractFloor(hours.Value))
-                .HasColumnName("ContractFloor");
-
             entity.Property(c => c.CommittedFocusHours)
                 .IsRequired();
 

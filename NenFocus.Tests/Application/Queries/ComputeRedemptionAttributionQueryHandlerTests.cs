@@ -57,7 +57,6 @@ public class ComputeRedemptionAttributionQueryHandlerTests
             allowCancellation: false,
             plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
             sealedAt: At.Utc(Today.AddDays(-7).ToDateTime(TimeOnly.MinValue)), timeZone: At.UtcZone,
-            contractFloor: new ContractFloor(10),
             redemptionPlacementPolicy: RedemptionPlacementPolicy.AnywhereInContract);
 
     private static FocusBlockDeficitDto Deficit(Guid presetId, DateTime scheduledStart, double remaining, Guid? focusBlockId = null) =>
@@ -424,7 +423,7 @@ public class ComputeRedemptionAttributionQueryHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_PeriodTimeBudgetWithContractFloor_MissedOnADifferentDay_StillEligible()
+    public async Task HandleAsync_PeriodTimeBudgetWithAPeriodTarget_MissedOnADifferentDay_StillEligible()
     {
         var contractId = Guid.NewGuid();
         var presetId = Guid.NewGuid();

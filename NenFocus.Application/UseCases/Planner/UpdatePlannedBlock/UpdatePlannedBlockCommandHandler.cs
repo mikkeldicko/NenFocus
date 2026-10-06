@@ -14,7 +14,6 @@ public sealed class UpdatePlannedBlockCommandHandler : ICommandHandler<UpdatePla
     private readonly INenContractRepository _contracts;
     private readonly IQueryHandler<ComputeRedemptionAttributionQuery, RedemptionAttributionResult> _computeRedemptionAttribution;
     private readonly IBlockPlacementChecker _placement;
-    private readonly IBlockChangeChecker _changes;
     private readonly ISystemClock _clock;
 
     public UpdatePlannedBlockCommandHandler(
@@ -23,7 +22,6 @@ public sealed class UpdatePlannedBlockCommandHandler : ICommandHandler<UpdatePla
         INenContractRepository contracts,
         IQueryHandler<ComputeRedemptionAttributionQuery, RedemptionAttributionResult> computeRedemptionAttribution,
         IBlockPlacementChecker placement,
-        IBlockChangeChecker changes,
         ISystemClock clock)
     {
         _blocks = blocks;
@@ -31,7 +29,6 @@ public sealed class UpdatePlannedBlockCommandHandler : ICommandHandler<UpdatePla
         _contracts = contracts;
         _computeRedemptionAttribution = computeRedemptionAttribution;
         _placement = placement;
-        _changes = changes;
         _clock = clock;
     }
 
@@ -47,13 +44,11 @@ public sealed class UpdatePlannedBlockCommandHandler : ICommandHandler<UpdatePla
         if (preset is null)
             return UpdatePlannedBlockResult.Fail($"Preset '{command.PresetId}' not found.");
 
-        var redemptionCapped = false;
-
         // Only a redemption block's coverage is recomputed on an edit, against its own contract
         // (Gap 97): a role never changes, so a Committed, Bonus or plain block never starts
-        // claiming a deficit because it was edited. Attribution returns the final (capped)
-        // window — the one place the cap is computed, so the validator's placement check and
-        // this save can never disagree (Gap 88 phase 8).
+        // claiming a deficit because it was edited. Its length was fixed when it was placed (Gap 95,
+        // decision 16) — the validator refuses a resize — so only the entries are recomputed; a
+        // block that now covers less than its length keeps the surplus (Redemption Rule 6).
         if (existing is FocusBlock { IsRedemption: true } redemption)
         {
             var existingEntries = redemption.RedemptionEntries
@@ -64,23 +59,9 @@ public sealed class UpdatePlannedBlockCommandHandler : ICommandHandler<UpdatePla
                 new ComputeRedemptionAttributionQuery(redemption.Membership!.ContractId, command.PresetId, slot, existing.Id, existingEntries),
                 cancellationToken);
 
-            // Attribution may have shortened the slot after the validator approved the longer one —
-            // the permission answer (the floor, above all) must hold for the slot that is saved.
-            if (attribution.Slot != slot)
-            {
-                var contractId = redemption.Membership.ContractId;
-                var change = _changes.CheckReschedule(redemption, attribution.Slot, presetChanges: false,
-                    await _contracts.GetByIdAsync(contractId, cancellationToken),
-                    await _blocks.GetForContractAsync(contractId, cancellationToken), _clock.Now, _clock.TimeZone);
-                if (!change.IsAllowed)
-                    return UpdatePlannedBlockResult.Fail(BlockChangeVerdictDto.From(change).Message!);
-            }
-
             redemption.AssignRedemptionEntries(attribution.Entries
                 .Select(e => new RedemptionEntry(e.MissedBlockId, e.MinutesCovered))
                 .ToList());
-            slot = attribution.Slot;
-            redemptionCapped = attribution.WasCapped;
         }
 
         existing.Reschedule(slot);
@@ -92,6 +73,6 @@ public sealed class UpdatePlannedBlockCommandHandler : ICommandHandler<UpdatePla
             slot, await _contracts.GetAllInEffectAsync(cancellationToken), _clock.TimeZone));
 
         await _blocks.UpdateAsync(existing, cancellationToken);
-        return UpdatePlannedBlockResult.Ok(redemptionCapped);
+        return UpdatePlannedBlockResult.Ok();
     }
 }

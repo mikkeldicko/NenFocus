@@ -33,7 +33,6 @@ public sealed class ComputePlannedFocusHoursQueryHandler
             focusTime.AddRange(persisted
                 .OfType<FocusBlock>()
                 .Where(b => b.CountsTowardFloor)
-                .Where(b => b.Id != query.ExcludeBlockId)
                 .Select(b => b.Scheduled));
         }
 

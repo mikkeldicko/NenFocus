@@ -36,6 +36,9 @@ public enum ChangeOutcome
     /// <summary>Split is only for a Focus block that a contract binds.</summary>
     SplitNotOffered,
 
+    /// <summary>A Redemption block keeps the length it was placed with: it may move and be split, never resized (Gap 95).</summary>
+    RedemptionLengthFixed,
+
     /// <summary>The change would leave a day under its floor.</summary>
     BelowDailyFloor,
 

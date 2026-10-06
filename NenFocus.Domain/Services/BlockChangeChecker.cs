@@ -48,6 +48,9 @@ public sealed class BlockChangeChecker : IBlockChangeChecker
         if (newSlot == block.Scheduled)
             return ChangeVerdict.Allowed;
 
+        if (contract.CheckBlockLength(block, newSlot) is { IsAllowed: false } lengthFixed)
+            return lengthFixed;
+
         if (contract.CheckBlockMove(block, newSlot, timeZone) is { IsAllowed: false } cannotMove)
             return cannotMove;
 
@@ -91,18 +94,19 @@ public sealed class BlockChangeChecker : IBlockChangeChecker
     }
 
     /// <summary>
-    /// Only a block that counts toward the floor can lower it. The plan after the change is every
-    /// other floor-counting Focus block of the contract as it stands, plus where this one goes.
+    /// The floor is a minimum of what was signed (Gap 95): only a Committed block's change can lower
+    /// it, and the plan after the change is every other Committed Focus block as it stands, plus
+    /// where this one goes. A Redemption block pays for a missed block, never for a shrunk one.
     /// </summary>
     private ChangeVerdict CheckFloor(PlannedBlock block, IReadOnlyList<TimeSlot> replacement,
         NenContract contract, IEnumerable<PlannedBlock> contractBlocks, UserTimeZone timeZone)
     {
-        if (block is not FocusBlock { CountsTowardFloor: true })
+        if (block is not FocusBlock { IsCommitted: true })
             return ChangeVerdict.Allowed;
 
         var focusTime = contractBlocks
             .OfType<FocusBlock>()
-            .Where(b => b.CountsTowardFloor && b.Id != block.Id)
+            .Where(b => b.IsCommitted && b.Id != block.Id)
             .Select(b => b.Scheduled)
             .Concat(replacement);
 

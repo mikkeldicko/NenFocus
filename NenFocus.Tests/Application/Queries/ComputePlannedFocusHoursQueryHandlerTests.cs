@@ -78,26 +78,6 @@ public class ComputePlannedFocusHoursQueryHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_ExcludeBlockId_OmitsThatPersistedBlock()
-    {
-        var editingBlock = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(new DateTime(2026, 1, 2, 9, 0, 0), new DateTime(2026, 1, 2, 10, 0, 0)), membership: TestContracts.Committed(ContractId));
-
-        _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>())
-            .Returns((IReadOnlyList<PlannedBlock>)[editingBlock]);
-
-        var updatedStart = new DateTime(2026, 1, 2, 9, 0, 0);
-        var updatedEnd = new DateTime(2026, 1, 2, 11, 0, 0);
-
-        await CreateHandler().HandleAsync(
-            new ComputePlannedFocusHoursQuery(ContractId, [At.Slot(updatedStart, updatedEnd)], ExcludeBlockId: editingBlock.Id),
-            CancellationToken.None);
-
-        _calculator.Received(1).Calculate(
-            Arg.Is<IEnumerable<TimeSlot>>(r => r.SequenceEqual(new[] { new TimeSlot(At.Utc(updatedStart), At.Utc(updatedEnd)) })),
-            Arg.Any<UserTimeZone>());
-    }
-
-    [Fact]
     public async Task HandleAsync_PassesRealTimeAndTheUsersTimeZone_ToTheCalculator()
     {
         // Gap 88 phase 4: the calculator decides "which local day" from the time zone — the

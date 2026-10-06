@@ -25,7 +25,7 @@ namespace NenFocus.Converters;
 /// drafting, where ContractStrictnessRule/ContractStatus are both null and a future day
 /// genuinely can be under-floor as feedback to fix before sealing (drafting's own rest days
 /// keep the plain grey — there is no real Active/Scheduled contract yet to color them by).
-/// A ContractFloor contract's Past days keep the ordinary met/unmet coloring (green/dark
+/// A period-target contract's Past days keep the ordinary met/unmet coloring (green/dark
 /// red) — only their label format differs, see DayFloorPreviewViewModel. Pairs with
 /// DayFloorStatusToForegroundConverter.
 /// </summary>

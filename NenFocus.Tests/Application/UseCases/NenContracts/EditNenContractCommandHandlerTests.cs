@@ -235,7 +235,7 @@ public class EditNenContractCommandHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_PeriodTimeBudgetNoFixedFloor_DerivesContractFloorFromTotalPlannedHours()
+    public async Task HandleAsync_PeriodTimeBudgetNoFixedFloor_TheTargetIsTheTotalPlannedHours()
     {
         var contract = ScheduledContract(Guid.NewGuid());
         _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
@@ -252,7 +252,8 @@ public class EditNenContractCommandHandlerTests
 
         result.Success.Should().BeTrue();
         saved.Should().NotBeNull();
-        saved!.ContractFloorHours.Should().Be(9); // 3 + 4 + 2
+        saved!.HasPeriodTarget.Should().BeTrue();
+        saved.CommittedFocusHours.Should().Be(9); // 3 + 4 + 2 — the whole-period target
         saved.FloorRule.Should().Be(new DailyFloorRule.None());
     }
 

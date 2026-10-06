@@ -48,12 +48,13 @@ Current-state reference for the Nen Contract aggregate: its rules, the Redemptio
 - A bound block moves within its `MovementRange`, keeps its preset, can be split (not under `Locked`), is never deleted.
 - A free Bonus block moves anywhere inside the period, may change preset and be deleted until it starts, can't be split.
 - No member moves outside the planned period; a Bonus block leaves only when the contract releases it (Break, Delete).
-- Any change to a block that counts toward the floor must leave the floor met (`NenContract.CheckFloor`).
+- A floor is a planning minimum of what was signed: only a Committed block's change can lower it, and `NenContract.CheckFloor` counts Committed blocks only — Seal asks the same check (Gap 95, decisions 7, 16).
 - Split = atomic delete-and-recreate with the original's membership and preset.
+- A Redemption block's length is fixed once placed: it may move and be split, never resized (`NenContract.CheckBlockLength` → `RedemptionLengthFixed`, Gap 95 decision 16).
 
 **Daily Floor:** stored per `ContractDay` (null = rest day), never more than the day's window. Days get it from `DailyFloorRule` when generated: `Fixed` (a day that can't fit it is refused at Seal, never shrunk), `FollowsPlan`, or `None`. Scoring always asks the day.
 
-**Period target (`PeriodTimeBudget` with no fixed floor):** `FloorRule` is `None`; the contract holds a `ContractFloor` = total drafted Focus hours, fixed at Seal (no 24 h cap; mutually exclusive with per-day floors). No day is individually obligated — Day Met and rest days don't apply; `IsPeriodMet` / `CheckFloor` check the total.
+**Period target (`PeriodTimeBudget` with no fixed floor):** `FloorRule` is `None` and `HasPeriodTarget` is true; the target is `CommittedFocusHours`, read off the rules, never stored (Gap 95, decision 8 — `ContractFloor` deleted). No day is individually obligated — Day Met and rest days don't apply; `CheckFloor` checks the total.
 
 **Rest days:** a day with no floor — skipped at Seal, trivially met. Fixed at Seal. Blocks may still be placed there. The Planner badge may show a rest day that received a floor-counting block as progress instead of "Rest" — display only, never written back (Gap 52).
 
@@ -63,7 +64,7 @@ Current-state reference for the Nen Contract aggregate: its rules, the Redemptio
 
 **Change Window:** parked. `ChangeWindow` value object exists (`Contains(TimeOnly)`, `UsesPerDay`), not mapped or enforced.
 
-**Banner:** every contract shows `"Contract: [Name] — Day X/Y — Xh / Yh completed — Zh deficit"` (`NenContractRangeViewDto.TotalCompletedHours` / `TotalFloorHours`; floor total = `ContractFloor`, else the sum of day floors). A week straddling two contracts badges every day; the banner and Cover Deficit name one, switchable (`SelectedContract`, Gap 55). The popover's Active card always names the app-wide Active contract.
+**Banner:** every contract shows `"Contract: [Name] — Day X/Y — Xh / Yh completed — Zh deficit"` (`NenContractRangeViewDto.TotalCompletedHours` / `TotalFloorHours`; floor total = `CommittedFocusHours`). A week straddling two contracts badges every day; the banner and Cover Deficit name one, switchable (`SelectedContract`, Gap 55). The popover's Active card always names the app-wide Active contract.
 
 ## Block outcome and credit
 
@@ -89,7 +90,7 @@ Current-state reference for the Nen Contract aggregate: its rules, the Redemptio
 | 4 | Same preset only — attribution walks deficits of the block's own preset. |
 | 4a | Same contract only — attribution walks one contract's ledger (`ContractId` required, Gap 97). |
 | 5 | One redemption block can cover several missed blocks — oldest outstanding first, spilling into the next. |
-| 6 | A redemption block may exceed the deficit; the surplus counts toward the floor, attributed to nothing. |
+| 6 | A redemption block may exceed the deficit; the surplus is attributed to nothing. It is capped to the remaining deficit only when created; after that its length is fixed, so a deficit that shrinks leaves surplus (Gap 95, decision 16). |
 | 7 | Each entry's `MinutesCovered` = `Min(remaining block minutes, remaining deficit)`. |
 | 8 | Where a redemption may go is `RedemptionPlacementPolicy`, not strictness: `AnywhereInContract` (default) or `CurrentDayOnly` — `NenContract.CheckRedemptionEligibility(proposedDate, today)`. A deficit stays claimable however long it has been outstanding (Gap 49). |
 | 9 | *Retired — folded into Rule 8 (Gap 49).* |
@@ -98,7 +99,7 @@ Current-state reference for the Nen Contract aggregate: its rules, the Redemptio
 | 12 | A redemption block gets its own outcome, classified independently. |
 | 13 | A missed redemption block creates no new deficit — no "redeem the redemption" chain (`FocusBlock.OwnDeficit`, Gaps 29, 95). |
 | 14 | No cross-preset coverage; with several presets owing, Cover Deficit offers one tile per preset. |
-| 15 | Every edit of a Redemption block recomputes its coverage from scratch, in its own contract. |
+| 15 | Every edit of a Redemption block recomputes its coverage from scratch, in its own contract — never its length (decision 16). |
 | 16 | Splitting a redemption block asks attribution once for the whole span and divides the entries across the halves by duration — never copies them to both. Under review in Gap 106. |
 | 17 | Cover Deficit sizes a preset's tile to its total remaining deficit and places it as described above. |
 | 18 | A block counts in the ledger — as a deficit source or as coverage — only once its session has ended (`Session.HasEnded`); a late session still running counts as open. Not gated on Post-Session acknowledgement (Gap 34). |
@@ -107,8 +108,8 @@ Current-state reference for the Nen Contract aggregate: its rules, the Redemptio
 
 | Layer | Artifact | Role |
 |-------|----------|------|
-| Domain | `NenContract` (`Entities/`) | `Name`, `Goal`, private `ContractCalendar`, `StartDate`/`EndDate`/`OriginalEndDate`, `Rules`, `ContractFloor?`, `CommittedFocusHours` (frozen at Seal), `Status`, `ContractPresetId?`, `ChangeWindow?`, reflection + `PostContractAcknowledgedAt`. `Seal`, `Activate`, `Complete`, `Break`. Questions: `StartsAt`/`EndsAt`, `WindowOn`, `IsRestDay`, `FloorHoursFor`, `IsDayMet`, `PercentOfFloorMet`, `IsPeriodMet`, `IsInEffect`, `IsDueForActivation`/`IsDueForCompletion`, `Governs`, `AllowsBlockPlacement`, `MembershipForPlacedBlock`, `FateWhenBroken`, `CheckComplete`, `CheckBreak`, `CheckRedemptionEligibility`, and the change answers `Binds`, `CheckBlockMove`, `CheckBlockMayMove`, `AllowsBlockOnAnotherDay`, `CheckBlockPresetChange`, `CheckBlockSplit`, `CheckBlockDelete`, `CheckFloor` (Gaps 65, 93, 97). |
-| Domain | `ContractDay`, `ContractCalendar`, `DailyFloorRule`, `DailyFloor`, `ContractFloor`, `ContractRules`, `MovementRange`, `WorkHours`, `ChangeWindow`, `NenContractGoal`, `RedemptionEntry`, `ContractEndVerdict` (`ValueObjects/`) | As described above. `ContractCalendar.Generate` is the one place Work Hours / rest days / planned hours become days; `SuggestedStart` bridges until Open Gap 66's start-time field. |
+| Domain | `NenContract` (`Entities/`) | `Name`, `Goal`, private `ContractCalendar`, `StartDate`/`EndDate`/`OriginalEndDate`, `Rules`, `CommittedFocusHours` (frozen at Seal; also the period target), `HasPeriodTarget`, `Status`, `ContractPresetId?`, `ChangeWindow?`, reflection + `PostContractAcknowledgedAt`. `Seal`, `Activate`, `Complete`, `Break`. Questions: `StartsAt`/`EndsAt`, `WindowOn`, `IsRestDay`, `FloorHoursFor`, `IsDayMet`, `PercentOfFloorMet`, `IsInEffect`, `IsDueForActivation`/`IsDueForCompletion`, `Governs`, `AllowsBlockPlacement`, `MembershipForPlacedBlock`, `FateWhenBroken`, `CheckComplete`, `CheckBreak`, `CheckRedemptionEligibility`, and the change answers `Binds`, `CheckBlockMove`, `CheckBlockLength`, `CheckBlockMayMove`, `AllowsBlockOnAnotherDay`, `CheckBlockPresetChange`, `CheckBlockSplit`, `CheckBlockDelete`, `CheckFloor` (Gaps 65, 93, 97). |
+| Domain | `ContractDay`, `ContractCalendar`, `DailyFloorRule`, `DailyFloor`, `ContractRules`, `MovementRange`, `WorkHours`, `ChangeWindow`, `NenContractGoal`, `RedemptionEntry`, `ContractEndVerdict` (`ValueObjects/`) | As described above. `ContractCalendar.Generate` is the one place Work Hours / rest days / planned hours become days; `SuggestedStart` bridges until Open Gap 66's start-time field. |
 | Domain | `StrictnessRule`, `NenContractStatus`, `RedemptionPlacementPolicy`, `RedemptionEligibility` (`Allowed`/`WrongDay`), `FocusBlockOutcome`, `ContractRole`, `ContractEndOutcome` (`Allowed`/`SessionIsRunning`/`HoursNotDelivered`/`BlocksStillPending`, worded once in `ContractEndVerdictDto.From`) (`Enums/`) | — |
 | Domain | `NenContractSealedEvent` / `ActivatedEvent` / `CompletedEvent` / `BrokenEvent` | Raised by the matching methods. |
 | Domain | `ContractPreset` (`Entities/`) | Aggregate root; `Update` replaces every rule (none can be silently reset, Gap 64). |

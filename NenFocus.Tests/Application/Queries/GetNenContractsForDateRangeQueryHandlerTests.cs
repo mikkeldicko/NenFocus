@@ -89,9 +89,8 @@ public class GetNenContractsForDateRangeQueryHandlerTests
     }
 
     // CommittedFocusHours is computed from this same map at Seal — matching real usage
-    // (SealNenContractCommandHandler derives ContractFloor from the identical sum), so the
-    // two stay numerically consistent here too.
-    private static NenContract ContractFloorContract(double contractFloorHours) =>
+    // (the period target is that sum — NenContract.HasPeriodTarget, Gap 95).
+    private static NenContract PeriodTargetContract(double contractFloorHours) =>
         TestContracts.Seal(
             id: Guid.NewGuid(),
             name: "Period Contract",
@@ -102,8 +101,7 @@ public class GetNenContractsForDateRangeQueryHandlerTests
             changeWindow: null,
             allowCancellation: false,
             plannedFocusHoursByDay: new Dictionary<DateOnly, double> { [StartDate] = contractFloorHours },
-            sealedAt: At.Utc(StartDate.ToDateTime(TimeOnly.MinValue)), timeZone: At.UtcZone,
-            contractFloor: new ContractFloor(contractFloorHours));
+            sealedAt: At.Utc(StartDate.ToDateTime(TimeOnly.MinValue)), timeZone: At.UtcZone);
 
     [Fact]
     public async Task HandleAsync_NoContractInEffect_ReturnsEmpty()
@@ -705,23 +703,23 @@ public class GetNenContractsForDateRangeQueryHandlerTests
         result.DayStatuses.Single(d => d.Date == StartDate.AddDays(1)).FloorHours.Should().Be(5);
     }
 
-    // ── ContractFloor mode (Period Time Budget, no per-day floor) ──────────────────
+    // ── Period-target mode (Period Time Budget, no per-day floor) ──────────────────
 
     [Fact]
-    public async Task HandleAsync_OrdinaryContract_ContractFloorHoursIsNull()
+    public async Task HandleAsync_OrdinaryContract_HasNoPeriodTarget()
     {
         var contract = Contract();
         SetInEffect(contract);
 
         var result = (await CreateHandler().HandleAsync(AnyRange)).Single();
 
-        result.ContractFloorHours.Should().BeNull();
+        result.HasPeriodTarget.Should().BeFalse();
     }
 
     [Fact]
-    public async Task HandleAsync_ContractFloorMode_MapsTargetAndTotalCompletedHours()
+    public async Task HandleAsync_PeriodTargetMode_MapsTargetAndTotalCompletedHours()
     {
-        SetInEffect(ContractFloorContract(9));
+        SetInEffect(PeriodTargetContract(9));
         _completedHours.HandleAsync(Arg.Any<GetNenContractCompletedFocusHoursQuery>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyDictionary<DateOnly, double>)new Dictionary<DateOnly, double>
             {
@@ -730,7 +728,7 @@ public class GetNenContractsForDateRangeQueryHandlerTests
 
         var result = (await CreateHandler().HandleAsync(AnyRange)).Single();
 
-        result.ContractFloorHours.Should().Be(9);
+        result.HasPeriodTarget.Should().BeTrue();
         result.TotalFloorHours.Should().Be(9);
         result.TotalCompletedHours.Should().Be(4.5);
     }
@@ -767,11 +765,11 @@ public class GetNenContractsForDateRangeQueryHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_ContractFloorMode_NoDayIsEverRestDay()
+    public async Task HandleAsync_PeriodTargetMode_NoDayIsEverRestDay()
     {
         // Nothing planned or completed anywhere — an ordinary contract would resolve
-        // every day to a rest day (no floor); ContractFloor mode never does.
-        SetInEffect(ContractFloorContract(9));
+        // every day to a rest day (no floor); period-target mode never does.
+        SetInEffect(PeriodTargetContract(9));
 
         var result = (await CreateHandler().HandleAsync(AnyRange)).Single();
 
@@ -779,9 +777,9 @@ public class GetNenContractsForDateRangeQueryHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_ContractFloorMode_PastDayFullyCompleted_IsMet()
+    public async Task HandleAsync_PeriodTargetMode_PastDayFullyCompleted_IsMet()
     {
-        SetInEffect(ContractFloorContract(9));
+        SetInEffect(PeriodTargetContract(9));
         _plannedHours.HandleAsync(Arg.Any<ComputePlannedFocusHoursQuery>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyDictionary<DateOnly, double>)new Dictionary<DateOnly, double> { [StartDate] = 2 });
         _completedHours.HandleAsync(Arg.Any<GetNenContractCompletedFocusHoursQuery>(), Arg.Any<CancellationToken>())
@@ -796,9 +794,9 @@ public class GetNenContractsForDateRangeQueryHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_ContractFloorMode_PastDayPartiallyMissed_IsNotMet()
+    public async Task HandleAsync_PeriodTargetMode_PastDayPartiallyMissed_IsNotMet()
     {
-        SetInEffect(ContractFloorContract(9));
+        SetInEffect(PeriodTargetContract(9));
         _plannedHours.HandleAsync(Arg.Any<ComputePlannedFocusHoursQuery>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyDictionary<DateOnly, double>)new Dictionary<DateOnly, double> { [StartDate] = 2 });
         _completedHours.HandleAsync(Arg.Any<GetNenContractCompletedFocusHoursQuery>(), Arg.Any<CancellationToken>())
@@ -812,11 +810,11 @@ public class GetNenContractsForDateRangeQueryHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_ContractFloorMode_DayWithNothingPlannedOrCompleted_StillMet()
+    public async Task HandleAsync_PeriodTargetMode_DayWithNothingPlannedOrCompleted_StillMet()
     {
         // A day emptied on purpose (hours moved elsewhere) shows as met, not a failure —
         // 0 completed against 0 planned is trivially satisfied.
-        SetInEffect(ContractFloorContract(9));
+        SetInEffect(PeriodTargetContract(9));
 
         var result = (await CreateHandler().HandleAsync(AnyRange)).Single();
 
@@ -827,10 +825,10 @@ public class GetNenContractsForDateRangeQueryHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_ContractFloorMode_FutureDay_UsesPlannedHours()
+    public async Task HandleAsync_PeriodTargetMode_FutureDay_UsesPlannedHours()
     {
         var futureDate = StartDate.AddDays(5); // today is Jan 4
-        SetInEffect(ContractFloorContract(9));
+        SetInEffect(PeriodTargetContract(9));
         _plannedHours.HandleAsync(Arg.Any<ComputePlannedFocusHoursQuery>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyDictionary<DateOnly, double>)new Dictionary<DateOnly, double> { [futureDate] = 4 });
 
@@ -843,11 +841,11 @@ public class GetNenContractsForDateRangeQueryHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_ContractFloorMode_DaysBehindAndDaysConsideredAreZero()
+    public async Task HandleAsync_PeriodTargetMode_DaysBehindAndDaysConsideredAreZero()
     {
-        // Day-Met scoring is fully removed for ContractFloor contracts — the days-behind
+        // Day-Met scoring is fully removed for period-target contracts — the days-behind
         // loop naturally yields zero since every day resolves to "no per-day obligation."
-        SetInEffect(ContractFloorContract(9));
+        SetInEffect(PeriodTargetContract(9));
 
         var result = (await CreateHandler().HandleAsync(AnyRange)).Single();
 

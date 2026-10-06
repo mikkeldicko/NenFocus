@@ -237,10 +237,10 @@ public class SealNenContractCommandHandlerTests
         saved!.Membership.Should().Be(TestContracts.Committed(result.ContractId!.Value));
     }
 
-    // ── Period Time Budget: no fixed floor -> ContractFloor ─────────────────────
+    // ── Period Time Budget: no fixed floor -> a whole-period target ─────────────────────
 
     [Fact]
-    public async Task HandleAsync_PeriodTimeBudgetNoFixedFloor_DerivesContractFloorFromTotalPlannedHours()
+    public async Task HandleAsync_PeriodTimeBudgetNoFixedFloor_TheTargetIsTheTotalPlannedHours()
     {
         var block = new NenContractBlockSpec(Guid.NewGuid(), At.Slot(new DateTime(2026, 1, 1, 9, 0, 0), new DateTime(2026, 1, 1, 11, 0, 0)), IsFocus: true);
         _calculator.Calculate(Arg.Any<IEnumerable<TimeSlot>>(), Arg.Any<UserTimeZone>())
@@ -253,13 +253,14 @@ public class SealNenContractCommandHandlerTests
 
         result.Success.Should().BeTrue();
         saved.Should().NotBeNull();
-        saved!.ContractFloorHours.Should().Be(9); // 3 + 4 + 2
+        saved!.HasPeriodTarget.Should().BeTrue();
+        saved.CommittedFocusHours.Should().Be(9); // 3 + 4 + 2 — the whole-period target
         saved.FloorRule.Should().Be(new DailyFloorRule.None());
         saved.IsRestDay(StartDate).Should().BeTrue();
     }
 
     [Fact]
-    public async Task HandleAsync_PeriodTimeBudgetWithFixedFloor_UsesAFixedDailyFloor_NotContractFloor()
+    public async Task HandleAsync_PeriodTimeBudgetWithFixedFloor_UsesAFixedDailyFloor_NoPeriodTarget()
     {
         _calculator.Calculate(Arg.Any<IEnumerable<TimeSlot>>(), Arg.Any<UserTimeZone>())
             .Returns(new Dictionary<DateOnly, double>());
@@ -271,7 +272,7 @@ public class SealNenContractCommandHandlerTests
 
         result.Success.Should().BeTrue();
         saved.Should().NotBeNull();
-        saved!.ContractFloorHours.Should().BeNull();
+        saved!.HasPeriodTarget.Should().BeFalse();
         saved.FloorRule.Should().Be(new DailyFloorRule.Fixed(new DailyFloor(0)));
     }
 

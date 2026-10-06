@@ -74,11 +74,8 @@ public sealed class EditNenContractCommandHandler : ICommandHandler<EditNenContr
             command.BonusBlocksFollowStrictness);
 
         // The rules say how days get their floor (ContractRules.FloorRule). With no per-day
-        // obligation, whatever was drafted becomes the committed whole-period target.
+        // obligation, whatever was drafted is the whole-period target (NenContract.HasPeriodTarget).
         var floorRule = rules.FloorRule;
-        var contractFloor = floorRule is DailyFloorRule.None
-            ? new ContractFloor(preparation.PlannedFocusHoursByDay.Values.Sum())
-            : null;
 
         var workHours = command.WorkHoursStart is { } workHoursStart && command.WorkHoursEnd is { } workHoursEnd
             ? new WorkHours(workHoursStart, workHoursEnd)
@@ -110,8 +107,7 @@ public sealed class EditNenContractCommandHandler : ICommandHandler<EditNenContr
                 plannedFocusHoursByDay: preparation.PlannedFocusHoursByDay,
                 sealedAt: now,
                 timeZone: _clock.TimeZone,
-                contractPresetId: command.ContractPresetId,
-                contractFloor: contractFloor);
+                contractPresetId: command.ContractPresetId);
         }
         catch (ArgumentException ex)
         {

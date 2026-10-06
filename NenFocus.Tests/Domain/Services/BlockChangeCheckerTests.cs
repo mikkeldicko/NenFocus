@@ -166,6 +166,57 @@ public class BlockChangeCheckerTests
             .Should().Be(ChangeVerdict.BelowDailyFloor(Tuesday, 2));
     }
 
+    // ── Floors are minimums of what was signed; a Redemption block's length is fixed (Gap 95, decision 16) ──
+
+    private static FocusBlock Redemption(NenContract contract, TimeSlot slot) =>
+        FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), slot, membership: TestContracts.Redemption(contract.Id));
+
+    [Fact]
+    public void CheckReschedule_ARedemptionBlock_DoesNotMakeUpForAShrinkingCommittedBlock()
+    {
+        // Tuesday: 2h committed + 1h redeeming a missed block. The 2h signed for Tuesday stays
+        // owed by the committed block — the redemption pays for something else.
+        var contract = Contract(StrictnessRule.DailyFlexibility, fixedFloorHours: 2, plan: TwoHoursEveryDay);
+        var monday = Committed(contract, Slot(Monday, 10, 12));
+        var tuesday = Committed(contract, Slot(Tuesday, 10, 12));
+        var wednesday = Committed(contract, Slot(Wednesday, 10, 12));
+        var redemption = Redemption(contract, Slot(Tuesday, 13, 14));
+
+        Reschedule(tuesday, Slot(Tuesday, 10, 11), contract, [monday, tuesday, wednesday, redemption])
+            .Should().Be(ChangeVerdict.BelowDailyFloor(Tuesday, 2));
+    }
+
+    [Theory]
+    [InlineData(13, 13.5)] // shorter
+    [InlineData(13, 15)]   // longer
+    public void CheckReschedule_ResizingARedemptionBlock_IsRefused(double fromHour, double toHour)
+    {
+        var contract = Contract(StrictnessRule.PeriodTimeBudget, plan: TwoHoursEveryDay);
+        var redemption = Redemption(contract, Slot(Tuesday, 13, 14));
+
+        Reschedule(redemption, Slot(Tuesday, fromHour, toHour), contract)
+            .Should().Be(ChangeVerdict.Refused(ChangeOutcome.RedemptionLengthFixed));
+    }
+
+    [Fact]
+    public void CheckReschedule_MovingARedemptionBlockAtTheSameLength_IsAllowed()
+    {
+        var contract = Contract(StrictnessRule.DailyFlexibility, plan: TwoHoursEveryDay);
+        var redemption = Redemption(contract, Slot(Tuesday, 13, 14));
+
+        Reschedule(redemption, Slot(Tuesday, 15, 16), contract).IsAllowed.Should().BeTrue();
+    }
+
+    [Fact]
+    public void CheckSplit_ARedemptionBlock_MayBeSplit_ThePiecesKeepItsLength()
+    {
+        var contract = Contract(StrictnessRule.DailyFlexibility, plan: TwoHoursEveryDay);
+        var redemption = Redemption(contract, Slot(Tuesday, 13, 15));
+
+        Checker.CheckSplit(redemption, Slot(Tuesday, 13, 14), Slot(Tuesday, 14, 15), contract, [redemption], BeforeItAll, At.UtcZone)
+            .IsAllowed.Should().BeTrue();
+    }
+
     [Fact]
     public void CheckReschedule_ABonusBlock_IsNeverHeldToTheFloor()
     {

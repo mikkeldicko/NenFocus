@@ -21,7 +21,6 @@ public class NenContractBlockChangeTests
         StrictnessRule strictness,
         bool bonusBlocksFollowStrictness = false,
         double? fixedFloorHours = null,
-        ContractFloor? contractFloor = null,
         IReadOnlyDictionary<DateOnly, double>? plan = null)
     {
         var rules = TestRules.Of(strictness,
@@ -37,8 +36,7 @@ public class NenContractBlockChangeTests
             changeWindow: null,
             plannedFocusHoursByDay: plan,
             sealedAt: SealedAt,
-            timeZone: At.UtcZone,
-            contractFloor: contractFloor);
+            timeZone: At.UtcZone);
     }
 
     private static NenContract Finished(StrictnessRule strictness)
@@ -351,7 +349,7 @@ public class NenContractBlockChangeTests
     [Fact]
     public void CheckFloor_WithAWholePeriodTarget_ChecksTheTotal_NotTheDays()
     {
-        var contract = Contract(StrictnessRule.PeriodTimeBudget, contractFloor: new ContractFloor(6));
+        var contract = Contract(StrictnessRule.PeriodTimeBudget, plan: new Dictionary<DateOnly, double> { [Monday] = 6 }); // the target is the 6h signed
 
         contract.CheckFloor(Plan(6, 0, 0)).Should().Be(ChangeVerdict.Allowed);
         contract.CheckFloor(Plan(3, 2, 0.5)).Should().Be(ChangeVerdict.BelowPeriodTarget(6));

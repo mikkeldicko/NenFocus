@@ -195,10 +195,6 @@ namespace NenFocus.Infrastructure.Migrations
                     b.Property<double>("CommittedFocusHours")
                         .HasColumnType("REAL");
 
-                    b.Property<double?>("ContractFloor")
-                        .HasColumnType("REAL")
-                        .HasColumnName("ContractFloor");
-
                     b.Property<Guid?>("ContractPresetId")
                         .HasColumnType("TEXT");
 

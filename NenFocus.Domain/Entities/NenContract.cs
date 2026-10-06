@@ -77,12 +77,11 @@ public class NenContract : AggregateRoot
     public RedemptionPlacementPolicy RedemptionPlacementPolicy => Rules.RedemptionPlacement;
 
     /// <summary>
-    /// A whole-period minimum, as an alternative to per-day floors — mutually exclusive
-    /// with any day carrying a floor, enforced
-    /// in Seal. Null for every contract except a Period Time Budget contract that opted
-    /// out of a per-day obligation entirely.
+    /// A whole-period target instead of per-day floors: the floor rule is None (Period Study with
+    /// no fixed floor). The target is <see cref="CommittedFocusHours"/> — read off the rules, never
+    /// stored beside them, so the two can't disagree (Gap 95, decision 8).
     /// </summary>
-    public ContractFloor? ContractFloor { get; private set; }
+    public bool HasPeriodTarget => FloorRule is DailyFloorRule.None;
 
     /// <summary>
     /// Total Focus hours actually planned at Seal — sum(plannedFocusHoursByDay), frozen
@@ -132,8 +131,7 @@ public class NenContract : AggregateRoot
         IReadOnlyDictionary<DateOnly, double> plannedFocusHoursByDay,
         Moment sealedAt,
         UserTimeZone timeZone,
-        Guid? contractPresetId = null,
-        ContractFloor? contractFloor = null)
+        Guid? contractPresetId = null)
     {
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Contract name cannot be empty.", nameof(name));
@@ -145,25 +143,8 @@ public class NenContract : AggregateRoot
         if (calendar.StartsAt < TruncateToMinute(localSealedAt))
             throw new ArgumentException("Your start time has passed — move it to now or later.");
 
-        if (contractFloor is not null && calendar.HasAnyDailyFloor)
-            throw new ArgumentException(
-                "A contract cannot have both a daily floor and a whole-contract floor.");
-
         if (rules.FloorRule is DailyFloorRule.None && calendar.HasAnyDailyFloor)
             throw new ArgumentException("A contract without daily floors cannot have a day with a floor.");
-
-        foreach (var day in calendar.Days)
-        {
-            var floor = day.Floor;
-            var date = day.Date;
-            if (floor is null)
-                continue; // rest day — no obligation, skipped entirely
-
-            var plannedHours = plannedFocusHoursByDay.GetValueOrDefault(date);
-            if (!floor.IsSatisfiedBy(plannedHours))
-                throw new ArgumentException(
-                    $"Day {date:yyyy-MM-dd} is planned below the daily floor of {floor.Hours}h (planned: {plannedHours}h).");
-        }
 
         var contract = new NenContract
         {
@@ -175,13 +156,17 @@ public class NenContract : AggregateRoot
             Rules = rules with { },
             ChangeWindow = changeWindow,
             ContractPresetId = contractPresetId,
-            ContractFloor = contractFloor,
             CommittedFocusHours = plannedFocusHoursByDay.Values.Sum(),
             Status = calendar.StartsAt <= localSealedAt
                 ? NenContractStatus.Active
                 : NenContractStatus.Scheduled
         };
         contract.SetCalendar(calendar);
+
+        // The plan must meet every floor it signs — the same check later changes are held to (Gap 95).
+        if (contract.CheckFloor(plannedFocusHoursByDay) is { Outcome: ChangeOutcome.BelowDailyFloor, Day: { } shortDay } verdict)
+            throw new ArgumentException(
+                $"Day {shortDay:yyyy-MM-dd} is planned below the daily floor of {verdict.FloorHours}h (planned: {plannedFocusHoursByDay.GetValueOrDefault(shortDay)}h).");
 
         contract.Raise(new NenContractSealedEvent(id, contract.Name, contract.StartDate, contract.EndDate, sealedAt));
 
@@ -334,23 +319,6 @@ public class NenContract : AggregateRoot
     public double? FloorHoursFor(DateOnly date) => FloorOn(date)?.Hours;
 
     private DailyFloor? FloorOn(DateOnly date) => _calendar.DayOn(date)?.Floor;
-
-    /// <summary>
-    /// The whole-period target's raw hour value for display — null when this contract
-    /// has no ContractFloor. Exists for the same reason as FloorHoursFor: Application-
-    /// layer callers never reach into ContractFloor directly.
-    /// </summary>
-    public double? ContractFloorHours => ContractFloor?.Hours;
-
-    /// <summary>
-    /// Whether the given total Focus hours satisfy this contract's whole-period target —
-    /// trivially true when there is no ContractFloor. Mirrors IsDayMet's shape exactly,
-    /// scoped to the whole period instead of one day; used both for the period-total-
-    /// protection edit guard (against total currently-planned hours) and the active-
-    /// contract banner (against total completed hours).
-    /// </summary>
-    public bool IsPeriodMet(double totalFocusHours)
-        => ContractFloor is null || ContractFloor.IsSatisfiedBy(totalFocusHours);
 
     /// <summary>
     /// Whether a redemption block may originate a new claim against an outstanding deficit
@@ -613,18 +581,32 @@ public class NenContract : AggregateRoot
     }
 
     /// <summary>
-    /// Would the plan still meet this contract's floor? <paramref name="plannedFocusHoursByDay"/>
-    /// is the planned Focus hours per day as they would be after a change (only blocks that
-    /// count toward the floor). With a whole-period target the total is checked; otherwise every
-    /// day that has a floor, first short day first — every day, not only the ones the change
-    /// touched, so no day can be missed. The strictness plays no part: a day's floor is a day's floor.
+    /// Whether the block may take a slot of another length. A Redemption block may not: it was sized
+    /// to the deficit it covers when placed, so resizing it would quietly reopen or overclaim that
+    /// deficit. It may still move, and be split into pieces of the same total (Gap 95, decision 16).
+    /// </summary>
+    public ChangeVerdict CheckBlockLength(PlannedBlock block, TimeSlot newSlot)
+    {
+        EnsureMine(block);
+        return block is FocusBlock { IsRedemption: true } && newSlot.Length != block.Scheduled.Length
+            ? ChangeVerdict.Refused(ChangeOutcome.RedemptionLengthFixed)
+            : ChangeVerdict.Allowed;
+    }
+
+    /// <summary>
+    /// Would the plan still meet what was signed? <paramref name="plannedFocusHoursByDay"/> is the
+    /// planned Focus hours per day of the Committed blocks as they would be after a change (Gap 95:
+    /// a floor is a planning minimum, so only the signed plan counts). With a whole-period target
+    /// the total must stay at <see cref="CommittedFocusHours"/>; otherwise every day that has a
+    /// floor, first short day first — every day, not only the ones the change touched. Seal asks it
+    /// too. The strictness plays no part: a day's floor is a day's floor.
     /// </summary>
     public ChangeVerdict CheckFloor(IReadOnlyDictionary<DateOnly, double> plannedFocusHoursByDay)
     {
-        if (ContractFloor is { } target)
-            return target.IsSatisfiedBy(plannedFocusHoursByDay.Values.Sum())
+        if (HasPeriodTarget)
+            return plannedFocusHoursByDay.Values.Sum() >= CommittedFocusHours
                 ? ChangeVerdict.Allowed
-                : ChangeVerdict.BelowPeriodTarget(target.Hours);
+                : ChangeVerdict.BelowPeriodTarget(CommittedFocusHours);
 
         foreach (var day in _calendar.Days)
         {

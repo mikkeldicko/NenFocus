@@ -38,10 +38,9 @@ public class NenContractTests
         IReadOnlyDictionary<DateOnly, double>? floorPlan = null,
         ContractCalendar? calendar = null,
         Guid? contractPresetId = null,
-        ContractFloor? contractFloor = null,
         RedemptionPlacementPolicy redemptionPlacementPolicy = RedemptionPlacementPolicy.AnywhereInContract)
     {
-        var rule = floorRule ?? (contractFloor is not null ? new DailyFloorRule.None() : new DailyFloorRule.Fixed(new DailyFloor(4)));
+        var rule = floorRule ?? new DailyFloorRule.Fixed(new DailyFloor(4));
         var plan = plannedFocusHoursByDay ?? FullyPlanned();
         return TestContracts.Seal(
             id: Guid.NewGuid(),
@@ -55,7 +54,6 @@ public class NenContractTests
             plannedFocusHoursByDay: plan,
             sealedAt: At.Utc(sealedAt ?? SealedOnStart), timeZone: At.UtcZone,
             contractPresetId: contractPresetId,
-            contractFloor: contractFloor,
             redemptionPlacementPolicy: redemptionPlacementPolicy);
     }
 
@@ -1004,64 +1002,16 @@ public class NenContractTests
         contract.FloorHoursFor(StartDate).Should().BeNull();
     }
 
-    // ── ContractFloor ────────────────────────────────────────────────────────────
+    // The whole-period target (Gap 95, decision 8)
 
     [Fact]
-    public void Seal_ContractFloorWithAFixedDailyFloor_Throws()
+    public void HasPeriodTarget_OnlyWhenTheFloorRuleIsNone()
     {
-        var act = () => Seal(
-            floorRule: new DailyFloorRule.Fixed(new DailyFloor(4)),
-            contractFloor: new ContractFloor(9));
-
-        act.Should().Throw<ArgumentException>();
-    }
-
-    [Fact]
-    public void Seal_ContractFloorWithADayCarryingAFloor_Throws()
-    {
-        var act = () => Seal(
-            floorRule: new DailyFloorRule.FollowsPlan(),
-            floorPlan: new Dictionary<DateOnly, double> { [StartDate] = 2 },
-            contractFloor: new ContractFloor(9));
-
-        act.Should().Throw<ArgumentException>();
-    }
-
-    [Fact]
-    public void Seal_ContractFloorWithNoDailyFloors_Succeeds()
-    {
-        var act = () => Seal(floorRule: new DailyFloorRule.None(), contractFloor: new ContractFloor(9));
-
-        act.Should().NotThrow();
-    }
-
-    [Fact]
-    public void Seal_ContractFloorWithOnlyRestDays_Succeeds()
-    {
-        // Days with no floor carry no real obligation — only a day with a floor should
-        // conflict with ContractFloor.
-        var act = () => Seal(
-            floorRule: new DailyFloorRule.FollowsPlan(),
-            floorPlan: new Dictionary<DateOnly, double>(),
-            contractFloor: new ContractFloor(9));
-
-        act.Should().NotThrow();
-    }
-
-    [Fact]
-    public void ContractFloorHours_WhenSet_ReturnsHours()
-    {
-        var contract = Seal(contractFloor: new ContractFloor(9));
-
-        contract.ContractFloorHours.Should().Be(9);
-    }
-
-    [Fact]
-    public void ContractFloorHours_WhenNotSet_ReturnsNull()
-    {
-        var contract = Seal();
-
-        contract.ContractFloorHours.Should().BeNull();
+        // The floor rule follows from the rules: None is Period Study with no fixed floor.
+        Seal(strictnessRule: StrictnessRule.PeriodTimeBudget, floorRule: new DailyFloorRule.None()).HasPeriodTarget.Should().BeTrue();
+        Seal(strictnessRule: StrictnessRule.PeriodTimeBudget, floorRule: new DailyFloorRule.Fixed(new DailyFloor(4))).HasPeriodTarget.Should().BeFalse();
+        Seal(floorRule: new DailyFloorRule.Fixed(new DailyFloor(4))).HasPeriodTarget.Should().BeFalse();
+        Seal(floorRule: new DailyFloorRule.FollowsPlan(), floorPlan: new Dictionary<DateOnly, double>()).HasPeriodTarget.Should().BeFalse();
     }
 
     [Fact]
@@ -1089,32 +1039,17 @@ public class NenContractTests
         contract.CommittedFocusHours.Should().Be(1);
     }
 
-    [Fact]
-    public void CommittedFocusHours_MatchesContractFloorHours_ForAContractFloorModeContract()
-    {
-        var plan = new Dictionary<DateOnly, double> { [StartDate] = 9 };
-        var contract = Seal(floorRule: new DailyFloorRule.None(), plannedFocusHoursByDay: plan, contractFloor: new ContractFloor(9));
-
-        contract.CommittedFocusHours.Should().Be(contract.ContractFloorHours);
-    }
-
     [Theory]
     [InlineData(8.9, false)]
     [InlineData(9, true)]
     [InlineData(10, true)]
-    public void IsPeriodMet_ComparesTotalAgainstContractFloor(double totalHours, bool expectedMet)
+    public void CheckFloor_WithAPeriodTarget_HoldsTheTotalToWhatWasSigned(double totalHours, bool allowed)
     {
-        var contract = Seal(contractFloor: new ContractFloor(9));
+        var contract = Seal(strictnessRule: StrictnessRule.PeriodTimeBudget, floorRule: new DailyFloorRule.None(),
+            plannedFocusHoursByDay: new Dictionary<DateOnly, double> { [StartDate] = 9 });
 
-        contract.IsPeriodMet(totalHours).Should().Be(expectedMet);
-    }
-
-    [Fact]
-    public void IsPeriodMet_NoContractFloor_AlwaysMet()
-    {
-        var contract = Seal();
-
-        contract.IsPeriodMet(0).Should().BeTrue();
+        contract.CheckFloor(new Dictionary<DateOnly, double> { [StartDate.AddDays(1)] = totalHours })
+            .Should().Be(allowed ? ChangeVerdict.Allowed : ChangeVerdict.BelowPeriodTarget(9));
     }
 
     [Fact]

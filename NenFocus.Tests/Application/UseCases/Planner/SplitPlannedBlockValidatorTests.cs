@@ -432,9 +432,8 @@ public class SplitPlannedBlockValidatorTests
             rules: TestRules.Of(StrictnessRule.PeriodTimeBudget),
             calendar: TestCalendars.For(day1, day2, new DailyFloorRule.None()),
             changeWindow: null,
-            plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-            sealedAt: TestAt.Utc(day1.ToDateTime(TimeOnly.MinValue)), timeZone: TestAt.UtcZone,
-            contractFloor: new ContractFloor(contractFloorHours));
+            plannedFocusHoursByDay: new Dictionary<DateOnly, double> { [day1] = contractFloorHours }, // the target is what was signed
+            sealedAt: TestAt.Utc(day1.ToDateTime(TimeOnly.MinValue)), timeZone: TestAt.UtcZone);
 
     [Theory]
     [InlineData(10, false)] // the contract's only block is 3h — under a 10h target whatever the split

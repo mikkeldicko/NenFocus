@@ -90,13 +90,13 @@ public sealed class GetNenContractsForDateRangeQueryHandler
         var bonusHoursByDay = await _bonusHours.HandleAsync(
             new GetNenContractBonusFocusHoursQuery(contract.Id), cancellationToken);
 
-        // Period Time Budget using a whole-period ContractFloor has no per-day obligation
+        // Period Time Budget with a whole-period target has no per-day obligation
         // at all — DailyFloorPolicy is None for these contracts, so IsRestDay/IsDayMet
         // would trivially resolve "rest"/"always met" for every day. Each day's badge
         // instead compares completed-so-far against that day's own currently-planned
         // hours (a live number, not a frozen seal-time value — reflects any moves), and
         // no day is ever a rest day since none is ever individually "off."
-        var isContractFloorMode = contract.ContractFloorHours.HasValue;
+        var hasPeriodTarget = contract.HasPeriodTarget;
 
         var dayStatuses = new List<NenContractDayStatusDto>();
         for (var date = contract.StartDate; date <= contract.EndDate; date = date.AddDays(1))
@@ -131,9 +131,9 @@ public sealed class GetNenContractsForDateRangeQueryHandler
             // currently-scheduled duration (plannedForDay, live) — no longer "Rest." A day
             // with neither stays "Rest." Domain (DailyFloorPolicy/IsDayMet/IsRestDay) is
             // never touched — this is purely how the read-side projection displays it.
-            var committedFloor = isContractFloorMode ? null : contract.FloorHoursFor(date);
-            var hasAdHocFloor = !isContractFloorMode && committedFloor is null && plannedForDay > 0;
-            var isRestDay = !isContractFloorMode && committedFloor is null && !hasAdHocFloor;
+            var committedFloor = hasPeriodTarget ? null : contract.FloorHoursFor(date);
+            var hasAdHocFloor = !hasPeriodTarget && committedFloor is null && plannedForDay > 0;
+            var isRestDay = !hasPeriodTarget && committedFloor is null && !hasAdHocFloor;
 
             // Every "is this met" decision — real committed floor, ad-hoc floor, or Period
             // Time Budget's live period-total comparison — now funnels through the exact
@@ -144,7 +144,7 @@ public sealed class GetNenContractsForDateRangeQueryHandler
             // construction — a day's own blocks can never sum past a real calendar day.
             double floorHours;
             bool isMet;
-            if (isContractFloorMode)
+            if (hasPeriodTarget)
             {
                 floorHours = plannedForDay;
                 isMet = new DailyFloor(plannedForDay).IsSatisfiedBy(currentHours);
@@ -184,9 +184,8 @@ public sealed class GetNenContractsForDateRangeQueryHandler
         // ad-hoc floor on top of the missed day's own floor for what's really the same
         // hour, or under-count entirely for a contract using DailyFloorPolicy.None (no
         // per-day floor at all, yet still a real originally-planned schedule). For a
-        // ContractFloor-mode contract this is numerically identical to ContractFloorHours
-        // (both computed the same way at Seal) — CommittedFocusHours works uniformly
-        // across every strictness rule without needing that special case here.
+        // period-target contract it is that target itself (Gap 95, decision 8) — CommittedFocusHours
+        // works uniformly across every strictness rule.
         var totalCompletedHours = completedHoursByDay.Values.Sum();
         var totalFloorHours = contract.CommittedFocusHours;
         var totalBonusHours = bonusHoursByDay.Values.Sum();
@@ -207,7 +206,7 @@ public sealed class GetNenContractsForDateRangeQueryHandler
             DeficitHours = deficitHours,
             AllowCancellation = contract.AllowCancellation,
             DayStatuses = dayStatuses,
-            ContractFloorHours = contract.ContractFloorHours,
+            HasPeriodTarget = contract.HasPeriodTarget,
             TotalFloorHours = totalFloorHours,
             TotalCompletedHours = totalCompletedHours,
             TotalBonusHours = totalBonusHours
