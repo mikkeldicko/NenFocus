@@ -259,8 +259,7 @@ public class NenFocusDbContext : DbContext
 
             // Scoped by PresetType, not global — a Focus preset and a Background preset
             // are chosen from separate, type-filtered contexts and never compared against
-            // each other, so sharing a name isn't a real collision. Mirrors the seed data
-            // below, which already has "Social Media Blocked" once per type.
+            // each other, so sharing a name isn't a real collision.
             entity.HasIndex(p => new { p.Name, p.PresetType }).IsUnique();
 
             entity.Property<string>("TagsSerialized")
@@ -284,7 +283,7 @@ public class NenFocusDbContext : DbContext
 
             entity.HasData(
                 new { Id = focusAllowlistId, Name = "AI & Dev Tools Only",    WebsiteFilterType = WebsiteFilterType.Allowlist, PresetType = BlockPresetType.Focus,      TagsSerialized = "" },
-                new { Id = focusBlocklistId, Name = "Social Media Blocked",   WebsiteFilterType = WebsiteFilterType.Blocklist, PresetType = BlockPresetType.Focus,      TagsSerialized = "" },
+                new { Id = focusBlocklistId, Name = "DBA block",              WebsiteFilterType = WebsiteFilterType.Blocklist, PresetType = BlockPresetType.Focus,      TagsSerialized = "" },
                 new { Id = bgBlocklistId,    Name = "Social Media Blocked",   WebsiteFilterType = WebsiteFilterType.Blocklist, PresetType = BlockPresetType.Background, TagsSerialized = "" },
                 new { Id = bgAllowlistId,    Name = "Work & Music Only",      WebsiteFilterType = WebsiteFilterType.Allowlist, PresetType = BlockPresetType.Background, TagsSerialized = "" }
             );
@@ -302,11 +301,7 @@ public class NenFocusDbContext : DbContext
                     new { BlockPresetId = focusAllowlistId, Url = "claude.ai" },
                     new { BlockPresetId = focusAllowlistId, Url = "github.com" },
 
-                    new { BlockPresetId = focusBlocklistId, Url = "youtube.com" },
-                    new { BlockPresetId = focusBlocklistId, Url = "twitter.com" },
-                    new { BlockPresetId = focusBlocklistId, Url = "instagram.com" },
-                    new { BlockPresetId = focusBlocklistId, Url = "reddit.com" },
-                    new { BlockPresetId = focusBlocklistId, Url = "facebook.com" },
+                    new { BlockPresetId = focusBlocklistId, Url = "dba.dk" },
 
                     new { BlockPresetId = bgBlocklistId, Url = "youtube.com" },
                     new { BlockPresetId = bgBlocklistId, Url = "twitter.com" },

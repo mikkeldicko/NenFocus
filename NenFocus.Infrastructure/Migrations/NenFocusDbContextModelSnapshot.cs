@@ -63,7 +63,7 @@ namespace NenFocus.Infrastructure.Migrations
                         new
                         {
                             Id = new Guid("a0000001-0000-0000-0000-000000000002"),
-                            Name = "Social Media Blocked",
+                            Name = "DBA block",
                             PresetType = "Focus",
                             TagsSerialized = "",
                             WebsiteFilterType = "Blocklist"
@@ -420,27 +420,7 @@ namespace NenFocus.Infrastructure.Migrations
                                 new
                                 {
                                     BlockPresetId = new Guid("a0000001-0000-0000-0000-000000000002"),
-                                    Url = "youtube.com"
-                                },
-                                new
-                                {
-                                    BlockPresetId = new Guid("a0000001-0000-0000-0000-000000000002"),
-                                    Url = "twitter.com"
-                                },
-                                new
-                                {
-                                    BlockPresetId = new Guid("a0000001-0000-0000-0000-000000000002"),
-                                    Url = "instagram.com"
-                                },
-                                new
-                                {
-                                    BlockPresetId = new Guid("a0000001-0000-0000-0000-000000000002"),
-                                    Url = "reddit.com"
-                                },
-                                new
-                                {
-                                    BlockPresetId = new Guid("a0000001-0000-0000-0000-000000000002"),
-                                    Url = "facebook.com"
+                                    Url = "dba.dk"
                                 },
                                 new
                                 {
