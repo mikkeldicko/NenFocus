@@ -3,21 +3,11 @@ using NenFocus.Domain.Enums;
 namespace NenFocus.Application.DTOs;
 
 /// <summary>
-/// One day's daily-floor status within a sealed contract's full [StartDate, EndDate]
-/// range — feeds the Planner's per-day floor badges. CurrentHours is completed Focus
-/// hours when Timing is Today or Past, otherwise planned Focus hours from
-/// already-scheduled blocks; IsMet is computed against whichever of those applies, via
-/// NenContract.IsDayMet, so the same day-met rule covers both cases uniformly. Timing
-/// gives "today, not yet met" its own distinct treatment from "past, missed" — the day
-/// isn't over yet, so it isn't a real miss — without allowing the impossible
-/// Today-and-Past combination two loose bools would.
-///
-/// For a Period Time Budget contract with a whole-period target (NenContractRangeViewDto.HasPeriodTarget),
-/// there is no real per-day floor — FloorHours instead carries that day's currently-
-/// planned hours (a comparison baseline, not an obligation) and IsMet compares
-/// CurrentHours directly against it rather than through IsDayMet, which would trivially
-/// always be true (DailyFloorPolicy is None for these contracts). IsRestDay is always
-/// false for these contracts — no day is ever "off" when only the period total matters.
+/// One day of a sealed contract as the Planner's day badge shows it — <c>ContractDayStatus</c>
+/// (<c>NenContract.DayStatuses</c>, the one day rule, Gap 95), mapped for display. FloorHours is
+/// what the day owes. CurrentHours is what was done when Timing is Today or Past; on a future day
+/// it is what the day owes as planned, met as planned. Timing gives "today, not yet met" its own
+/// treatment apart from "past, missed" — the day isn't over yet, so it isn't a real miss.
 /// </summary>
 public sealed record NenContractDayStatusDto
 {

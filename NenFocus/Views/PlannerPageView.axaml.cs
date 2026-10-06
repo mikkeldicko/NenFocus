@@ -648,9 +648,9 @@ public partial class PlannerPageView : UserControl
     /// class / no badges for a still-pending block (default focusTile gold). StartedLate and
     /// EndedEarly share one class deliberately: both are "something went off-schedule," same
     /// amber treatment, distinguished only by badge text. CompletedOnTime gets color with no
-    /// badge — green alone is enough to read as "on time." wasStartedLate is independent of
-    /// outcome (Classify gives EndedEarly priority when a block is both late and early), so an
-    /// EndedEarly block that was also started late shows both badges stacked.
+    /// badge — green alone is enough to read as "on time." StartedLate and EndedEarly are flags
+    /// apart from the outcome (the outcome gives EndedEarly priority when a block is both), so a
+    /// block that started late and ended early shows both badges stacked.
     /// </summary>
     // Colour from the one verdict; a label for each true fact — a block that started late and
     // ended early shows both (Gap 95).

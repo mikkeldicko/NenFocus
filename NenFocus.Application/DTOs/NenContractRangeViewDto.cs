@@ -32,7 +32,7 @@ public sealed record NenContractRangeViewDto
     public int DayNumber { get; init; }
     public int TotalDays { get; init; }
 
-    /// <summary>Non-rest-day count from StartDate through today (or EndDate) with IsDayMet false.
+    /// <summary>Non-rest-day count from StartDate through today (or EndDate) that are not met (ContractDayStatus.IsMet).
     /// Zero for a period-target contract (see HasPeriodTarget) — Day-Met has no meaning there. No longer
     /// shown in the banner text, but kept for any future per-day-scoring consumer (e.g. streaks).</summary>
     public int DaysBehind { get; init; }

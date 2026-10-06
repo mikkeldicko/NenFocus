@@ -214,11 +214,6 @@ public class Session : AggregateRoot
         PostSessionAcknowledgedAt = acknowledgedAt;
     }
 
-    /// <summary>Mirrors PlannedBlock.HasEnded's naming idiom — a single
-    /// named question over EndedAt so callers ask whether this session has actually finished
-    /// (naturally or ended early) rather than null-checking the raw field themselves.</summary>
-    public bool HasEnded => EndedAt.HasValue;
-
     /// <summary>
     /// The time this session occupies while it runs — StartedAt to its scheduled end — and null
     /// once it isn't running. What Focus placement must keep clear (Gap 88). A running planned

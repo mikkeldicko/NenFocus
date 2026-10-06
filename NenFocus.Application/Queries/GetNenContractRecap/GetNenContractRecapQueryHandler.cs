@@ -48,8 +48,7 @@ public sealed class GetNenContractRecapQueryHandler : IQueryHandler<GetNenContra
         foreach (var block in linkedBlocks)
         {
             // Bonus blocks are counted apart from the contract's own (Gap 97): never in the
-            // totals or outcomes, and a removed (cancelled) one not at all. Same set as
-            // GetNenContractBonusFocusHoursQueryHandler's hours.
+            // totals or outcomes, and a removed (cancelled) one not at all.
             if (block.Membership is { IsBonus: true })
             {
                 if (block is FocusBlock && !block.CancelledAt.HasValue) bonusBlockCount++;
@@ -68,7 +67,7 @@ public sealed class GetNenContractRecapQueryHandler : IQueryHandler<GetNenContra
 
             if (focusBlock.IsRedemption) redemptionBlocks++;
 
-            // Cancelled is reported as its own category, never run through Classify — same
+            // Cancelled is reported as its own category, never asked its outcome — same
             // split GetNenContractRecapQuery was originally designed around (Open Gap G).
             if (focusBlock.CancelledAt.HasValue)
             {

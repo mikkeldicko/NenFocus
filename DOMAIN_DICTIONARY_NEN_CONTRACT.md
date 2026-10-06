@@ -54,7 +54,7 @@ Current-state reference for the Nen Contract aggregate: its rules, the Redemptio
 
 **Daily Floor:** stored per `ContractDay` (null = no floor), never more than the day's window — a **planning minimum** only: Seal and every Committed-block change are held to it (`CheckFloor`), but it never decides "met" (Gap 95, decision 7). Days get it from `DailyFloorRule` when generated: `Fixed` (a day that can't fit it is refused at Seal, never shrunk), `FollowsPlan`, or `None`. `FloorHoursFor(date)` reads it (the edit form).
 
-**Period target (`PeriodTimeBudget` with no fixed floor):** `FloorRule` is `None` and `HasPeriodTarget` is true; the target is `CommittedFocusHours`, read off the rules, never stored (Gap 95, decision 8 — `ContractFloor` deleted). No day is individually obligated — Day Met and rest days don't apply; `CheckFloor` checks the total.
+**Period target (`PeriodTimeBudget` with no fixed floor):** `FloorRule` is `None` and `HasPeriodTarget` is true; the target is `CommittedFocusHours`, read off the rules, never stored (Gap 95, decision 8 — `ContractFloor` deleted). The total is the planning minimum (`CheckFloor`); each day still owes its own plan like any contract's (Day Met below, Gap 95 decision 5).
 
 **Rest days:** a day that owes nothing (`ContractDayStatus.IsRest`): no Committed block and no redemption on it — trivially met, skipped by days behind and streaks. A day with no stored floor can still owe hours if a redemption lands there (Gap 95; replaced Gap 52's display-only ad-hoc target).
 
