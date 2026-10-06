@@ -21,14 +21,14 @@ Every rule has exactly one home, chosen by **what data it needs** and **whether 
 |------|------|----------|
 | **Entity method** | A question about one thing with an identity, answered from its own data | `PlannedBlock.IsActive`, `PlannedBlock.EffectiveEnd`, `FocusBlock.IsAwaitingRitual`, `Session.LiftsBlockingAt` |
 | **Value object** | Values that belong together and carry their own rules; no identity (equal values are the same thing); usually used in many places | `BreakSchedule`, `WorkHours`, `ContractDay`, `SessionGoal` |
-| **Domain service** (`Domain/Services/`) | A business rule that needs several things at once and belongs to none of them; stateless | `PolicyEngine` (blocks + sessions + presets), `FocusBlockOutcomeClassifier` (grace rule shared by outcome and credit) |
+| **Domain service** (`Domain/Services/`) | A business rule that needs several things at once and belongs to none of them; stateless | `PolicyEngine` (blocks + sessions + presets), `BlockPlacementChecker` (a slot + contracts + blocks + sessions) |
 | **Application service** (`Application/Services/`) | No business rule — takes a Domain answer and acts on it (database, OS, notifications) | `EnforcementSynchronizer`, `Notifier`, `BlockMarkerNotifier` |
 
 **Decide in this order:**
 1. **Rule or coordination?** Only asks the Domain and then acts → application service. Stop.
 2. **One thing's data or several?** Several → probably a domain service, but try step 4 first.
 3. **Identity or just values?** Has an identity and a lifecycle ("*this* block") → entity method. Just values that travel together → value object. Strong signal: the same primitives keep appearing together (`Start` + `End`) and the same formula keeps being written on them.
-4. **Can one of them own it if the others are passed in?** `FocusBlock.CanContributeOwnDeficit(outcome)` — the block owns the rule, the caller supplies the outcome. Only when no single thing is the natural owner does it become a domain service.
+4. **Can one of them own it if the others are passed in?** `NenContract.CheckBlockMove(block, newSlot, timeZone)` — the contract owns the rule, the caller passes the block in. Only when no single thing is the natural owner does it become a domain service.
 
 **Warning signs:**
 - A domain service answering a question about a single entity → the rule belongs on the entity (anemic domain).
@@ -141,7 +141,7 @@ A handler must not read an entity's raw fields (`Start`, `End`, `RitualCompleted
 >
 > **Smell to watch for while reviewing any new Application handler:** a `.Where(...)`, `if`, or arithmetic expression built from more than one raw entity field, especially one that resembles logic that already exists — even loosely — somewhere else in the codebase. Grep for the fields involved before writing the expression.
 >
-> **Canonical example of doing it right:** `FocusBlock.CanContributeOwnDeficit(FocusBlockOutcome? outcome)` — takes the already-classified outcome as a parameter (the caller owns *when* to classify, since that needs `now`/session data), but the entity owns the *rule* of what counts as its own deficit.
+> **Canonical example of doing it right:** `FocusBlock.OwnDeficit(asOf)` — the block answers "what did I fail to deliver" from its own stamps; no caller re-derives outcome, credit or finality from raw fields. (It replaced `CanContributeOwnDeficit(outcome)` + `RawDeficitMinutes(credited)`, which still left callers computing the outcome and credit to pass in — Gap 95.)
 
 #### No Baking a Computed Fraction Into a Persisted Timestamp Without Rounding to Its Invariant's Grain
 
@@ -308,7 +308,7 @@ These converters are approved. Reuse before creating new ones. **This list must 
 | DTO | `<Noun>Dto` — a read model the Application hands out; every `…Dto` lives in `Application/DTOs/`. That folder is the home for any data shape shared across the Application boundary, so it also holds a few non-DTOs named for what they are (command input `NenContractBlockSpec`, event payload `RitualRequirementChange`). A UI-only item is not a DTO and doesn't take the suffix. **One builder per DTO** (added 2026-09-29): "what the UI sees of this entity" is a rule, so each DTO is built in one production file; a DTO needed by several use cases gets a named factory on itself (`SessionDto.From(…)`, like the existing `SessionDto.MapBreaks`) that they call — guarded by `DtoBuilderRuleTests` | `SessionDto`, `PostSessionDto` |
 | Domain event | `<Noun><PastTense>Event` | `SessionStartedEvent`, `SessionEndedEvent` |
 | Value object | Noun only | `SessionGoal`, `BreakTimer` |
-| Domain service | Agent noun — names the role it plays (`-Engine`, `-Classifier`, `-Calculator`, `-Checker`, …); never `-Service`, which is reserved for Infrastructure and the Application↔UI bridges. Interface `I<Name>` in `Domain/Services/` | `PolicyEngine`, `FocusBlockOutcomeClassifier`, `BlockPlacementChecker` |
+| Domain service | Agent noun — names the role it plays (`-Engine`, `-Classifier`, `-Calculator`, `-Checker`, …); never `-Service`, which is reserved for Infrastructure and the Application↔UI bridges. Interface `I<Name>` in `Domain/Services/` | `PolicyEngine`, `PlannedFocusHoursCalculator`, `BlockPlacementChecker` |
 | ViewModel | `<Page>ViewModel` | `MainPageViewModel`, `HatsuPageViewModel` |
 | Converter | `<Input>To<Output>Converter` for a mapping; `<What>EqualConverter` / `<Subject>Has<X>Converter` for a yes/no test (added 2026-09-29, Gap 98 — the catalogue already listed `IntEqualConverter`). Every converter is listed in the Converter Catalogue above — a test fails otherwise | `TimeSpanToStringConverter`, `StringEqualConverter` |
 

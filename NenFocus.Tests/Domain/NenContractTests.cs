@@ -544,19 +544,29 @@ public class NenContractTests
             At.Slot(StartDate.ToDateTime(new TimeOnly(fromHour, 0)), StartDate.ToDateTime(new TimeOnly(toHour, 0))), membership: membership);
 
     [Theory]
-    [InlineData(false, BlockFateOnBreak.Cancel)]
-    [InlineData(true, BlockFateOnBreak.Leave)]
-    public void FateWhenBroken_CommittedOrRedemptionBlock_CancelledUnlessFinished_WhateverTheBonusChoice(bool isResolved, BlockFateOnBreak expected)
+    [InlineData(14, 15, BlockFateOnBreak.Cancel)] // upcoming: not final
+    [InlineData(9, 10, BlockFateOnBreak.Leave)]   // missed: final
+    public void FateWhenBroken_CommittedOrRedemptionBlock_CancelledUnlessFinal_WhateverTheBonusChoice(int fromHour, int toHour, BlockFateOnBreak expected)
     {
         var contract = Seal();
-        var committed = BlockAt(14, 15, TestContracts.Committed(contract.Id));
-        var redemption = BlockAt(15, 16, TestContracts.Redemption(contract.Id));
+        var committed = BlockAt(fromHour, toHour, TestContracts.Committed(contract.Id));
+        var redemption = BlockAt(fromHour, toHour, TestContracts.Redemption(contract.Id));
 
         foreach (var keepBonus in new[] { true, false })
         {
-            contract.FateWhenBroken(committed, isResolved, At.Utc(BrokenAt), keepBonus).Should().Be(expected);
-            contract.FateWhenBroken(redemption, isResolved, At.Utc(BrokenAt), keepBonus).Should().Be(expected);
+            contract.FateWhenBroken(committed, At.Utc(BrokenAt), keepBonus).Should().Be(expected);
+            contract.FateWhenBroken(redemption, At.Utc(BrokenAt), keepBonus).Should().Be(expected);
         }
+    }
+
+    [Fact]
+    public void FateWhenBroken_CommittedBlockWhoseSessionEndedEarly_IsLeft()
+    {
+        // Its session already ended: the block is final, so breaking never relabels it Cancelled.
+        var contract = Seal();
+        var endedEarly = TestBlocks.Worked(BlockAt(11, 13, TestContracts.Committed(contract.Id)), ritualAfterStart: 0, endedAfterStart: 30);
+
+        contract.FateWhenBroken(endedEarly, At.Utc(BrokenAt), keepBonusBlocks: true).Should().Be(BlockFateOnBreak.Leave);
     }
 
     [Theory]
@@ -567,7 +577,7 @@ public class NenContractTests
         var contract = Seal();
         var upcoming = BlockAt(14, 15, TestContracts.Bonus(contract.Id));
 
-        contract.FateWhenBroken(upcoming, isResolved: false, At.Utc(BrokenAt), keepBonusBlocks).Should().Be(expected);
+        contract.FateWhenBroken(upcoming, At.Utc(BrokenAt), keepBonusBlocks).Should().Be(expected);
     }
 
     [Fact]
@@ -580,9 +590,9 @@ public class NenContractTests
 
         foreach (var keepBonus in new[] { true, false })
         {
-            contract.FateWhenBroken(running, false, At.Utc(BrokenAt), keepBonus).Should().Be(BlockFateOnBreak.Leave);
-            contract.FateWhenBroken(startingNow, false, At.Utc(BrokenAt), keepBonus).Should().Be(BlockFateOnBreak.Leave);
-            contract.FateWhenBroken(finished, true, At.Utc(BrokenAt), keepBonus).Should().Be(BlockFateOnBreak.Leave);
+            contract.FateWhenBroken(running, At.Utc(BrokenAt), keepBonus).Should().Be(BlockFateOnBreak.Leave);
+            contract.FateWhenBroken(startingNow, At.Utc(BrokenAt), keepBonus).Should().Be(BlockFateOnBreak.Leave);
+            contract.FateWhenBroken(finished, At.Utc(BrokenAt), keepBonus).Should().Be(BlockFateOnBreak.Leave);
         }
     }
 
@@ -590,8 +600,8 @@ public class NenContractTests
     public void FateWhenBroken_BlockOfAnotherContractOrOfNone_Throws()
     {
         var contract = Seal();
-        var foreign = () => contract.FateWhenBroken(BlockAt(14, 15, TestContracts.Committed(Guid.NewGuid())), false, At.Utc(BrokenAt), true);
-        var plain = () => contract.FateWhenBroken(BlockAt(14, 15, null), false, At.Utc(BrokenAt), true);
+        var foreign = () => contract.FateWhenBroken(BlockAt(14, 15, TestContracts.Committed(Guid.NewGuid())), At.Utc(BrokenAt), true);
+        var plain = () => contract.FateWhenBroken(BlockAt(14, 15, null), At.Utc(BrokenAt), true);
 
         foreign.Should().Throw<ArgumentException>();
         plain.Should().Throw<ArgumentException>();
@@ -1122,5 +1132,92 @@ public class NenContractTests
 
         contract.AllowsBlockPlacement(Utc(8, 9), copenhagen).Should().BeTrue("09:00–10:00 on the user's clock");
         contract.AllowsBlockPlacement(Utc(7, 8), copenhagen).Should().BeFalse("08:00–09:00 on the user's clock");
+    }
+
+    // ── May this contract end? (Gap 95, decision 18) ───────────────────────────
+
+    private static readonly Moment EndCheckAt = At.Utc(StartDate.ToDateTime(new TimeOnly(12, 0)));
+
+    [Fact]
+    public void CheckComplete_EverythingDeliveredAndDone_IsAllowed()
+    {
+        var contract = Seal();
+        var done = BlockAt(9, 10, TestContracts.Committed(contract.Id)); // missed: final
+
+        var verdict = contract.CheckComplete([done], sessionRunning: false, contract.CommittedFocusHours, EndCheckAt);
+
+        verdict.Outcome.Should().Be(ContractEndOutcome.Allowed);
+        verdict.IsAllowed.Should().BeTrue();
+    }
+
+    [Fact]
+    public void CheckComplete_WhileASessionRuns_IsRefused_EvenWithEverythingDelivered()
+    {
+        var contract = Seal();
+
+        contract.CheckComplete([], sessionRunning: true, contract.CommittedFocusHours, EndCheckAt)
+            .Outcome.Should().Be(ContractEndOutcome.SessionIsRunning);
+    }
+
+    [Fact]
+    public void CheckComplete_HoursStillOwed_IsRefusedWithTheHoursLeft()
+    {
+        var contract = Seal();
+
+        var verdict = contract.CheckComplete([], sessionRunning: false, contract.CommittedFocusHours - 2.5, EndCheckAt);
+
+        verdict.Outcome.Should().Be(ContractEndOutcome.HoursNotDelivered);
+        verdict.RemainingHours.Should().Be(2.5);
+    }
+
+    [Fact]
+    public void CheckComplete_OverDelivered_HasNoHoursLeft()
+    {
+        var contract = Seal();
+
+        contract.CheckComplete([], sessionRunning: false, contract.CommittedFocusHours + 3, EndCheckAt)
+            .RemainingHours.Should().Be(0);
+    }
+
+    [Fact]
+    public void CheckComplete_ABlockNotYetFinal_IsRefusedWithTheCount_CancelledBlocksIgnored()
+    {
+        var contract = Seal();
+        var upcoming = BlockAt(14, 15, TestContracts.Committed(contract.Id));
+        var running = TestBlocks.Worked(BlockAt(11, 13, TestContracts.Committed(contract.Id)), ritualAfterStart: 0, endedAfterStart: null);
+        var cancelled = BlockAt(15, 16, TestContracts.Committed(contract.Id));
+        cancelled.MarkCancelled(EndCheckAt);
+
+        var verdict = contract.CheckComplete([upcoming, running, cancelled], sessionRunning: false, contract.CommittedFocusHours, EndCheckAt);
+
+        verdict.Outcome.Should().Be(ContractEndOutcome.BlocksStillPending);
+        verdict.PendingBlockCount.Should().Be(2);
+    }
+
+    [Fact]
+    public void CheckComplete_ABlockOfAnotherContract_Throws()
+    {
+        var contract = Seal();
+        var foreign = BlockAt(14, 15, TestContracts.Committed(Guid.NewGuid()));
+
+        var act = () => contract.CheckComplete([foreign], sessionRunning: false, contract.CommittedFocusHours, EndCheckAt);
+
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Theory]
+    [InlineData(true, ContractEndOutcome.SessionIsRunning)]
+    [InlineData(false, ContractEndOutcome.Allowed)]
+    public void CheckBreak_IsRefusedOnlyWhileASessionRuns(bool sessionRunning, ContractEndOutcome expected)
+    {
+        Seal(allowCancellation: true).CheckBreak(sessionRunning).Outcome.Should().Be(expected);
+    }
+
+    [Fact]
+    public void CheckBreak_CancellationOff_IsStillAllowed_UntilStrictModeDecides()
+    {
+        // Interim since 2026-08-18: AllowCancellation is stored but not enforced; Gap 83 decides
+        // whether it or Strict Mode is the gate, and adds that reason to CheckBreak.
+        Seal(allowCancellation: false).CheckBreak(sessionRunning: false).IsAllowed.Should().BeTrue();
     }
 }

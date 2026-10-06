@@ -39,7 +39,7 @@ public sealed record PlannedBlockDto
     public required BlockChangeAllowances Allowances { get; init; }
 
     /// <summary>
-    /// FocusBlockOutcomeClassifier.Classify's result for a FocusBlock — null for a
+    /// FocusBlock.Outcome for a FocusBlock — null for a
     /// BackgroundBlock (no ritual, no outcome concept) or a FocusBlock still pending. Drives
     /// the Planner tile's Missed/StartedLate badge; a Missed block still renders at its full
     /// original span (nothing new can practically be scheduled over already-passed time), but

@@ -22,7 +22,6 @@ public class EndSessionCommandHandlerTests
     // Real instance, not mocked — it's a pure, dependency-free domain service, and the
     // grace-period-crediting tests below exist specifically to verify its actual
     // arithmetic end-to-end through this handler, not just that the handler calls it.
-    private readonly IFocusBlockOutcomeClassifier _classifier = new FocusBlockOutcomeClassifier();
 
     public EndSessionCommandHandlerTests()
     {
@@ -31,7 +30,7 @@ public class EndSessionCommandHandlerTests
     }
 
     private EndSessionCommandHandler CreateHandler()
-        => new(_sessions, _presets, _plannedBlocks, _attemptTracker, _clock, _classifier);
+        => new(_sessions, _presets, _plannedBlocks, _attemptTracker, _clock);
 
     private static Session CreateActiveSession(Guid? originatingBlockId = null)
     {
@@ -162,6 +161,7 @@ public class EndSessionCommandHandlerTests
         _sessions.GetByIdAsync(session.Id, Arg.Any<CancellationToken>()).Returns(session);
         var originalEnd = Now.AddHours(1);
         var block = FocusBlock.Create(blockId, session.BlockPresetId,At.Slot(Now.AddMinutes(-10), originalEnd));
+        block.MarkRitualCompleted(At.Utc(Now.AddMinutes(-10)));
         _plannedBlocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns(block);
 
         await CreateHandler().HandleAsync(new EndSessionCommand { SessionId = session.Id });
@@ -180,6 +180,7 @@ public class EndSessionCommandHandlerTests
         var session = CreateActiveSession(blockId);
         _sessions.GetByIdAsync(session.Id, Arg.Any<CancellationToken>()).Returns(session);
         var block = FocusBlock.Create(blockId, session.BlockPresetId,At.Slot(Now.AddMinutes(-10), Now));
+        block.MarkRitualCompleted(At.Utc(Now.AddMinutes(-10)));
         _plannedBlocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns(block);
 
         await CreateHandler().HandleAsync(new EndSessionCommand { SessionId = session.Id });

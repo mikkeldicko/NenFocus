@@ -34,8 +34,6 @@ public class GetNenContractsForDateRangeQueryHandlerTests
     private readonly IQueryHandler<GetNenContractBonusFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> _bonusHours =
         Substitute.For<IQueryHandler<GetNenContractBonusFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>>>();
     private readonly IPlannedBlockRepository _blocks = Substitute.For<IPlannedBlockRepository>();
-    private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
-    private readonly IFocusBlockOutcomeClassifier _classifier = Substitute.For<IFocusBlockOutcomeClassifier>();
     private readonly ISystemClock _clock = TestClock.Create();
 
     public GetNenContractsForDateRangeQueryHandlerTests()
@@ -53,12 +51,10 @@ public class GetNenContractsForDateRangeQueryHandlerTests
             .Returns((IReadOnlyDictionary<DateOnly, double>)new Dictionary<DateOnly, double>());
         _blocks.GetForContractAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[]);
-        _sessions.GetByOriginatingBlockIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
-            .Returns((Session?)null);
     }
 
     private GetNenContractsForDateRangeQueryHandler CreateHandler() =>
-        new(_contracts, _deficits, _completedHours, _plannedHours, _bonusHours, _blocks, _sessions, _classifier, _clock);
+        new(_contracts, _deficits, _completedHours, _plannedHours, _bonusHours, _blocks, _clock);
 
     private void SetInEffect(params NenContract[] contracts) =>
         _contracts.GetAllInEffectAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<NenContract>)contracts);
@@ -627,10 +623,7 @@ public class GetNenContractsForDateRangeQueryHandlerTests
 
         _blocks.GetForContractAsync(contract.Id, Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[missed, attempt1, attempt2]);
-        // The missed block itself never started — nothing credited, its full 60 minutes
-        // stays owed forever once settled.
-        _classifier.CreditedFocusMinutes(missed.Scheduled, Arg.Any<Moment?>(), Arg.Any<Moment?>(), Arg.Any<double>())
-            .Returns(0);
+        // The missed block itself never started — its full 60 minutes stay owed.
         // The raw (buggy) scheduled-span sum a naive read would report for redemptionDay:
         // attempt1's full 1h claim plus attempt2's 40-minute claim = 1h40m.
         _plannedHours.HandleAsync(Arg.Any<ComputePlannedFocusHoursQuery>(), Arg.Any<CancellationToken>())
@@ -668,8 +661,6 @@ public class GetNenContractsForDateRangeQueryHandlerTests
 
         _blocks.GetForContractAsync(contract.Id, Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[missed, attempt1, attempt2]);
-        _classifier.CreditedFocusMinutes(missed.Scheduled, Arg.Any<Moment?>(), Arg.Any<Moment?>(), Arg.Any<double>())
-            .Returns(0);
         _plannedHours.HandleAsync(Arg.Any<ComputePlannedFocusHoursQuery>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyDictionary<DateOnly, double>)new Dictionary<DateOnly, double>
             {

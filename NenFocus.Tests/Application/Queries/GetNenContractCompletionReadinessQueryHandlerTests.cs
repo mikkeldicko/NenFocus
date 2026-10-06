@@ -21,8 +21,8 @@ public class GetNenContractCompletionReadinessQueryHandlerTests
     private readonly IPlannedBlockRepository _blocks = Substitute.For<IPlannedBlockRepository>();
     private readonly IQueryHandler<GetNenContractCompletedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> _completedHours =
         Substitute.For<IQueryHandler<GetNenContractCompletedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>>>();
+    private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
     private readonly ISystemClock _clock = TestClock.Create();
-    private readonly IFocusBlockOutcomeClassifier _outcomeClassifier = Substitute.For<IFocusBlockOutcomeClassifier>();
 
     public GetNenContractCompletionReadinessQueryHandlerTests()
     {
@@ -31,10 +31,11 @@ public class GetNenContractCompletionReadinessQueryHandlerTests
         _clock.SetTimeZoneOffset(TimeSpan.Zero);
         _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[]);
+        _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns((Session?)null);
     }
 
     private GetNenContractCompletionReadinessQueryHandler CreateHandler() =>
-        new(_contracts, _blocks, _completedHours, _clock, _outcomeClassifier);
+        new(_contracts, _blocks, _completedHours, _sessions, _clock);
 
     private static NenContract ActiveContract(double committedHours = 4) => TestContracts.Seal(
         id: ContractId,
@@ -151,7 +152,6 @@ public class GetNenContractCompletionReadinessQueryHandlerTests
         _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[ended]);
         // Never ritual-completed and its scheduled End has already passed — resolved as Missed.
-        _outcomeClassifier.Classify(ended, At.Utc(Now)).Returns(FocusBlockOutcome.Missed);
 
         var result = await CreateHandler().HandleAsync(new GetNenContractCompletionReadinessQuery(ContractId));
 
@@ -169,13 +169,48 @@ public class GetNenContractCompletionReadinessQueryHandlerTests
         var endedEarly = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now.AddMinutes(-30), Now.AddHours(1)), membership: TestContracts.Committed(ContractId));
         _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[endedEarly]);
-        _outcomeClassifier.Classify(endedEarly, At.Utc(Now))
-            .Returns(FocusBlockOutcome.EndedEarly);
+        TestBlocks.Worked(endedEarly, ritualAfterStart: 0, endedAfterStart: 10);
 
         var result = await CreateHandler().HandleAsync(new GetNenContractCompletionReadinessQuery(ContractId));
 
         result.IsReady.Should().BeTrue();
         result.PendingBlockCount.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task HandleAsync_LinkedBlockWithASessionStillRunning_IsPending()
+    {
+        // Gap 95 decision 11: a block whose session is still running isn't done — it could still
+        // end early, and its hours are still growing. Completing now would freeze the recap
+        // mid-session, so the contract isn't ready, even with every committed hour delivered.
+        _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(ActiveContract(committedHours: 4));
+        StubCompleted(4);
+        var running = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Now.AddMinutes(-30), Now.AddHours(1)), membership: TestContracts.Committed(ContractId));
+        _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyList<PlannedBlock>)[running]);
+        TestBlocks.Worked(running, ritualAfterStart: 0, endedAfterStart: null);
+
+        var result = await CreateHandler().HandleAsync(new GetNenContractCompletionReadinessQuery(ContractId));
+
+        result.IsReady.Should().BeFalse();
+        result.PendingBlockCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ASpontaneousSessionRunning_IsNotReady()
+    {
+        // Gap 95: no contract ends while Focus time is being worked — any session, not only one of
+        // the contract's own blocks.
+        _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(ActiveContract(committedHours: 4));
+        StubCompleted(4);
+        var session = Session.Create(Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(30)), Guid.NewGuid(), SessionOrigin.Spontaneous);
+        session.Start(At.Utc(Now.AddMinutes(-10)));
+        _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns(session);
+
+        var result = await CreateHandler().HandleAsync(new GetNenContractCompletionReadinessQuery(ContractId));
+
+        result.IsReady.Should().BeFalse();
+        result.NotReadyReason.Should().Contain("session is running");
     }
 
     [Fact]

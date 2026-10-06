@@ -1,70 +1,52 @@
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
-using NenFocus.Domain.ValueObjects;
 using NenFocus.Application.Queries.GetNenContractCompletedFocusHours;
 using NenFocus.Domain.Enums;
-using NenFocus.Domain.Services;
 
 namespace NenFocus.Application.Queries.GetNenContractCompletionReadiness;
 
+/// <summary>
+/// Gathers what NenContract.CheckComplete needs — its blocks, its completed hours, whether any
+/// session is running — and returns its answer (Gap 95). The Complete validator, the Complete
+/// handler and the Planner's "Complete Contract" button all read this one answer.
+/// </summary>
 public sealed class GetNenContractCompletionReadinessQueryHandler
     : IQueryHandler<GetNenContractCompletionReadinessQuery, NenContractCompletionReadinessDto>
 {
     private readonly INenContractRepository _contracts;
     private readonly IPlannedBlockRepository _blocks;
     private readonly IQueryHandler<GetNenContractCompletedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> _completedHours;
+    private readonly ISessionRepository _sessions;
     private readonly ISystemClock _clock;
-    private readonly IFocusBlockOutcomeClassifier _outcomeClassifier;
 
     public GetNenContractCompletionReadinessQueryHandler(
         INenContractRepository contracts,
         IPlannedBlockRepository blocks,
         IQueryHandler<GetNenContractCompletedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> completedHours,
-        ISystemClock clock,
-        IFocusBlockOutcomeClassifier outcomeClassifier)
+        ISessionRepository sessions,
+        ISystemClock clock)
     {
         _contracts = contracts;
         _blocks = blocks;
         _completedHours = completedHours;
+        _sessions = sessions;
         _clock = clock;
-        _outcomeClassifier = outcomeClassifier;
     }
-
-    private static readonly NenContractCompletionReadinessDto NotReady = new()
-    {
-        IsReady = false,
-        RemainingHours = 0,
-        PendingBlockCount = 0
-    };
 
     public async Task<NenContractCompletionReadinessDto> HandleAsync(
         GetNenContractCompletionReadinessQuery query, CancellationToken ct = default)
     {
         var contract = await _contracts.GetByIdAsync(query.ContractId, ct);
         if (contract is null || contract.Status != NenContractStatus.Active)
-            return NotReady;
+            return NenContractCompletionReadinessDto.NotActive;
 
         var completedByDay = await _completedHours.HandleAsync(
             new GetNenContractCompletedFocusHoursQuery(contract.Id), ct);
-        var totalCompleted = completedByDay.Values.Sum();
-        var remainingHours = Math.Max(0, contract.CommittedFocusHours - totalCompleted);
-
-        var now = _clock.Now;
-        // Every member, Bonus blocks included (Gap 97): the contract can't complete early while
-        // any block of its own is unfinished.
-        // IsResolved (not raw HasEnded) so a FocusBlock whose session ended early doesn't
-        // keep blocking readiness until its original scheduled End arrives — see
-        // PlannedBlockResolutionExtensions.
+        // Every member, Bonus blocks included (Gap 97): completing must leave nothing to clean up.
         var members = await _blocks.GetForContractAsync(contract.Id, ct);
-        var pendingBlockCount = members.Count(b =>
-            !b.CancelledAt.HasValue &&
-            !b.IsResolved(_outcomeClassifier, now));
+        var sessionRunning = await _sessions.GetActiveAsync(ct) is not null;
 
-        return new NenContractCompletionReadinessDto
-        {
-            IsReady = remainingHours <= 0 && pendingBlockCount == 0,
-            RemainingHours = remainingHours,
-            PendingBlockCount = pendingBlockCount
-        };
+        var verdict = contract.CheckComplete(members, sessionRunning, completedByDay.Values.Sum(), _clock.Now);
+        return NenContractCompletionReadinessDto.From(verdict);
     }
 }

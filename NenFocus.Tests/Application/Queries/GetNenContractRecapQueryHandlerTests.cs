@@ -21,7 +21,6 @@ public class GetNenContractRecapQueryHandlerTests
 
     private readonly INenContractRepository _contracts = Substitute.For<INenContractRepository>();
     private readonly IPlannedBlockRepository _blocks = Substitute.For<IPlannedBlockRepository>();
-    private readonly IFocusBlockOutcomeClassifier _classifier = Substitute.For<IFocusBlockOutcomeClassifier>();
     private readonly IQueryHandler<GetNenContractCompletedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> _completedHours =
         Substitute.For<IQueryHandler<GetNenContractCompletedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>>>();
     private readonly IQueryHandler<GetNenContractBonusFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> _bonusHours =
@@ -42,7 +41,7 @@ public class GetNenContractRecapQueryHandlerTests
     }
 
     private GetNenContractRecapQueryHandler CreateHandler() =>
-        new(_contracts, _blocks, _classifier, _completedHours, _bonusHours, _clock);
+        new(_contracts, _blocks, _completedHours, _bonusHours, _clock);
 
     private static NenContract CompletedContract(double committedHours = 4, StrictnessRule strictness = StrictnessRule.Locked) =>
         TestContracts.Seal(
@@ -162,8 +161,6 @@ public class GetNenContractRecapQueryHandlerTests
         var contract = CompletedContract();
         _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(contract);
 
-        // Distinct Start times — the classifier is stubbed by (Start, End), so identical
-        // windows across blocks would collide and only the last stub would ever match.
         var completedOnTime = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now.AddHours(-10), Now.AddHours(-9)), membership: TestContracts.Committed(ContractId));
         var startedLate = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now.AddHours(-8), Now.AddHours(-7)), membership: TestContracts.Committed(ContractId));
         var endedEarly = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now.AddHours(-6), Now.AddHours(-5)), membership: TestContracts.Committed(ContractId));
@@ -175,16 +172,11 @@ public class GetNenContractRecapQueryHandlerTests
         _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[completedOnTime, startedLate, endedEarly, missed, redemption, background]);
 
-        _classifier.Classify(completedOnTime, At.Utc(Now))
-            .Returns(FocusBlockOutcome.CompletedOnTime);
-        _classifier.Classify(startedLate, At.Utc(Now))
-            .Returns(FocusBlockOutcome.StartedLate);
-        _classifier.Classify(endedEarly, At.Utc(Now))
-            .Returns(FocusBlockOutcome.EndedEarly);
-        _classifier.Classify(missed, At.Utc(Now))
-            .Returns(FocusBlockOutcome.Missed);
-        _classifier.Classify(redemption, At.Utc(Now))
-            .Returns(FocusBlockOutcome.CompletedOnTime);
+        TestBlocks.Worked(completedOnTime, ritualAfterStart: 0, endedAfterStart: 60);
+        TestBlocks.Worked(startedLate, ritualAfterStart: 20, endedAfterStart: 60);
+        TestBlocks.Worked(endedEarly, ritualAfterStart: 0, endedAfterStart: 30);
+        TestBlocks.Worked(redemption, ritualAfterStart: 0, endedAfterStart: 60);
+        // missed: never stamped
 
         var result = await CreateHandler().HandleAsync(new GetNenContractRecapQuery(ContractId), CancellationToken.None);
 
@@ -198,7 +190,7 @@ public class GetNenContractRecapQueryHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_CancelledBlock_CountedSeparately_NeverClassified()
+    public async Task HandleAsync_CancelledBlock_CountedSeparately()
     {
         var contract = CompletedContract();
         _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(contract);
@@ -214,7 +206,6 @@ public class GetNenContractRecapQueryHandlerTests
         result.StartedLateBlocks.Should().Be(0);
         result.EndedEarlyBlocks.Should().Be(0);
         result.MissedBlocks.Should().Be(0);
-        _classifier.DidNotReceiveWithAnyArgs().Classify(default!, default);
     }
 
     [Fact]
@@ -233,7 +224,7 @@ public class GetNenContractRecapQueryHandlerTests
         var bonusBackground = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Now.AddHours(-6), Now.AddHours(-5)), membership: TestContracts.Bonus(ContractId));
         _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[committed, bonus, removedBonus, bonusBackground]);
-        _classifier.Classify(committed, At.Utc(Now)).Returns(FocusBlockOutcome.CompletedOnTime);
+        TestBlocks.Worked(committed, ritualAfterStart: 0, endedAfterStart: 60);
 
         var result = await CreateHandler().HandleAsync(new GetNenContractRecapQuery(ContractId), CancellationToken.None);
 
@@ -242,7 +233,6 @@ public class GetNenContractRecapQueryHandlerTests
         result.TotalBackgroundBlocks.Should().Be(0);
         result.CompletedOnTimeBlocks.Should().Be(1);
         result.CancelledBlocks.Should().Be(0);
-        _classifier.DidNotReceive().Classify(bonus, Arg.Any<Moment>());
     }
 
     [Theory]

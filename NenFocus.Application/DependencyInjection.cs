@@ -22,7 +22,6 @@ public static class DependencyInjection
         services.AddScoped<IBlockChangeChecker, BlockChangeChecker>();
 
         services.AddScoped<IPlannedFocusHoursCalculator, PlannedFocusHoursCalculator>();
-        services.AddScoped<IFocusBlockOutcomeClassifier, FocusBlockOutcomeClassifier>();
         services.AddScoped<IContractBlockBatchPreparer, ContractBlockBatchPreparer>();
 
         // Singleton: its lock must be shared by every caller (the heartbeat and every event

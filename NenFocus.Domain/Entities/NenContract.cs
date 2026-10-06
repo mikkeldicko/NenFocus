@@ -433,13 +433,13 @@ public class NenContract : AggregateRoot
 
     /// <summary>
     /// What breaking this contract does to one of its blocks (Gap 97). A Committed or Redemption
-    /// block that isn't finished (<paramref name="isResolved"/> false) is cancelled; a finished
-    /// one is left as it is. A Bonus block that hasn't started is the user's choice
+    /// block that isn't final (<see cref="PlannedBlock.IsFinal"/>) is cancelled; a final one is left
+    /// as it is. A Bonus block that hasn't started is the user's choice
     /// (<paramref name="keepBonusBlocks"/>): released to a plain block, or cancelled with the
     /// rest; one that has started or finished is left with its membership, so the recap's Bonus
-    /// hours stay true. Whether a block is resolved needs its session, so the caller supplies it.
+    /// hours stay true. The block answers whether it is final from its own stamps (Gap 95).
     /// </summary>
-    public BlockFateOnBreak FateWhenBroken(PlannedBlock block, bool isResolved, Moment brokenAt, bool keepBonusBlocks)
+    public BlockFateOnBreak FateWhenBroken(PlannedBlock block, Moment brokenAt, bool keepBonusBlocks)
     {
         if (block.Membership?.ContractId != Id)
             throw new ArgumentException("This block does not belong to this contract.", nameof(block));
@@ -450,8 +450,49 @@ public class NenContract : AggregateRoot
             return keepBonusBlocks ? BlockFateOnBreak.Release : BlockFateOnBreak.Cancel;
         }
 
-        return isResolved ? BlockFateOnBreak.Leave : BlockFateOnBreak.Cancel;
+        return block.IsFinal(brokenAt) ? BlockFateOnBreak.Leave : BlockFateOnBreak.Cancel;
     }
+
+    // ── May this contract end now? (Gap 95) ─────────────────────────────────────────────────
+
+    // No contract ends while Focus time is being worked: a session's hours are still growing and
+    // it could still end early, so ending would freeze the recap mid-session. The caller says
+    // whether a session runs; the contract owns what that means.
+
+    /// <summary>
+    /// Whether the user may complete this contract early: no session running, every committed
+    /// hour delivered, and every block of its own done (<see cref="PlannedBlock.IsFinal"/>;
+    /// cancelled blocks don't count) — so completing never leaves anything to clean up. The
+    /// verdict carries the hours still owed and the blocks not done either way. Completed hours
+    /// are passed in until the contract works them out itself (Gap 95 slice 7).
+    /// </summary>
+    public ContractEndVerdict CheckComplete(
+        IEnumerable<PlannedBlock> members, bool sessionRunning, double completedFocusHours, Moment asOf)
+    {
+        var pending = 0;
+        foreach (var block in members)
+        {
+            if (block.Membership?.ContractId != Id)
+                throw new ArgumentException("This block does not belong to this contract.", nameof(members));
+            if (!block.CancelledAt.HasValue && !block.IsFinal(asOf))
+                pending++;
+        }
+
+        var remainingHours = Math.Max(0, CommittedFocusHours - completedFocusHours);
+        var outcome = sessionRunning ? ContractEndOutcome.SessionIsRunning
+            : remainingHours > 0 ? ContractEndOutcome.HoursNotDelivered
+            : pending > 0 ? ContractEndOutcome.BlocksStillPending
+            : ContractEndOutcome.Allowed;
+        return new ContractEndVerdict(outcome, remainingHours, pending);
+    }
+
+    /// <summary>
+    /// Whether the user may break this contract now. AllowCancellation is stored but not yet a
+    /// reason here (interim since 2026-08-18): Gap 83 decides whether it or Strict Mode is the
+    /// gate, and adds that reason in this one place.
+    /// </summary>
+    public ContractEndVerdict CheckBreak(bool sessionRunning)
+        => new(sessionRunning ? ContractEndOutcome.SessionIsRunning : ContractEndOutcome.Allowed);
 
     // ── What may happen to one of this contract's blocks (Gap 93) ───────────────────────────
 

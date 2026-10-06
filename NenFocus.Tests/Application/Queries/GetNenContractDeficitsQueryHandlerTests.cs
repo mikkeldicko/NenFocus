@@ -3,52 +3,61 @@ using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.GetNenContractDeficits;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
-using NenFocus.Domain.Services;
 using NenFocus.Domain.ValueObjects;
 using NSubstitute;
 
 namespace NenFocus.Tests.Application.Queries;
 
+/// <summary>
+/// Each block carries its own stamps — Ritual completed, session ended — the way
+/// StartSession/EndSession leave them; the handler asks the block, never a session (Gap 95).
+/// </summary>
 public class GetNenContractDeficitsQueryHandlerTests
 {
     private static readonly Guid ContractId = Guid.NewGuid();
     private static readonly DateTime Now = new(2026, 1, 5, 12, 0, 0, DateTimeKind.Utc);
 
     private readonly IPlannedBlockRepository _blocks = Substitute.For<IPlannedBlockRepository>();
-    private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
-    private readonly IFocusBlockOutcomeClassifier _classifier = Substitute.For<IFocusBlockOutcomeClassifier>();
     private readonly ISystemClock _clock = TestClock.Create();
 
     public GetNenContractDeficitsQueryHandlerTests()
     {
         _clock.SetNow(Now);
-        _sessions.GetByOriginatingBlockIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((Session?)null);
     }
 
-    private GetNenContractDeficitsQueryHandler CreateHandler() => new(_blocks, _sessions, _classifier, _clock);
+    private GetNenContractDeficitsQueryHandler CreateHandler() => new(_blocks, _clock);
 
-    private static FocusBlock MissedBlock(DateTime start, DateTime end, Guid? presetId = null) =>
-        FocusBlock.Create(Guid.NewGuid(), presetId ?? Guid.NewGuid(),At.Slot(start, end), membership: TestContracts.Committed(ContractId));
+    private static FocusBlock CommittedBlock(DateTime start, DateTime end, Guid? presetId = null) =>
+        FocusBlock.Create(Guid.NewGuid(), presetId ?? Guid.NewGuid(), At.Slot(start, end), membership: TestContracts.Committed(ContractId));
 
-    /// <summary>A genuinely finished Missed session — the state MarkFocusBlockMissedCommandHandler
-    /// produces in real usage. Deficits now require the block's session to have actually
-    /// ended (HasEnded) before they're trusted (see the "still active" test below).</summary>
-    private static Session EndedMissedSession(FocusBlock block)
+    private static FocusBlock RedemptionBlock(Guid presetId, DateTime start, DateTime end, Guid missedId, double minutesCovered) =>
+        FocusBlock.Create(Guid.NewGuid(), presetId, At.Slot(start, end),
+            membership: TestContracts.Redemption(ContractId), redemptionEntries: [new RedemptionEntry(missedId, minutesCovered)]);
+
+    /// <summary>The Ritual completed <paramref name="ritualAfterStart"/> into the block; the
+    /// session ended <paramref name="endedAfterStart"/> into it, or is still running.</summary>
+    private static FocusBlock Worked(FocusBlock block, TimeSpan ritualAfterStart, TimeSpan? endedAfterStart)
     {
-        var session = Session.Create(Guid.NewGuid(), new SessionGoal("(missed — no goal set)"),
-            new SessionDuration(block.GetDuration()), block.BlockPresetId, SessionOrigin.Planned, originatingBlockId: block.Id);
-        session.Miss(block.Scheduled);
-        return session;
+        var start = At.Start(block.Scheduled);
+        block.MarkRitualCompleted(start + ritualAfterStart);
+        if (endedAfterStart is { } ended) block.MarkSessionEnded(start + ended);
+        return block;
     }
+
+    private void ContractHas(params PlannedBlock[] blocks) =>
+        _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)blocks);
+
+    private Task<IReadOnlyList<NenFocus.Application.DTOs.FocusBlockDeficitDto>> Handle(Guid? excludeCoverageFrom = null) =>
+        CreateHandler().HandleAsync(new GetNenContractDeficitsQuery(ContractId, ExcludeCoverageFromBlockId: excludeCoverageFrom), CancellationToken.None);
+
+    private static TimeSpan Min(double minutes) => TimeSpan.FromMinutes(minutes);
 
     [Fact]
     public async Task HandleAsync_NoFocusBlocks_ReturnsEmpty()
     {
-        _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[]);
+        ContractHas();
 
-        var result = await CreateHandler().HandleAsync(new GetNenContractDeficitsQuery(ContractId), CancellationToken.None);
-
-        result.Should().BeEmpty();
+        (await Handle()).Should().BeEmpty();
     }
 
     [Fact]
@@ -58,58 +67,37 @@ public class GetNenContractDeficitsQueryHandlerTests
         // so missing one creates no deficit.
         var bonus = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Now.AddHours(-3), Now.AddHours(-1)),
             membership: TestContracts.Bonus(ContractId));
-        _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[bonus]);
-        _sessions.GetByOriginatingBlockIdAsync(bonus.Id, Arg.Any<CancellationToken>()).Returns(EndedMissedSession(bonus));
-        _classifier.Classify(bonus, At.Utc(Now)).Returns(FocusBlockOutcome.Missed);
+        ContractHas(bonus);
 
-        var result = await CreateHandler().HandleAsync(new GetNenContractDeficitsQuery(ContractId), CancellationToken.None);
-
-        result.Should().BeEmpty();
+        (await Handle()).Should().BeEmpty();
     }
 
     [Fact]
     public async Task HandleAsync_CompletedOnTimeBlock_Excluded()
     {
-        var block = MissedBlock(Now.AddHours(-3), Now.AddHours(-1));
-        _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
-        _classifier.Classify(block, At.Utc(Now)).Returns(FocusBlockOutcome.CompletedOnTime);
+        ContractHas(Worked(CommittedBlock(Now.AddHours(-3), Now.AddHours(-1)), Min(0), Min(120)));
 
-        var result = await CreateHandler().HandleAsync(new GetNenContractDeficitsQuery(ContractId), CancellationToken.None);
-
-        result.Should().BeEmpty();
+        (await Handle()).Should().BeEmpty();
     }
 
     [Fact]
     public async Task HandleAsync_OpenBlock_Excluded()
     {
-        var block = MissedBlock(Now.AddHours(-1), Now.AddHours(1));
-        _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
-        _classifier.Classify(block, At.Utc(Now)).Returns((FocusBlockOutcome?)null);
+        ContractHas(CommittedBlock(Now.AddHours(-1), Now.AddHours(1)));
 
-        var result = await CreateHandler().HandleAsync(new GetNenContractDeficitsQuery(ContractId), CancellationToken.None);
-
-        result.Should().BeEmpty();
+        (await Handle()).Should().BeEmpty();
     }
 
     [Fact]
     public async Task HandleAsync_StartedLateSessionStillActive_ExcludedFromDeficit()
     {
-        // The core case this gate exists for: a 1-hour block started 10 minutes late is
-        // still running, with no idea yet whether it'll finish on schedule or end early —
-        // its final credited minutes aren't knowable, so it must not surface as a deficit
-        // (or a Cover Deficit suggestion) while still in flight.
-        var block = MissedBlock(Now.AddMinutes(-10), Now.AddMinutes(50)); // 1-hour block, started 10 min late
-        _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
-        _classifier.Classify(block, At.Utc(Now)).Returns(FocusBlockOutcome.StartedLate);
+        // The core case Rule 18 exists for: a 1-hour block started 10 minutes late is still
+        // running, with no idea yet whether it'll finish on schedule or end early — its final
+        // credited minutes aren't knowable, so it must not surface as a deficit (or a Cover
+        // Deficit suggestion) while still in flight.
+        ContractHas(Worked(CommittedBlock(Now.AddMinutes(-10), Now.AddMinutes(50)), Min(10), endedAfterStart: null));
 
-        var session = Session.Create(Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(60)),
-            block.BlockPresetId, SessionOrigin.Planned, originatingBlockId: block.Id);
-        session.Start(At.Start(block.Scheduled) + TimeSpan.FromMinutes(10), block.Scheduled); // still running — no Complete() call, so HasEnded is false
-        _sessions.GetByOriginatingBlockIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns(session);
-
-        var result = await CreateHandler().HandleAsync(new GetNenContractDeficitsQuery(ContractId), CancellationToken.None);
-
-        result.Should().BeEmpty();
+        (await Handle()).Should().BeEmpty();
     }
 
     [Fact]
@@ -118,34 +106,19 @@ public class GetNenContractDeficitsQueryHandlerTests
         // Acknowledging the Post-Session screen is a separate, unrelated fact (it exists for
         // crash-recovery replay, not deficit finality) — once the session has actually ended,
         // the deficit is real and visible regardless of whether the user has dismissed that
-        // screen yet.
-        var block = MissedBlock(Now.AddHours(-3), Now.AddHours(-1)); // 2-hour block, 120 min
-        _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
-        _classifier.Classify(block, At.Utc(Now)).Returns(FocusBlockOutcome.EndedEarly);
+        // screen yet. The block's stamps don't even know about acknowledgement.
+        ContractHas(Worked(CommittedBlock(Now.AddHours(-3), Now.AddHours(-1)), Min(0), Min(45)));
 
-        var session = Session.Create(Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(120)),
-            block.BlockPresetId, SessionOrigin.Planned, originatingBlockId: block.Id);
-        session.Start(At.Start(block.Scheduled));
-        session.Complete(At.Start(block.Scheduled) + TimeSpan.FromMinutes(45)); // ended — PostSessionAcknowledgedAt deliberately left null
-        _sessions.GetByOriginatingBlockIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns(session);
-        _classifier.CreditedFocusMinutes(block.Scheduled, Arg.Any<Moment?>(), Arg.Any<Moment?>(), Arg.Any<double>()).Returns(45);
-
-        var result = await CreateHandler().HandleAsync(new GetNenContractDeficitsQuery(ContractId), CancellationToken.None);
-
-        result.Should().ContainSingle().Subject.RemainingDeficitMinutes.Should().Be(75);
+        (await Handle()).Should().ContainSingle().Subject.RemainingDeficitMinutes.Should().Be(75);
     }
 
     [Fact]
     public async Task HandleAsync_MissedBlockEnded_FullDeficit()
     {
-        var block = MissedBlock(Now.AddHours(-3), Now.AddHours(-1)); // 2-hour block
-        _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
-        _classifier.Classify(block, At.Utc(Now)).Returns(FocusBlockOutcome.Missed);
-        _sessions.GetByOriginatingBlockIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns(EndedMissedSession(block));
+        var block = CommittedBlock(Now.AddHours(-3), Now.AddHours(-1)); // 2-hour block
+        ContractHas(block);
 
-        var result = await CreateHandler().HandleAsync(new GetNenContractDeficitsQuery(ContractId), CancellationToken.None);
-
-        var dto = result.Should().ContainSingle().Subject;
+        var dto = (await Handle()).Should().ContainSingle().Subject;
         dto.FocusBlockId.Should().Be(block.Id);
         dto.Outcome.Should().Be(FocusBlockOutcome.Missed);
         dto.RemainingDeficitMinutes.Should().Be(120);
@@ -154,44 +127,25 @@ public class GetNenContractDeficitsQueryHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_StartedLateBlockWithPartialSession_DeficitIsScheduledMinusActual()
+    public async Task HandleAsync_StartedLateBlockRanToItsEnd_DeficitIsTheLateStart()
     {
-        var block = MissedBlock(Now.AddHours(-3), Now.AddHours(-1)); // 2-hour block, 120 min
-        _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
-        _classifier.Classify(block, At.Utc(Now)).Returns(FocusBlockOutcome.StartedLate);
+        // 20 min late, then ran to the scheduled end: 100 credited of 120.
+        ContractHas(Worked(CommittedBlock(Now.AddHours(-3), Now.AddHours(-1)), Min(20), Min(120)));
 
-        var session = Session.Create(Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(90)),
-            block.BlockPresetId, SessionOrigin.Planned, originatingBlockId: block.Id);
-        session.Start(At.Start(block.Scheduled) + TimeSpan.FromMinutes(20), block.Scheduled);
-        session.Complete(At.Start(block.Scheduled) + TimeSpan.FromMinutes(20 + 90)); // 90 minutes actually completed
-        _sessions.GetByOriginatingBlockIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns(session);
-        _classifier.CreditedFocusMinutes(block.Scheduled, Arg.Any<Moment?>(), Arg.Any<Moment?>(), Arg.Any<double>()).Returns(90);
-
-        var result = await CreateHandler().HandleAsync(new GetNenContractDeficitsQuery(ContractId), CancellationToken.None);
-
-        var dto = result.Should().ContainSingle().Subject;
-        dto.RemainingDeficitMinutes.Should().Be(30); // 120 - 90
+        var dto = (await Handle()).Should().ContainSingle().Subject;
+        dto.Outcome.Should().Be(FocusBlockOutcome.StartedLate);
+        dto.RemainingDeficitMinutes.Should().Be(20);
         dto.PlannedMinutes.Should().Be(120);
-        dto.CompletedMinutes.Should().Be(90);
+        dto.CompletedMinutes.Should().Be(100);
     }
 
     [Fact]
     public async Task HandleAsync_EndedEarlyBlock_DeficitIsScheduledMinusActual()
     {
-        var block = MissedBlock(Now.AddHours(-3), Now.AddHours(-1)); // 2-hour block, 120 min
-        _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
-        _classifier.Classify(block, At.Utc(Now)).Returns(FocusBlockOutcome.EndedEarly);
+        // Started right on time, but quit after 45 of the 120 scheduled minutes.
+        ContractHas(Worked(CommittedBlock(Now.AddHours(-3), Now.AddHours(-1)), Min(0), Min(45)));
 
-        var session = Session.Create(Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(120)),
-            block.BlockPresetId, SessionOrigin.Planned, originatingBlockId: block.Id);
-        session.Start(At.Start(block.Scheduled)); // started right on time
-        session.Complete(At.Start(block.Scheduled) + TimeSpan.FromMinutes(45)); // but quit after 45 of the 120 scheduled minutes
-        _sessions.GetByOriginatingBlockIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns(session);
-        _classifier.CreditedFocusMinutes(block.Scheduled, Arg.Any<Moment?>(), Arg.Any<Moment?>(), Arg.Any<double>()).Returns(45);
-
-        var result = await CreateHandler().HandleAsync(new GetNenContractDeficitsQuery(ContractId), CancellationToken.None);
-
-        var dto = result.Should().ContainSingle().Subject;
+        var dto = (await Handle()).Should().ContainSingle().Subject;
         dto.Outcome.Should().Be(FocusBlockOutcome.EndedEarly);
         dto.RemainingDeficitMinutes.Should().Be(75); // 120 - 45 — the early-end gap is no longer silently lost
         dto.PlannedMinutes.Should().Be(120);
@@ -201,86 +155,41 @@ public class GetNenContractDeficitsQueryHandlerTests
     [Fact]
     public async Task HandleAsync_StartedLateSessionRanPastBlocksScheduledEnd_DeficitUsesCreditedNotRawElapsed()
     {
-        // Block scheduled for 120 minutes; ritual completed 40 min late. The session then
-        // ran a full 150 minutes from that late start, extending 70 minutes past the
-        // block's own scheduled end. Raw elapsed (150) exceeds scheduled (120) — the bug
-        // this reproduces let that raw excess silently zero out a real remaining deficit.
-        var block = MissedBlock(Now.AddHours(-3), Now.AddHours(-1)); // 2-hour block, 120 min
-        _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
-        _classifier.Classify(block, At.Utc(Now)).Returns(FocusBlockOutcome.StartedLate);
+        // Block scheduled for 120 minutes; Ritual completed 40 min late. The session then ran
+        // a full 150 minutes from that late start, 70 minutes past the block's own scheduled
+        // end. Credit stops at the scheduled end (120 - 40 = 80), so time spent after the
+        // window closed can't zero out a real deficit.
+        ContractHas(Worked(CommittedBlock(Now.AddHours(-3), Now.AddHours(-1)), Min(40), Min(190)));
 
-        var ritualCompletedAt = At.Start(block.Scheduled) + TimeSpan.FromMinutes(40);
-        var session = Session.Create(Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(150)),
-            block.BlockPresetId, SessionOrigin.Planned, originatingBlockId: block.Id);
-        session.Start(ritualCompletedAt, block.Scheduled);
-        session.Complete(ritualCompletedAt + TimeSpan.FromMinutes(150)); // 70 minutes past block.End
-        _sessions.GetByOriginatingBlockIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns(session);
-
-        // Credited is capped at scheduledEnd - completedAt (120 - 40 = 80), same rule
-        // Daily Floor crediting already applies — the deficit query must reuse it, not
-        // re-derive its own number from raw elapsed time.
-        _classifier.CreditedFocusMinutes(block.Scheduled, Arg.Any<Moment?>(), Arg.Any<Moment?>(), Arg.Any<double>())
-            .Returns(80);
-
-        var result = await CreateHandler().HandleAsync(new GetNenContractDeficitsQuery(ContractId), CancellationToken.None);
-
-        var dto = result.Should().ContainSingle().Subject;
+        var dto = (await Handle()).Should().ContainSingle().Subject;
         dto.RemainingDeficitMinutes.Should().Be(40); // 120 - 80
         dto.CompletedMinutes.Should().Be(80);
     }
 
     [Fact]
-    public async Task HandleAsync_MissedBlockFullyCoveredByRedemption_Excluded()
+    public async Task HandleAsync_MissedBlockFullyCoveredByPendingRedemption_Excluded()
     {
-        var missed = MissedBlock(Now.AddHours(-3), Now.AddHours(-1)); // 120 min deficit
-        var presetId = missed.BlockPresetId;
-        var redemption = FocusBlock.Create(Guid.NewGuid(), presetId,At.Slot(Now.AddHours(1), Now.AddHours(3)),
-            membership: TestContracts.Redemption(ContractId), redemptionEntries: [new RedemptionEntry(missed.Id, 120)]);
+        var missed = CommittedBlock(Now.AddHours(-3), Now.AddHours(-1)); // 120 min deficit
+        var redemption = RedemptionBlock(missed.BlockPresetId, Now.AddHours(1), Now.AddHours(3), missed.Id, 120);
+        ContractHas(missed, redemption);
 
-        _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>())
-            .Returns((IReadOnlyList<PlannedBlock>)[missed, redemption]);
-        _classifier.Classify(missed, At.Utc(Now)).Returns(FocusBlockOutcome.Missed);
-        _classifier.Classify(redemption, At.Utc(Now)).Returns((FocusBlockOutcome?)null);
-        _sessions.GetByOriginatingBlockIdAsync(missed.Id, Arg.Any<CancellationToken>()).Returns(EndedMissedSession(missed));
-
-        var result = await CreateHandler().HandleAsync(new GetNenContractDeficitsQuery(ContractId), CancellationToken.None);
-
-        result.Should().BeEmpty();
+        (await Handle()).Should().BeEmpty();
     }
 
     [Fact]
     public async Task HandleAsync_RedemptionBlockItselfStartedLate_DoesNotAppearAsItsOwnDeficit()
     {
-        // Reproduces the reported bug: a redemption block that itself runs a few minutes
-        // past its own grace period (e.g. the Ritual took a moment) must not become a
-        // second, uncoverable deficit — it fully covered the block it exists to redeem,
-        // and that's the only fact that matters.
-        var missed = MissedBlock(Now.AddHours(-3), Now.AddHours(-1)); // 120 min deficit
-        var presetId = missed.BlockPresetId;
-        var redemption = FocusBlock.Create(Guid.NewGuid(), presetId,At.Slot(Now.AddHours(-2), Now),
-            membership: TestContracts.Redemption(ContractId), redemptionEntries: [new RedemptionEntry(missed.Id, 120)]);
+        // Reproduces the reported bug: a redemption block that itself runs a few minutes past
+        // its own grace period (e.g. the Ritual took a moment) must not become a second,
+        // uncoverable deficit — it fully covered the block it exists to redeem.
+        var missed = CommittedBlock(Now.AddHours(-5), Now.AddHours(-3)); // 120 min deficit
+        // 130 minutes long, started 10 late, ran to the end: 120 credited, covering it all.
+        var redemption = Worked(
+            RedemptionBlock(missed.BlockPresetId, Now.AddMinutes(-150), Now.AddMinutes(-20), missed.Id, 120),
+            Min(10), Min(130));
+        ContractHas(missed, redemption);
 
-        _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>())
-            .Returns((IReadOnlyList<PlannedBlock>)[missed, redemption]);
-        _classifier.Classify(missed, At.Utc(Now)).Returns(FocusBlockOutcome.Missed);
-        _sessions.GetByOriginatingBlockIdAsync(missed.Id, Arg.Any<CancellationToken>()).Returns(EndedMissedSession(missed));
-        // If the fix regresses, the handler starts calling Classify for the redemption
-        // block too — stubbing StartedLate here means a regression shows up as a second,
-        // real deficit entry in the result instead of silently passing either way.
-        _classifier.Classify(redemption, At.Utc(Now)).Returns(FocusBlockOutcome.StartedLate);
-        // Starting a few minutes late doesn't mean it delivered nothing — it still ran its
-        // full committed 120 minutes, which is what Rule 13's coverage cap should honor.
-        var redemptionSession = Session.Create(Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(120)),
-            presetId, SessionOrigin.Planned, originatingBlockId: redemption.Id);
-        redemptionSession.Start(At.Start(redemption.Scheduled), redemption.Scheduled);
-        redemptionSession.Complete(At.End(redemption.Scheduled));
-        _sessions.GetByOriginatingBlockIdAsync(redemption.Id, Arg.Any<CancellationToken>()).Returns(redemptionSession);
-        _classifier.CreditedFocusMinutes(redemption.Scheduled, Arg.Any<Moment?>(), Arg.Any<Moment?>(), Arg.Any<double>())
-            .Returns(120);
-
-        var result = await CreateHandler().HandleAsync(new GetNenContractDeficitsQuery(ContractId), CancellationToken.None);
-
-        result.Should().BeEmpty();
+        (await Handle()).Should().BeEmpty();
     }
 
     [Fact]
@@ -288,42 +197,23 @@ public class GetNenContractDeficitsQueryHandlerTests
     {
         // Reproduces the live bug: recomputing a redemption block's coverage on edit must
         // not see the block's own stale, pre-edit RedemptionEntry as coverage from someone
-        // else — without the exclusion, remainingDeficit collapses toward zero (floating-
-        // point noise, not a clean 0) instead of the true 120-minute deficit.
-        var missed = MissedBlock(Now.AddHours(-3), Now.AddHours(-1)); // 120 min deficit
-        var presetId = missed.BlockPresetId;
-        var editingBlockId = Guid.NewGuid();
-        var redemption = FocusBlock.Create(editingBlockId, presetId,At.Slot(Now.AddHours(1), Now.AddHours(3)),
-            membership: TestContracts.Redemption(ContractId), redemptionEntries: [new RedemptionEntry(missed.Id, 120)]);
+        // else — without the exclusion, remainingDeficit collapses toward zero instead of
+        // the true 120-minute deficit.
+        var missed = CommittedBlock(Now.AddHours(-3), Now.AddHours(-1)); // 120 min deficit
+        var redemption = RedemptionBlock(missed.BlockPresetId, Now.AddHours(1), Now.AddHours(3), missed.Id, 120);
+        ContractHas(missed, redemption);
 
-        _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>())
-            .Returns((IReadOnlyList<PlannedBlock>)[missed, redemption]);
-        _classifier.Classify(missed, At.Utc(Now)).Returns(FocusBlockOutcome.Missed);
-        _sessions.GetByOriginatingBlockIdAsync(missed.Id, Arg.Any<CancellationToken>()).Returns(EndedMissedSession(missed));
-
-        var result = await CreateHandler().HandleAsync(
-            new GetNenContractDeficitsQuery(ContractId, ExcludeCoverageFromBlockId: editingBlockId), CancellationToken.None);
-
-        result.Should().ContainSingle().Subject.RemainingDeficitMinutes.Should().Be(120);
+        (await Handle(excludeCoverageFrom: redemption.Id)).Should().ContainSingle().Subject.RemainingDeficitMinutes.Should().Be(120);
     }
 
     [Fact]
     public async Task HandleAsync_MissedBlockPartiallyCoveredByRedemption_RemainingDeficitReduced()
     {
-        var missed = MissedBlock(Now.AddHours(-3), Now.AddHours(-1)); // 120 min deficit
-        var presetId = missed.BlockPresetId;
-        var redemption = FocusBlock.Create(Guid.NewGuid(), presetId,At.Slot(Now.AddHours(1), Now.AddHours(2)),
-            membership: TestContracts.Redemption(ContractId), redemptionEntries: [new RedemptionEntry(missed.Id, 50)]);
+        var missed = CommittedBlock(Now.AddHours(-3), Now.AddHours(-1)); // 120 min deficit
+        var redemption = RedemptionBlock(missed.BlockPresetId, Now.AddHours(1), Now.AddHours(2), missed.Id, 50);
+        ContractHas(missed, redemption);
 
-        _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>())
-            .Returns((IReadOnlyList<PlannedBlock>)[missed, redemption]);
-        _classifier.Classify(missed, At.Utc(Now)).Returns(FocusBlockOutcome.Missed);
-        _classifier.Classify(redemption, At.Utc(Now)).Returns((FocusBlockOutcome?)null);
-        _sessions.GetByOriginatingBlockIdAsync(missed.Id, Arg.Any<CancellationToken>()).Returns(EndedMissedSession(missed));
-
-        var result = await CreateHandler().HandleAsync(new GetNenContractDeficitsQuery(ContractId), CancellationToken.None);
-
-        result.Should().ContainSingle().Subject.RemainingDeficitMinutes.Should().Be(70); // 120 - 50
+        (await Handle()).Should().ContainSingle().Subject.RemainingDeficitMinutes.Should().Be(70); // 120 - 50
     }
 
     [Fact]
@@ -332,156 +222,85 @@ public class GetNenContractDeficitsQueryHandlerTests
         // Rule 13's second half: a redemption block that never actually happened must not
         // keep "paying off" the deficit it was scheduled to cover — the original block's
         // deficit reopens in full.
-        var missed = MissedBlock(Now.AddHours(-5), Now.AddHours(-3)); // 120 min deficit
-        var presetId = missed.BlockPresetId;
-        var redemption = FocusBlock.Create(Guid.NewGuid(), presetId,At.Slot(Now.AddHours(-2), Now.AddHours(-1)),
-            membership: TestContracts.Redemption(ContractId), redemptionEntries: [new RedemptionEntry(missed.Id, 60)]);
+        var missed = CommittedBlock(Now.AddHours(-5), Now.AddHours(-3)); // 120 min deficit
+        var redemption = RedemptionBlock(missed.BlockPresetId, Now.AddHours(-2), Now.AddHours(-1), missed.Id, 60);
+        ContractHas(missed, redemption);
 
-        _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>())
-            .Returns((IReadOnlyList<PlannedBlock>)[missed, redemption]);
-        _classifier.Classify(missed, At.Utc(Now)).Returns(FocusBlockOutcome.Missed);
-        _sessions.GetByOriginatingBlockIdAsync(missed.Id, Arg.Any<CancellationToken>()).Returns(EndedMissedSession(missed));
-        _classifier.Classify(redemption, At.Utc(Now)).Returns(FocusBlockOutcome.Missed);
-        _sessions.GetByOriginatingBlockIdAsync(redemption.Id, Arg.Any<CancellationToken>()).Returns(EndedMissedSession(redemption));
-
-        var result = await CreateHandler().HandleAsync(new GetNenContractDeficitsQuery(ContractId), CancellationToken.None);
-
-        result.Should().ContainSingle().Subject.RemainingDeficitMinutes.Should().Be(120); // full deficit, not 60
+        (await Handle()).Should().ContainSingle().Subject.RemainingDeficitMinutes.Should().Be(120); // full deficit, not 60
     }
 
     [Fact]
     public async Task HandleAsync_CoveringRedemptionBlockEndedEarly_CoverageCappedAtActualCredit()
     {
-        // A redemption block scheduled to cover 60 minutes but that itself only delivered
-        // 20 real credited minutes (ended early) must not get credit for the full 60 it
-        // was planned for — only its own actual, live outcome counts.
-        var missed = MissedBlock(Now.AddHours(-5), Now.AddHours(-3)); // 120 min deficit
-        var presetId = missed.BlockPresetId;
-        var redemption = FocusBlock.Create(Guid.NewGuid(), presetId,At.Slot(Now.AddHours(-2), Now.AddHours(-1)),
-            membership: TestContracts.Redemption(ContractId), redemptionEntries: [new RedemptionEntry(missed.Id, 60)]);
-
-        _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>())
-            .Returns((IReadOnlyList<PlannedBlock>)[missed, redemption]);
-        _classifier.Classify(missed, At.Utc(Now)).Returns(FocusBlockOutcome.Missed);
-        _sessions.GetByOriginatingBlockIdAsync(missed.Id, Arg.Any<CancellationToken>()).Returns(EndedMissedSession(missed));
-        _classifier.Classify(redemption, At.Utc(Now)).Returns(FocusBlockOutcome.EndedEarly);
-        var redemptionSession = Session.Create(Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(60)),
-            presetId, SessionOrigin.Planned, originatingBlockId: redemption.Id);
-        redemptionSession.Start(At.Start(redemption.Scheduled), redemption.Scheduled);
-        redemptionSession.Complete(At.Start(redemption.Scheduled) + TimeSpan.FromMinutes(20));
-        _sessions.GetByOriginatingBlockIdAsync(redemption.Id, Arg.Any<CancellationToken>()).Returns(redemptionSession);
-        _classifier.CreditedFocusMinutes(redemption.Scheduled, Arg.Any<Moment?>(), Arg.Any<Moment?>(), Arg.Any<double>())
-            .Returns(20);
-
-        var result = await CreateHandler().HandleAsync(new GetNenContractDeficitsQuery(ContractId), CancellationToken.None);
+        // A redemption block scheduled to cover 60 minutes but that itself only delivered 20
+        // real credited minutes (ended early) must not get credit for the full 60 it was
+        // planned for — only its own actual outcome counts.
+        var missed = CommittedBlock(Now.AddHours(-5), Now.AddHours(-3)); // 120 min deficit
+        var redemption = Worked(
+            RedemptionBlock(missed.BlockPresetId, Now.AddHours(-2), Now.AddHours(-1), missed.Id, 60),
+            Min(0), Min(20));
+        ContractHas(missed, redemption);
 
         // 120 raw deficit - min(60 planned, 20 actually credited) = 100
-        result.Should().ContainSingle().Subject.RemainingDeficitMinutes.Should().Be(100);
+        (await Handle()).Should().ContainSingle().Subject.RemainingDeficitMinutes.Should().Be(100);
     }
 
     [Fact]
-    public async Task HandleAsync_CoveringRedemptionBlockStillPending_OptimisticFullCredit()
+    public async Task HandleAsync_CoveringRedemptionBlockStillRunning_OptimisticFullCredit()
     {
-        // A redemption block scheduled ahead but not yet started (no verdict yet) should
-        // still count as covering — a "cover deficit" tile shouldn't reopen the original
-        // deficit just because it hasn't happened yet.
-        var missed = MissedBlock(Now.AddHours(-3), Now.AddHours(-1)); // 120 min deficit
-        var presetId = missed.BlockPresetId;
-        var redemption = FocusBlock.Create(Guid.NewGuid(), presetId,At.Slot(Now.AddHours(1), Now.AddHours(3)),
-            membership: TestContracts.Redemption(ContractId), redemptionEntries: [new RedemptionEntry(missed.Id, 120)]);
+        // A covering block still in flight isn't final (Rule 18): its claim is trusted until
+        // its session ends, even though only 20 minutes are credited so far.
+        var missed = CommittedBlock(Now.AddHours(-5), Now.AddHours(-3)); // 120 min deficit
+        var redemption = Worked(
+            RedemptionBlock(missed.BlockPresetId, Now.AddMinutes(-20), Now.AddMinutes(40), missed.Id, 60),
+            Min(0), endedAfterStart: null);
+        ContractHas(missed, redemption);
 
-        _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>())
-            .Returns((IReadOnlyList<PlannedBlock>)[missed, redemption]);
-        _classifier.Classify(missed, At.Utc(Now)).Returns(FocusBlockOutcome.Missed);
-        _sessions.GetByOriginatingBlockIdAsync(missed.Id, Arg.Any<CancellationToken>()).Returns(EndedMissedSession(missed));
-        _classifier.Classify(redemption, At.Utc(Now)).Returns((FocusBlockOutcome?)null);
-
-        var result = await CreateHandler().HandleAsync(new GetNenContractDeficitsQuery(ContractId), CancellationToken.None);
-
-        result.Should().BeEmpty();
+        (await Handle()).Should().ContainSingle().Subject.RemainingDeficitMinutes.Should().Be(60);
     }
 
     [Fact]
     public async Task HandleAsync_CoverageWithinFloatingPointTolerance_TreatedAsFullyCovered()
     {
-        // Reproduces a live bug: a redemption block's duration is sized to a deficit
-        // expressed as a double, round-tripped through a DateTime End (quantized to 100ns
-        // ticks), then read back out as TotalMinutes for its MinutesCovered — losing a
-        // sliver of precision every time. A redemption that visibly, functionally fully
-        // covers its target must not leave a microscopic phantom deficit that keeps the
-        // Cover Deficit button alive forever.
-        var missed = MissedBlock(Now.AddHours(-3), Now.AddHours(-1)); // 120 min deficit
-        var presetId = missed.BlockPresetId;
-        // 1.7e-9 minutes short of the real 120-minute deficit — exactly the kind of residual
-        // the double -> DateTime -> double round-trip through tick quantization produces.
-        var redemption = FocusBlock.Create(Guid.NewGuid(), presetId,At.Slot(Now.AddHours(1), Now.AddHours(3)),
-            membership: TestContracts.Redemption(ContractId), redemptionEntries: [new RedemptionEntry(missed.Id, 120 - 1.7e-9)]);
+        // Reproduces a live bug: a redemption block's MinutesCovered round-trips through a
+        // tick-quantized timestamp and loses a sliver of precision. A redemption that
+        // visibly, functionally fully covers its target must not leave a microscopic phantom
+        // deficit that keeps the Cover Deficit button alive forever.
+        var missed = CommittedBlock(Now.AddHours(-3), Now.AddHours(-1)); // 120 min deficit
+        var redemption = RedemptionBlock(missed.BlockPresetId, Now.AddHours(1), Now.AddHours(3), missed.Id, 120 - 1.7e-9);
+        ContractHas(missed, redemption);
 
-        _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>())
-            .Returns((IReadOnlyList<PlannedBlock>)[missed, redemption]);
-        _classifier.Classify(missed, At.Utc(Now)).Returns(FocusBlockOutcome.Missed);
-        _sessions.GetByOriginatingBlockIdAsync(missed.Id, Arg.Any<CancellationToken>()).Returns(EndedMissedSession(missed));
-        _classifier.Classify(redemption, At.Utc(Now)).Returns((FocusBlockOutcome?)null);
-
-        var result = await CreateHandler().HandleAsync(new GetNenContractDeficitsQuery(ContractId), CancellationToken.None);
-
-        result.Should().BeEmpty();
+        (await Handle()).Should().BeEmpty();
     }
 
     [Fact]
     public async Task HandleAsync_DeficitOfExactlyOneMinute_Surfaces()
     {
         // Gap 44's 1-minute write-off is gone — every whole-minute shortfall is a real,
-        // visible deficit now, recoverable through Cover Deficit down to the last minute.
-        // A clean 1-minute deficit is the smallest one that can exist once credited minutes
-        // are floored at the source, and it must surface, not be silently forgiven.
-        var block = MissedBlock(Now.AddHours(-3), Now.AddHours(-1)); // 2-hour block, 120 min
-        _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
-        _classifier.Classify(block, At.Utc(Now)).Returns(FocusBlockOutcome.EndedEarly);
-        var session = Session.Create(Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(120)),
-            block.BlockPresetId, SessionOrigin.Planned, originatingBlockId: block.Id);
-        session.Start(At.Start(block.Scheduled));
-        session.Complete(At.End(block.Scheduled) + TimeSpan.FromMinutes(-1)); // exactly 1 minute short
-        _sessions.GetByOriginatingBlockIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns(session);
-        _classifier.CreditedFocusMinutes(block.Scheduled, Arg.Any<Moment?>(), Arg.Any<Moment?>(), Arg.Any<double>()).Returns(119);
+        // visible deficit, recoverable through Cover Deficit down to the last minute.
+        ContractHas(Worked(CommittedBlock(Now.AddHours(-3), Now.AddHours(-1)), Min(0), Min(119)));
 
-        var result = await CreateHandler().HandleAsync(new GetNenContractDeficitsQuery(ContractId), CancellationToken.None);
-
-        result.Should().ContainSingle().Subject.RemainingDeficitMinutes.Should().Be(1);
+        (await Handle()).Should().ContainSingle().Subject.RemainingDeficitMinutes.Should().Be(1);
     }
 
     [Fact]
-    public async Task HandleAsync_DeficitJustOverWriteOffThreshold_StillSurfaces()
+    public async Task HandleAsync_EndedSecondsShortOfAMinute_DeficitIsWholeMinutes()
     {
-        var block = MissedBlock(Now.AddHours(-3), Now.AddHours(-1)); // 2-hour block, 120 min
-        _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
-        _classifier.Classify(block, At.Utc(Now)).Returns(FocusBlockOutcome.EndedEarly);
-        var session = Session.Create(Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(120)),
-            block.BlockPresetId, SessionOrigin.Planned, originatingBlockId: block.Id);
-        session.Start(At.Start(block.Scheduled));
-        session.Complete(At.End(block.Scheduled) + TimeSpan.FromSeconds(-97)); // 1 min 37 sec short
-        _sessions.GetByOriginatingBlockIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns(session);
-        _classifier.CreditedFocusMinutes(block.Scheduled, Arg.Any<Moment?>(), Arg.Any<Moment?>(), Arg.Any<double>())
-            .Returns(120 - 97 / 60.0);
+        // Ended 1 min 37 s short: credit rounds down to whole minutes (118), so the deficit is
+        // 2 whole minutes — never a fraction, and never forgiven.
+        ContractHas(Worked(CommittedBlock(Now.AddHours(-3), Now.AddHours(-1)), Min(0), TimeSpan.FromSeconds(120 * 60 - 97)));
 
-        var result = await CreateHandler().HandleAsync(new GetNenContractDeficitsQuery(ContractId), CancellationToken.None);
-
-        result.Should().ContainSingle().Subject.RemainingDeficitMinutes.Should().BeApproximately(97 / 60.0, 1e-9);
+        (await Handle()).Should().ContainSingle().Subject.RemainingDeficitMinutes.Should().Be(2);
     }
 
     [Fact]
     public async Task HandleAsync_MultipleDeficits_OrderedByScheduledStart()
     {
-        var later = MissedBlock(Now.AddHours(-1).AddMinutes(-30), Now.AddHours(-1));
-        var earlier = MissedBlock(Now.AddHours(-5), Now.AddHours(-4));
-        _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>())
-            .Returns((IReadOnlyList<PlannedBlock>)[later, earlier]);
-        _classifier.Classify(later, At.Utc(Now)).Returns(FocusBlockOutcome.Missed);
-        _sessions.GetByOriginatingBlockIdAsync(later.Id, Arg.Any<CancellationToken>()).Returns(EndedMissedSession(later));
-        _classifier.Classify(earlier, At.Utc(Now)).Returns(FocusBlockOutcome.Missed);
-        _sessions.GetByOriginatingBlockIdAsync(earlier.Id, Arg.Any<CancellationToken>()).Returns(EndedMissedSession(earlier));
+        var later = CommittedBlock(Now.AddHours(-1).AddMinutes(-30), Now.AddHours(-1));
+        var earlier = CommittedBlock(Now.AddHours(-5), Now.AddHours(-4));
+        ContractHas(later, earlier);
 
-        var result = await CreateHandler().HandleAsync(new GetNenContractDeficitsQuery(ContractId), CancellationToken.None);
+        var result = await Handle();
 
         result.Should().HaveCount(2);
         result[0].FocusBlockId.Should().Be(earlier.Id);

@@ -12,20 +12,17 @@ public sealed class GetFocusBlockRitualContextQueryHandler
     private readonly IBlockPresetRepository _presets;
     private readonly ISessionRepository _sessions;
     private readonly ISystemClock _clock;
-    private readonly IFocusBlockOutcomeClassifier _classifier;
 
     public GetFocusBlockRitualContextQueryHandler(
         IPlannedBlockRepository blocks,
         IBlockPresetRepository presets,
         ISessionRepository sessions,
-        ISystemClock clock,
-        IFocusBlockOutcomeClassifier classifier)
+        ISystemClock clock)
     {
         _blocks = blocks;
         _presets = presets;
         _sessions = sessions;
         _clock = clock;
-        _classifier = classifier;
     }
 
     public async Task<FocusBlockRitualContext?> HandleAsync(GetFocusBlockRitualContextQuery query, CancellationToken ct)
@@ -36,7 +33,7 @@ public sealed class GetFocusBlockRitualContextQueryHandler
         var preset = await _presets.GetByIdAsync(block.BlockPresetId, ct);
         if (preset is null) return null;
 
-        // Reuses IFocusBlockOutcomeClassifier.IsLateStart — one definition of "late enough
+        // Asks the block's own IsLateAt — one definition of "late enough
         // to matter," not a second one invented for this modal — against a live "if the
         // ritual completed right now" check, since the ritual hasn't happened yet.
         var now = _clock.Now;
@@ -46,7 +43,7 @@ public sealed class GetFocusBlockRitualContextQueryHandler
             Preset = BlockPresetDto.FromEntity(preset),
             Schedule = new FocusBlockSchedule { Slot = block.Scheduled },
             LateBy = -block.Scheduled.StartsIn(now),
-            IsLate = _classifier.IsLateStart(block.Scheduled, now),
+            IsLate = block.IsLateAt(now),
             AlreadyHasSession = await _sessions.ExistsForOriginatingBlockAsync(block.Id, ct)
         };
     }

@@ -20,7 +20,6 @@ public class GetPlannedBlocksForDayQueryHandlerTests
     private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
     private readonly INenContractRepository _contracts = Substitute.For<INenContractRepository>();
     private readonly ISystemClock _clock = TestClock.Create();
-    private readonly IFocusBlockOutcomeClassifier _classifier = new FocusBlockOutcomeClassifier();
 
     public GetPlannedBlocksForDayQueryHandlerTests()
     {
@@ -31,7 +30,7 @@ public class GetPlannedBlocksForDayQueryHandlerTests
         _contracts.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<NenContract>)[]);
     }
 
-    private GetPlannedBlocksForDayQueryHandler CreateHandler() => new(_blocks, _presets, _contracts, _clock, _classifier,
+    private GetPlannedBlocksForDayQueryHandler CreateHandler() => new(_blocks, _presets, _contracts, _clock,
         new BlockChangeChecker(new PlannedFocusHoursCalculator()));
 
     [Fact]
@@ -73,6 +72,7 @@ public class GetPlannedBlocksForDayQueryHandlerTests
     public async Task HandleAsync_FocusBlockEndedEarly_DisplayEndIsSessionEndedAt()
     {
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End));
+        block.MarkRitualCompleted(At.Utc(Start));
         block.MarkSessionEnded(At.Utc(Start.AddMinutes(20)));
         _blocks.GetForRangeAsync(At.UtcZone.SlotCovering(Day), Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
         _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
@@ -87,7 +87,7 @@ public class GetPlannedBlocksForDayQueryHandlerTests
     [Fact]
     public async Task HandleAsync_FocusBlockStartedLate_DisplayStartIsRitualCompletedAt()
     {
-        var ritualCompletedAt = Start.AddMinutes(FocusBlockOutcomeClassifier.GracePeriodMinutes + 1);
+        var ritualCompletedAt = Start.AddMinutes(FocusBlock.GracePeriodMinutes + 1);
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End));
         block.MarkRitualCompleted(At.Utc(ritualCompletedAt));
         _blocks.GetForRangeAsync(At.UtcZone.SlotCovering(Day), Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
@@ -103,7 +103,7 @@ public class GetPlannedBlocksForDayQueryHandlerTests
     [Fact]
     public async Task HandleAsync_FocusBlockRitualCompletedWithinGracePeriod_DisplayStartIsScheduledStart()
     {
-        var ritualCompletedAt = Start.AddMinutes(FocusBlockOutcomeClassifier.GracePeriodMinutes);
+        var ritualCompletedAt = Start.AddMinutes(FocusBlock.GracePeriodMinutes);
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End));
         block.MarkRitualCompleted(At.Utc(ritualCompletedAt));
         _blocks.GetForRangeAsync(At.UtcZone.SlotCovering(Day), Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
@@ -238,7 +238,7 @@ public class GetPlannedBlocksForDayQueryHandlerTests
     public async Task HandleAsync_FocusBlockRitualCompletedLate_OutcomeIsStartedLate()
     {
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End));
-        block.MarkRitualCompleted(At.Utc(Start.AddMinutes(FocusBlockOutcomeClassifier.GracePeriodMinutes + 1)));
+        block.MarkRitualCompleted(At.Utc(Start.AddMinutes(FocusBlock.GracePeriodMinutes + 1)));
         _blocks.GetForRangeAsync(At.UtcZone.SlotCovering(Day), Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
         _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
 

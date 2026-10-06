@@ -14,7 +14,6 @@ public sealed class GetPlannedBlocksForDayQueryHandler
     private readonly IBlockPresetRepository _presets;
     private readonly INenContractRepository _contracts;
     private readonly ISystemClock _clock;
-    private readonly IFocusBlockOutcomeClassifier _classifier;
     private readonly IBlockChangeChecker _changes;
 
     public GetPlannedBlocksForDayQueryHandler(
@@ -22,14 +21,12 @@ public sealed class GetPlannedBlocksForDayQueryHandler
         IBlockPresetRepository presets,
         INenContractRepository contracts,
         ISystemClock clock,
-        IFocusBlockOutcomeClassifier classifier,
         IBlockChangeChecker changes)
     {
         _blocks = blocks;
         _presets = presets;
         _contracts = contracts;
         _clock = clock;
-        _classifier = classifier;
         _changes = changes;
     }
 
@@ -58,9 +55,7 @@ public sealed class GetPlannedBlocksForDayQueryHandler
             // StartedLate in Classify (a block can only carry one verdict), but a block can
             // genuinely be both. This flag lets the tile badge say so even when Outcome alone
             // would hide it.
-            var wasStartedLate = focusBlock?.RitualCompletedAt is { } ritualCompletedAt
-                && _classifier.IsLateStart(b.Scheduled, ritualCompletedAt)
-                && !b.Scheduled.HasEnded(ritualCompletedAt);
+            var wasStartedLate = focusBlock?.StartedLate ?? false;
 
             // Display span mirrors the actual worked window, not the scheduled one: a ritual
             // completed past the grace period pulls the visual start forward, and a session
@@ -99,9 +94,7 @@ public sealed class GetPlannedBlocksForDayQueryHandler
                 HasEnded = b.HasEnded(now),
                 Allowances = _changes.AllowancesFor(
                     b, b.Membership is { } membership ? contractsById.GetValueOrDefault(membership.ContractId) : null, now),
-                Outcome = focusBlock is not null
-                    ? _classifier.Classify(focusBlock, now)
-                    : null,
+                Outcome = focusBlock?.Outcome(now),
                 WasStartedLate = wasStartedLate,
                 ContractBadge = contractBadge,
                 BonusContractName = bonusContract?.Name

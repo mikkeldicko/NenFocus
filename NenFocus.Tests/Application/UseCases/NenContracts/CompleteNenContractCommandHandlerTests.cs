@@ -1,6 +1,7 @@
 using FluentAssertions;
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
+using NenFocus.Application.Queries.GetNenContractCompletionReadiness;
 using NenFocus.Application.Queries.GetNenContractRecap;
 using NenFocus.Application.UseCases.NenContracts.CompleteNenContract;
 using NenFocus.Domain.Entities;
@@ -20,13 +21,17 @@ public class CompleteNenContractCommandHandlerTests
     private readonly ISystemClock _clock = TestClock.Create();
     private readonly IQueryHandler<GetNenContractRecapQuery, NenContractRecapDto?> _recap =
         Substitute.For<IQueryHandler<GetNenContractRecapQuery, NenContractRecapDto?>>();
+    private readonly IQueryHandler<GetNenContractCompletionReadinessQuery, NenContractCompletionReadinessDto> _readiness =
+        Substitute.For<IQueryHandler<GetNenContractCompletionReadinessQuery, NenContractCompletionReadinessDto>>();
 
     public CompleteNenContractCommandHandlerTests()
     {
         _clock.SetNow(Now);
+        _readiness.HandleAsync(Arg.Any<GetNenContractCompletionReadinessQuery>(), Arg.Any<CancellationToken>())
+            .Returns(new NenContractCompletionReadinessDto { IsReady = true });
     }
 
-    private CompleteNenContractCommandHandler CreateHandler() => new(_contracts, _clock, _recap);
+    private CompleteNenContractCommandHandler CreateHandler() => new(_contracts, _clock, _recap, _readiness);
 
     private static NenContract ActiveContract() => TestContracts.Seal(
         id: Guid.NewGuid(),
@@ -48,6 +53,24 @@ public class CompleteNenContractCommandHandlerTests
         var result = await CreateHandler().HandleAsync(new CompleteNenContractCommand { ContractId = Guid.NewGuid() });
 
         result.Success.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task HandleAsync_NotReady_IsRefused_AndNothingChanges()
+    {
+        // Gap 95: the handler refuses on its own (a session running, hours owed, a block not
+        // done), even if a caller skipped the validator.
+        var contract = ActiveContract();
+        _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
+        _readiness.HandleAsync(Arg.Any<GetNenContractCompletionReadinessQuery>(), Arg.Any<CancellationToken>())
+            .Returns(new NenContractCompletionReadinessDto { IsReady = false, NotReadyReason = "A session is running." });
+
+        var result = await CreateHandler().HandleAsync(new CompleteNenContractCommand { ContractId = contract.Id });
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Be("A session is running.");
+        contract.Status.Should().Be(NenContractStatus.Active);
+        await _contracts.DidNotReceive().SaveAsync(Arg.Any<NenContract>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]

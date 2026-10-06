@@ -13,7 +13,6 @@ public sealed class GetNenContractRecapQueryHandler : IQueryHandler<GetNenContra
 {
     private readonly INenContractRepository _contracts;
     private readonly IPlannedBlockRepository _blocks;
-    private readonly IFocusBlockOutcomeClassifier _classifier;
     private readonly IQueryHandler<GetNenContractCompletedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> _completedHours;
     private readonly IQueryHandler<GetNenContractBonusFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> _bonusHours;
     private readonly ISystemClock _clock;
@@ -21,14 +20,12 @@ public sealed class GetNenContractRecapQueryHandler : IQueryHandler<GetNenContra
     public GetNenContractRecapQueryHandler(
         INenContractRepository contracts,
         IPlannedBlockRepository blocks,
-        IFocusBlockOutcomeClassifier classifier,
         IQueryHandler<GetNenContractCompletedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> completedHours,
         IQueryHandler<GetNenContractBonusFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> bonusHours,
         ISystemClock clock)
     {
         _contracts = contracts;
         _blocks = blocks;
-        _classifier = classifier;
         _completedHours = completedHours;
         _bonusHours = bonusHours;
         _clock = clock;
@@ -84,7 +81,7 @@ public sealed class GetNenContractRecapQueryHandler : IQueryHandler<GetNenContra
                 continue;
             }
 
-            var outcome = _classifier.Classify(focusBlock, now);
+            var outcome = focusBlock.Outcome(now);
 
             switch (outcome)
             {

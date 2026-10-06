@@ -32,7 +32,7 @@ public class ValidatorWordingRuleTests
         "NenFocus.Application/UseCases/ContractPresets/DeleteContractPreset/DeleteContractPresetValidator.cs has 1",
         "NenFocus.Application/UseCases/ContractPresets/UpdateContractPreset/UpdateContractPresetValidator.cs has 7",
         "NenFocus.Application/UseCases/NenContracts/Break/BreakNenContractValidator.cs has 3",
-        "NenFocus.Application/UseCases/NenContracts/CompleteNenContract/CompleteNenContractValidator.cs has 4",
+        "NenFocus.Application/UseCases/NenContracts/CompleteNenContract/CompleteNenContractValidator.cs has 2",
         "NenFocus.Application/UseCases/NenContracts/Delete/DeleteNenContractValidator.cs has 3",
         "NenFocus.Application/UseCases/NenContracts/Edit/EditNenContractValidator.cs has 13",
         "NenFocus.Application/UseCases/NenContracts/Seal/SealNenContractValidator.cs has 10",

@@ -13,20 +13,17 @@ public sealed class GetUnacknowledgedPostSessionsQueryHandler
     private readonly IBlockPresetRepository _presets;
     private readonly IPlannedBlockRepository _plannedBlocks;
     private readonly IBlockedAttemptTracker _attemptTracker;
-    private readonly IFocusBlockOutcomeClassifier _classifier;
 
     public GetUnacknowledgedPostSessionsQueryHandler(
         ISessionRepository sessions,
         IBlockPresetRepository presets,
         IPlannedBlockRepository plannedBlocks,
-        IBlockedAttemptTracker attemptTracker,
-        IFocusBlockOutcomeClassifier classifier)
+        IBlockedAttemptTracker attemptTracker)
     {
         _sessions = sessions;
         _presets = presets;
         _plannedBlocks = plannedBlocks;
         _attemptTracker = attemptTracker;
-        _classifier = classifier;
     }
 
     public async Task<IReadOnlyList<PostSessionDto>> HandleAsync(
@@ -90,8 +87,7 @@ public sealed class GetUnacknowledgedPostSessionsQueryHandler
         if (block is not FocusBlock focusBlock)
             return actualElapsedMinutes;
 
-        return _classifier.CreditedFocusMinutes(
-            focusBlock.Scheduled, focusBlock.RitualCompletedAt, session.EndedAt, actualElapsedMinutes);
+        return focusBlock.CreditedSlot(session.EndedAt!.Value)?.Length.TotalMinutes ?? 0;
     }
 
     private async Task<string> ResolvePresetNameAsync(

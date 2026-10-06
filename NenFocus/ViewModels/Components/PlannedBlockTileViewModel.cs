@@ -29,7 +29,7 @@ public partial class PlannedBlockTileViewModel : ViewModelBase
     /// <summary>True for an unsealed Nen Contract draft block — never persisted, styled distinctly.</summary>
     public bool IsDraft { get; }
 
-    /// <summary>FocusBlockOutcomeClassifier.Classify's result — null for Background blocks or a still-pending Focus block.</summary>
+    /// <summary>FocusBlock.Outcome — null for Background blocks or a still-pending Focus block.</summary>
     public FocusBlockOutcome? Outcome { get; }
 
     /// <summary>True only for Missed — the sole outcome whose tile text is struck through (nothing happened at all).</summary>

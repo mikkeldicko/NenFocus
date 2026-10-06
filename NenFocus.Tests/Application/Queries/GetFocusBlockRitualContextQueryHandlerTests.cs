@@ -18,9 +18,8 @@ public class GetFocusBlockRitualContextQueryHandlerTests
     private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
     private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
     private readonly ISystemClock _clock = TestClock.Create();
-    private readonly IFocusBlockOutcomeClassifier _classifier = new FocusBlockOutcomeClassifier();
 
-    private GetFocusBlockRitualContextQueryHandler CreateHandler() => new(_blocks, _presets, _sessions, _clock, _classifier);
+    private GetFocusBlockRitualContextQueryHandler CreateHandler() => new(_blocks, _presets, _sessions, _clock);
 
     [Fact]
     public async Task HandleAsync_BlockNotFound_ReturnsNull()
@@ -109,7 +108,7 @@ public class GetFocusBlockRitualContextQueryHandlerTests
     [InlineData(5, false)]   // exactly at the grace period boundary — still within grace
     [InlineData(6, true)]    // past the grace period
     [InlineData(90, true)]
-    public async Task HandleAsync_IsLate_ComparesAgainstFocusBlockOutcomeClassifierGracePeriod(
+    public async Task HandleAsync_IsLate_ComparesAgainstTheBlocksGracePeriod(
         int minutesAfterStart, bool expectedIsLate)
     {
         var blockId = Guid.NewGuid();
@@ -128,17 +127,17 @@ public class GetFocusBlockRitualContextQueryHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_UsesSameGracePeriodConstantAsFocusBlockOutcomeClassifier()
+    public async Task HandleAsync_UsesTheBlocksGracePeriodConstant()
     {
         // Not a hardcoded "5" — asserts against the shared constant directly, so this
-        // test can't silently drift from FocusBlockOutcomeClassifier's own definition.
+        // test can't silently drift from FocusBlock's own definition.
         var blockId = Guid.NewGuid();
         var presetId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
             .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Start, End)));
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
             .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Start)));
-        _clock.SetNow(Start.AddMinutes(FocusBlockOutcomeClassifier.GracePeriodMinutes + 1));
+        _clock.SetNow(Start.AddMinutes(FocusBlock.GracePeriodMinutes + 1));
 
         var result = await CreateHandler().HandleAsync(
             new GetFocusBlockRitualContextQuery { FocusBlockId = blockId }, CancellationToken.None);

@@ -23,7 +23,6 @@ public class BreakNenContractCommandHandlerTests
     private readonly ISystemClock _clock = TestClock.Create();
     private readonly IQueryHandler<GetNenContractRecapQuery, NenContractRecapDto?> _recap =
         Substitute.For<IQueryHandler<GetNenContractRecapQuery, NenContractRecapDto?>>();
-    private readonly IFocusBlockOutcomeClassifier _outcomeClassifier = Substitute.For<IFocusBlockOutcomeClassifier>();
 
     public BreakNenContractCommandHandlerTests()
     {
@@ -35,7 +34,7 @@ public class BreakNenContractCommandHandlerTests
     }
 
     private BreakNenContractCommandHandler CreateHandler() =>
-        new(_contracts, _blocks, _sessions, _clock, _recap, _outcomeClassifier);
+        new(_contracts, _blocks, _sessions, _clock, _recap);
 
     private static Session CreatePlannedSession(Guid originatingBlockId)
     {
@@ -100,8 +99,7 @@ public class BreakNenContractCommandHandlerTests
         var currentBlock = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now.AddHours(-1), Now.AddHours(1)), membership: TestContracts.Committed(contract.Id)); // active right now
         var futureBlock = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now.AddDays(1), Now.AddDays(1).AddHours(1)), membership: TestContracts.Committed(contract.Id)); // upcoming
 
-        // Never ritual-completed and its scheduled End has already passed — resolved as Missed.
-        _outcomeClassifier.Classify(pastBlock, At.Utc(Now)).Returns(FocusBlockOutcome.Missed);
+        // pastBlock: never ritual-completed and its scheduled End has already passed — Missed.
 
         _blocks.GetForContractAsync(contract.Id, Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[pastBlock, currentBlock, futureBlock]);
@@ -129,8 +127,6 @@ public class BreakNenContractCommandHandlerTests
         var endedEarly = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now.AddMinutes(-30), Now.AddHours(1)), membership: TestContracts.Committed(contract.Id));
         endedEarly.MarkRitualCompleted(At.Utc(Now.AddMinutes(-30)));
         endedEarly.MarkSessionEnded(At.Utc(Now.AddMinutes(-5)));
-        _outcomeClassifier.Classify(endedEarly, At.Utc(Now))
-            .Returns(FocusBlockOutcome.EndedEarly);
 
         _blocks.GetForContractAsync(contract.Id, Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[endedEarly]);
@@ -151,8 +147,6 @@ public class BreakNenContractCommandHandlerTests
         var runningBonus = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Now.AddHours(-1), Now.AddHours(1)), membership: TestContracts.Bonus(contract.Id));
         _blocks.GetForContractAsync(contract.Id, Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[upcomingBonus, runningBonus]);
-        var session = CreatePlannedSession(runningBonus.Id);
-        _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns(session);
 
         await CreateHandler().HandleAsync(new BreakNenContractCommand { ContractId = contract.Id }, CancellationToken.None);
 
@@ -163,7 +157,6 @@ public class BreakNenContractCommandHandlerTests
         runningBonus.Membership.Should().Be(TestContracts.Bonus(contract.Id));
         runningBonus.CancelledAt.Should().BeNull();
         await _blocks.DidNotReceive().SaveAsync(runningBonus, Arg.Any<CancellationToken>());
-        session.Status.Should().Be(SessionStatus.Active, "a running Bonus block's session is not cut short");
     }
 
     [Fact]
@@ -179,40 +172,29 @@ public class BreakNenContractCommandHandlerTests
         await _blocks.DidNotReceive().SaveAsync(Arg.Any<PlannedBlock>(), Arg.Any<CancellationToken>());
     }
 
-    [Fact]
-    public async Task HandleAsync_ActiveSessionOriginatingFromCancelledBlock_ForceCompletesSession()
+    [Theory]
+    [InlineData(true)]  // the session of the contract's own running block
+    [InlineData(false)] // any other session
+    public async Task HandleAsync_WhileASessionRuns_IsRefused_AndNothingChanges(bool sessionOfTheContractsBlock)
     {
+        // Gap 95: no contract ends while Focus time is being worked — the handler refuses on its
+        // own, even if a caller skipped the validator.
         var contract = ActiveCancellableContract();
         _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
-
-        var currentBlock = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now.AddHours(-1), Now.AddHours(1)), membership: TestContracts.Committed(contract.Id));
+        var currentBlock = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Now.AddHours(-1), Now.AddHours(1)), membership: TestContracts.Committed(contract.Id));
         _blocks.GetForContractAsync(contract.Id, Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[currentBlock]);
-
-        var session = CreatePlannedSession(currentBlock.Id);
+        var session = CreatePlannedSession(sessionOfTheContractsBlock ? currentBlock.Id : Guid.NewGuid());
         _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns(session);
 
-        await CreateHandler().HandleAsync(new BreakNenContractCommand { ContractId = contract.Id }, CancellationToken.None);
+        var result = await CreateHandler().HandleAsync(new BreakNenContractCommand { ContractId = contract.Id }, CancellationToken.None);
 
-        session.Status.Should().Be(SessionStatus.Completed);
-        session.EndedAt.Should().Be(At.Utc(Now));
-    }
-
-    [Fact]
-    public async Task HandleAsync_ActiveSessionOnBlockNotUnderThisContract_LeftUntouched()
-    {
-        var contract = ActiveCancellableContract();
-        _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
-        _blocks.GetForContractAsync(contract.Id, Arg.Any<CancellationToken>())
-            .Returns((IReadOnlyList<PlannedBlock>)[]);
-
-        var unrelatedBlockId = Guid.NewGuid();
-        var session = CreatePlannedSession(unrelatedBlockId);
-        _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns(session);
-
-        await CreateHandler().HandleAsync(new BreakNenContractCommand { ContractId = contract.Id }, CancellationToken.None);
-
+        result.Success.Should().BeFalse();
+        contract.Status.Should().Be(NenContractStatus.Active);
+        currentBlock.CancelledAt.Should().BeNull();
         session.Status.Should().Be(SessionStatus.Active);
+        await _contracts.DidNotReceive().SaveAsync(Arg.Any<NenContract>(), Arg.Any<CancellationToken>());
+        await _blocks.DidNotReceive().SaveAsync(Arg.Any<PlannedBlock>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]

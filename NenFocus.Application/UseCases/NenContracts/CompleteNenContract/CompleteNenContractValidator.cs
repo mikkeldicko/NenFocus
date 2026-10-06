@@ -28,30 +28,20 @@ public sealed class CompleteNenContractValidator : AbstractValidator<CompleteNen
             })
             .WithMessage("Only an active contract can be completed.");
 
-        // The real gate: every committed hour delivered, and nothing left pending — no
-        // still-open block (committed, redemption, or Bonus) anywhere in the contract's
-        // own window. The second half isn't just conservative: it's what guarantees
-        // completing here never needs Break's cleanup logic, because by construction
-        // there's nothing left to clean up. Delegates to GetNenContractCompletionReadinessQuery
-        // — the same query the Planner's "Complete Contract" button binds to directly to
-        // decide its own visibility, so the rule that gates the command and the rule that
-        // decides whether to show the button can never drift apart.
+        // The real gate is the contract's own answer (NenContract.CheckComplete, Gap 95): no
+        // session running, every committed hour delivered, every block done — read through
+        // GetNenContractCompletionReadinessQuery, the same answer the Planner's "Complete
+        // Contract" button binds to, so the gate and the button can never drift apart.
         RuleFor(x => x)
             .CustomAsync(async (command, context, ct) =>
             {
-                var contractExists = await contracts.GetByIdAsync(command.ContractId, ct) is not null;
-                if (!contractExists) return; // already reported by the "not found" rule above
+                var contract = await contracts.GetByIdAsync(command.ContractId, ct);
+                if (contract is not { Status: NenContractStatus.Active }) return; // reported by the rules above
 
                 var result = await readiness.HandleAsync(
                     new GetNenContractCompletionReadinessQuery(command.ContractId), ct);
-                if (result.IsReady) return;
-
-                if (result.RemainingHours > 0)
-                    context.AddFailure(nameof(CompleteNenContractCommand.ContractId),
-                        $"You haven't completed all committed hours yet ({result.RemainingHours:0.#}h remaining).");
-                else if (result.PendingBlockCount > 0)
-                    context.AddFailure(nameof(CompleteNenContractCommand.ContractId),
-                        "There's still a block scheduled in this contract's window — move or remove it before completing.");
+                if (!result.IsReady && result.NotReadyReason is { } reason)
+                    context.AddFailure(nameof(CompleteNenContractCommand.ContractId), reason);
             });
     }
 }

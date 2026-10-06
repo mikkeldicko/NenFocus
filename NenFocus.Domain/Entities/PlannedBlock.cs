@@ -79,6 +79,13 @@ public abstract class PlannedBlock : AggregateRoot
     public bool HasEnded(Moment asOf) => Scheduled.HasEnded(asOf);
 
     /// <summary>
+    /// The block's story has concluded — the one "done" that ending a contract and the deficit
+    /// ledger ask (Gap 95). A block with nothing to wait for is done once it has ended; a Focus
+    /// block also waits for its session.
+    /// </summary>
+    public virtual bool IsFinal(Moment asOf) => HasEnded(asOf);
+
+    /// <summary>
     /// True from its start onward. Once started, a block is locked: no edit, no split, and no
     /// delete until it has ended (Gap 88 phase 0).
     /// </summary>

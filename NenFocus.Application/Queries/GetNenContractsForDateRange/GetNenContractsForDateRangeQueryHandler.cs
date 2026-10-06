@@ -20,8 +20,6 @@ public sealed class GetNenContractsForDateRangeQueryHandler
     private readonly IQueryHandler<ComputePlannedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> _plannedHours;
     private readonly IQueryHandler<GetNenContractBonusFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> _bonusHours;
     private readonly IPlannedBlockRepository _blocks;
-    private readonly ISessionRepository _sessions;
-    private readonly IFocusBlockOutcomeClassifier _classifier;
     private readonly ISystemClock _clock;
 
     public GetNenContractsForDateRangeQueryHandler(
@@ -31,8 +29,6 @@ public sealed class GetNenContractsForDateRangeQueryHandler
         IQueryHandler<ComputePlannedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> plannedHours,
         IQueryHandler<GetNenContractBonusFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> bonusHours,
         IPlannedBlockRepository blocks,
-        ISessionRepository sessions,
-        Domain.Services.IFocusBlockOutcomeClassifier classifier,
         ISystemClock clock)
     {
         _contracts = contracts;
@@ -41,8 +37,6 @@ public sealed class GetNenContractsForDateRangeQueryHandler
         _plannedHours = plannedHours;
         _bonusHours = bonusHours;
         _blocks = blocks;
-        _sessions = sessions;
-        _classifier = classifier;
         _clock = clock;
     }
 
@@ -227,7 +221,7 @@ public sealed class GetNenContractsForDateRangeQueryHandler
     /// raw sum keeps counting its full original claim even after a later block picks up the
     /// leftover deficit. Grouped by (local day, missed block) — same-day retries against the
     /// same missed block collapse to that missed block's own settled deficit
-    /// (FocusBlock.RawDeficitMinutes); a retry on a different day is left alone, since each
+    /// (FocusBlock.OwnDeficit); a retry on a different day is left alone, since each
     /// day's badge is its own historical record, not retroactively rewritten once a leftover
     /// is redeemed elsewhere. Grouping by the covering block's local Start date (not the
     /// day-splitting IPlannedFocusHoursCalculator ComputePlannedFocusHoursQueryHandler itself
@@ -264,8 +258,9 @@ public sealed class GetNenContractsForDateRangeQueryHandler
 
             if (!rawDeficitCache.TryGetValue(group.Key.MissedBlockId, out var cap))
             {
-                cap = await ResolveMissedBlockRawDeficitMinutesAsync(group.Key.MissedBlockId, blocksById, now, cancellationToken)
-                      ?? claimedMinutes; // missed block not found (shouldn't happen) — trust the claim, no capping
+                cap = blocksById.TryGetValue(group.Key.MissedBlockId, out var missedBlock)
+                    ? missedBlock.OwnDeficit(now).TotalMinutes
+                    : claimedMinutes; // missed block not found (shouldn't happen) — trust the claim, no capping
                 rawDeficitCache[group.Key.MissedBlockId] = cap;
             }
 
@@ -277,19 +272,5 @@ public sealed class GetNenContractsForDateRangeQueryHandler
             adjustmentByDay[date] = (dedupedMinutesByDay.GetValueOrDefault(date) - rawMinutesByDay[date]) / 60.0;
 
         return adjustmentByDay;
-    }
-
-    private async Task<double?> ResolveMissedBlockRawDeficitMinutesAsync(
-        Guid missedBlockId, Dictionary<Guid, FocusBlock> blocksById, Moment now, CancellationToken cancellationToken)
-    {
-        if (!blocksById.TryGetValue(missedBlockId, out var missedBlock))
-            return null;
-
-        var session = await _sessions.GetByOriginatingBlockIdAsync(missedBlockId, cancellationToken);
-        var actualElapsedMinutes = session?.GetElapsedTime(now)?.TotalMinutes ?? 0;
-        var creditedMinutes = _classifier.CreditedFocusMinutes(
-            missedBlock.Scheduled, missedBlock.RitualCompletedAt, session?.EndedAt, actualElapsedMinutes);
-
-        return missedBlock.RawDeficitMinutes(creditedMinutes);
     }
 }

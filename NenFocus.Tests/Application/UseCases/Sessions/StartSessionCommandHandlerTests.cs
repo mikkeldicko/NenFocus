@@ -324,7 +324,7 @@ public class StartSessionCommandHandlerTests
     {
         // PlannedBlock.HasEnded(asOf) is the codebase's one canonical "is this past"
         // definition — this check must match it exactly. Since Gap 88 it's half-open: at
-        // exactly End the block has ended (and the classifier already calls it Missed), so
+        // exactly End the block has ended (and the block already calls itself Missed), so
         // a session can't start for it.
         var blockId = Guid.NewGuid();
         var block = FocusBlock.Create(blockId, Guid.NewGuid(),At.Slot(Now.AddHours(-1), Now));

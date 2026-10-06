@@ -12,7 +12,6 @@ public sealed class GetNenContractCompletedFocusHoursQueryHandler
     private readonly INenContractRepository _contracts;
     private readonly IPlannedBlockRepository _blocks;
     private readonly ISessionRepository _sessions;
-    private readonly IFocusBlockOutcomeClassifier _classifier;
     private readonly IPlannedFocusHoursCalculator _calculator;
     private readonly ISystemClock _clock;
 
@@ -20,14 +19,12 @@ public sealed class GetNenContractCompletedFocusHoursQueryHandler
         INenContractRepository contracts,
         IPlannedBlockRepository blocks,
         ISessionRepository sessions,
-        IFocusBlockOutcomeClassifier classifier,
         IPlannedFocusHoursCalculator calculator,
         ISystemClock clock)
     {
         _contracts = contracts;
         _blocks = blocks;
         _sessions = sessions;
-        _classifier = classifier;
         _calculator = calculator;
         _clock = clock;
     }
@@ -59,13 +56,8 @@ public sealed class GetNenContractCompletedFocusHoursQueryHandler
 
         foreach (var block in focusBlocks)
         {
-            var session = await _sessions.GetByOriginatingBlockIdAsync(block.Id, ct);
-            var actualElapsedMinutes = session?.GetElapsedTime(now)?.TotalMinutes ?? 0;
-            var window = _classifier.CreditedWindow(
-                block.Scheduled, block.RitualCompletedAt, session?.EndedAt, actualElapsedMinutes);
-
-            if (window is { } w)
-                creditedWindows.Add(w);
+            if (block.CreditedSlot(now) is { } credited)
+                creditedWindows.Add(credited);
         }
 
         // Spontaneous sessions that started on one of the contract's local days — whole dates,

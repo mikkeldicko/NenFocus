@@ -137,7 +137,7 @@ NenFocus has five pages accessible via the sidebar:
 
 **Blocked attempts are always zero on a missed session — a known, accepted gap.** `BlockedAttempt` rows key off `SessionId`, and tracking only fires once a Session exists; during a Focus Block's active window before (or absent) Ritual completion, enforcement runs but there is no `SessionId` yet to attach an attempt to. Fixing this would mean tracking attempts against `FocusBlockId` during that window — separate future Infrastructure work, out of scope here.
 
-**The originating block is untouched.** `FocusBlock` is not deleted or altered when its session is marked missed — it remains the schedule record (`RitualCompletedAt` stays `null`), while the Session is the attempt record. Both already agree: `FocusBlockOutcomeClassifier` independently derives `Missed` from the same `RitualCompletedAt == null` fact once the scheduled end has passed.
+**The originating block is untouched.** `FocusBlock` is not deleted or altered when its session is marked missed — it remains the schedule record (`RitualCompletedAt` stays `null`), while the Session is the attempt record. Both already agree: `FocusBlock.Outcome` independently derives `Missed` from the same `RitualCompletedAt == null` fact once the scheduled end has passed.
 
 **Idempotent creation:** `MarkFocusBlockMissedCommand` can safely fire more than once for the same block (the expected failure mode for a heartbeat-triggered command, not a hypothetical) — `ISessionRepository.ExistsForOriginatingBlockAsync` guards against creating a second missed session for a block that already has one.
 

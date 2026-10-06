@@ -17,7 +17,6 @@ public class GetUnacknowledgedPostSessionsQueryHandlerTests
     private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
     private readonly IPlannedBlockRepository _plannedBlocks = Substitute.For<IPlannedBlockRepository>();
     private readonly IBlockedAttemptTracker _attemptTracker = Substitute.For<IBlockedAttemptTracker>();
-    private readonly IFocusBlockOutcomeClassifier _classifier = new FocusBlockOutcomeClassifier();
 
     public GetUnacknowledgedPostSessionsQueryHandlerTests()
     {
@@ -25,7 +24,7 @@ public class GetUnacknowledgedPostSessionsQueryHandlerTests
     }
 
     private GetUnacknowledgedPostSessionsQueryHandler CreateHandler()
-        => new(_sessions, _presets, _plannedBlocks, _attemptTracker, _classifier);
+        => new(_sessions, _presets, _plannedBlocks, _attemptTracker);
 
     private static Session CreateCompletedSpontaneousSession(DateTime endedAt, TimeSpan elapsed)
     {

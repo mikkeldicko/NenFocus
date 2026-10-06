@@ -14,8 +14,14 @@ public class BreakNenContractValidatorTests
     private static readonly DateOnly EndDate = new(2026, 1, 7);
 
     private readonly INenContractRepository _contracts = Substitute.For<INenContractRepository>();
+    private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
 
-    private BreakNenContractValidator CreateValidator() => new(_contracts);
+    public BreakNenContractValidatorTests()
+    {
+        _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns((Session?)null);
+    }
+
+    private BreakNenContractValidator CreateValidator() => new(_contracts, _sessions);
 
     private static NenContract Seal(bool allowCancellation, DateTime sealedAt) => TestContracts.Seal(
         id: Guid.NewGuid(),
@@ -82,6 +88,22 @@ public class BreakNenContractValidatorTests
         var result = await CreateValidator().ValidateAsync(new BreakNenContractCommand { ContractId = contract.Id });
 
         result.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Validate_WhileASessionRuns_IsInvalidWithMessage()
+    {
+        // Gap 95: no contract ends while Focus time is being worked.
+        var contract = Seal(allowCancellation: true, sealedAt: StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)); // Active
+        _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
+        var session = Session.Create(Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(30)), Guid.NewGuid(), SessionOrigin.Spontaneous);
+        session.Start(At.Utc(StartDate.ToDateTime(new TimeOnly(9, 0), DateTimeKind.Utc)));
+        _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns(session);
+
+        var result = await CreateValidator().ValidateAsync(new BreakNenContractCommand { ContractId = contract.Id });
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().ContainSingle(e => e.ErrorMessage.Contains("session is running"));
     }
 
     [Fact]

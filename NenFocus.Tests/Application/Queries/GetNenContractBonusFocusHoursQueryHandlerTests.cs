@@ -18,8 +18,6 @@ public class GetNenContractBonusFocusHoursQueryHandlerTests
 
     private readonly INenContractRepository _contracts = Substitute.For<INenContractRepository>();
     private readonly IPlannedBlockRepository _blocks = Substitute.For<IPlannedBlockRepository>();
-    private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
-    private readonly IFocusBlockOutcomeClassifier _classifier = Substitute.For<IFocusBlockOutcomeClassifier>();
     private readonly IPlannedFocusHoursCalculator _calculator = new PlannedFocusHoursCalculator();
     private readonly ISystemClock _clock = TestClock.Create();
 
@@ -28,10 +26,9 @@ public class GetNenContractBonusFocusHoursQueryHandlerTests
         _clock.SetNow(Now);
         _clock.SetTimeZoneOffset(TimeSpan.Zero);
         _clock.SetTimeZoneOffset(TimeSpan.Zero);
-        _sessions.GetByOriginatingBlockIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((Session?)null);
     }
 
-    private GetNenContractBonusFocusHoursQueryHandler CreateHandler() => new(_contracts, _blocks, _sessions, _classifier, _calculator, _clock);
+    private GetNenContractBonusFocusHoursQueryHandler CreateHandler() => new(_contracts, _blocks, _calculator, _clock);
 
     private static NenContract ActiveContract(WorkHours? workHoursPolicy = null) => TestContracts.Seal(
         id: ContractId,
@@ -64,8 +61,6 @@ public class GetNenContractBonusFocusHoursQueryHandlerTests
         block.MarkRitualCompleted(At.Utc(day));
         _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[block]);
-        _classifier.CreditedWindow(block.Scheduled, Arg.Any<Moment?>(), Arg.Any<Moment?>(), 0)
-            .Returns((TimeSlot?)block.Scheduled);
 
         var result = await CreateHandler().HandleAsync(new GetNenContractBonusFocusHoursQuery(ContractId), CancellationToken.None);
 
@@ -87,7 +82,6 @@ public class GetNenContractBonusFocusHoursQueryHandlerTests
         var result = await CreateHandler().HandleAsync(new GetNenContractBonusFocusHoursQuery(ContractId), CancellationToken.None);
 
         result.Should().BeEmpty();
-        _classifier.DidNotReceiveWithAnyArgs().CreditedWindow(default!, default, default, default);
     }
 
     [Fact]

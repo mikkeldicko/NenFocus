@@ -14,22 +14,19 @@ public sealed class EndSessionCommandHandler
     private readonly IPlannedBlockRepository _plannedBlocks;
     private readonly IBlockedAttemptTracker _attemptTracker;
     private readonly ISystemClock _clock;
-    private readonly IFocusBlockOutcomeClassifier _classifier;
 
     public EndSessionCommandHandler(
         ISessionRepository sessions,
         IBlockPresetRepository presets,
         IPlannedBlockRepository plannedBlocks,
         IBlockedAttemptTracker attemptTracker,
-        ISystemClock clock,
-        IFocusBlockOutcomeClassifier classifier)
+        ISystemClock clock)
     {
         _sessions = sessions;
         _presets = presets;
         _plannedBlocks = plannedBlocks;
         _attemptTracker = attemptTracker;
         _clock = clock;
-        _classifier = classifier;
     }
 
     public async Task<EndSessionResult> HandleAsync(
@@ -93,8 +90,7 @@ public sealed class EndSessionCommandHandler
         // for display. Only applies to a Planned session with a resolved originating
         // block — an impromptu session has no scheduled window to be graced against.
         var creditedMinutes = originatingFocusBlock is not null
-            ? _classifier.CreditedFocusMinutes(
-            originatingFocusBlock.Scheduled, originatingFocusBlock.RitualCompletedAt, session.EndedAt, actualElapsedMinutes)
+            ? originatingFocusBlock.CreditedSlot(session.EndedAt!.Value)?.Length.TotalMinutes ?? 0
             : actualElapsedMinutes;
 
         var postSession = new PostSessionDto

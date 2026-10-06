@@ -87,7 +87,7 @@ public sealed class StartSessionCommandHandler
         // For a Planned session, Duration ("Planned") is the block's full nominal
         // length — a fixed fact about the schedule, independent of exactly when the
         // Ritual completes — not "time remaining from Ritual completion." This is the
-        // invariant that makes CreditedFocusMinutes (EndSessionCommandHandler) always
+        // invariant that makes FocusBlock.CreditedSlot (EndSessionCommandHandler) always
         // produce a "Duration" ≤ "Planned": a graced-within-5-minutes credit maxes out at
         // exactly this same (End - Start) figure, and actual elapsed time can never
         // exceed it either, since StartedAt ≥ Start and EndedAt ≤ End by construction. A

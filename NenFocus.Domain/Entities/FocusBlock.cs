@@ -1,5 +1,4 @@
 using NenFocus.Domain.Enums;
-using NenFocus.Domain.Services;
 using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Domain.Entities;
@@ -14,6 +13,18 @@ public sealed class FocusBlock : PlannedBlock
     /// guard — no repository lookup needed, so nothing pushes it out of Domain.
     /// </summary>
     public const int MaxDurationHours = 12;
+
+    /// <summary>
+    /// A Ritual completed within this many minutes after the scheduled start still counts as on
+    /// time — the Ritual takes a moment, and blocking was already running from the start.
+    /// </summary>
+    public const int GracePeriodMinutes = 5;
+
+    /// <summary>
+    /// How short a redemption block's save-time trim must be before the user is told about it
+    /// (<see cref="WasRedemptionCoverageMeaningfullyCapped"/>). Not a write-off of any kind.
+    /// </summary>
+    public const double MinimumMeaningfulDeficitMinutes = 1;
 
     /// <summary>Null means the Ritual was never completed for this block.</summary>
     public Moment? RitualCompletedAt { get; private set; }
@@ -51,6 +62,85 @@ public sealed class FocusBlock : PlannedBlock
     /// </summary>
     public bool IsUnresolved(Moment asOf)
         => HasEnded(asOf) && RitualCompletedAt is null && CancelledAt is null;
+
+    /// <summary>
+    /// Past the grace period at <paramref name="moment"/> — the one lateness rule, asked with the
+    /// Ritual stamp (<see cref="StartedLate"/>) and with "now" (the Ritual's late notice).
+    /// </summary>
+    public bool IsLateAt(Moment moment) => moment > Scheduled.Start + TimeSpan.FromMinutes(GracePeriodMinutes);
+
+    /// <summary>The Ritual was completed past the grace period, but before the block's end.</summary>
+    public bool StartedLate =>
+        RitualCompletedAt is { } ritualCompletedAt && IsLateAt(ritualCompletedAt) && !Scheduled.HasEnded(ritualCompletedAt);
+
+    /// <summary>The session ended before the scheduled end.</summary>
+    public bool EndedEarly => SessionEndedAt is { } sessionEndedAt && !Scheduled.HasEnded(sessionEndedAt);
+
+    /// <summary>
+    /// How the block resolved, or null while it could still be started (before its end, Ritual
+    /// not done). One verdict per block, in this priority: Missed, EndedEarly, StartedLate,
+    /// CompletedOnTime — <see cref="StartedLate"/> and <see cref="EndedEarly"/> can both be true.
+    /// </summary>
+    public FocusBlockOutcome? Outcome(Moment asOf)
+    {
+        if (RitualCompletedAt is not { } ritualCompletedAt)
+            return HasEnded(asOf) ? FocusBlockOutcome.Missed : null;
+        if (Scheduled.HasEnded(ritualCompletedAt)) return FocusBlockOutcome.Missed;
+        if (EndedEarly) return FocusBlockOutcome.EndedEarly;
+        return StartedLate ? FocusBlockOutcome.StartedLate : FocusBlockOutcome.CompletedOnTime;
+    }
+
+    /// <summary>
+    /// The whole span the block is worked over, from its stamps alone: from the scheduled start
+    /// when the Ritual came within grace (blocking was already running), else from the Ritual;
+    /// to the session's end when it ended early, else the scheduled end (still planned while the
+    /// session runs). Null when the Ritual wasn't done, or nothing is left of the span. The grace
+    /// and early-end rules live only here.
+    /// </summary>
+    public TimeSlot? WorkSlot()
+    {
+        if (RitualCompletedAt is not { } ritualCompletedAt) return null;
+
+        var start = IsLateAt(ritualCompletedAt) ? ritualCompletedAt : Scheduled.Start;
+        var end = EndedEarly ? SessionEndedAt!.Value : Scheduled.End;
+        return TimeSlot.TryCreate(start, end);
+    }
+
+    /// <summary>
+    /// The Focus time this block has earned by <paramref name="asOf"/>: <see cref="WorkSlot"/>
+    /// cut at <paramref name="asOf"/>, rounded down to whole minutes — rounding is credit's only
+    /// rule of its own. Null when nothing is earned.
+    /// </summary>
+    public TimeSlot? CreditedSlot(Moment asOf)
+    {
+        if (WorkSlot() is not { } worked) return null;
+
+        var end = asOf < worked.End ? asOf : worked.End;
+        var wholeMinutes = Math.Floor((end - worked.Start).TotalMinutes);
+        return wholeMinutes > 0 ? worked.Until(worked.Start + TimeSpan.FromMinutes(wholeMinutes)) : null;
+    }
+
+    /// <summary>
+    /// The block's story has concluded: its session ended, or it was missed. A session still
+    /// running isn't final — it could still end early (Redemption Rule 18).
+    /// </summary>
+    public override bool IsFinal(Moment asOf)
+        => SessionEndedAt.HasValue || Outcome(asOf) == FocusBlockOutcome.Missed;
+
+    /// <summary>
+    /// What this block failed to deliver of its own schedule — its side of the deficit ledger,
+    /// however many blocks have since tried to redeem it. Zero until final, zero when it was
+    /// completed on time, and zero for a redemption block: a block covering someone else's
+    /// deficit never becomes a deficit source itself (Rule 13).
+    /// </summary>
+    public TimeSpan OwnDeficit(Moment asOf)
+    {
+        if (IsRedemption || !IsFinal(asOf) || Outcome(asOf) == FocusBlockOutcome.CompletedOnTime)
+            return TimeSpan.Zero;
+
+        var credited = CreditedSlot(asOf)?.Length ?? TimeSpan.Zero;
+        return credited < Scheduled.Length ? Scheduled.Length - credited : TimeSpan.Zero;
+    }
 
     /// <summary>Once the Ritual is done, a session owns this block's ending and announces it.</summary>
     protected override bool AnnouncesOwnEnd => RitualCompletedAt is null;
@@ -99,11 +189,21 @@ public sealed class FocusBlock : PlannedBlock
         RitualCompletedAt = completedAt;
     }
 
+    /// <summary>
+    /// Refuses a stamp the block's own answers (late, outcome, credit) can't interpret: no
+    /// session can end on a block whose Ritual wasn't done, or before it was (Gap 95).
+    /// </summary>
     public void MarkSessionEnded(Moment endedAt)
     {
         if (SessionEndedAt.HasValue)
             throw new InvalidOperationException(
                 "Session end has already been marked for this block.");
+        if (RitualCompletedAt is not { } ritualCompletedAt)
+            throw new InvalidOperationException(
+                "A session can't end on a block whose Ritual was never completed.");
+        if (endedAt < ritualCompletedAt)
+            throw new ArgumentException(
+                "A session can't end before its Ritual was completed.", nameof(endedAt));
 
         SessionEndedAt = endedAt;
     }
@@ -120,7 +220,7 @@ public sealed class FocusBlock : PlannedBlock
     /// <summary>
     /// Tail freed once a session ended early; whole window freed once the block is genuinely
     /// Missed (ritual never completed and its scheduled End has already passed) — mirrors
-    /// <see cref="Services.IFocusBlockOutcomeClassifier.Classify"/>'s own Missed condition so
+    /// <see cref="Outcome"/>'s own Missed condition so
     /// the two can never disagree about when a block is truly vacated. Still-pending or
     /// fully-used blocks keep the whole window reserved. Adds to the base reasons
     /// (cancellation): whichever reason came first wins.
@@ -188,43 +288,9 @@ public sealed class FocusBlock : PlannedBlock
     /// GetSuggestedRedemptionPlacementsQueryHandler's own whole-minute rounding, required by
     /// the same MODULE_STANDARDS.md rule referenced above). Without this, "shortened to
     /// match" would fire on that deliberate safety margin every ordinary Cover Deficit save.
-    /// Shares FocusBlockOutcomeClassifier.MinimumMeaningfulDeficitMinutes purely as a
-    /// UI-notice threshold now — the deficit ledger's own write-off and CreditedWindow's
-    /// sub-minute-shortfall forgiveness this constant used to also gate were both removed
-    /// (Gap 44/45): every deficit is now whole minutes and fully recoverable, no write-off
-    /// anywhere. This is the one remaining consumer of the constant.
+    /// A UI-notice threshold only (<see cref="MinimumMeaningfulDeficitMinutes"/>) — nothing is
+    /// written off: every deficit is whole minutes and recoverable (Gaps 44, 45, 57).
     /// </summary>
     public static bool WasRedemptionCoverageMeaningfullyCapped(TimeSlot requested, TimeSlot capped)
-        => (requested.Length - capped.Length).TotalMinutes >= FocusBlockOutcomeClassifier.MinimumMeaningfulDeficitMinutes;
-
-    /// <summary>
-    /// True when this block's own outcome represents an unredeemed shortfall of its own —
-    /// Missed, StartedLate, or EndedEarly — and it isn't itself already serving as a
-    /// redemption for another block. A block actively covering someone else's deficit never
-    /// becomes a deficit source in its own right (e.g. a Ritual that ran a few minutes past
-    /// its own grace period, StartedLate against its own schedule): the commitment it exists
-    /// to redeem is what's tracked, not a second one layered on top of it. Takes the outcome
-    /// as a parameter rather than reclassifying — IFocusBlockOutcomeClassifier.Classify needs
-    /// "now" and session data the caller already has, and the two must never disagree about
-    /// what the outcome was.
-    /// </summary>
-    public bool CanContributeOwnDeficit(FocusBlockOutcome? outcome) =>
-        outcome is FocusBlockOutcome.Missed or FocusBlockOutcome.StartedLate or FocusBlockOutcome.EndedEarly
-        && !IsRedemption;
-
-    /// <summary>
-    /// How much of this block's own scheduled duration was never delivered — this block's
-    /// side of the deficit ledger, independent of how many other blocks have since attempted
-    /// to redeem it. Fixed forever once this block has concluded (RitualCompletedAt/
-    /// SessionEndedAt are set-once fields), so callers can treat it as a stable, cacheable
-    /// fact rather than something that drifts as later redemption attempts come and go.
-    /// Pure and self-contained (this block's own Start/End plus a credited-minutes figure the
-    /// caller already resolved via IFocusBlockOutcomeClassifier), the same justification
-    /// already used for CanContributeOwnDeficit/WasRedemptionCoverageMeaningfullyCapped — the
-    /// rule belongs with the data it's about, not re-derived inline by every caller that needs
-    /// it (GetNenContractDeficitsQueryHandler and GetNenContractsForDateRangeQueryHandler both
-    /// need this exact number and must never be allowed to disagree about what it means).
-    /// </summary>
-    public double RawDeficitMinutes(double creditedMinutes) =>
-        Math.Max(0, GetDuration().TotalMinutes - creditedMinutes);
+        => (requested.Length - capped.Length).TotalMinutes >= MinimumMeaningfulDeficitMinutes;
 }

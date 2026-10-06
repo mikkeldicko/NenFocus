@@ -75,6 +75,7 @@ public class PlannedBlockTests
         var block = CreateFocusBlock();
         var endedAt = Start.AddMinutes(20);
 
+        block.MarkRitualCompleted(At.Utc(Start));
         block.MarkSessionEnded(At.Utc(endedAt));
 
         block.SessionEndedAt.Should().Be(At.Utc(endedAt));
@@ -84,6 +85,7 @@ public class PlannedBlockTests
     public void FocusBlock_MarkSessionEnded_Twice_Throws()
     {
         var block = CreateFocusBlock();
+        block.MarkRitualCompleted(At.Utc(Start));
         block.MarkSessionEnded(At.Utc(Start.AddMinutes(20)));
 
         var act = () => block.MarkSessionEnded(At.Utc(Start.AddMinutes(30)));
@@ -96,6 +98,7 @@ public class PlannedBlockTests
     {
         var block = CreateFocusBlock();
 
+        block.MarkRitualCompleted(At.Utc(Start));
         block.MarkSessionEnded(At.Utc(Start.AddMinutes(20)));
 
         block.Scheduled.Should().Be(At.Slot(Start, End));
@@ -228,6 +231,7 @@ public class PlannedBlockTests
         // new one scheduled into the freed tail, permanently suppressing the new block's
         // Ritual trigger.
         var block = CreateFocusBlock();
+        block.MarkRitualCompleted(At.Utc(Start));
         block.MarkSessionEnded(At.Utc(Start.AddMinutes(20)));
 
         block.IsActive(At.Utc(Start.AddMinutes(21))).Should().BeFalse();
@@ -237,6 +241,7 @@ public class PlannedBlockTests
     public void IsActive_SessionEndedEarly_BeforeActualEnd_IsStillTrue()
     {
         var block = CreateFocusBlock();
+        block.MarkRitualCompleted(At.Utc(Start));
         block.MarkSessionEnded(At.Utc(Start.AddMinutes(20)));
 
         block.IsActive(At.Utc(Start.AddMinutes(10))).Should().BeTrue();
@@ -262,6 +267,16 @@ public class PlannedBlockTests
     public void HasEnded_AtEnd_IsTrue()
         => CreateFocusBlock().HasEnded(At.Utc(End)).Should().BeTrue("half-open: at exactly End the block is over (Gap 88)");
 
+    [Theory]
+    [InlineData(-10, false)]
+    [InlineData(30, false)]
+    [InlineData(60, true)] // at its end
+    public void IsFinal_BackgroundBlock_OnceItHasEnded(int minutesAfterStart, bool expected)
+    {
+        // No ritual or session to wait for — a Background block is done when its slot is (Gap 95).
+        CreateBackgroundBlock().IsFinal(At.Utc(Start.AddMinutes(minutesAfterStart))).Should().Be(expected);
+    }
+
     [Fact]
     public void AtTheExactEnd_IsActiveHasEndedAndMissedAgree()
     {
@@ -271,7 +286,7 @@ public class PlannedBlockTests
 
         block.IsActive(At.Utc(End)).Should().BeFalse();
         block.HasEnded(At.Utc(End)).Should().BeTrue();
-        new NenFocus.Domain.Services.FocusBlockOutcomeClassifier().Classify(block, At.Utc(End)).Should().Be(FocusBlockOutcome.Missed);
+        block.Outcome(At.Utc(End)).Should().Be(FocusBlockOutcome.Missed);
         block.IsUnresolved(At.Utc(End)).Should().BeTrue();
     }
 
@@ -785,43 +800,6 @@ public class PlannedBlockTests
         block.AssignRedemptionEntries([]);
 
         block.RedemptionEntries.Should().BeEmpty();
-    }
-
-    [Theory]
-    [InlineData(FocusBlockOutcome.Missed)]
-    [InlineData(FocusBlockOutcome.StartedLate)]
-    [InlineData(FocusBlockOutcome.EndedEarly)]
-    public void FocusBlock_CanContributeOwnDeficit_ShortfallOutcomeNotARedemption_True(FocusBlockOutcome outcome)
-    {
-        CreateFocusBlock().CanContributeOwnDeficit(outcome).Should().BeTrue();
-    }
-
-    [Fact]
-    public void FocusBlock_CanContributeOwnDeficit_CompletedOnTime_False()
-    {
-        CreateFocusBlock().CanContributeOwnDeficit(FocusBlockOutcome.CompletedOnTime).Should().BeFalse();
-    }
-
-    [Fact]
-    public void FocusBlock_CanContributeOwnDeficit_StillOpen_False()
-    {
-        CreateFocusBlock().CanContributeOwnDeficit(null).Should().BeFalse();
-    }
-
-    [Theory]
-    [InlineData(FocusBlockOutcome.Missed)]
-    [InlineData(FocusBlockOutcome.StartedLate)]
-    [InlineData(FocusBlockOutcome.EndedEarly)]
-    public void FocusBlock_CanContributeOwnDeficit_AlreadyARedemption_False(FocusBlockOutcome outcome)
-    {
-        // A block covering someone else's deficit never becomes a deficit source of its
-        // own, no matter how its own completion turned out — this is the exact bug the
-        // "Cover Deficit" flow used to hit: a redemption block that ran a few minutes past
-        // its own grace period would otherwise spawn a fresh, uncoverable deficit.
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End),
-            membership: TestContracts.Redemption(Guid.NewGuid()), redemptionEntries: [new RedemptionEntry(Guid.NewGuid(), 30)]);
-
-        block.CanContributeOwnDeficit(outcome).Should().BeFalse();
     }
 
     [Fact]
