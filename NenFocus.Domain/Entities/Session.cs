@@ -214,7 +214,7 @@ public class Session : AggregateRoot
         PostSessionAcknowledgedAt = acknowledgedAt;
     }
 
-    /// <summary>Mirrors PlannedBlock.HasEnded/NenContract.IsRestDay's naming idiom — a single
+    /// <summary>Mirrors PlannedBlock.HasEnded's naming idiom — a single
     /// named question over EndedAt so callers ask whether this session has actually finished
     /// (naturally or ended early) rather than null-checking the raw field themselves.</summary>
     public bool HasEnded => EndedAt.HasValue;

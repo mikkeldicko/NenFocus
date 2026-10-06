@@ -55,22 +55,4 @@ public class DailyFloorTests
     {
         DailyFloor.None.IsSatisfiedBy(focusHours).Should().BeTrue();
     }
-
-    [Fact]
-    public void PercentComplete_WhenNone_ReturnsNull()
-    {
-        DailyFloor.None.PercentComplete(2).Should().BeNull();
-    }
-
-    [Theory]
-    [InlineData(4, 0, 0.0)]
-    [InlineData(4, 2, 0.5)]
-    [InlineData(4, 4, 1.0)]
-    [InlineData(4, 5.32, 1.33)] // uncapped — 133% displays as 133%, never clamped to 100%
-    public void PercentComplete_DividesCompletedByHours(double floorHours, double completedHours, double expected)
-    {
-        var floor = new DailyFloor(floorHours);
-
-        floor.PercentComplete(completedHours).Should().BeApproximately(expected, 0.001);
-    }
 }

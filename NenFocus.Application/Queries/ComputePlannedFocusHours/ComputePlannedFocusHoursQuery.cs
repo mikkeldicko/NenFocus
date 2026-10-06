@@ -4,14 +4,10 @@ using NenFocus.Domain.ValueObjects;
 namespace NenFocus.Application.Queries.ComputePlannedFocusHours;
 
 /// <summary>
-/// Computes planned Focus hours per calendar day from a contract's already-persisted
-/// blocks (if any) merged with not-yet-saved draft ranges — the same calculation
-/// whether it's live wizard feedback (ContractId null, drafts only), a live edit on an
-/// already-sealed contract (ContractId set, drafts is the one block being dragged), or
-/// the final commit at Seal (ContractId null, drafts is the whole finished schedule).
+/// Planned Focus hours per calendar day for a schedule being drafted — the Contract Wizard's live
+/// "hours scheduled" feedback before any contract exists. A sealed contract's days are
+/// <c>NenContract.DayStatuses</c> (Gap 95).
 /// </summary>
-/// <param name="ContractId">Null when the contract doesn't exist yet (the Seal wizard).</param>
-/// <param name="DraftFocusBlockRanges">Not-yet-persisted Focus block ranges to include.</param>
+/// <param name="DraftFocusBlockRanges">The drafted, not-yet-saved Focus block ranges.</param>
 public sealed record ComputePlannedFocusHoursQuery(
-    Guid? ContractId,
     IReadOnlyList<TimeSlot> DraftFocusBlockRanges) : IQuery<IReadOnlyDictionary<DateOnly, double>>;

@@ -1,8 +1,7 @@
 using FluentAssertions;
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
-using NenFocus.Application.Queries.GetNenContractBonusFocusHours;
-using NenFocus.Application.Queries.GetNenContractCompletedFocusHours;
+using NenFocus.Application.Queries.GetNenContractDayStatuses;
 using NenFocus.Application.Queries.GetNenContractRecap;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
@@ -21,10 +20,8 @@ public class GetNenContractRecapQueryHandlerTests
 
     private readonly INenContractRepository _contracts = Substitute.For<INenContractRepository>();
     private readonly IPlannedBlockRepository _blocks = Substitute.For<IPlannedBlockRepository>();
-    private readonly IQueryHandler<GetNenContractCompletedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> _completedHours =
-        Substitute.For<IQueryHandler<GetNenContractCompletedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>>>();
-    private readonly IQueryHandler<GetNenContractBonusFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> _bonusHours =
-        Substitute.For<IQueryHandler<GetNenContractBonusFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>>>();
+    private readonly IQueryHandler<GetNenContractDayStatusesQuery, IReadOnlyList<ContractDayStatus>> _dayStatuses =
+        Substitute.For<IQueryHandler<GetNenContractDayStatusesQuery, IReadOnlyList<ContractDayStatus>>>();
     private readonly ISystemClock _clock = TestClock.Create();
 
     public GetNenContractRecapQueryHandlerTests()
@@ -34,14 +31,12 @@ public class GetNenContractRecapQueryHandlerTests
         _clock.SetTimeZoneOffset(TimeSpan.Zero);
         _blocks.GetForRangeAsync(Arg.Any<TimeSlot>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[]);
-        _completedHours.HandleAsync(Arg.Any<GetNenContractCompletedFocusHoursQuery>(), Arg.Any<CancellationToken>())
-            .Returns((IReadOnlyDictionary<DateOnly, double>)new Dictionary<DateOnly, double>());
-        _bonusHours.HandleAsync(Arg.Any<GetNenContractBonusFocusHoursQuery>(), Arg.Any<CancellationToken>())
-            .Returns((IReadOnlyDictionary<DateOnly, double>)new Dictionary<DateOnly, double>());
+        _dayStatuses.HandleAsync(Arg.Any<GetNenContractDayStatusesQuery>(), Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyList<ContractDayStatus>)[]);
     }
 
     private GetNenContractRecapQueryHandler CreateHandler() =>
-        new(_contracts, _blocks, _completedHours, _bonusHours, _clock);
+        new(_contracts, _blocks, _dayStatuses, _clock);
 
     private static NenContract CompletedContract(double committedHours = 4, StrictnessRule strictness = StrictnessRule.Locked) =>
         TestContracts.Seal(
@@ -71,9 +66,20 @@ public class GetNenContractRecapQueryHandlerTests
         },
         sealedAt: At.Utc(StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)), timeZone: At.UtcZone);
 
-    private void StubCompletedByDay(Dictionary<DateOnly, double> hoursByDay) =>
-        _completedHours.HandleAsync(Arg.Any<GetNenContractCompletedFocusHoursQuery>(), Arg.Any<CancellationToken>())
-            .Returns((IReadOnlyDictionary<DateOnly, double>)hoursByDay);
+    // The recap reads the contract's own days (DayStatuses, Gap 95; its arithmetic is pinned in
+    // NenContractDayStatusTests): every day of Jan 1-7 owes 4h, except the rest days given.
+    private void StubCompletedByDay(Dictionary<DateOnly, double> hoursByDay, params DateOnly[] restDays)
+    {
+        var days = Enumerable.Range(0, 7).Select(i => StartDate.AddDays(i)).Select(date =>
+        {
+            var isRest = restDays.Contains(date);
+            var target = isRest ? 0 : 4;
+            var done = hoursByDay.GetValueOrDefault(date);
+            return new ContractDayStatus(date, target, done, 0, isRest, isRest || done >= target);
+        }).ToList();
+        _dayStatuses.HandleAsync(Arg.Any<GetNenContractDayStatusesQuery>(), Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyList<ContractDayStatus>)days);
+    }
 
     [Fact]
     public async Task HandleAsync_DailyBreakdown_OneEntryPerDayWithCorrectPercentage()
@@ -93,6 +99,7 @@ public class GetNenContractRecapQueryHandlerTests
     public async Task HandleAsync_DailyBreakdown_RestDayHasNullPercentageAndIsFlagged()
     {
         _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(FloorContract(restDays: [StartDate.AddDays(3)]));
+        StubCompletedByDay(new Dictionary<DateOnly, double>(), StartDate.AddDays(3));
 
         var result = await CreateHandler().HandleAsync(new GetNenContractRecapQuery(ContractId), CancellationToken.None);
 
@@ -127,7 +134,7 @@ public class GetNenContractRecapQueryHandlerTests
         StubCompletedByDay(new Dictionary<DateOnly, double>
         {
             [StartDate] = 4, [StartDate.AddDays(2)] = 4
-        });
+        }, StartDate.AddDays(1));
 
         var result = await CreateHandler().HandleAsync(new GetNenContractRecapQuery(ContractId), CancellationToken.None);
 
@@ -245,8 +252,7 @@ public class GetNenContractRecapQueryHandlerTests
         var contract = CompletedContract(committedHours: committed);
         _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(contract);
         _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[]);
-        _completedHours.HandleAsync(Arg.Any<GetNenContractCompletedFocusHoursQuery>(), Arg.Any<CancellationToken>())
-            .Returns((IReadOnlyDictionary<DateOnly, double>)new Dictionary<DateOnly, double> { [StartDate] = completed });
+        StubCompletedByDay(new Dictionary<DateOnly, double> { [StartDate] = completed });
 
         var result = await CreateHandler().HandleAsync(new GetNenContractRecapQuery(ContractId), CancellationToken.None);
 

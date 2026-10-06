@@ -86,7 +86,7 @@ public class SealNenContractCommandHandlerTests
         saved.Should().NotBeNull();
         saved!.FloorRule.Should().Be(new DailyFloorRule.Fixed(new DailyFloor(0)));
         saved.FloorHoursFor(StartDate).Should().Be(0);
-        saved.IsRestDay(restDay).Should().BeTrue();
+        saved.FloorHoursFor(restDay).Should().BeNull();
     }
 
     [Fact]
@@ -256,7 +256,7 @@ public class SealNenContractCommandHandlerTests
         saved!.HasPeriodTarget.Should().BeTrue();
         saved.CommittedFocusHours.Should().Be(9); // 3 + 4 + 2 — the whole-period target
         saved.FloorRule.Should().Be(new DailyFloorRule.None());
-        saved.IsRestDay(StartDate).Should().BeTrue();
+        saved.FloorHoursFor(StartDate).Should().BeNull();
     }
 
     [Fact]

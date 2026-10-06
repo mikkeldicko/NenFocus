@@ -335,87 +335,6 @@ public class NenContractTests
         contract.OriginalEndDate.Should().Be(EndDate); // OriginalEndDate is never touched by Break
     }
 
-    [Theory]
-    [InlineData(3.9, false)] // below floor -> not met
-    [InlineData(4, true)]    // exactly at floor -> met
-    [InlineData(5, true)]    // above floor -> met
-    public void IsDayMet_ComparesHoursAgainstFloor(double completedHours, bool expectedMet)
-    {
-        var contract = Seal(floorRule: new DailyFloorRule.Fixed(new DailyFloor(4)));
-
-        contract.IsDayMet(StartDate, completedHours).Should().Be(expectedMet);
-    }
-
-    [Fact]
-    public void IsDayMet_MetEvenWhenABlockWasMissed_AsLongAsHoursMeetFloor()
-    {
-        // The day verdict is hours-only now — a missed/late block only costs hours
-        // that must be made up elsewhere; it does not fail the day directly.
-        var contract = Seal(floorRule: new DailyFloorRule.Fixed(new DailyFloor(4)));
-
-        contract.IsDayMet(StartDate, completedFocusHours: 4).Should().BeTrue();
-    }
-
-    [Theory]
-    [InlineData(0)]
-    [InlineData(2)]
-    public void IsDayMet_FloorlessContract_AlwaysMet(double completedHours)
-    {
-        var contract = Seal(floorRule: new DailyFloorRule.None(), plannedFocusHoursByDay: new Dictionary<DateOnly, double>());
-
-        contract.IsDayMet(StartDate, completedHours).Should().BeTrue();
-    }
-
-    [Fact]
-    public void IsDayMet_RestDayViaPerDayException_AlwaysMet()
-    {
-        var plan = FullyPlanned(4);
-        plan.Remove(StartDate.AddDays(5));
-        var contract = Seal(floorRule: new DailyFloorRule.Fixed(new DailyFloor(4)), restDays: [StartDate.AddDays(5)], plannedFocusHoursByDay: plan);
-
-        contract.IsDayMet(StartDate.AddDays(5), completedFocusHours: 0).Should().BeTrue();
-    }
-
-    [Fact]
-    public void IsDayMet_DifferentDaysHaveDifferentFloors()
-    {
-        var plan = new Dictionary<DateOnly, double> { [StartDate] = 2, [StartDate.AddDays(1)] = 3 };
-        var contract = Seal(floorRule: new DailyFloorRule.FollowsPlan(), plannedFocusHoursByDay: plan);
-
-        contract.IsDayMet(StartDate, completedFocusHours: 2).Should().BeTrue();
-        contract.IsDayMet(StartDate.AddDays(1), completedFocusHours: 2).Should().BeFalse(); // below its own 3h floor
-    }
-
-    [Theory]
-    [InlineData(0, 0.0)]
-    [InlineData(2, 0.5)]
-    [InlineData(4, 1.0)]
-    [InlineData(5.32, 1.33)] // uncapped
-    public void PercentOfFloorMet_DelegatesToDailyFloor(double completedHours, double expected)
-    {
-        var contract = Seal(floorRule: new DailyFloorRule.Fixed(new DailyFloor(4)));
-
-        contract.PercentOfFloorMet(StartDate, completedHours).Should().BeApproximately(expected, 0.001);
-    }
-
-    [Fact]
-    public void PercentOfFloorMet_RestDay_ReturnsNull()
-    {
-        var plan = FullyPlanned(4);
-        plan.Remove(StartDate.AddDays(5));
-        var contract = Seal(floorRule: new DailyFloorRule.Fixed(new DailyFloor(4)), restDays: [StartDate.AddDays(5)], plannedFocusHoursByDay: plan);
-
-        contract.PercentOfFloorMet(StartDate.AddDays(5), completedFocusHours: 2).Should().BeNull();
-    }
-
-    [Fact]
-    public void PercentOfFloorMet_FloorlessContract_ReturnsNull()
-    {
-        var contract = Seal(floorRule: new DailyFloorRule.None(), plannedFocusHoursByDay: new Dictionary<DateOnly, double>());
-
-        contract.PercentOfFloorMet(StartDate, completedFocusHours: 2).Should().BeNull();
-    }
-
     [Fact]
     public void WindowOn_WithoutWorkHours_IsTheWholeDay()
     {
@@ -975,7 +894,7 @@ public class NenContractTests
     {
         var contract = Seal(floorRule: new DailyFloorRule.Fixed(new DailyFloor(4)));
 
-        contract.IsRestDay(StartDate).Should().BeFalse();
+        contract.FloorHoursFor(StartDate).Should().NotBeNull();
     }
 
     [Fact]
@@ -983,7 +902,7 @@ public class NenContractTests
     {
         var contract = Seal(floorRule: new DailyFloorRule.Fixed(new DailyFloor(4)), restDays: [StartDate]);
 
-        contract.IsRestDay(StartDate).Should().BeTrue();
+        contract.FloorHoursFor(StartDate).Should().BeNull();
     }
 
     [Fact]
@@ -1073,13 +992,23 @@ public class NenContractTests
 
     private static readonly Moment EndCheckAt = At.Utc(StartDate.ToDateTime(new TimeOnly(12, 0)));
 
+    // Signed 2h on the first day; completed hours are the days' own (DayStatuses), so the tests
+    // deliver them with real blocks.
+    private static NenContract TwoHoursSigned() => Seal(floorRule: new DailyFloorRule.FollowsPlan(),
+        floorPlan: new Dictionary<DateOnly, double> { [StartDate] = 2 }, plannedFocusHoursByDay: new Dictionary<DateOnly, double> { [StartDate] = 2 });
+
+    private static FocusBlock WorkedBlock(NenContract contract, int fromHour, int toHour, double? endedAfterMinutes) =>
+        TestBlocks.Worked(BlockAt(fromHour, toHour, TestContracts.Committed(contract.Id)), ritualAfterStart: 0, endedAfterStart: endedAfterMinutes);
+
+    private static ContractEndVerdict Complete(NenContract contract, IEnumerable<PlannedBlock> blocks, bool sessionRunning = false) =>
+        contract.CheckComplete(blocks, [], sessionRunning, EndCheckAt, At.UtcZone);
+
     [Fact]
     public void CheckComplete_EverythingDeliveredAndDone_IsAllowed()
     {
-        var contract = Seal();
-        var done = BlockAt(9, 10, TestContracts.Committed(contract.Id)); // missed: final
+        var contract = TwoHoursSigned();
 
-        var verdict = contract.CheckComplete([done], sessionRunning: false, contract.CommittedFocusHours, EndCheckAt);
+        var verdict = Complete(contract, [WorkedBlock(contract, 9, 11, endedAfterMinutes: 120)]);
 
         verdict.Outcome.Should().Be(ContractEndOutcome.Allowed);
         verdict.IsAllowed.Should().BeTrue();
@@ -1088,42 +1017,42 @@ public class NenContractTests
     [Fact]
     public void CheckComplete_WhileASessionRuns_IsRefused_EvenWithEverythingDelivered()
     {
-        var contract = Seal();
+        var contract = TwoHoursSigned();
 
-        contract.CheckComplete([], sessionRunning: true, contract.CommittedFocusHours, EndCheckAt)
+        Complete(contract, [WorkedBlock(contract, 9, 11, endedAfterMinutes: 120)], sessionRunning: true)
             .Outcome.Should().Be(ContractEndOutcome.SessionIsRunning);
     }
 
     [Fact]
     public void CheckComplete_HoursStillOwed_IsRefusedWithTheHoursLeft()
     {
-        var contract = Seal();
+        var contract = TwoHoursSigned();
 
-        var verdict = contract.CheckComplete([], sessionRunning: false, contract.CommittedFocusHours - 2.5, EndCheckAt);
+        var verdict = Complete(contract, [WorkedBlock(contract, 9, 11, endedAfterMinutes: 30)]);
 
         verdict.Outcome.Should().Be(ContractEndOutcome.HoursNotDelivered);
-        verdict.RemainingHours.Should().Be(2.5);
+        verdict.RemainingHours.Should().Be(1.5);
     }
 
     [Fact]
     public void CheckComplete_OverDelivered_HasNoHoursLeft()
     {
-        var contract = Seal();
+        var contract = TwoHoursSigned();
 
-        contract.CheckComplete([], sessionRunning: false, contract.CommittedFocusHours + 3, EndCheckAt)
-            .RemainingHours.Should().Be(0);
+        Complete(contract, [WorkedBlock(contract, 8, 11, endedAfterMinutes: 180)]).RemainingHours.Should().Be(0);
     }
 
     [Fact]
     public void CheckComplete_ABlockNotYetFinal_IsRefusedWithTheCount_CancelledBlocksIgnored()
     {
-        var contract = Seal();
+        var contract = TwoHoursSigned();
+        var delivered = WorkedBlock(contract, 8, 10, endedAfterMinutes: 120);
+        var running = WorkedBlock(contract, 11, 13, endedAfterMinutes: null);
         var upcoming = BlockAt(14, 15, TestContracts.Committed(contract.Id));
-        var running = TestBlocks.Worked(BlockAt(11, 13, TestContracts.Committed(contract.Id)), ritualAfterStart: 0, endedAfterStart: null);
         var cancelled = BlockAt(15, 16, TestContracts.Committed(contract.Id));
         cancelled.MarkCancelled(EndCheckAt);
 
-        var verdict = contract.CheckComplete([upcoming, running, cancelled], sessionRunning: false, contract.CommittedFocusHours, EndCheckAt);
+        var verdict = Complete(contract, [delivered, running, upcoming, cancelled]);
 
         verdict.Outcome.Should().Be(ContractEndOutcome.BlocksStillPending);
         verdict.PendingBlockCount.Should().Be(2);
@@ -1132,10 +1061,10 @@ public class NenContractTests
     [Fact]
     public void CheckComplete_ABlockOfAnotherContract_Throws()
     {
-        var contract = Seal();
+        var contract = TwoHoursSigned();
         var foreign = BlockAt(14, 15, TestContracts.Committed(Guid.NewGuid()));
 
-        var act = () => contract.CheckComplete([foreign], sessionRunning: false, contract.CommittedFocusHours, EndCheckAt);
+        var act = () => Complete(contract, [foreign]);
 
         act.Should().Throw<ArgumentException>();
     }

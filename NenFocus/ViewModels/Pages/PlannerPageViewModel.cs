@@ -2129,7 +2129,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
             .ToList();
 
         var hoursByDay = await _queryDispatcher.QueryAsync(
-            new ComputePlannedFocusHoursQuery(ContractId: null, DraftFocusBlockRanges: focusRanges));
+            new ComputePlannedFocusHoursQuery(DraftFocusBlockRanges: focusRanges));
 
         var byDate = new Dictionary<DateOnly, DayFloorPreviewViewModel>();
         for (int i = 0; i < 7; i++)

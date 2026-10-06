@@ -112,7 +112,7 @@ public class NenContractRepositoryTests : SqliteRepositoryTestBase
         var reloaded = await CreateRepository().GetByIdAsync(contract.Id);
         reloaded!.FloorRule.Should().Be(new DailyFloorRule.Fixed(new DailyFloor(4)));
         reloaded.FloorHoursFor(StartDate).Should().Be(4);
-        reloaded.IsRestDay(restDay).Should().BeTrue();
+        reloaded.FloorHoursFor(restDay).Should().BeNull();
     }
 
     [Fact]
@@ -129,7 +129,7 @@ public class NenContractRepositoryTests : SqliteRepositoryTestBase
         reloaded!.FloorRule.Should().Be(new DailyFloorRule.FollowsPlan());
         reloaded.FloorHoursFor(StartDate).Should().Be(2);
         reloaded.FloorHoursFor(StartDate.AddDays(1)).Should().Be(3.5);
-        reloaded.IsRestDay(StartDate.AddDays(2)).Should().BeTrue();
+        reloaded.FloorHoursFor(StartDate.AddDays(2)).Should().BeNull();
     }
 
     [Fact]

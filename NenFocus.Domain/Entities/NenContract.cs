@@ -53,7 +53,7 @@ public class NenContract : AggregateRoot
     /// <summary>
     /// How this contract's days get their floor when generated — fixed, following the plan,
     /// or none. Read only when days are (re)generated (an Edit re-draft); each day's actual
-    /// floor is answered by the day itself (IsRestDay / FloorHoursFor). Gap 65.
+    /// floor is answered by the day itself (FloorHoursFor; what a day owes is DayStatuses). Gaps 65, 95.
     /// </summary>
     public DailyFloorRule FloorRule => Rules.FloorRule;
 
@@ -288,34 +288,10 @@ public class NenContract : AggregateRoot
     }
 
     /// <summary>
-    /// A day is met if that day's floor is satisfied by its completed Focus hours. A day
-    /// with no floor (a rest day, or a date outside the contract) is trivially met. Missed
-    /// or late blocks do not fail the day directly — they only cost hours that must be
-    /// made up elsewhere; if the hours are made up, the day is met.
+    /// The day's stored floor in hours — the planning minimum it was sealed with, null on a rest
+    /// day. Not what the day owes: that is <see cref="DayStatuses"/> (Gap 95). The contract edit form
+    /// reads it to reopen the wizard.
     /// </summary>
-    public bool IsDayMet(DateOnly date, double completedFocusHours)
-    {
-        var floor = FloorOn(date);
-        return floor is null || floor.IsSatisfiedBy(completedFocusHours);
-    }
-
-    /// <summary>
-    /// completedFocusHours as a percentage of the day's floor, uncapped (133% displays as
-    /// 133%, never clamped to 100%) — null on a rest day or a floorless contract. Purely
-    /// additive display concern, computed at query time — IsDayMet stays the sole
-    /// authoritative pass/fail for Redemption deficit logic and lifecycle transitions.
-    /// See ARCHITECT_GOVERNANCE.md Open Gap C, C1.
-    /// </summary>
-    public double? PercentOfFloorMet(DateOnly date, double completedFocusHours)
-        => FloorOn(date)?.PercentComplete(completedFocusHours);
-
-    /// <summary>
-    /// True when this day carries no obligation at all — exposed so Application-layer
-    /// callers (e.g. the active-contract banner's days-behind count) never reach into the days.
-    /// </summary>
-    public bool IsRestDay(DateOnly date) => FloorOn(date) is null;
-
-    /// <summary>The day's floor in hours for display — null means rest day.</summary>
     public double? FloorHoursFor(DateOnly date) => FloorOn(date)?.Hours;
 
     private DailyFloor? FloorOn(DateOnly date) => _calendar.DayOn(date)?.Floor;
@@ -421,6 +397,25 @@ public class NenContract : AggregateRoot
         return block.IsFinal(brokenAt) ? BlockFateOnBreak.Leave : BlockFateOnBreak.Cancel;
     }
 
+    // ── What each day owes and got (Gap 95, decisions 5 and 6) ──────────────────────────────
+
+    /// <summary>
+    /// Every day of this contract as it stands: what it owes, what was done toward it, the Bonus
+    /// hours earned apart from it, and whether it was met — the one day rule the Planner badge,
+    /// the banner, the recap and completion all read. <paramref name="blocks"/> are this
+    /// contract's own; <paramref name="sessions"/> may be any, the contract decides which count.
+    /// </summary>
+    public IReadOnlyList<ContractDayStatus> DayStatuses(
+        IEnumerable<PlannedBlock> blocks, IEnumerable<Session> sessions, Moment asOf, UserTimeZone timeZone)
+    {
+        var mine = blocks.ToList();
+        foreach (var block in mine)
+            EnsureMine(block);
+
+        return ContractDayLedger.Build(
+            _calendar.Days.Select(d => d.Date).ToList(), mine.OfType<FocusBlock>().ToList(), sessions, asOf, timeZone);
+    }
+
     // ── May this contract end now? (Gap 95) ─────────────────────────────────────────────────
 
     // No contract ends while Focus time is being worked: a session's hours are still growing and
@@ -431,14 +426,17 @@ public class NenContract : AggregateRoot
     /// Whether the user may complete this contract early: no session running, every committed
     /// hour delivered, and every block of its own done (<see cref="PlannedBlock.IsFinal"/>;
     /// cancelled blocks don't count) — so completing never leaves anything to clean up. The
-    /// verdict carries the hours still owed and the blocks not done either way. Completed hours
-    /// are passed in until the contract works them out itself (Gap 95 slice 7).
+    /// verdict carries the hours still owed and the blocks not done either way. Completed hours are
+    /// the days' own (<see cref="DayStatuses"/>), so completing and the Planner can't disagree.
     /// </summary>
     public ContractEndVerdict CheckComplete(
-        IEnumerable<PlannedBlock> members, bool sessionRunning, double completedFocusHours, Moment asOf)
+        IEnumerable<PlannedBlock> members, IEnumerable<Session> sessions, bool sessionRunning, Moment asOf, UserTimeZone timeZone)
     {
+        var blocks = members.ToList();
+        var completedFocusHours = DayStatuses(blocks, sessions, asOf, timeZone).Sum(d => d.CompletedHours);
+
         var pending = 0;
-        foreach (var block in members)
+        foreach (var block in blocks)
         {
             if (block.Membership?.ContractId != Id)
                 throw new ArgumentException("This block does not belong to this contract.", nameof(members));

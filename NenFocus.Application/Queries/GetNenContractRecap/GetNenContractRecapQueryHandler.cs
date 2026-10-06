@@ -1,11 +1,9 @@
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Domain.ValueObjects;
-using NenFocus.Application.Queries.GetNenContractBonusFocusHours;
-using NenFocus.Application.Queries.GetNenContractCompletedFocusHours;
+using NenFocus.Application.Queries.GetNenContractDayStatuses;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
-using NenFocus.Domain.Services;
 
 namespace NenFocus.Application.Queries.GetNenContractRecap;
 
@@ -13,21 +11,18 @@ public sealed class GetNenContractRecapQueryHandler : IQueryHandler<GetNenContra
 {
     private readonly INenContractRepository _contracts;
     private readonly IPlannedBlockRepository _blocks;
-    private readonly IQueryHandler<GetNenContractCompletedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> _completedHours;
-    private readonly IQueryHandler<GetNenContractBonusFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> _bonusHours;
+    private readonly IQueryHandler<GetNenContractDayStatusesQuery, IReadOnlyList<ContractDayStatus>> _dayStatuses;
     private readonly ISystemClock _clock;
 
     public GetNenContractRecapQueryHandler(
         INenContractRepository contracts,
         IPlannedBlockRepository blocks,
-        IQueryHandler<GetNenContractCompletedFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> completedHours,
-        IQueryHandler<GetNenContractBonusFocusHoursQuery, IReadOnlyDictionary<DateOnly, double>> bonusHours,
+        IQueryHandler<GetNenContractDayStatusesQuery, IReadOnlyList<ContractDayStatus>> dayStatuses,
         ISystemClock clock)
     {
         _contracts = contracts;
         _blocks = blocks;
-        _completedHours = completedHours;
-        _bonusHours = bonusHours;
+        _dayStatuses = dayStatuses;
         _clock = clock;
     }
 
@@ -92,31 +87,28 @@ public sealed class GetNenContractRecapQueryHandler : IQueryHandler<GetNenContra
             }
         }
 
-        var completedHoursByDay = await _completedHours.HandleAsync(new GetNenContractCompletedFocusHoursQuery(query.ContractId), ct);
-        var bonusHoursByDay = await _bonusHours.HandleAsync(new GetNenContractBonusFocusHoursQuery(query.ContractId), ct);
+        // The one day rule (NenContract.DayStatuses, Gap 95) — the same days the Planner shows.
+        var days = await _dayStatuses.HandleAsync(new GetNenContractDayStatusesQuery(query.ContractId), ct);
 
-        var totalCompletedHours = completedHoursByDay.Values.Sum();
-        var totalBonusHours = bonusHoursByDay.Values.Sum();
+        var totalCompletedHours = days.Sum(d => d.CompletedHours);
+        var totalBonusHours = days.Sum(d => d.BonusHours);
 
         var dailyBreakdown = new List<NenContractDailyRecapEntryDto>();
         var bestStreakDays = 0;
         var currentStreakDays = 0;
-        for (var date = contract.StartDate; date <= contract.EndDate; date = date.AddDays(1))
+        foreach (var day in days)
         {
-            var completedThatDay = completedHoursByDay.GetValueOrDefault(date);
-            var isRestDay = contract.IsRestDay(date);
-
             dailyBreakdown.Add(new NenContractDailyRecapEntryDto
             {
-                Date = date,
-                IsRestDay = isRestDay,
-                Percentage = contract.PercentOfFloorMet(date, completedThatDay)
+                Date = day.Date,
+                IsRestDay = day.IsRest,
+                Percentage = day.PercentMet
             });
 
             // Rest days are skipped entirely — they neither extend nor break a streak.
-            if (isRestDay) continue;
+            if (day.IsRest) continue;
 
-            if (contract.IsDayMet(date, completedThatDay))
+            if (day.IsMet)
             {
                 currentStreakDays++;
                 bestStreakDays = Math.Max(bestStreakDays, currentStreakDays);
