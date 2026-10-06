@@ -2072,7 +2072,6 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
                 PresetName = draft.PresetName,
                 BlockPresetType = blockPresetType,
                 Shown = draft.Slot,
-                IsCompleted = false,
                 HasEnded = false,
                 // A draft tile isn't saved yet: nothing restricts it, and Split is for sealed blocks.
                 Allowances = new BlockChangeAllowances(CanReschedule: true, CanChangePreset: true, CanSplit: false, CanDelete: true)

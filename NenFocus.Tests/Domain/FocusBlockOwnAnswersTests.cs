@@ -50,7 +50,7 @@ public class FocusBlockOwnAnswersTests
 
         block.MarkSessionEnded(ritualAt);
 
-        block.SessionEndedAt.Should().Be(ritualAt);
+        block.IsFinal(ritualAt).Should().BeTrue(); // the end was stamped
     }
 
     // --- IsFinal and OwnDeficit (decisions 10, 11; Redemption Rules 1, 13, 18) ---

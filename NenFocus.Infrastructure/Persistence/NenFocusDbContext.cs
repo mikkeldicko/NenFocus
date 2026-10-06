@@ -373,8 +373,10 @@ public class NenFocusDbContext : DbContext
 
         modelBuilder.Entity<FocusBlock>(entity =>
         {
-            entity.Property(r => r.RitualCompletedAt);
-            entity.Property(r => r.SessionEndedAt);
+            // Gap 95: the block's stamps are Domain-only — every reader asks the block — so they're
+            // mapped by name, like a slot's Start/End.
+            entity.Property<Moment?>("RitualCompletedAt");
+            entity.Property<Moment?>("SessionEndedAt");
         });
 
         modelBuilder.Entity<BlockedAttempt>(entity =>

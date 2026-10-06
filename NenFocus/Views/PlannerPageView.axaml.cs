@@ -652,14 +652,24 @@ public partial class PlannerPageView : UserControl
     /// outcome (Classify gives EndedEarly priority when a block is both late and early), so an
     /// EndedEarly block that was also started late shows both badges stacked.
     /// </summary>
-    private static (string? TileClass, IReadOnlyList<string> BadgeTexts) GetOutcomeVisual(FocusBlockOutcome? outcome, bool wasStartedLate) => outcome switch
+    // Colour from the one verdict; a label for each true fact — a block that started late and
+    // ended early shows both (Gap 95).
+    private static (string? TileClass, IReadOnlyList<string> BadgeTexts) GetOutcomeVisual(PlannedBlockTileViewModel tile)
     {
-        FocusBlockOutcome.Missed => ("missedTile", new[] { "MISSED" }),
-        FocusBlockOutcome.StartedLate => ("lateOrEarlyTile", new[] { "STARTED LATE" }),
-        FocusBlockOutcome.EndedEarly => ("lateOrEarlyTile", wasStartedLate ? new[] { "STARTED LATE", "ENDED EARLY" } : new[] { "ENDED EARLY" }),
-        FocusBlockOutcome.CompletedOnTime => ("completedOnTimeTile", NoBadges),
-        _ => (null, NoBadges)
-    };
+        var tileClass = tile.Outcome switch
+        {
+            FocusBlockOutcome.Missed => "missedTile",
+            FocusBlockOutcome.StartedLate or FocusBlockOutcome.EndedEarly => "lateOrEarlyTile",
+            FocusBlockOutcome.CompletedOnTime => "completedOnTimeTile",
+            _ => null
+        };
+
+        var badges = new List<string>();
+        if (tile.Outcome == FocusBlockOutcome.Missed) badges.Add("MISSED");
+        if (tile.StartedLate) badges.Add("STARTED LATE");
+        if (tile.EndedEarly) badges.Add("ENDED EARLY");
+        return (tileClass, badges);
+    }
 
     private Button BuildTileButton(PlannedBlockTileViewModel tile, Canvas ownerCanvas)
     {
@@ -670,7 +680,7 @@ public partial class PlannerPageView : UserControl
             DataContext  = tile
         };
 
-        var (outcomeTileClass, outcomeBadgeTexts) = GetOutcomeVisual(tile.Outcome, tile.WasStartedLate);
+        var (outcomeTileClass, outcomeBadgeTexts) = GetOutcomeVisual(tile);
         if (outcomeTileClass is not null)
             btn.Classes.Add(outcomeTileClass);
 

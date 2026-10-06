@@ -77,7 +77,7 @@ public class DeletePlannedBlockValidatorTests
 
         var result = await CreateValidator().ValidateAsync(new DeletePlannedBlockCommand { BlockId = block.Id });
 
-        block.RitualCompletedAt.Should().BeNull(); // confirms this is the "missed", not "completed", case
+        block.Outcome(At.Utc(Now)).Should().Be(FocusBlockOutcome.Missed); // the "missed", not "completed", case
         result.IsValid.Should().BeTrue();
     }
 

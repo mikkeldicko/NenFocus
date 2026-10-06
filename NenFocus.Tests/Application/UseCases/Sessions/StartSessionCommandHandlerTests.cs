@@ -196,7 +196,7 @@ public class StartSessionCommandHandlerTests
         var result = await CreateHandler().HandleAsync(command, CancellationToken.None);
 
         result.Success.Should().BeTrue();
-        focusBlock.RitualCompletedAt.Should().Be(At.Utc(Now));
+        focusBlock.Outcome(At.Utc(Now)).Should().Be(FocusBlockOutcome.CompletedOnTime); // Ritual stamped, a minute in: within grace
         await _plannedBlocks.Received(1).SaveAsync(focusBlock, Arg.Any<CancellationToken>());
         await _sessions.Received(1).SaveAsync(
             Arg.Is<Session>(s => s.Origin == SessionOrigin.Planned && s.OriginatingBlockId == blockId),
@@ -302,7 +302,7 @@ public class StartSessionCommandHandlerTests
         var result = await CreateHandler().HandleAsync(command, CancellationToken.None);
 
         result.Success.Should().BeTrue();
-        ownBlock.RitualCompletedAt.Should().Be(At.Utc(Now));
+        ownBlock.Outcome(At.Utc(Now)).Should().Be(FocusBlockOutcome.CompletedOnTime); // Ritual stamped, 5 minutes in: within grace
     }
 
     [Fact]

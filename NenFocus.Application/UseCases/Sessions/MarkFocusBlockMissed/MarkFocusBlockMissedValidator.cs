@@ -6,7 +6,7 @@ namespace NenFocus.Application.UseCases.Sessions.MarkFocusBlockMissed;
 
 public sealed class MarkFocusBlockMissedValidator : AbstractValidator<MarkFocusBlockMissedCommand>
 {
-    public MarkFocusBlockMissedValidator(IPlannedBlockRepository blocks, ISessionRepository sessions)
+    public MarkFocusBlockMissedValidator(IPlannedBlockRepository blocks, ISessionRepository sessions, ISystemClock clock)
     {
         RuleFor(x => x.FocusBlockId)
             .NotEmpty().WithMessage("Focus block ID is required.");
@@ -25,9 +25,11 @@ public sealed class MarkFocusBlockMissedValidator : AbstractValidator<MarkFocusB
             {
                 if (command.FocusBlockId == Guid.Empty) return true;
                 var block = await blocks.GetByIdAsync(command.FocusBlockId, ct) as FocusBlock;
-                return block is null || block.RitualCompletedAt is null;
+                // The missed sweep's own rule (FocusBlock.IsUnresolved, Gap 95): window closed, Ritual
+                // never done, not cancelled.
+                return block is null || block.IsUnresolved(clock.Now);
             })
-            .WithMessage("The ritual for this block was already completed — it cannot be marked missed.");
+            .WithMessage("This block can't be marked missed — its window hasn't closed, its Ritual was done, or it was cancelled.");
 
         RuleFor(x => x.FocusBlockId)
             .MustAsync(async (id, ct) =>

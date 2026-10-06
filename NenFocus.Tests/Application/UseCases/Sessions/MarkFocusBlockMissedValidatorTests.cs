@@ -14,8 +14,14 @@ public class MarkFocusBlockMissedValidatorTests
 
     private readonly IPlannedBlockRepository _blocks = Substitute.For<IPlannedBlockRepository>();
     private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
+    private readonly ISystemClock _clock = TestClock.Create();
 
-    private MarkFocusBlockMissedValidator CreateValidator() => new(_blocks, _sessions);
+    public MarkFocusBlockMissedValidatorTests()
+    {
+        _clock.SetNow(End.AddMinutes(1)); // the window has just closed
+    }
+
+    private MarkFocusBlockMissedValidator CreateValidator() => new(_blocks, _sessions, _clock);
 
     [Fact]
     public async Task Validate_EmptyFocusBlockId_IsInvalid()
@@ -62,6 +68,34 @@ public class MarkFocusBlockMissedValidatorTests
 
         var result = await CreateValidator().ValidateAsync(
             new MarkFocusBlockMissedCommand { FocusBlockId = block.Id });
+
+        result.IsValid.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Validate_WindowStillOpen_IsInvalid()
+    {
+        // Gap 95: the validator asks the sweep's own rule, FocusBlock.IsUnresolved — a block can't be
+        // missed before its window has closed.
+        _clock.SetNow(End.AddMinutes(-1));
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Start, End));
+        _blocks.GetByIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns(block);
+        _sessions.ExistsForOriginatingBlockAsync(block.Id, Arg.Any<CancellationToken>()).Returns(false);
+
+        var result = await CreateValidator().ValidateAsync(new MarkFocusBlockMissedCommand { FocusBlockId = block.Id });
+
+        result.IsValid.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Validate_CancelledBlock_IsInvalid()
+    {
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Start, End));
+        block.MarkCancelled(At.Utc(Start.AddMinutes(10)));
+        _blocks.GetByIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns(block);
+        _sessions.ExistsForOriginatingBlockAsync(block.Id, Arg.Any<CancellationToken>()).Returns(false);
+
+        var result = await CreateValidator().ValidateAsync(new MarkFocusBlockMissedCommand { FocusBlockId = block.Id });
 
         result.IsValid.Should().BeFalse();
     }

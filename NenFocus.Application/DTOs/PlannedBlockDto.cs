@@ -13,14 +13,11 @@ public sealed record PlannedBlockDto
     public WebsiteFilterType WebsiteFilterType { get; init; }
 
     /// <summary>
-    /// Display span, not the raw scheduled window: pulled forward to RitualCompletedAt for a
-    /// StartedLate block and back to SessionEndedAt for an EndedEarly one, so the tile always
-    /// reflects the actual worked window. A grace-period-late start is left untrimmed, since
-    /// it's credited as full duration.
+    /// Display span: the span a Focus block was worked over (<c>FocusBlock.WorkSlot</c> — from the
+    /// Ritual for a late start, to the session's end for an early one; a start within grace is
+    /// drawn whole, since it is credited whole), else the scheduled window (Gap 95).
     /// </summary>
     public TimeSlot Shown { get; init; } = null!;
-
-    public bool IsCompleted { get; init; }
 
     public Guid? ContractId { get; init; }
 
@@ -47,13 +44,12 @@ public sealed record PlannedBlockDto
     /// </summary>
     public FocusBlockOutcome? Outcome { get; init; }
 
-    /// <summary>
-    /// True when the ritual completed past the grace period, independent of Outcome. Classify
-    /// gives EndedEarly priority over StartedLate — a block can only carry one Outcome — but a
-    /// block can genuinely be both, and this flag lets the tile badge say so even when Outcome
-    /// alone (EndedEarly) would hide the lateness.
-    /// </summary>
-    public bool WasStartedLate { get; init; }
+    /// <summary>The Ritual came past the grace period (<c>FocusBlock.StartedLate</c>). Independent of
+    /// <see cref="Outcome"/>: a block can have started late and ended early, and the tile shows both.</summary>
+    public bool StartedLate { get; init; }
+
+    /// <summary>The session ended before the scheduled end (<c>FocusBlock.EndedEarly</c>).</summary>
+    public bool EndedEarly { get; init; }
 
     /// <summary>
     /// The Focus block's stored role in its contract (Gap 97): Committed (drafted and sealed),

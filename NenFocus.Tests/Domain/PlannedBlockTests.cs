@@ -36,20 +36,19 @@ public class PlannedBlockTests
     [Fact]
     public void FocusBlock_Create_Valid_HasNoRitualCompletionYet()
     {
-        var block = CreateFocusBlock();
-
-        block.RitualCompletedAt.Should().BeNull();
+        CreateFocusBlock().IsAwaitingRitual(At.Utc(Start)).Should().BeTrue();
     }
 
     [Fact]
     public void FocusBlock_MarkRitualCompleted_SetsTimestamp()
     {
         var block = CreateFocusBlock();
-        var completedAt = DateTime.UtcNow;
+        var completedAt = Start.AddMinutes(10); // past grace, so the stamp shows in the worked span
 
         block.MarkRitualCompleted(At.Utc(completedAt));
 
-        block.RitualCompletedAt.Should().Be(At.Utc(completedAt));
+        block.StartedLate.Should().BeTrue();
+        block.WorkSlot().Should().Be(At.Slot(completedAt, End));
     }
 
     [Fact]
@@ -64,9 +63,12 @@ public class PlannedBlockTests
     }
 
     [Fact]
-    public void FocusBlock_Create_Valid_HasNoSessionEndedYet()
+    public void FocusBlock_RitualDoneButNoSessionEndYet_IsNotFinal()
     {
-        CreateFocusBlock().SessionEndedAt.Should().BeNull();
+        var block = CreateFocusBlock();
+        block.MarkRitualCompleted(At.Utc(Start));
+
+        block.IsFinal(At.Utc(End.AddHours(1))).Should().BeFalse();
     }
 
     [Fact]
@@ -78,7 +80,8 @@ public class PlannedBlockTests
         block.MarkRitualCompleted(At.Utc(Start));
         block.MarkSessionEnded(At.Utc(endedAt));
 
-        block.SessionEndedAt.Should().Be(At.Utc(endedAt));
+        block.EndedEarly.Should().BeTrue();
+        block.WorkSlot().Should().Be(At.Slot(Start, endedAt));
     }
 
     [Fact]

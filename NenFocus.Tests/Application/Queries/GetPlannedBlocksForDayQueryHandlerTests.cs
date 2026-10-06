@@ -49,7 +49,6 @@ public class GetPlannedBlocksForDayQueryHandlerTests
         dto.BlockPresetType.Should().Be(BlockPresetType.Focus);
         dto.WebsiteFilterType.Should().Be(WebsiteFilterType.Allowlist);
         dto.Shown.Should().Be(At.Slot(Start, End));
-        dto.IsCompleted.Should().BeFalse();
         dto.HasEnded.Should().BeFalse();
         dto.ContractBadge.Should().BeNull();
     }
@@ -130,14 +129,14 @@ public class GetPlannedBlocksForDayQueryHandlerTests
 
         var dto = result.Should().ContainSingle().Subject;
         dto.Shown.Should().Be(At.Slot(ritualCompletedAt, sessionEndedAt));
-        // Classify gives EndedEarly priority, but WasStartedLate is independent — the block
+        // Classify gives EndedEarly priority, but StartedLate is independent — the block
         // was genuinely both, and the badge needs to be able to say so.
         dto.Outcome.Should().Be(FocusBlockOutcome.EndedEarly);
-        dto.WasStartedLate.Should().BeTrue();
+        dto.StartedLate.Should().BeTrue();
     }
 
     [Fact]
-    public async Task HandleAsync_FocusBlockEndedEarlyButRitualWasOnTime_WasStartedLateIsFalse()
+    public async Task HandleAsync_FocusBlockEndedEarlyButRitualWasOnTime_StartedLateIsFalse()
     {
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End));
         block.MarkRitualCompleted(At.Utc(Start));
@@ -149,7 +148,7 @@ public class GetPlannedBlocksForDayQueryHandlerTests
 
         var dto = result.Should().ContainSingle().Subject;
         dto.Outcome.Should().Be(FocusBlockOutcome.EndedEarly);
-        dto.WasStartedLate.Should().BeFalse();
+        dto.StartedLate.Should().BeFalse();
     }
 
     [Fact]
@@ -246,7 +245,7 @@ public class GetPlannedBlocksForDayQueryHandlerTests
 
         var dto = result.Should().ContainSingle().Subject;
         dto.Outcome.Should().Be(FocusBlockOutcome.StartedLate);
-        dto.WasStartedLate.Should().BeTrue();
+        dto.StartedLate.Should().BeTrue();
     }
 
     [Fact]
@@ -298,19 +297,6 @@ public class GetPlannedBlocksForDayQueryHandlerTests
         var dto = result.Should().ContainSingle().Subject;
         dto.PresetName.Should().Be("Unknown");
         dto.WebsiteFilterType.Should().Be(WebsiteFilterType.Blocklist);
-    }
-
-    [Fact]
-    public async Task HandleAsync_FocusBlockWithCompletedRitual_IsCompletedIsTrue()
-    {
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End));
-        block.MarkRitualCompleted(At.Utc(Start));
-        _blocks.GetForRangeAsync(At.UtcZone.SlotCovering(Day), Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
-        _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
-
-        var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
-
-        result.Should().ContainSingle().Subject.IsCompleted.Should().BeTrue();
     }
 
     // ── Allowances: BlockChangeChecker's answer, handed the block's own contract (Gap 93) ──

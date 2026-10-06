@@ -106,12 +106,14 @@ public class PlannedBlockRepositoryTests : SqliteRepositoryTestBase
         await repo.AddAsync(block);
         await Context.SaveChangesAsync();
 
-        block.MarkRitualCompleted(At.Utc(Start));
+        block.MarkRitualCompleted(At.Utc(Start.AddMinutes(10)));
+        block.MarkSessionEnded(At.Utc(Start.AddMinutes(20)));
         await CreateRepository().SaveAsync(block);
         await Context.SaveChangesAsync();
 
+        // Both Domain-only stamps survive the round trip, mapped by name (Gap 95).
         var reloaded = (FocusBlock)(await CreateRepository().GetByIdAsync(block.Id))!;
-        reloaded.RitualCompletedAt.Should().Be(At.Utc(Start));
+        reloaded.WorkSlot().Should().Be(At.Slot(Start.AddMinutes(10), Start.AddMinutes(20)));
     }
 
     [Fact]

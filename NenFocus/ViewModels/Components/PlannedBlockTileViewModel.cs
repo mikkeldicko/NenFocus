@@ -35,12 +35,12 @@ public partial class PlannedBlockTileViewModel : ViewModelBase
     /// <summary>True only for Missed — the sole outcome whose tile text is struck through (nothing happened at all).</summary>
     public bool IsMissed => Outcome == FocusBlockOutcome.Missed;
 
-    /// <summary>
-    /// True when the ritual completed past the grace period, independent of Outcome — a block
-    /// can be both StartedLate and EndedEarly (Outcome favors EndedEarly), so this lets the
-    /// tile show both facts.
-    /// </summary>
-    public bool WasStartedLate { get; }
+    /// <summary>The Ritual came past the grace period — independent of Outcome; a block can have
+    /// started late and ended early, and the tile shows a label for each.</summary>
+    public bool StartedLate { get; }
+
+    /// <summary>The session ended before the scheduled end.</summary>
+    public bool EndedEarly { get; }
 
     /// <summary>
     /// Redemption or Bonus — mutually exclusive by construction. Null for an ordinary block
@@ -71,7 +71,8 @@ public partial class PlannedBlockTileViewModel : ViewModelBase
         Height = height;
         IsDraft = isDraft;
         Outcome = dto.Outcome;
-        WasStartedLate = dto.WasStartedLate;
+        StartedLate = dto.StartedLate;
+        EndedEarly = dto.EndedEarly;
         ContractBadge = dto.ContractBadge;
     }
 }

@@ -101,13 +101,13 @@ public sealed class PlannedBlockRepository : IPlannedBlockRepository
         Moment asOf,
         CancellationToken cancellationToken = default)
     {
-        // FocusBlock.IsUnresolved in SQL: the window-closed part is the Domain's own filter, so it
-        // can't drift from the entity (Gap 88). Cancelled excluded: a block cancelled by breaking
+        // FocusBlock.IsUnresolved in SQL, both halves the Domain's own filters, so it
+        // can't drift from the entity (Gaps 88, 95). Cancelled excluded: a block cancelled by breaking
         // its contract never ran its Ritual by design, not by oversight.
         return await _context.PlannedBlocks
             .Where(OnSlot<PlannedBlock, bool>(b => b.Scheduled, TimeSlot.Filters.HasEnded(asOf)))
             .OfType<FocusBlock>()
-            .Where(b => b.RitualCompletedAt == null && b.CancelledAt == null)
+            .Where(FocusBlock.Filters.NoRitualAndNotCancelled)
             .OrderBy(OnSlot<FocusBlock, Moment>(b => b.Scheduled, TimeSlot.Filters.ByStart))
             .ToListAsync(cancellationToken);
     }

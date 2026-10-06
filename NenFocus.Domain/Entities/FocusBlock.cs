@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using NenFocus.Domain.Enums;
 using NenFocus.Domain.ValueObjects;
 
@@ -27,14 +28,14 @@ public sealed class FocusBlock : PlannedBlock
     public const double MinimumMeaningfulDeficitMinutes = 1;
 
     /// <summary>Null means the Ritual was never completed for this block.</summary>
-    public Moment? RitualCompletedAt { get; private set; }
+    internal Moment? RitualCompletedAt { get; private set; }
 
     /// <summary>
     /// When this block's session ended, early or on time — a faithful copy of the session's
     /// own EndedAt, written in the same save; null while no session has ended (Gap 86). An
     /// early end is simply one before End: every reader compares it to End itself.
     /// </summary>
-    public Moment? SessionEndedAt { get; private set; }
+    internal Moment? SessionEndedAt { get; private set; }
 
     private FocusBlock() { }
 
@@ -57,11 +58,23 @@ public sealed class FocusBlock : PlannedBlock
 
     /// <summary>
     /// Window closed, Ritual never completed, not cancelled — what the missed-block sweep looks
-    /// for. <c>IPlannedBlockRepository.GetUnresolvedFocusBlocksAsync</c> mirrors this in SQL for
-    /// speed; a repository test checks the two agree.
+    /// for. <c>IPlannedBlockRepository.GetUnresolvedFocusBlocksAsync</c> asks the same rule in SQL
+    /// through <see cref="TimeSlot.Filters.HasEnded"/> and <see cref="Filters.NoRitualAndNotCancelled"/>;
+    /// a repository test checks the two agree.
     /// </summary>
     public bool IsUnresolved(Moment asOf)
         => HasEnded(asOf) && RitualCompletedAt is null && CancelledAt is null;
+
+    /// <summary>
+    /// The block's rules as expressions a repository hands to the database, since the stamps they
+    /// read are Domain-only (Gap 95) — the same idea as <see cref="TimeSlot.Filters"/>.
+    /// </summary>
+    public static class Filters
+    {
+        /// <summary>The stamp half of <see cref="IsUnresolved"/>: Ritual never completed, not cancelled.</summary>
+        public static Expression<Func<FocusBlock, bool>> NoRitualAndNotCancelled { get; } =
+            b => b.RitualCompletedAt == null && b.CancelledAt == null;
+    }
 
     /// <summary>
     /// Past the grace period at <paramref name="moment"/> — the one lateness rule, asked with the

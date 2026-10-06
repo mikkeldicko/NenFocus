@@ -67,7 +67,7 @@ Current-state reference for the Nen Contract aggregate: its rules, the Redemptio
 
 ## Block outcome and credit
 
-**`FocusBlockOutcome`** — `CompletedOnTime` / `StartedLate` / `Missed` / `EndedEarly`, from `FocusBlock.Outcome(asOf)`, read off the block's own stamps (Gaps 86, 95). `null` = no verdict yet (could still be started late until its scheduled end). `EndedEarly` wins over `StartedLate`; the flags `StartedLate` and `EndedEarly` can both be true, and `PlannedBlockDto.WasStartedLate` carries lateness separately so a tile can show both badges (Gap 20). The tile shows the worked window, trimmed from whichever end applies.
+**`FocusBlockOutcome`** — `CompletedOnTime` / `StartedLate` / `Missed` / `EndedEarly`, from `FocusBlock.Outcome(asOf)`, read off the block's own stamps (Gaps 86, 95). `null` = no verdict yet (could still be started late until its scheduled end). `EndedEarly` wins over `StartedLate`; the flags `StartedLate` and `EndedEarly` can both be true; `PlannedBlockDto` carries both, and the tile shows one label per true flag (Gaps 20, 95). The tile draws `WorkSlot() ?? Scheduled`.
 
 **Grace period:** 5 min (`FocusBlock.GracePeriodMinutes`), all Focus blocks. A Ritual completed within it is `CompletedOnTime`. `FocusBlock.IsLateAt(moment)` is the one lateness check (Gaps 20, 95).
 

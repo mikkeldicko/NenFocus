@@ -166,7 +166,8 @@ public class EndSessionCommandHandlerTests
 
         await CreateHandler().HandleAsync(new EndSessionCommand { SessionId = session.Id });
 
-        block.SessionEndedAt.Should().Be(At.Utc(Now));
+        block.EndedEarly.Should().BeTrue();
+        block.WorkSlot().Should().Be(At.Slot(Now.AddMinutes(-10), Now)); // stamped at the session's end
         block.Scheduled.Should().Be(At.Slot(Now.AddMinutes(-10), originalEnd)); // original schedule preserved, not overwritten
         await _plannedBlocks.Received(1).SaveAsync(block, Arg.Any<CancellationToken>());
     }
@@ -185,7 +186,8 @@ public class EndSessionCommandHandlerTests
 
         await CreateHandler().HandleAsync(new EndSessionCommand { SessionId = session.Id });
 
-        block.SessionEndedAt.Should().Be(session.EndedAt);
+        block.IsFinal(At.Utc(Now)).Should().BeTrue(); // stamped: a block with a Ritual is final only once its session ended
+        block.EndedEarly.Should().BeFalse();
         block.Scheduled.Should().Be(At.Slot(Now.AddMinutes(-10), Now));
         await _plannedBlocks.Received(1).SaveAsync(block, Arg.Any<CancellationToken>());
     }

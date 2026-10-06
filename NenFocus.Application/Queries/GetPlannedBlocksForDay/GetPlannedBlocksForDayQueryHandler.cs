@@ -51,20 +51,9 @@ public sealed class GetPlannedBlocksForDayQueryHandler
             var preset = presetMap.TryGetValue(b.BlockPresetId, out var p) ? p : null;
             var focusBlock = b as FocusBlock;
 
-            // wasStartedLate is independent of Outcome — EndedEarly takes priority over
-            // StartedLate in Classify (a block can only carry one verdict), but a block can
-            // genuinely be both. This flag lets the tile badge say so even when Outcome alone
-            // would hide it.
-            var wasStartedLate = focusBlock?.StartedLate ?? false;
-
-            // Display span mirrors the actual worked window, not the scheduled one: a ritual
-            // completed past the grace period pulls the visual start forward, and a session
-            // ended before the block's own scheduled end pulls the visual end back. A grace-
-            // period-late start is left untrimmed — it's credited as full duration, so it
-            // should look like full duration too.
-            var shown = wasStartedLate ? b.Scheduled.From(focusBlock!.RitualCompletedAt!.Value) : b.Scheduled;
-            if (focusBlock?.SessionEndedAt is { } sessionEndedAt && !b.Scheduled.HasEnded(sessionEndedAt))
-                shown = shown.Until(sessionEndedAt);
+            // The span the block was worked over, else its schedule (Gap 95): late and early-end
+            // rules live on the block alone, so the tile and every hour count can't drift.
+            var shown = focusBlock?.WorkSlot() ?? b.Scheduled;
 
             // The badge is the block's own stored role in its contract (Gap 97) — one role, so
             // only one badge can apply. Focus only: the floor and Bonus hours only ever come
@@ -90,12 +79,12 @@ public sealed class GetPlannedBlocksForDayQueryHandler
                 Shown = shown,
                 WebsiteFilterType = preset?.WebsiteFilterType ?? WebsiteFilterType.Blocklist,
                 ContractId = b.Membership?.ContractId,
-                IsCompleted = focusBlock?.RitualCompletedAt.HasValue ?? false,
                 HasEnded = b.HasEnded(now),
                 Allowances = _changes.AllowancesFor(
                     b, b.Membership is { } membership ? contractsById.GetValueOrDefault(membership.ContractId) : null, now),
                 Outcome = focusBlock?.Outcome(now),
-                WasStartedLate = wasStartedLate,
+                StartedLate = focusBlock?.StartedLate ?? false,
+                EndedEarly = focusBlock?.EndedEarly ?? false,
                 ContractBadge = contractBadge,
                 BonusContractName = bonusContract?.Name
             };
