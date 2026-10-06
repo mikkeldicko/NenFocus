@@ -29,9 +29,8 @@ public sealed class BreakNenContractValidator : AbstractValidator<BreakNenContra
             })
             .WithMessage("Only a contract that is still in effect (Scheduled or Active) can be broken.");
 
-        // The contract's own answer (NenContract.CheckBreak, Gap 95): no contract ends while a
-        // session runs. AllowCancellation isn't a reason there yet (interim, 2026-08-18) — Gap 83
-        // decides whether it or Strict Mode is the gate.
+        // The contract's own answer (NenContract.CheckBreak): not if it was sealed with cancellation
+        // off, and not while a session runs.
         RuleFor(x => x)
             .CustomAsync(async (command, context, ct) =>
             {

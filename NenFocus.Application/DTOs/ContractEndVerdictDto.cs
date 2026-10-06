@@ -12,6 +12,8 @@ public sealed record ContractEndVerdictDto
     public ContractEndOutcome Outcome { get; init; }
     public string? Message { get; init; }
 
+    public bool IsAllowed => Outcome == ContractEndOutcome.Allowed;
+
     /// <summary>
     /// The one builder, and the one home of the contract-end wording: the Complete and Break
     /// validators and handlers and the readiness query all go through it. Gap 100 moves the
@@ -23,6 +25,8 @@ public sealed record ContractEndVerdictDto
         Message = verdict.Outcome switch
         {
             ContractEndOutcome.Allowed => null,
+            ContractEndOutcome.CancellationNotAllowed =>
+                "This contract was sealed without cancellation — it runs until its end.",
             ContractEndOutcome.SessionIsRunning =>
                 "A session is running — a contract can't be ended until it finishes.",
             ContractEndOutcome.HoursNotDelivered =>

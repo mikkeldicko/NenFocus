@@ -9,6 +9,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
+using NenFocus.Application.Queries.CheckNenContractCancellable;
 using NenFocus.Application.Queries.CheckNenContractDateRangeOverlap;
 using NenFocus.Application.Queries.ComputePlannedFocusHours;
 using NenFocus.Application.Queries.GetNenContractsForDateRange;
@@ -318,6 +319,11 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     // the same query CompleteNenContractValidator delegates to, so the button and the command's
     // own gate can never drift apart.
     [ObservableProperty] private bool _canCompleteActiveContract;
+
+    // Same idea for Cancel: CheckNenContractCancellableQuery asks NenContract.CheckBreak, the answer
+    // the Break validator gives — hidden when the contract was sealed without cancellation or a
+    // session is running. The refusal modal stays for a session started after the popover opened.
+    [ObservableProperty] private bool _canCancelActiveContract;
     [ObservableProperty] private string? _completeContractErrorMessage;
 
     // Mirrors CanCompleteActiveContract but scoped to SelectedContract (the banner's own
@@ -649,6 +655,8 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
         if (!result.Success)
         {
+            // Shown as a modal the user must dismiss; the popover closes so it can't sit over it.
+            IsNenContractPopoverVisible = false;
             CancelContractErrorMessage = result.ErrorMessage;
             return;
         }
@@ -662,6 +670,9 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
     [RelayCommand]
     private void CancelCancelContract() => IsConfirmCancelContractVisible = false;
+
+    [RelayCommand]
+    private void DismissCancelContractError() => CancelContractErrorMessage = null;
 
     public string SaveButtonLabel => IsEditing ? "Save Changes" : "Create Block";
 
@@ -2308,6 +2319,8 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
         CanCompleteActiveContract = PopoverActiveContract is not null &&
             (await _queryDispatcher.QueryAsync(new GetNenContractCompletionReadinessQuery(PopoverActiveContract.Id))).IsReady;
+        CanCancelActiveContract = PopoverActiveContract is not null &&
+            await _queryDispatcher.QueryAsync(new CheckNenContractCancellableQuery(PopoverActiveContract.Id)) is { IsAllowed: true };
     }
 
     [RelayCommand]

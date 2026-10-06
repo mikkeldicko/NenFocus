@@ -934,6 +934,21 @@
 			</Border>
 		</Border>
 
+		<!-- A refused cancel (e.g. a session is running) must be read and dismissed — never a line in the popover. -->
+		<Border IsVisible="{Binding CancelContractErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" Background="#88000000">
+			<Border Background="#FFFFFF" CornerRadius="14" Width="400" Padding="32,28"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                    BoxShadow="0 12 48 0 #44000000">
+				<StackPanel Spacing="20">
+					<TextBlock Text="Can't Cancel Contract" FontSize="18" FontWeight="SemiBold" Foreground="#1A1A2E"/>
+					<TextBlock Text="{Binding CancelContractErrorMessage}" FontSize="14" Foreground="#888899" TextWrapping="Wrap"/>
+					<StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="12">
+						<Button Classes="primary" Content="OK" Command="{Binding DismissCancelContractErrorCommand}"/>
+					</StackPanel>
+				</StackPanel>
+			</Border>
+		</Border>
+
 		<Border IsVisible="{Binding IsConfirmDeleteContractVisible}" Background="#88000000">
 			<Border Background="#FFFFFF" CornerRadius="14" Width="400" Padding="32,28"
                     HorizontalAlignment="Center" VerticalAlignment="Center"
@@ -983,9 +998,6 @@
 											<TextBlock Text="{Binding PopoverActiveContract.StrictnessRule, Converter={x:Static conv:StrictnessRuleToLabelConverter.Instance}}"
                                                    FontSize="12" Foreground="#888899"/>
 										</StackPanel>
-										<TextBlock Text="{Binding CancelContractErrorMessage}"
-                                               IsVisible="{Binding CancelContractErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                                               FontSize="11" Foreground="#C03A2B" TextWrapping="Wrap"/>
 										<TextBlock Text="{Binding CompleteContractErrorMessage}"
                                                IsVisible="{Binding CompleteContractErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                                                FontSize="11" Foreground="#C03A2B" TextWrapping="Wrap"/>
@@ -998,7 +1010,8 @@
                                             IsVisible="{Binding CanCompleteActiveContract}"/>
 									<Button Classes="bannerCancelBtn" Content="Cancel"
                                             ToolTip.Tip="Cancel this contract"
-                                            Command="{Binding RequestCancelContractCommand}"/>
+                                            Command="{Binding RequestCancelContractCommand}"
+                                            IsVisible="{Binding CanCancelActiveContract}"/>
 								</StackPanel>
 							</Grid>
 						</Border>

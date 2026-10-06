@@ -12,6 +12,9 @@ public enum ContractEndOutcome
     /// <summary>A session is running: no contract ends while Focus time is still being worked.</summary>
     SessionIsRunning,
 
+    /// <summary>The contract was sealed with cancellation off: it runs to its end.</summary>
+    CancellationNotAllowed,
+
     /// <summary>Completing early needs every committed hour delivered first.</summary>
     HoursNotDelivered,
 

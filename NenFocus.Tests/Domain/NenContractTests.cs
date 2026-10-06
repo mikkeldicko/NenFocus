@@ -1077,11 +1077,12 @@ public class NenContractTests
         Seal(allowCancellation: true).CheckBreak(sessionRunning).Outcome.Should().Be(expected);
     }
 
-    [Fact]
-    public void CheckBreak_CancellationOff_IsStillAllowed_UntilStrictModeDecides()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)] // the setting never changes, so it is the reason given even while a session runs
+    public void CheckBreak_CancellationOff_IsRefused(bool sessionRunning)
     {
-        // Interim since 2026-08-18: AllowCancellation is stored but not enforced; Gap 83 decides
-        // whether it or Strict Mode is the gate, and adds that reason to CheckBreak.
-        Seal(allowCancellation: false).CheckBreak(sessionRunning: false).IsAllowed.Should().BeTrue();
+        // The contract's own setting is the gate (decided 2026-10-06, ending the 2026-08-18 interim).
+        Seal(allowCancellation: false).CheckBreak(sessionRunning).Outcome.Should().Be(ContractEndOutcome.CancellationNotAllowed);
     }
 }

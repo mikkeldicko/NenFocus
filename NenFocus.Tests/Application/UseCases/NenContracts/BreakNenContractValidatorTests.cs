@@ -79,15 +79,16 @@ public class BreakNenContractValidatorTests
     }
 
     [Fact]
-    public async Task Validate_CancellationNotAllowed_StillValid_InterimUntilStrictModeExists()
+    public async Task Validate_CancellationNotAllowed_IsInvalidWithMessage()
     {
-        // AllowCancellation is deliberately not enforced right now — see BreakNenContractValidator's own comment.
+        // The contract's own setting is the gate (decided 2026-10-06, ending the 2026-08-18 interim).
         var contract = Seal(allowCancellation: false, sealedAt: StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)); // Active
         _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
 
         var result = await CreateValidator().ValidateAsync(new BreakNenContractCommand { ContractId = contract.Id });
 
-        result.IsValid.Should().BeTrue();
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().ContainSingle(e => e.ErrorMessage.Contains("sealed without cancellation"));
     }
 
     [Fact]

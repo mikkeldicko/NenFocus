@@ -472,7 +472,7 @@ After Gap 65, extending means appending Contract Days generated with `ContractCa
 
 **Why it's a gap:** the Settings page is one of the five sidebar pages (`DOMAIN_DICTIONARY.md` → App Structure) but has never been built, and other work already assumes it exists.
 
-**From Gap 93 (2026-10-02):** a contract's "Allow cancellation" is stored and shown but never enforced — Break doesn't check it, waiting for Strict Mode as the real gate (`BreakNenContractValidator:31`). Decide here what gates breaking a contract: Strict Mode alone, the contract's own setting (`ContractRules`, Gap 93), or both. Also for Strict Mode: no placed block may be moved, edited, split or deleted — one more input to Gap 93's permission service (its decision 2).
+**From Gap 93 (2026-10-02), partly decided 2026-10-06:** the contract's own "Allow cancellation" is now the gate — `NenContract.CheckBreak` refuses a contract sealed with it off, and the Planner hides Cancel (`CheckNenContractCancellableQuery`; recorded under Gap 95). Left here: whether Strict Mode adds to it. Also for Strict Mode: no placed block may be moved, edited, split or deleted — one more input to Gap 93's permission service (its decision 2).
 
 **Known pieces waiting on it:** Break Timer Preset management — full CRUD backend built in Gap 61, no UI. "Strict Mode" (can't end a session early) — mentioned in `DOMAIN_DICTIONARY.md` → Session, not designed. Parts of Gap 78 (P) Break Flexibility (e.g. a break budget).
 

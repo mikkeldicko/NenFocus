@@ -263,12 +263,8 @@ public class NenContract : AggregateRoot
         PostContractAcknowledgedAt = acknowledgedAt;
     }
 
-    // AllowCancellation is deliberately not enforced here (interim, 2026-08-18) — see
-    // DOMAIN_DICTIONARY.md's Nen Contract section. The real intended gate for "you can't
-    // cancel this" is a future global Strict Mode Settings toggle, not this per-contract
-    // flag; until Strict Mode exists, every in-effect contract can be broken regardless of
-    // AllowCancellation. AllowCancellation itself is kept (still stored, still
-    // user-configurable in Advanced) so Strict Mode has a real value to read once it lands.
+    // Whether the user may break it now is CheckBreak's answer (cancellation allowed, no session
+    // running) — asked by the Break validator and handler before this is called.
     public void Break(Moment brokenAt, UserTimeZone timeZone)
     {
         if (!IsInEffect)
@@ -453,12 +449,14 @@ public class NenContract : AggregateRoot
     }
 
     /// <summary>
-    /// Whether the user may break this contract now. AllowCancellation is stored but not yet a
-    /// reason here (interim since 2026-08-18): Gap 83 decides whether it or Strict Mode is the
-    /// gate, and adds that reason in this one place.
+    /// Whether the user may break this contract now: not if it was sealed with cancellation off —
+    /// the contract's own setting is the gate (decided 2026-10-06, ending the 2026-08-18 interim;
+    /// Strict Mode may add more in Gap 83) — and not while a session runs.
     /// </summary>
     public ContractEndVerdict CheckBreak(bool sessionRunning)
-        => new(sessionRunning ? ContractEndOutcome.SessionIsRunning : ContractEndOutcome.Allowed);
+        => new(!AllowCancellation ? ContractEndOutcome.CancellationNotAllowed
+            : sessionRunning ? ContractEndOutcome.SessionIsRunning
+            : ContractEndOutcome.Allowed);
 
     // ── What may happen to one of this contract's blocks (Gap 93) ───────────────────────────
 
