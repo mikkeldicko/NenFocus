@@ -29,7 +29,6 @@ using NenFocus.Application.UseCases.Planner.SplitPlannedBlock;
 using NenFocus.Application.UseCases.Planner.UpdatePlannedBlock;
 using NenFocus.Application.UseCases.Sessions.AcknowledgePostSession;
 using NenFocus.Application.UseCases.Sessions.EndSession;
-using NenFocus.Application.UseCases.Sessions.MarkFocusBlockMissed;
 using NenFocus.Application.UseCases.Sessions.SaveReflection;
 using NenFocus.Application.UseCases.Sessions.StartSession;
 using NenFocus.Domain.Enums;
@@ -52,13 +51,18 @@ public partial class ShellViewModel : ViewModelBase
 {
     private readonly IQueryDispatcher _queryDispatcher;
     private readonly ICommandDispatcher _commandDispatcher;
-    private readonly ISessionStateService _sessionState;
+    private readonly IActiveSessionState _sessionState;
+    private readonly IRitualPrompt _ritualPrompt;
+    private readonly IRecapRelay _recaps;
     private readonly IActiveSessionMonitor _monitor;
     private readonly IPlannerClockService _plannerClock;
     private readonly ISystemClock _clock;
 
     private readonly Queue<PendingOverlay> _pendingOverlays = new();
     private bool _suppressTriage;
+
+    // The block the open Ritual is for; null when none is open or it is a spontaneous one.
+    private Guid? _ritualBlockId;
 
     private abstract record PendingOverlay;
     private sealed record PendingPostSession(PostSessionDto PostSession) : PendingOverlay;
@@ -92,7 +96,9 @@ public partial class ShellViewModel : ViewModelBase
     public ShellViewModel(
        IQueryDispatcher queryDispatcher,
        ICommandDispatcher commandDispatcher,
-       ISessionStateService sessionState,
+       IActiveSessionState sessionState,
+       IRitualPrompt ritualPrompt,
+       IRecapRelay recaps,
        IActiveSessionMonitor monitor,
        IPlannerClockService plannerClock,
        ISystemClock clock,
@@ -101,16 +107,18 @@ public partial class ShellViewModel : ViewModelBase
         _queryDispatcher = queryDispatcher;
         _commandDispatcher = commandDispatcher;
         _sessionState = sessionState;
+        _ritualPrompt = ritualPrompt;
+        _recaps = recaps;
         _monitor = monitor;
         _plannerClock = plannerClock;
         _clock = clock;
         DebugClockViewModel = new DebugClockViewModel(clock, debugClockController);
 
-        _sessionState.RitualRequirementChanged += (s, change) =>
-            Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => OnRitualRequirementChanged(change));
-        _sessionState.PostSessionsReady += (s, postSessions) =>
+        _ritualPrompt.Changed += (s, awaitingBlockId) =>
+            Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => OnRitualPromptChanged(awaitingBlockId));
+        _recaps.PostSessionsReady += (s, postSessions) =>
             Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => OnPostSessionsReady(postSessions));
-        _sessionState.PostContractsReady += (s, recaps) =>
+        _recaps.PostContractsReady += (s, recaps) =>
             Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => OnPostContractsReady(recaps));
 
         void Select(NavItemViewModel selected)
@@ -125,7 +133,7 @@ public partial class ShellViewModel : ViewModelBase
             new BlockPresetPageViewModel(_queryDispatcher, _commandDispatcher),
             new ContractPresetPageViewModel(_queryDispatcher, _commandDispatcher));
         NavItems.Add(new NavItemViewModel("Presets", "◻", presetsPageViewModel, Select));
-        var plannerViewModel = new PlannerPageViewModel(_queryDispatcher, _commandDispatcher, _plannerClock, _sessionState, _clock);
+        var plannerViewModel = new PlannerPageViewModel(_queryDispatcher, _commandDispatcher, _plannerClock, _sessionState, _recaps, _clock);
         plannerViewModel.ContractWizardOpened += OnContractWizardOpened;
         plannerViewModel.ContractWizardClosed += OnContractWizardClosed;
         plannerViewModel.PostContractReady += OnPostContractReadyLive;
@@ -149,17 +157,16 @@ public partial class ShellViewModel : ViewModelBase
     //    happened before being dropped into what's happening now.
     // 2. A Focus Block's Ritual requirement. This is also a startup race:
     //    ScheduledEnforcementService's heartbeat starts (via AppHost.StartAsync() in
-    //    Program.Main) before this constructor runs and subscribes to
-    //    RitualRequirementChanged above. If a Focus Block is already active at launch,
-    //    the very first heartbeat tick can call SetRitualRequired(true, ...) with no
-    //    subscriber listening — and since that method only raises its event on a
-    //    required-state transition (a later tick for the same still-pending block is a
-    //    no-op), that notification is lost for good once the block's ID stops changing.
+    //    Program.Main) before this constructor runs and subscribes to the Ritual
+    //    prompt's Changed above. If a Focus Block is already active at launch, the very
+    //    first heartbeat tick can name it with no subscriber listening — and since the
+    //    prompt only raises Changed when its answer changes (a later tick for the same
+    //    still-pending block is silent), that notification is lost for good.
     //    Catching up here, enqueued behind any pending post-sessions above, covers both
     //    races with one mechanism instead of two.
     //
     // ActiveSession is checked too, defensively, even though Program.Main now awaits
-    // ISessionStateService.InitializeAsync() before either the heartbeat or this
+    // IActiveSessionState.RefreshAsync() before either the heartbeat or this
     // constructor can run — the Ritual must never appear over an active session, and
     // this costs nothing to assert here too.
     private async Task InitializePendingOverlaysAsync()
@@ -175,12 +182,8 @@ public partial class ShellViewModel : ViewModelBase
         foreach (var recap in unacknowledgedContracts)
             _pendingOverlays.Enqueue(new PendingPostContract(recap));
 
-        if (_sessionState.IsRitualRequired
-            && _sessionState.ActiveSession is null
-            && _sessionState.PendingFocusBlockId.HasValue)
-        {
-            _pendingOverlays.Enqueue(new PendingRitual(_sessionState.PendingFocusBlockId.Value));
-        }
+        if (_ritualPrompt.PendingFocusBlockId is { } awaitingBlockId && _sessionState.ActiveSession is null)
+            _pendingOverlays.Enqueue(new PendingRitual(awaitingBlockId));
 
         TryDrainQueue();
     }
@@ -246,98 +249,35 @@ public partial class ShellViewModel : ViewModelBase
             onCancel: isPlanned ? () => { } : ExitRitual,
             isLateToBlock: isLateToBlock,
             lateBy: lateBy);
+        _ritualBlockId = focusBlockId;
         IsRitualActive = true;
     }
 
-    private void OnRitualRequirementChanged(RitualRequirementChange change)
+    // The Ritual follows the prompt (Gap 92, A3, D′): open one when the prompt names a block,
+    // close it when the prompt stops naming that block, whatever the reason — its window
+    // closed (the heartbeat's sweep has already queued the missed screen, earlier in the same
+    // tick) or its session started. Back-to-back blocks keep their order: the previous
+    // block's missed screen is already queued, so the next block's Ritual goes behind it.
+    private void OnRitualPromptChanged(Guid? awaitingBlockId)
     {
-        if (change.Required)
+        var closed = false;
+        if (IsRitualActive && _ritualBlockId is { } openBlockId && openBlockId != awaitingBlockId)
         {
-            if (change.HandoffFromFocusBlockId.HasValue)
-                _ = HandleRitualHandoff(change.HandoffFromFocusBlockId.Value, change.FocusBlockId);
-            else
-                EnqueueOrStartRitual(change.FocusBlockId);
-            return;
-        }
-
-        if (IsRitualActive && change.FocusBlockId.HasValue)
-            _ = HandleLiveRitualRelease(change.FocusBlockId.Value);
-    }
-
-    private void EnqueueOrStartRitual(Guid? focusBlockId)
-    {
-        if (IsRitualActive) return;
-
-        if (IsPostSessionActive || IsPostContractActive || IsTriageActive || IsContractWizardActive)
-        {
-            if (focusBlockId.HasValue)
-                _pendingOverlays.Enqueue(new PendingRitual(focusBlockId.Value));
-            return;
-        }
-
-        StartRitual(focusBlockId);
-        BringToForeground();
-    }
-
-    private async Task HandleLiveRitualRelease(Guid focusBlockId)
-    {
-        // The block's window closed while its ritual was on screen — the ritual is
-        // dead and can't wait behind anything else in the queue, so close it now.
-        CloseRitualOverlay();
-
-        var postSession = await TryMarkBlockMissed(focusBlockId);
-        if (postSession is not null)
-            _pendingOverlays.Enqueue(new PendingPostSession(postSession));
-
-        TryDrainQueue();
-    }
-
-    private async Task HandleRitualHandoff(Guid previousFocusBlockId, Guid? nextFocusBlockId)
-    {
-        // Back-to-back scheduled blocks: the previous block's window closed and the
-        // next one became active in the same heartbeat tick, with no intervening
-        // false transition. The previous block never gets its own release, so resolve
-        // it here — same sequence as a live release, just triggered differently.
-        if (IsRitualActive)
             CloseRitualOverlay();
+            closed = true;
+        }
 
-        var postSession = await TryMarkBlockMissed(previousFocusBlockId);
-        if (postSession is not null)
-            _pendingOverlays.Enqueue(new PendingPostSession(postSession));
-
-        // Enqueued behind the missed session above (not started directly) so the
-        // user deals with the miss before the next block's ritual takes over — the
-        // single TryDrainQueue() call below surfaces them in that order.
-        if (nextFocusBlockId.HasValue)
-            _pendingOverlays.Enqueue(new PendingRitual(nextFocusBlockId.Value));
+        if (awaitingBlockId is { } blockId && _ritualBlockId != blockId)
+            _pendingOverlays.Enqueue(new PendingRitual(blockId));
+        else if (!closed)
+            return;
 
         TryDrainQueue();
     }
 
-    private async Task<PostSessionDto?> TryMarkBlockMissed(Guid focusBlockId)
-    {
-        try
-        {
-            var result = await _commandDispatcher.DispatchAsync(
-                new MarkFocusBlockMissedCommand { FocusBlockId = focusBlockId });
-
-            return result.Success ? result.PostSession : null;
-        }
-        catch
-        {
-            // The block itself is untouched by a failed attempt — the next cold-start
-            // sweep or heartbeat tick will pick it up again. What must not happen is
-            // the shell getting stuck with nothing draining the queue, so every caller
-            // still proceeds to TryDrainQueue() after this returns.
-            return null;
-        }
-    }
-
-    // Fires when the enforcement heartbeat's periodic sweep catches a block whose window
-    // closed with no ritual done — a case the live edge-triggered ritual-required tracking
-    // never had a chance to observe (see ScheduledEnforcementService). Same queue, same
-    // triage batching as every other post-session; the only difference from the live path
-    // is where the PostSessionDto came from.
+    // Fires when the enforcement heartbeat's sweep catches a block whose window closed with
+    // no ritual done — the only way a missed screen arrives while the app runs (Gap 92, A3,
+    // D′). Same queue, same triage batching as every other post-session.
     private void OnPostSessionsReady(IReadOnlyList<PostSessionDto> postSessions)
     {
         foreach (var postSession in postSessions)
@@ -378,7 +318,7 @@ public partial class ShellViewModel : ViewModelBase
                 ShowPostSession(postSession.PostSession);
                 break;
             case PendingRitual ritual:
-                _ = HandlePendingRitual(ritual.FocusBlockId);
+                HandlePendingRitual(ritual.FocusBlockId);
                 break;
             case PendingPostContract postContract:
                 ShowPostContract(postContract.Recap);
@@ -386,20 +326,13 @@ public partial class ShellViewModel : ViewModelBase
         }
     }
 
-    private async Task HandlePendingRitual(Guid focusBlockId)
+    private void HandlePendingRitual(Guid focusBlockId)
     {
-        // Time may have passed while this sat behind another overlay — if the block's
-        // window already closed, there's nothing left to ritual into, so resolve it
-        // the same way a live release would instead of opening a dead Ritual screen.
-        var context = await _queryDispatcher.QueryAsync(
-            new GetFocusBlockRitualContextQuery { FocusBlockId = focusBlockId });
-
-        if (context is not null && context.Schedule.HasEnded(_clock.Now))
+        // Time may have passed while this sat behind another overlay. If the prompt no longer
+        // names the block, it no longer awaits its Ritual — its window closed (the sweep has
+        // queued the missed screen) or its session started — so there is nothing to open.
+        if (_ritualPrompt.PendingFocusBlockId != focusBlockId)
         {
-            var postSession = await TryMarkBlockMissed(focusBlockId);
-            if (postSession is not null)
-                _pendingOverlays.Enqueue(new PendingPostSession(postSession));
-
             TryDrainQueue();
             return;
         }
@@ -473,6 +406,7 @@ public partial class ShellViewModel : ViewModelBase
     {
         IsRitualActive = false;
         RitualViewModel = null;
+        _ritualBlockId = null;
     }
 
     private void ExitRitual()
@@ -497,7 +431,7 @@ public partial class ShellViewModel : ViewModelBase
     {
         IsPostSessionActive = false;
         PostSessionViewModel = null;
-        _sessionState.NotifyPostSessionAcknowledged();
+        _recaps.NotifyPostSessionAcknowledged();
         TryDrainQueue();
     }
 

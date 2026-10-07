@@ -16,8 +16,6 @@ public class StartSessionCommandHandlerTests
 
     private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
     private readonly IPlannedBlockRepository _plannedBlocks = Substitute.For<IPlannedBlockRepository>();
-    private readonly ISessionStateService _sessionState = Substitute.For<ISessionStateService>();
-    private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
     private readonly IBreakTimerPresetRepository _breakTimerPresets = Substitute.For<IBreakTimerPresetRepository>();
     private readonly INenContractRepository _contracts = Substitute.For<INenContractRepository>();
     private readonly ISystemClock _clock = TestClock.Create();
@@ -30,7 +28,7 @@ public class StartSessionCommandHandlerTests
     }
 
     private StartSessionCommandHandler CreateHandler()
-        => new(_sessions, _plannedBlocks, _sessionState, _presets, _breakTimerPresets, _contracts, _clock, new BlockPlacementChecker());
+        => new(_sessions, _plannedBlocks, _breakTimerPresets, _contracts, _clock, new BlockPlacementChecker());
 
     private static StartSessionCommand SpontaneousCommand(Guid? presetId = null) => new()
     {
@@ -40,33 +38,15 @@ public class StartSessionCommandHandlerTests
     };
 
     [Fact]
-    public async Task HandleAsync_Spontaneous_SavesSessionAndSetsActiveState()
+    public async Task HandleAsync_Spontaneous_SavesAnActiveSpontaneousSession()
     {
-        var presetId = Guid.NewGuid();
-        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
-
-        var result = await CreateHandler().HandleAsync(SpontaneousCommand(presetId), CancellationToken.None);
+        var result = await CreateHandler().HandleAsync(SpontaneousCommand(), CancellationToken.None);
 
         result.Success.Should().BeTrue();
         result.SessionId.Should().NotBeNull();
         await _sessions.Received(1).SaveAsync(
             Arg.Is<Session>(s => s.Origin == SessionOrigin.Spontaneous && s.Status == SessionStatus.Active),
             Arg.Any<CancellationToken>());
-        _sessionState.Received(1).SetActive(Arg.Is<SessionDto>(d =>
-            d.PresetName == "Deep Work" && d.Origin == SessionOrigin.Spontaneous));
-    }
-
-    [Fact]
-    public async Task HandleAsync_PresetNotFound_StillSucceedsWithBlankPresetName()
-    {
-        var presetId = Guid.NewGuid();
-        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>()).Returns((BlockPreset?)null);
-
-        var result = await CreateHandler().HandleAsync(SpontaneousCommand(presetId), CancellationToken.None);
-
-        result.Success.Should().BeTrue();
-        _sessionState.Received(1).SetActive(Arg.Is<SessionDto>(d => d.PresetName == string.Empty));
     }
 
     [Fact]
@@ -147,7 +127,6 @@ public class StartSessionCommandHandlerTests
         await _sessions.Received(1).SaveAsync(
             Arg.Is<Session>(s => s.BreakSchedule.Equals(expected) && s.BreakPresetName == "Classic"),
             Arg.Any<CancellationToken>());
-        _sessionState.Received(1).SetActive(Arg.Is<SessionDto>(d => d.Timeline!.Breaks.Breaks.Count == 1 && d.BreakPresetName == "Classic"));
     }
 
     [Fact]
@@ -241,7 +220,6 @@ public class StartSessionCommandHandlerTests
         await _sessions.Received(1).SaveAsync(
             Arg.Is<Session>(s => s.EndAt == At.Utc(blockEnd)),
             Arg.Any<CancellationToken>());
-        _sessionState.Received(1).SetActive(Arg.Is<SessionDto>(d => d.Timeline!.Run.Equals(At.Slot(Now, blockEnd))));
     }
 
     [Fact]
@@ -267,7 +245,6 @@ public class StartSessionCommandHandlerTests
         await _sessions.Received(1).SaveAsync(
             Arg.Is<Session>(s => s.Duration.Value == TimeSpan.FromMinutes(60)), // full block: blockEnd - blockStart
             Arg.Any<CancellationToken>());
-        _sessionState.Received(1).SetActive(Arg.Is<SessionDto>(d => d.DurationMinutes == 60));
     }
 
     [Fact]
@@ -404,7 +381,6 @@ public class StartSessionCommandHandlerTests
         result.Success.Should().BeTrue();
         await _sessions.Received(1).SaveAsync(
             Arg.Is<Session>(s => s.KeepBlockingDuringBreaks == keepBlocking), Arg.Any<CancellationToken>());
-        _sessionState.Received(1).SetActive(Arg.Is<SessionDto>(d => d.Timeline!.KeepsBlockingDuringBreaks == keepBlocking));
     }
 
     [Fact]

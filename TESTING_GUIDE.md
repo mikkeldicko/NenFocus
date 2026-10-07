@@ -41,7 +41,7 @@ NenFocus.Tests/
 │   │   ├── SqliteRepositoryTestBase.cs   ← shared base: real SQLite via an in-memory connection, not a fake/InMemory provider
 │   │   ├── Repositories/                 ← BlockPresetRepositoryTests.cs, SessionRepositoryTests.cs, NenContractRepositoryTests.cs, PlannedBlockRepositoryTests.cs
 │   │   └── EfCoreUnitOfWorkTests.cs
-│   ├── Services/               ← BlockedAttemptTrackerTests.cs, SessionStateServiceTests.cs, TransactionalCommandHandlerTests.cs, InProcessDomainEventPublisherTests.cs
+│   ├── Services/               ← BlockedAttemptTrackerTests.cs, ActiveSessionStateTests.cs, RitualPromptTests.cs, TransactionalCommandHandlerTests.cs, InProcessDomainEventPublisherTests.cs
 │   └── CompositionRootTests.cs ← confirms every handler/service resolves from DI with no missing registrations
 ├── ArchitectureTests/          ← MODULE_STANDARDS rules that fail on drift (Gap 98) — see "Architecture Tests" below
 ├── Headless/                   ← real views rendered with no screen (Avalonia.Headless) — see "Headless UI Tests" below
@@ -50,7 +50,7 @@ NenFocus.Tests/
 
 **Rules:**
 - `Domain/` tests never use mocks. Domain is pure logic.
-- `Application/` tests mock all interfaces (`ISessionRepository`, `ISessionStateService`, etc.) with NSubstitute.
+- `Application/` tests mock all interfaces (`ISessionRepository`, `IActiveSessionState`, etc.) with NSubstitute.
 - `Infrastructure/` tests **are built** — they run against a real SQLite database (via `SqliteRepositoryTestBase`'s in-memory connection, not a fake in-memory EF provider), not mocks. This is the correct place for repository/EF Core behavior and DI composition tests.
 - No stand-alone ViewModel logic tests — ViewModels stay thin and are tested via the Application layer they delegate to. A view and its ViewModel together can be checked end-to-end in `Headless/` (since 2026-09-29).
 
@@ -143,13 +143,10 @@ await sessions.DidNotReceive().SaveAsync(Arg.Any<Session>(), Arg.Any<Cancellatio
 ### Mocking a state service
 
 ```csharp
-var sessionState = Substitute.For<ISessionStateService>();
+var sessionState = Substitute.For<IActiveSessionState>();
 
-// Verify SetActive was called with any SessionDto
-sessionState.Received(1).SetActive(Arg.Any<SessionDto>());
-
-// Verify Clear was called
-sessionState.Received(1).Clear();
+// Verify the event handler refreshed the app's view of the running session
+await sessionState.Received(1).RefreshAsync(Arg.Any<CancellationToken>());
 ```
 
 ### Faking the clock
@@ -240,7 +237,7 @@ public async Task HandleAsync_ValidDurations_AllSucceed(int durationMinutes)
 - **Manual app checks are for what tests can't prove** (architect, 2026-10-02): on-screen wiring (is the button hidden, the field disabled, the message shown), a migration on the real database, timing against the real clock. A rule case the Domain or validator tests already cover doesn't go on the list — a handful per phase, with a line saying what the tests cover.
 - **Tests can reach Domain internals** (`InternalsVisibleTo("NenFocus.Tests")`, Gap 106). Use it only to build a state production makes through a longer path — a block already holding a receipt (`FocusBlock.CreateWithReceipt`), a Redemption membership (`TestContracts.Redemption`) — never to test an internal method instead of the public answer it feeds.
 - **Scripted edits on Windows (Gap 106):** a `perl`/`sed` pattern containing a non-ASCII character (—, →) can silently not match; an `awk -v` path with backslashes is mangled, and the script went on to delete lines without inserting. Use the Edit tool for such lines, and check `git diff --stat` after any scripted doc edit.
-- **Scripted edits:** match the file's line endings (`\r?\n`; a `\n`-only deletion left an orphan `\r` that shifted every later line number); anchor text replacements to a word boundary (replacing `At.X(` also hit `TestAt.X(`); and delete exactly the member a plan names, not its type (read it first).
+- **Scripted edits:** match the file's line endings (`\r?\n`; a `\n`-only deletion left an orphan `\r` that shifted every later line number; a whole-file CRLF pass added `\r` to a last line with no newline, and git then saw the file as binary — `git ls-files --eol` shows `w/-text` — and diffed every line, Gap 92); anchor text replacements to a word boundary (replacing `At.X(` also hit `TestAt.X(`); and delete exactly the member a plan names, not its type (read it first).
 
 ---
 
@@ -261,7 +258,9 @@ public async Task HandleAsync_ValidDurations_AllSucceed(int durationMinutes)
 - `VisibleTexts`, `ButtonWithText` (innermost match), `Click` (a real mouse click), `Type` (real keyboard text), `PressKey`.
 - Gotcha: `IsEffectivelyVisible` can report true under a hidden panel — use `IsShown`, which checks every logical parent.
 
-Suites: `RitualStepViewTests`, `TenPageViewTests`, `PostSessionViewTests`, `PresetPageViewTests`, `PlannerEndDropdownViewTests`.
+**Against the real app (added 2026-10-08, Gap 92):** when the question is "does the whole chain behave", build the real composition root instead of doubles — `AddInfrastructure` on a temp SQLite file, then register a `TestClock`, a substitute `IEnforcementService` and `INotificationService` *after* it (the last registration wins: no hosts file, no toasts, your time), and `Database.Migrate()`. Run one heartbeat with `ScheduledEnforcementService.TickAsync` (internal; the hosted service is fetched from `GetServices<IHostedService>()`), and give async UI work a few `Settle()` + short delays. Slower (about 1–5 s per test), so keep these few. Examples: `ShellHeartbeatIntegrationTests`, `ContractPresetFormIntegrationTests`; `MainPageBreakFlipTests` uses the real `ActiveSessionMonitor` and waits for its own 1-second tick.
+
+Suites: `RitualStepViewTests`, `TenPageViewTests`, `PostSessionViewTests`, `PresetPageViewTests`, `PlannerEndDropdownViewTests`, `PlannerBlockLockViewTests`, `PlannerContractButtonsViewTests`, `ShellRitualPromptTests`, `ShellHeartbeatIntegrationTests`, `MainPageBreakFlipTests`, `ContractPresetFormIntegrationTests`.
 
 ---
 

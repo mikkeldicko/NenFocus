@@ -74,6 +74,6 @@ public class PlannerEndDropdownViewTests
         var systemClock = TestClock.Create();
         systemClock.SetTimeZoneOffset(TimeSpan.Zero);
         systemClock.SetNow(new DateTime(2026, 9, 28, 6, 0, 0, DateTimeKind.Utc)); // a Monday: column 1 (Tuesday) is still ahead
-        return new PlannerPageViewModel(queries, Substitute.For<ICommandDispatcher>(), clock, Substitute.For<ISessionStateService>(), systemClock);
+        return new PlannerPageViewModel(queries, Substitute.For<ICommandDispatcher>(), clock, Substitute.For<IActiveSessionState>(), Substitute.For<IRecapRelay>(), systemClock);
     }
 }

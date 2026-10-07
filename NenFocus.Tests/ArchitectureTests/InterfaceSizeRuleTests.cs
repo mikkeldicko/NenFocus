@@ -20,8 +20,10 @@ public class InterfaceSizeRuleTests
 
     private static readonly string[] KnownLargeInterfaces =
     [
-        // Three jobs: active session, Ritual prompt, post-session/post-contract relays. → Gap 92 A3, Gap 89 area 4.
-        "ISessionStateService has 15",
+        // Interim: the post-session/post-contract relays, left over when Gap 92 (A3) split
+        // ISessionStateService (15) into IActiveSessionState (3) and IRitualPrompt (3).
+        // → Gap 107 decides their owner.
+        "IRecapRelay has 6",
 
         // Repositories: in DDD a collection-like door to one aggregate. Each extra query method is
         // usually a business rule moving into SQL (e.g. HasFutureBlocksForPresetAsync, Gap 92 A6),

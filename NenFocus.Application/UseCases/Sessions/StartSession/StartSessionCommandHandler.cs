@@ -12,8 +12,6 @@ public sealed class StartSessionCommandHandler
 {
     private readonly ISessionRepository _sessions;
     private readonly IPlannedBlockRepository _plannedBlocks;
-    private readonly ISessionStateService _sessionState;
-    private readonly IBlockPresetRepository _presets;
     private readonly IBreakTimerPresetRepository _breakTimerPresets;
     private readonly INenContractRepository _contracts;
     private readonly ISystemClock _clock;
@@ -22,8 +20,6 @@ public sealed class StartSessionCommandHandler
     public StartSessionCommandHandler(
         ISessionRepository sessions,
         IPlannedBlockRepository plannedBlocks,
-        ISessionStateService sessionState,
-        IBlockPresetRepository presets,
         IBreakTimerPresetRepository breakTimerPresets,
         INenContractRepository contracts,
         ISystemClock clock,
@@ -31,8 +27,6 @@ public sealed class StartSessionCommandHandler
     {
         _sessions = sessions;
         _plannedBlocks = plannedBlocks;
-        _sessionState = sessionState;
-        _presets = presets;
         _breakTimerPresets = breakTimerPresets;
         _contracts = contracts;
         _clock = clock;
@@ -142,28 +136,9 @@ public sealed class StartSessionCommandHandler
             await _plannedBlocks.SaveAsync(originatingBlock, ct);
         }
 
+        // The app's view of the running session refreshes itself from the database once this
+        // commits (SessionStartedEventHandler) — nothing is pushed from here (Gap 92, A3).
         await _sessions.SaveAsync(session, ct);
-
-        var presetName = string.Empty;
-        if (command.PresetId is { } pid && pid != Guid.Empty)
-        {
-            var preset = await _presets.GetByIdAsync(pid, ct);
-            presetName = preset?.Name ?? string.Empty;
-        }
-
-        _sessionState.SetActive(new SessionDto
-        {
-            Id = session.Id,
-            Goal = session.Goal.Value,
-            PresetName = presetName,
-            BlockPresetId = session.BlockPresetId,
-            DurationMinutes = (int)duration.TotalMinutes,
-            Status = session.Status,
-            Origin = session.Origin,
-            OriginatingBlockId = session.OriginatingBlockId,
-            Timeline = session.Timeline,
-            BreakPresetName = session.BreakPresetName
-        });
 
         return StartSessionResult.Ok(session.Id);
     }

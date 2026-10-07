@@ -19,7 +19,7 @@ public partial class MainPageViewModel : ViewModelBase
 {
     private readonly Action _onStartRitual;
     private readonly Action<PostSessionDto> _onShowPostSession;
-    private readonly ISessionStateService _sessionState;
+    private readonly IActiveSessionState _sessionState;
     private readonly IActiveSessionMonitor _monitor;
     private readonly ICommandDispatcher _commandDispatcher;
     private readonly ISystemClock _clock;
@@ -56,9 +56,6 @@ public partial class MainPageViewModel : ViewModelBase
     [ObservableProperty]
     private int _breaksTaken;
 
-    [ObservableProperty]
-    private bool _isRitualBannerVisible;
-
     /// <summary>Ready-to-bind marker positions for the session progress bar — the session's own
     /// <c>SessionTimeline.Marks</c> (Gap 92). Empty for "No timer".</summary>
     [ObservableProperty]
@@ -79,7 +76,7 @@ public partial class MainPageViewModel : ViewModelBase
     public MainPageViewModel(
         Action onStartRitual,
         Action<PostSessionDto> onShowPostSession,
-        ISessionStateService sessionState,
+        IActiveSessionState sessionState,
         IActiveSessionMonitor monitor,
         ICommandDispatcher commandDispatcher,
         ISystemClock clock)
@@ -91,17 +88,14 @@ public partial class MainPageViewModel : ViewModelBase
         _commandDispatcher = commandDispatcher;
         _clock = clock;
 
-        _sessionState.RitualRequirementChanged += (_, change) =>
-            Dispatcher.UIThread.Post(() => IsRitualBannerVisible = change.Required);
-
         _sessionState.SessionChanged += OnSessionChanged;
 
         _monitor.Tick += OnMonitorTick;
         _monitor.SessionAutoEnded += OnSessionAutoEnded;
 
-        // SessionStateService.InitializeAsync() now runs once, awaited, during app
+        // IActiveSessionState.RefreshAsync() runs once, awaited, during app
         // startup (Program.Main) before this ViewModel is ever constructed — calling it
-        // again here would re-run the DB read and the missed-focus-block sweep a second
+        // again here would re-run the DB read a second
         // time for nothing. Catch up directly on whatever it already loaded instead,
         // since the SessionChanged event it fires already happened before the
         // subscription above existed to hear it.
@@ -174,7 +168,6 @@ public partial class MainPageViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanStartRitual))]
     private void StartRitual()
     {
-        IsRitualBannerVisible = false;
         _onStartRitual();
     }
 

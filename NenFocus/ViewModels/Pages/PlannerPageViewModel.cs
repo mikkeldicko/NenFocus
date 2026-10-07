@@ -60,7 +60,8 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
     /// <summary>What the user's clock shows now — through the user's time zone (Gap 88).</summary>
     private DateTime LocalNow => _clock.TimeZone.ToCalendarTime(_clock.Now);
-    private readonly ISessionStateService _sessionState;
+    private readonly IActiveSessionState _sessionState;
+    private readonly IRecapRelay _recaps;
 
     private readonly Dictionary<Guid, PlannedBlockDto> _blocksInWeek = new();
     private readonly List<BlockPresetDto> _allPresets = new();
@@ -719,8 +720,8 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
     // Shell renders the wizard as a full-screen overlay (mirrors the Ritual overlay), so it
     // needs to know when one opens/closes even though this ViewModel still owns construction
-    // and the drafting handoff — same event-bridge shape as ISessionStateService's
-    // RitualRequirementChanged, which ShellViewModel already consumes.
+    // and the drafting handoff — same event-bridge shape as IRitualPrompt's
+    // Changed, which ShellViewModel already consumes.
     public event Action<ContractWizardViewModel>? ContractWizardOpened;
     public event Action? ContractWizardClosed;
 
@@ -753,7 +754,8 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         IQueryDispatcher queryDispatcher,
         ICommandDispatcher commandDispatcher,
         IPlannerClockService clockService,
-        ISessionStateService sessionState,
+        IActiveSessionState sessionState,
+        IRecapRelay recaps,
         ISystemClock clock)
     {
         _queryDispatcher = queryDispatcher;
@@ -761,8 +763,9 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         _clockService = clockService;
         _clock = clock;
         _sessionState = sessionState;
+        _recaps = recaps;
         _sessionState.SessionChanged += OnSessionChanged;
-        _sessionState.PostSessionAcknowledged += OnPostSessionAcknowledged;
+        _recaps.PostSessionAcknowledged += OnPostSessionAcknowledged;
 
         for (int h = FirstHour; h < LastHour; h++)
             HourLabels.Add(new HourLabelViewModel(h));
@@ -808,7 +811,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     }
 
     // The heartbeat's background sweep can mark a block Missed with nobody watching live —
-    // ShellViewModel surfaces it as a Post-Session popup (see ISessionStateService.
+    // ShellViewModel surfaces it as a Post-Session popup (see IRecapRelay.
     // PostSessionsReady); this is the signal that its dismissal ("Done") is the right moment
     // to reload, since that's when the underlying data is actually known to have changed.
     private void OnPostSessionAcknowledged(object? sender, EventArgs e)
@@ -2300,7 +2303,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     {
         _clockService.Tick -= OnClockTick;
         _sessionState.SessionChanged -= OnSessionChanged;
-        _sessionState.PostSessionAcknowledged -= OnPostSessionAcknowledged;
+        _recaps.PostSessionAcknowledged -= OnPostSessionAcknowledged;
         _floorStatusPollTimer.Elapsed -= OnFloorStatusPollTick;
         _floorStatusPollTimer.Dispose();
     }

@@ -15,7 +15,7 @@ public class SessionEndedEventHandlerTests
 
     private readonly IEnforcementSynchronizer _synchronizer = Substitute.For<IEnforcementSynchronizer>();
     private readonly INotifier _notifier = Substitute.For<INotifier>();
-    private readonly ISessionStateService _sessionState = Substitute.For<ISessionStateService>();
+    private readonly IActiveSessionState _sessionState = Substitute.For<IActiveSessionState>();
     private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
     private readonly IPlannedBlockRepository _blocks = Substitute.For<IPlannedBlockRepository>();
     private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
@@ -42,13 +42,13 @@ public class SessionEndedEventHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_ClearsSessionStateSyncsEnforcementAndReportsCompletion()
+    public async Task HandleAsync_RefreshesSessionStateSyncsEnforcementAndReportsCompletion()
     {
         // Gap 62: previously removed ALL enforcement, unblocking a still-running
         // Background Block until the next heartbeat.
         await CreateHandler().HandleAsync(new SessionEndedEvent(GivenSession().Id, At.Utc(Now)));
 
-        _sessionState.Received(1).Clear();
+        await _sessionState.Received(1).RefreshAsync(Arg.Any<CancellationToken>());
         await _synchronizer.Received(1).SyncAsync(At.Utc(Now), Arg.Any<CancellationToken>());
         await _notifier.Received(1).NotifyAsync(new SessionCompleted(false, null), Arg.Any<CancellationToken>());
     }
@@ -75,16 +75,16 @@ public class SessionEndedEventHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_ClearsSessionStateBeforeSyncingEnforcement()
+    public async Task HandleAsync_RefreshesSessionStateBeforeSyncingEnforcement()
     {
-        // Ordering matters: sessionState.Clear() must happen before enforcement is synced
+        // Ordering matters: the session state refreshes before enforcement is synced
         // so ScheduledEnforcementService never observes a null ActiveSession while the
         // DB still shows the session as Active (see the handler's own comment).
         await CreateHandler().HandleAsync(new SessionEndedEvent(GivenSession().Id, At.Utc(Now)));
 
         Received.InOrder(() =>
         {
-            _sessionState.Received().Clear();
+            _sessionState.Received().RefreshAsync(Arg.Any<CancellationToken>());
             _synchronizer.Received().SyncAsync(Arg.Any<Moment>(), Arg.Any<CancellationToken>());
         });
     }

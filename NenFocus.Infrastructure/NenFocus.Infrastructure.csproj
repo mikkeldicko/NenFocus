@@ -5,6 +5,9 @@
 		<ImplicitUsings>enable</ImplicitUsings>
 	</PropertyGroup>
 	<ItemGroup>
+		<InternalsVisibleTo Include="NenFocus.Tests" />
+	</ItemGroup>
+	<ItemGroup>
 		<!-- Keep these for SQLite -->
 		<PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.20" />
 		<!-- This is needed for Migrations to work in this project -->

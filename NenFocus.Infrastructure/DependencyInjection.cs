@@ -47,7 +47,9 @@ public static class DependencyInjection
         services.AddSingleton<SystemClock>();
         services.AddSingleton<ISystemClock>(sp => sp.GetRequiredService<SystemClock>());
         services.AddSingleton<IDebugClockController>(sp => sp.GetRequiredService<SystemClock>());
-        services.AddSingleton<ISessionStateService, SessionStateService>();
+        services.AddSingleton<IActiveSessionState, ActiveSessionState>();
+        services.AddSingleton<IRitualPrompt, RitualPrompt>();
+        services.AddSingleton<IRecapRelay, RecapRelay>();
         services.AddSingleton<IActiveSessionMonitor, ActiveSessionMonitor>();
         services.AddSingleton<IPlannerClockService, PlannerClockService>();
         services.AddSingleton<IDomainEventPublisher, InProcessDomainEventPublisher>();

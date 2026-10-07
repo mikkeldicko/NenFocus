@@ -29,13 +29,19 @@ public sealed class GetActiveSessionQueryHandler
 
         var preset = await _presets.GetByIdAsync(session.BlockPresetId, cancellationToken);
 
+        // The one builder of SessionDto: IActiveSessionState refreshes from this query at
+        // startup and after a session starts or ends, so nothing else maps a running session
+        // (Gap 92, A3 — Gap 89 F1, F3).
         return new SessionDto
         {
             Id = session.Id,
             Goal = session.Goal.Value,
             PresetName = preset?.Name ?? "Unknown",
+            BlockPresetId = session.BlockPresetId,
             DurationMinutes = (int)session.Duration.Value.TotalMinutes,
             Status = session.Status,
+            Origin = session.Origin,
+            OriginatingBlockId = session.OriginatingBlockId,
             EndedAt = session.EndedAt,
             Timeline = session.Timeline,
             BreakPresetName = session.BreakPresetName

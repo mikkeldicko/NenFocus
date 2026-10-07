@@ -134,6 +134,6 @@ public class PlannerBlockLockViewTests
         var systemClock = TestClock.Create();
         systemClock.SetTimeZoneOffset(TimeSpan.Zero);
         systemClock.SetNow(new DateTime(2026, 9, 29, 7, 0, 0, DateTimeKind.Utc));
-        return new PlannerPageViewModel(queries, commands ?? Substitute.For<ICommandDispatcher>(), clock, Substitute.For<ISessionStateService>(), systemClock);
+        return new PlannerPageViewModel(queries, commands ?? Substitute.For<ICommandDispatcher>(), clock, Substitute.For<IActiveSessionState>(), Substitute.For<IRecapRelay>(), systemClock);
     }
 }

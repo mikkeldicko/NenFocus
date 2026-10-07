@@ -8,6 +8,7 @@ public sealed class SessionStartedEventHandler : IDomainEventHandler<SessionStar
 {
     private readonly IEnforcementSynchronizer _synchronizer;
     private readonly INotifier _notifier;
+    private readonly IActiveSessionState _sessionState;
     private readonly ISessionRepository _sessions;
     private readonly IPlannedBlockRepository _blocks;
     private readonly IBlockPresetRepository _presets;
@@ -16,6 +17,7 @@ public sealed class SessionStartedEventHandler : IDomainEventHandler<SessionStar
     public SessionStartedEventHandler(
         IEnforcementSynchronizer synchronizer,
         INotifier notifier,
+        IActiveSessionState sessionState,
         ISessionRepository sessions,
         IPlannedBlockRepository blocks,
         IBlockPresetRepository presets,
@@ -23,6 +25,7 @@ public sealed class SessionStartedEventHandler : IDomainEventHandler<SessionStar
     {
         _synchronizer = synchronizer;
         _notifier = notifier;
+        _sessionState = sessionState;
         _sessions = sessions;
         _blocks = blocks;
         _presets = presets;
@@ -33,6 +36,10 @@ public sealed class SessionStartedEventHandler : IDomainEventHandler<SessionStar
         SessionStartedEvent domainEvent,
         CancellationToken cancellationToken = default)
     {
+        // First: the app's view of the running session reads it from the database, now committed
+        // (Gap 92, A3 — StartSession no longer pushes a copy).
+        await _sessionState.RefreshAsync(cancellationToken);
+
         await _synchronizer.SyncAsync(_clock.Now, cancellationToken);
 
         // A planned session is named after its block — the block itself stays quiet about

@@ -36,7 +36,7 @@ public sealed class ActiveSessionMonitor : IActiveSessionMonitor, IDisposable
     public event EventHandler<PostSessionDto>? SessionAutoEnded;
 
     public ActiveSessionMonitor(
-        ISessionStateService sessionState, IServiceScopeFactory scopeFactory, ISystemClock clock,
+        IActiveSessionState sessionState, IServiceScopeFactory scopeFactory, ISystemClock clock,
         IBreakTransitionResponder breakTransitions, ILogger<ActiveSessionMonitor> logger)
     {
         _scopeFactory = scopeFactory;
@@ -45,8 +45,8 @@ public sealed class ActiveSessionMonitor : IActiveSessionMonitor, IDisposable
         _logger = logger;
         sessionState.SessionChanged += OnSessionChanged;
 
-        // SessionStateService.InitializeAsync() now runs once, awaited, during app
-        // startup (Program.Main) before any DI singleton — including this one — is ever
+        // IActiveSessionState.RefreshAsync() runs once, awaited, during app
+        // startup (Program.Main) before this monitor is ever
         // constructed. Its SessionChanged notification for an already-active session
         // fired before the subscription above existed to hear it, and unlike a plain
         // UI refresh, this monitor only ever populates _timeline

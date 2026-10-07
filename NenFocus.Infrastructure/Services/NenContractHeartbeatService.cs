@@ -12,7 +12,7 @@ namespace NenFocus.Infrastructure.Services;
 /// Periodically dispatches SweepNenContractLifecycleCommand so Scheduled contracts
 /// activate and Active contracts complete promptly at their start/end moment, even while
 /// the app runs continuously. Unlike SweepMissedFocusBlocksCommand
-/// (dispatched once, at startup, via SessionStateService.InitializeAsync), a start/end
+/// (dispatched once by app startup, Program.Main), a start/end
 /// crossing can happen at any point during a long-running session, not just at launch —
 /// a startup-only sweep would leave a due contract stuck Scheduled/Active for however long
 /// the app happens to stay open.
@@ -20,7 +20,7 @@ namespace NenFocus.Infrastructure.Services;
 public sealed class NenContractHeartbeatService : BackgroundService
 {
     private readonly IServiceScopeFactory _scopeFactory;
-    private readonly ISessionStateService _sessionState;
+    private readonly IRecapRelay _recaps;
     private readonly ILogger<NenContractHeartbeatService> _logger;
 
     // Same 5-second interval as ScheduledEnforcementService: a contract activates and
@@ -31,11 +31,11 @@ public sealed class NenContractHeartbeatService : BackgroundService
 
     public NenContractHeartbeatService(
         IServiceScopeFactory scopeFactory,
-        ISessionStateService sessionState,
+        IRecapRelay recaps,
         ILogger<NenContractHeartbeatService> logger)
     {
         _scopeFactory = scopeFactory;
-        _sessionState = sessionState;
+        _recaps = recaps;
         _logger = logger;
     }
 
@@ -56,7 +56,7 @@ public sealed class NenContractHeartbeatService : BackgroundService
                     // Nobody was watching this live — the same "background process produced
                     // a fact nobody asked for yet" shape as SweepMissedFocusBlocksCommand's
                     // missed sessions, surfaced via the same kind of event on
-                    // ISessionStateService (PostContractsReady mirrors PostSessionsReady).
+                    // IRecapRelay (PostContractsReady mirrors PostSessionsReady).
                     var recapHandler = scope.ServiceProvider
                         .GetRequiredService<IQueryHandler<GetNenContractRecapQuery, NenContractRecapDto?>>();
 
@@ -67,7 +67,7 @@ public sealed class NenContractHeartbeatService : BackgroundService
                         if (recap is not null) recaps.Add(recap);
                     }
 
-                    _sessionState.NotifyPostContractsReady(recaps);
+                    _recaps.NotifyPostContractsReady(recaps);
                 }
             }
             catch (Exception ex)

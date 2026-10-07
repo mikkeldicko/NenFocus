@@ -8,7 +8,7 @@ public sealed class SessionEndedEventHandler : IDomainEventHandler<SessionEndedE
 {
     private readonly IEnforcementSynchronizer _synchronizer;
     private readonly INotifier _notifier;
-    private readonly ISessionStateService _sessionState;
+    private readonly IActiveSessionState _sessionState;
     private readonly ISessionRepository _sessions;
     private readonly IPlannedBlockRepository _blocks;
     private readonly IBlockPresetRepository _presets;
@@ -17,7 +17,7 @@ public sealed class SessionEndedEventHandler : IDomainEventHandler<SessionEndedE
     public SessionEndedEventHandler(
         IEnforcementSynchronizer synchronizer,
         INotifier notifier,
-        ISessionStateService sessionState,
+        IActiveSessionState sessionState,
         ISessionRepository sessions,
         IPlannedBlockRepository blocks,
         IBlockPresetRepository presets,
@@ -36,11 +36,10 @@ public sealed class SessionEndedEventHandler : IDomainEventHandler<SessionEndedE
         SessionEndedEvent domainEvent,
         CancellationToken cancellationToken = default)
     {
-        // Clear session state only after the DB commit has completed (called from
-        // EfCoreUnitOfWork.CommitAsync after SaveChangesAsync). This prevents the
-        // ScheduledEnforcementService from seeing a null ActiveSession while the DB
-        // still shows the session as Active, which would falsely re-trigger the Ritual.
-        _sessionState.Clear();
+        // First, and only after the DB commit (EfCoreUnitOfWork.CommitAsync publishes after
+        // SaveChangesAsync): the refresh reads the session as ended, so the UI's view and the
+        // database can't disagree (Gap 92, A3).
+        await _sessionState.RefreshAsync(cancellationToken);
 
         // Sync, never "remove everything" — a Background Block still running must stay
         // enforced after the session ends (Gap 62).

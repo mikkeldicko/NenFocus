@@ -15,6 +15,7 @@ public class SessionStartedEventHandlerTests
 
     private readonly IEnforcementSynchronizer _synchronizer = Substitute.For<IEnforcementSynchronizer>();
     private readonly INotifier _notifier = Substitute.For<INotifier>();
+    private readonly IActiveSessionState _sessionState = Substitute.For<IActiveSessionState>();
     private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
     private readonly IPlannedBlockRepository _blocks = Substitute.For<IPlannedBlockRepository>();
     private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
@@ -22,7 +23,7 @@ public class SessionStartedEventHandlerTests
 
     public SessionStartedEventHandlerTests() => _clock.SetNow(Now);
 
-    private SessionStartedEventHandler CreateHandler() => new(_synchronizer, _notifier, _sessions, _blocks, _presets, _clock);
+    private SessionStartedEventHandler CreateHandler() => new(_synchronizer, _notifier, _sessionState, _sessions, _blocks, _presets, _clock);
 
     private Session GivenSession(FocusBlock? block = null)
     {
@@ -47,6 +48,20 @@ public class SessionStartedEventHandlerTests
         await CreateHandler().HandleAsync(StartedEvent(GivenSession()));
 
         await _synchronizer.Received(1).SyncAsync(At.Utc(Now), Arg.Any<CancellationToken>());
+    }
+
+    // StartSession no longer pushes a SessionDto: the app's view of the running session
+    // reads the committed session itself, first (Gap 92, A3).
+    [Fact]
+    public async Task HandleAsync_RefreshesSessionStateBeforeSyncingEnforcement()
+    {
+        await CreateHandler().HandleAsync(StartedEvent(GivenSession()));
+
+        Received.InOrder(() =>
+        {
+            _sessionState.Received().RefreshAsync(Arg.Any<CancellationToken>());
+            _synchronizer.Received().SyncAsync(Arg.Any<Moment>(), Arg.Any<CancellationToken>());
+        });
     }
 
     [Fact]

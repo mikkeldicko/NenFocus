@@ -56,8 +56,6 @@ public class DispatcherRuleTests
         "NenFocus.Infrastructure/Services/ScheduledEnforcementService.cs",
         "NenFocus.Infrastructure/Services/NenContractHeartbeatService.cs",
         "NenFocus.Infrastructure/Services/ActiveSessionMonitor.cs",
-        // → Gap 89 area 4: startup rehydration (with the SessionDto copies, F1).
-        "NenFocus.Infrastructure/Services/SessionStateService.cs",
     ];
 
     [Fact]

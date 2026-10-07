@@ -49,6 +49,26 @@ public class GetActiveSessionQueryHandlerTests
         result.Timeline!.Breaks.IsEmpty.Should().BeTrue();
     }
 
+    // Gap 89 F1/F2: the restart path used to lose Origin and OriginatingBlockId, so after a restart
+    // the Planner no longer knew which tile was running. The one builder carries both (Gap 92, A3).
+    [Fact]
+    public async Task HandleAsync_PlannedSession_CarriesOriginBlockAndPreset()
+    {
+        var presetId = Guid.NewGuid();
+        var blockId = Guid.NewGuid();
+        var session = Session.Create(
+            Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(30)),
+            presetId, SessionOrigin.Planned, originatingBlockId: blockId);
+        session.Start(At.Utc(DateTime.UtcNow));
+        _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns(session);
+
+        var result = await CreateHandler().HandleAsync(new GetActiveSessionQuery());
+
+        result!.Origin.Should().Be(SessionOrigin.Planned);
+        result.OriginatingBlockId.Should().Be(blockId);
+        result.BlockPresetId.Should().Be(presetId);
+    }
+
     [Fact]
     public async Task HandleAsync_PresetNotFound_ReturnsUnknownPresetName()
     {
