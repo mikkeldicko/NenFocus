@@ -5,7 +5,7 @@ namespace NenFocus.Tests.ArchitectureTests;
 /// <summary>
 /// Only the Domain decides contract membership (Gap 97): which contract a block belongs to and how
 /// (Committed, Redemption, Bonus) is stored on the block and answered by named questions —
-/// <c>CountsTowardFloor</c>, <c>IsBonus</c>, <c>IsRedemption</c>, <c>PlaceUnder</c>,
+/// <c>CountsTowardFloor</c>, <c>IsBonus</c>, <c>IsRedemption</c>,
 /// <c>NenContract.Governs</c>. The role itself is Domain-only, so the compiler guards that half.
 /// The contract id stays readable, because handlers need it to load the contract — so this test
 /// guards the other half: outside the Domain and persistence, nobody *compares* a block's contract

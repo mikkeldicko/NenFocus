@@ -1,7 +1,6 @@
 using FluentAssertions;
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
-using NenFocus.Application.Queries.ComputeRedemptionAttribution;
 using NenFocus.Application.Queries.GetBlockPlacementVerdict;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
@@ -24,8 +23,6 @@ public class GetBlockPlacementVerdictQueryHandlerTests
     private readonly IPlannedBlockRepository _blocks = Substitute.For<IPlannedBlockRepository>();
     private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
     private readonly INenContractRepository _contracts = Substitute.For<INenContractRepository>();
-    private readonly IQueryHandler<ComputeRedemptionAttributionQuery, RedemptionAttributionResult> _attribution =
-        Substitute.For<IQueryHandler<ComputeRedemptionAttributionQuery, RedemptionAttributionResult>>();
     private readonly ISystemClock _clock = TestClock.Create();
 
     public GetBlockPlacementVerdictQueryHandlerTests()
@@ -34,20 +31,13 @@ public class GetBlockPlacementVerdictQueryHandlerTests
         _clock.SetTimeZoneOffset(TimeSpan.Zero);
         _blocks.GetForRangeAsync(Arg.Any<TimeSlot>(), Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[]);
         _sessions.GetActiveSessionsAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<Session>)[]);
-        // Default: no deficit found — the requested slot back, no contract picked up.
-        _attribution.HandleAsync(Arg.Any<ComputeRedemptionAttributionQuery>(), Arg.Any<CancellationToken>())
-            .Returns(ci =>
-            {
-                var query = (ComputeRedemptionAttributionQuery)ci[0];
-                return new RedemptionAttributionResult([], query.Block);
-            });
     }
 
     private GetBlockPlacementVerdictQueryHandler CreateHandler() =>
-        new(_blocks, _sessions, _contracts, _attribution, new BlockPlacementChecker(), _clock);
+        new(_blocks, _sessions, _contracts, new BlockPlacementChecker(), _clock);
 
-    private static GetBlockPlacementVerdictQuery NewFocus(TimeSlot slot, bool declineRedemption = false) =>
-        new(slot, BlockPresetType.Focus, Guid.NewGuid(), declineRedemption);
+    private static GetBlockPlacementVerdictQuery NewFocus(TimeSlot slot) =>
+        new(slot, BlockPresetType.Focus, Guid.NewGuid());
 
     private static NenContract NineToFiveContract(Guid id) =>
         TestContracts.Seal(
@@ -205,7 +195,7 @@ public class GetBlockPlacementVerdictQueryHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_ExistingRedemptionBlock_KeepsItsOwnContract_AttributionScopedToIt()
+    public async Task HandleAsync_ExistingRedemptionBlock_KeepsItsOwnContract()
     {
         var contractId = SetUpNineToFiveContractInEffect();
         var blockId = Guid.NewGuid();
@@ -218,92 +208,39 @@ public class GetBlockPlacementVerdictQueryHandlerTests
             new GetBlockPlacementVerdictQuery(evening, BlockPresetType.Focus, presetId, ExistingBlockId: blockId));
 
         result.Outcome.Should().Be(PlacementOutcome.OutsideContractHours);
-        await _attribution.Received(1).HandleAsync(
-            Arg.Is<ComputeRedemptionAttributionQuery>(q => q.ContractId == contractId && q.ExcludeBlockId == blockId),
-            Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task HandleAsync_ExistingCommittedOrBonusBlock_NeverConsultsAttribution()
+    public async Task HandleAsync_ExistingRedemptionBlock_CoveringLessThanItsLength_ChecksTheRequestedSlot()
     {
-        // A role never changes: only a redemption block's coverage is recomputed on an edit.
+        // A move keeps the receipt and the length (Gap 106, decision 3), so Update saves the
+        // requested slot — the one checked here, never one capped to the receipt (Rule 12).
         var contractId = SetUpNineToFiveContractInEffect();
-        foreach (var membership in new[] { TestContracts.Committed(contractId), TestContracts.Bonus(contractId) })
-        {
-            var blockId = Guid.NewGuid();
-            _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-                .Returns(FocusBlock.Create(blockId, Guid.NewGuid(), At.Slot(Start, End), membership: membership));
+        var blockId = Guid.NewGuid();
+        var presetId = Guid.NewGuid();
+        _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
+            .Returns(FocusBlock.CreateWithReceipt(blockId, presetId, At.Slot(Start, End), title: null, membership: TestContracts.Redemption(contractId),
+                receipt: new RedemptionReceipt([new RedemptionEntry(Guid.NewGuid(), 30)])));
+        var requested = At.Slot(Start.AddHours(1), End.AddHours(1));
 
-            await CreateHandler().HandleAsync(
-                new GetBlockPlacementVerdictQuery(At.Slot(Start, End), BlockPresetType.Focus, Guid.NewGuid(), ExistingBlockId: blockId));
-        }
+        await CreateHandler().HandleAsync(new GetBlockPlacementVerdictQuery(requested, BlockPresetType.Focus, presetId, ExistingBlockId: blockId));
 
-        await _attribution.DidNotReceive().HandleAsync(Arg.Any<ComputeRedemptionAttributionQuery>(), Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
-    public async Task HandleAsync_NewFocusBlock_DeclineRedemption_NeverConsultsAttribution_ChecksTheRequestedSlot()
-    {
-        // What every manual creation sends: the block is saved uncapped, so it is checked uncapped.
-        SetUpNineToFiveContractInEffect();
-        var requested = At.Slot(Start, Start.AddHours(2));
-
-        await CreateHandler().HandleAsync(NewFocus(requested, declineRedemption: true));
-
-        await _attribution.DidNotReceive().HandleAsync(Arg.Any<ComputeRedemptionAttributionQuery>(), Arg.Any<CancellationToken>());
         await _blocks.Received(1).GetForRangeAsync(requested, Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task HandleAsync_NewFocusBlock_InsideNoContract_NeverConsultsAttribution()
+    public async Task HandleAsync_NewFocusBlock_InsideAContract_ChecksTheRequestedSlot()
     {
-        await CreateHandler().HandleAsync(NewFocus(At.Slot(Start, End)));
+        // A new block never covers a deficit (only Cover Deficit does, Gap 106): it is saved
+        // uncapped, so it is checked uncapped.
+        SetUpNineToFiveContractInEffect();
+        var requested = At.Slot(Start, Start.AddHours(2));
 
-        await _attribution.DidNotReceive().HandleAsync(Arg.Any<ComputeRedemptionAttributionQuery>(), Arg.Any<CancellationToken>());
+        await CreateHandler().HandleAsync(NewFocus(requested));
+
+        await _blocks.Received(1).GetForRangeAsync(requested, Arg.Any<CancellationToken>());
     }
 
-    [Fact]
-    public async Task HandleAsync_NewRedemptionBlock_CappedToBeforeItsContractStarts_IsRefused()
-    {
-        // 08:00–10:00 touches the contract (it starts 09:00 today... the contract here starts
-        // at 09:00 tomorrow), and the deficit caps the block to 08:00–08:30 — entirely before
-        // the period. A redemption block must sit inside the contract it redeems.
-        var tomorrow = DateOnly.FromDateTime(Now).AddDays(1);
-        var contract = TestContracts.Seal(
-            id: Guid.NewGuid(),
-            name: "Contract",
-            goal: new NenContractGoal("Goal"),
-            strictnessRule: StrictnessRule.DailyFlexibility,
-            calendar: TestCalendars.For(tomorrow, tomorrow.AddDays(7), new DailyFloorRule.None(),
-                workHours: new WorkHours(new TimeOnly(9, 0), new TimeOnly(17, 0))),
-            floorRule: new DailyFloorRule.None(),
-            changeWindow: null,
-            allowCancellation: false,
-            plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-            sealedAt: At.Utc(Now), timeZone: At.UtcZone);
-        _contracts.GetAllInEffectAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<NenContract>)[contract]);
-        var day = tomorrow.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
-        var capped = At.Slot(day.AddHours(8), day.AddHours(8.5));
-        _attribution.HandleAsync(Arg.Any<ComputeRedemptionAttributionQuery>(), Arg.Any<CancellationToken>())
-            .Returns(new RedemptionAttributionResult([new(Guid.NewGuid(), 30)], capped, true));
-
-        var result = await CreateHandler().HandleAsync(NewFocus(At.Slot(day.AddHours(8), day.AddHours(10))));
-
-        result.Outcome.Should().Be(PlacementOutcome.OutsideContractHours);
-    }
-
-    [Fact]
-    public async Task HandleAsync_ExistingBlockWithoutContract_NeverConsultsAttribution()
-    {
-        var blockId = Guid.NewGuid();
-        _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
-            .Returns(FocusBlock.Create(blockId, Guid.NewGuid(), At.Slot(Start, End)));
-
-        await CreateHandler().HandleAsync(
-            new GetBlockPlacementVerdictQuery(At.Slot(Start, End), BlockPresetType.Focus, Guid.NewGuid(), ExistingBlockId: blockId));
-
-        await _attribution.DidNotReceive().HandleAsync(Arg.Any<ComputeRedemptionAttributionQuery>(), Arg.Any<CancellationToken>());
-    }
 
     // ── The calendar and slot checked ────────────────────────────────────────
 
@@ -323,27 +260,7 @@ public class GetBlockPlacementVerdictQueryHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_RedemptionCapped_ChecksTheCappedSlotNotTheRequestedOne()
-    {
-        // Requested 14:00-16:00, but only 45 min of deficit exists, so 14:00-14:45 is what gets
-        // saved. A Focus block at 15:00 sits only in the part that will be cut off.
-        SetUpNineToFiveContractInEffect();
-        var capped = At.Slot(Start, Start.AddMinutes(45));
-        _attribution.HandleAsync(Arg.Any<ComputeRedemptionAttributionQuery>(), Arg.Any<CancellationToken>())
-            .Returns(new RedemptionAttributionResult([new(Guid.NewGuid(), 45)], capped, true));
-        _blocks.GetForRangeAsync(Arg.Any<TimeSlot>(), Arg.Any<CancellationToken>())
-            .Returns(ci => ((TimeSlot)ci[0]).Overlaps(At.Slot(End, End.AddHours(1)))
-                ? (IReadOnlyList<PlannedBlock>)[FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(End, End.AddHours(1)))]
-                : []);
-
-        var result = await CreateHandler().HandleAsync(NewFocus(At.Slot(Start, Start.AddHours(2))));
-
-        result.Outcome.Should().Be(PlacementOutcome.Allowed);
-        await _blocks.Received(1).GetForRangeAsync(capped, Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
-    public async Task HandleAsync_BackgroundBlock_MayOverlapFocusTime_AndNeverConsultsAttribution()
+    public async Task HandleAsync_BackgroundBlock_MayOverlapFocusTime()
     {
         _blocks.GetForRangeAsync(Arg.Any<TimeSlot>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Start, End))]);
@@ -352,6 +269,5 @@ public class GetBlockPlacementVerdictQueryHandlerTests
             new GetBlockPlacementVerdictQuery(At.Slot(Start, End), BlockPresetType.Background, Guid.NewGuid()));
 
         result.Outcome.Should().Be(PlacementOutcome.Allowed);
-        await _attribution.DidNotReceive().HandleAsync(Arg.Any<ComputeRedemptionAttributionQuery>(), Arg.Any<CancellationToken>());
     }
 }

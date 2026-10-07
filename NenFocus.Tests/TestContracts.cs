@@ -7,8 +7,9 @@ namespace NenFocus.Tests;
 
 /// <summary>
 /// Memberships for tests. Only the Domain makes a <see cref="ContractMembership"/> (Gap 97), so
-/// these go through the same two doors production does: the drafting batch for Committed, a
-/// contract for Redemption and Bonus.
+/// these go through production's doors where a public one exists: the drafting batch for Committed,
+/// a contract for Bonus. Redemption comes only from <c>NenContract.PlaceRedemptionBlock</c> (Gap 106),
+/// which needs a whole deficit set up, so tests use the internal constructor.
 /// </summary>
 internal static class TestContracts
 {
@@ -21,12 +22,11 @@ internal static class TestContracts
             .Blocks[0].Membership!;
 
     /// <summary>What a block placed to cover a deficit carries.</summary>
-    public static ContractMembership Redemption(Guid contractId) =>
-        Sealed(contractId).MembershipForPlacedBlock(claimsDeficit: true);
+    public static ContractMembership Redemption(Guid contractId) => new(contractId, ContractRole.Redemption);
 
     /// <summary>What any other block placed on a contract carries.</summary>
     public static ContractMembership Bonus(Guid contractId) =>
-        Sealed(contractId).MembershipForPlacedBlock(claimsDeficit: false);
+        Sealed(contractId).MembershipForPlacedBlock();
 
     private static NenContract Sealed(Guid contractId) => Seal(
         id: contractId,

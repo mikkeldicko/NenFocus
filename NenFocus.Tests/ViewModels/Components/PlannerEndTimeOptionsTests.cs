@@ -61,4 +61,23 @@ public class PlannerEndTimeOptionsTests
 
         offsetsForFocus1.Should().Equal(offsetsForFocus2);
     }
+
+    [Fact]
+    public void GenerateOffsets_WithAMaximum_StopsAtItAndOffersItExactly()
+    {
+        // A Cover Deficit tile may be shortened, never lengthened past the debt (Gap 106,
+        // decision 19): a 37-minute debt offers 15, 30 and 37.
+        var offsets = PlannerEndTimeOptions.GenerateOffsets(isFocus: true, maximum: TimeSpan.FromMinutes(37));
+
+        offsets.Should().Equal(TimeSpan.FromMinutes(15), TimeSpan.FromMinutes(30), TimeSpan.FromMinutes(37));
+    }
+
+    [Fact]
+    public void GenerateOffsets_WithAMaximumOnAStep_OffersItOnce()
+    {
+        var offsets = PlannerEndTimeOptions.GenerateOffsets(isFocus: true, maximum: TimeSpan.FromMinutes(90));
+
+        offsets.Should().Equal(
+            TimeSpan.FromMinutes(15), TimeSpan.FromMinutes(30), TimeSpan.FromMinutes(45), TimeSpan.FromMinutes(60), TimeSpan.FromMinutes(90));
+    }
 }

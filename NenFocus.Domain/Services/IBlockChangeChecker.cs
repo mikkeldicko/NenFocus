@@ -21,9 +21,12 @@ public interface IBlockChangeChecker
     /// if <paramref name="presetChanges"/>? Only what actually changes is asked about. A block
     /// that counts toward the floor must leave the floor met: <paramref name="contractBlocks"/>
     /// are the contract's blocks as they are now.
+    /// A plain block may not move where any of <paramref name="contractsInEffect"/> governs — a drag
+    /// never changes membership (Gap 106); a member ignores the list. A list, so no caller picks the contract.
     /// </summary>
     ChangeVerdict CheckReschedule(PlannedBlock block, TimeSlot newSlot, bool presetChanges,
-        NenContract? contract, IEnumerable<PlannedBlock> contractBlocks, Moment asOf, UserTimeZone timeZone);
+        NenContract? contract, IEnumerable<PlannedBlock> contractBlocks, IEnumerable<NenContract> contractsInEffect,
+        Moment asOf, UserTimeZone timeZone);
 
     /// <summary>
     /// May the block be replaced by <paramref name="first"/> and <paramref name="second"/>? Each

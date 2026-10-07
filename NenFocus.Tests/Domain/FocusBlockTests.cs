@@ -13,7 +13,7 @@ public class FocusBlockTests
     {
         var requestedEnd = Start.AddHours(2);
 
-        var result = FocusBlock.CapEndToRedemptionCoverage(At.Slot(Start, requestedEnd), []);
+        var result = FocusBlock.CapEndToRedemptionCoverage(At.Slot(Start, requestedEnd), new RedemptionReceipt([]));
 
         result.Should().Be(At.Slot(Start, requestedEnd));
     }
@@ -24,7 +24,7 @@ public class FocusBlockTests
         var requestedEnd = Start.AddHours(1); // 60 min requested
         var entries = new List<RedemptionEntry> { new(Guid.NewGuid(), 60) };
 
-        var result = FocusBlock.CapEndToRedemptionCoverage(At.Slot(Start, requestedEnd), entries);
+        var result = FocusBlock.CapEndToRedemptionCoverage(At.Slot(Start, requestedEnd), new RedemptionReceipt(entries));
 
         result.Should().Be(At.Slot(Start, requestedEnd));
     }
@@ -37,7 +37,7 @@ public class FocusBlockTests
         var requestedEnd = Start.AddMinutes(30);
         var entries = new List<RedemptionEntry> { new(Guid.NewGuid(), 90) };
 
-        var result = FocusBlock.CapEndToRedemptionCoverage(At.Slot(Start, requestedEnd), entries);
+        var result = FocusBlock.CapEndToRedemptionCoverage(At.Slot(Start, requestedEnd), new RedemptionReceipt(entries));
 
         result.Should().Be(At.Slot(Start, requestedEnd));
     }
@@ -48,7 +48,7 @@ public class FocusBlockTests
         var requestedEnd = Start.AddHours(2); // 120 min requested
         var entries = new List<RedemptionEntry> { new(Guid.NewGuid(), 45) };
 
-        var result = FocusBlock.CapEndToRedemptionCoverage(At.Slot(Start, requestedEnd), entries);
+        var result = FocusBlock.CapEndToRedemptionCoverage(At.Slot(Start, requestedEnd), new RedemptionReceipt(entries));
 
         result.Should().Be(At.Slot(Start, Start.AddMinutes(45)));
     }
@@ -59,7 +59,7 @@ public class FocusBlockTests
         var requestedEnd = Start.AddHours(2);
         var entries = new List<RedemptionEntry> { new(Guid.NewGuid(), 20), new(Guid.NewGuid(), 25) };
 
-        var result = FocusBlock.CapEndToRedemptionCoverage(At.Slot(Start, requestedEnd), entries);
+        var result = FocusBlock.CapEndToRedemptionCoverage(At.Slot(Start, requestedEnd), new RedemptionReceipt(entries));
 
         result.Should().Be(At.Slot(Start, Start.AddMinutes(45)));
     }
@@ -75,7 +75,7 @@ public class FocusBlockTests
         var requestedEnd = Start.AddHours(2);
         var entries = new List<RedemptionEntry> { new(Guid.NewGuid(), 45.9) };
 
-        var result = FocusBlock.CapEndToRedemptionCoverage(At.Slot(Start, requestedEnd), entries);
+        var result = FocusBlock.CapEndToRedemptionCoverage(At.Slot(Start, requestedEnd), new RedemptionReceipt(entries));
 
         result.Length.Should().Be(TimeSpan.FromMinutes(45.9));
     }
@@ -90,7 +90,7 @@ public class FocusBlockTests
         var requestedEnd = Start.AddMinutes(1); // suggestion padded up to a whole minute
         var entries = new List<RedemptionEntry> { new(Guid.NewGuid(), 0.0667) }; // ~4 seconds owed
 
-        var result = FocusBlock.CapEndToRedemptionCoverage(At.Slot(Start, requestedEnd), entries);
+        var result = FocusBlock.CapEndToRedemptionCoverage(At.Slot(Start, requestedEnd), new RedemptionReceipt(entries));
 
         result.Length.Should().Be(TimeSpan.FromMinutes(0.0667));
     }
@@ -162,5 +162,62 @@ public class FocusBlockTests
         block.MarkCancelled(At.Utc(Start));
 
         block.IsAwaitingRitual(At.Utc(Start.AddMinutes(10))).Should().BeFalse();
+    }
+
+    // ── SplitInto: a split never recalculates (Gap 106, decisions 2 and 16) ──
+
+    [Fact]
+    public void SplitInto_ARedemptionBlockWithSurplus_DividesItsReceiptInTimeOrder_AndShortensNothing()
+    {
+        // 2h covering 1h30, cut at 1h → 1h | 30m covered; the pieces keep the requested slots.
+        var missed = Guid.NewGuid();
+        var membership = TestContracts.Redemption(Guid.NewGuid());
+        var block = FocusBlock.CreateWithReceipt(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Start, Start.AddHours(2)), "Title",
+            membership, receipt: new RedemptionReceipt([new(missed, 90)]));
+        var firstSlot = At.Slot(Start, Start.AddHours(1));
+        var secondSlot = At.Slot(Start.AddHours(3), Start.AddHours(4));
+        var (firstId, secondId) = (Guid.NewGuid(), Guid.NewGuid());
+
+        var (first, second) = block.SplitInto(firstId, firstSlot, secondId, secondSlot);
+
+        first.Id.Should().Be(firstId);
+        second.Id.Should().Be(secondId);
+        first.Scheduled.Should().Be(firstSlot);
+        second.Scheduled.Should().Be(secondSlot);
+        first.Receipt.Entries.Should().Equal(new RedemptionEntry(missed, 60));
+        second.Receipt.Entries.Should().Equal(new RedemptionEntry(missed, 30));
+        foreach (var piece in new[] { first, second })
+        {
+            piece.Membership.Should().Be(membership);
+            piece.BlockPresetId.Should().Be(block.BlockPresetId);
+            piece.Title.Should().Be("Title");
+        }
+    }
+
+    [Fact]
+    public void SplitInto_ACommittedBlock_PiecesKeepItsMembership_AndCoverNothing()
+    {
+        var membership = TestContracts.Committed(Guid.NewGuid());
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Start, Start.AddHours(3)), membership: membership);
+
+        var (first, second) = block.SplitInto(
+            Guid.NewGuid(), At.Slot(Start, Start.AddHours(2)), Guid.NewGuid(), At.Slot(Start.AddHours(2), Start.AddHours(3)));
+
+        first.Membership.Should().Be(membership);
+        second.Membership.Should().Be(membership);
+        first.Receipt.Should().Be(RedemptionReceipt.None);
+        second.Receipt.Should().Be(RedemptionReceipt.None);
+    }
+
+    [Fact]
+    public void SplitInto_PiecesThatDoNotAddUpToTheOriginal_Throws()
+    {
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Start, Start.AddHours(2)),
+            membership: TestContracts.Committed(Guid.NewGuid()));
+
+        var act = () => block.SplitInto(
+            Guid.NewGuid(), At.Slot(Start, Start.AddHours(1)), Guid.NewGuid(), At.Slot(Start.AddHours(1), Start.AddMinutes(90)));
+
+        act.Should().Throw<ArgumentException>();
     }
 }

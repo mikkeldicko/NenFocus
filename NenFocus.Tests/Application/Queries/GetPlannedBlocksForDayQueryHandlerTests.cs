@@ -57,8 +57,8 @@ public class GetPlannedBlocksForDayQueryHandlerTests
     public async Task HandleAsync_FocusBlockWithRedemptionEntries_ContractBadgeIsRedemption()
     {
         var presetId = Guid.NewGuid();
-        var block = FocusBlock.Create(Guid.NewGuid(), presetId,At.Slot(Start, End),
-            membership: TestContracts.Redemption(Guid.NewGuid()), redemptionEntries: [new RedemptionEntry(Guid.NewGuid(), 30)]);
+        var block = FocusBlock.CreateWithReceipt(Guid.NewGuid(), presetId,At.Slot(Start, End),
+            title: null, membership: TestContracts.Redemption(Guid.NewGuid()), receipt: new RedemptionReceipt([new RedemptionEntry(Guid.NewGuid(), 30)]));
         _blocks.GetForRangeAsync(At.UtcZone.SlotCovering(Day), Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
         _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
 
@@ -355,7 +355,7 @@ public class GetPlannedBlocksForDayQueryHandlerTests
         var contract = SetUpContractInEffect(Guid.NewGuid(), StrictnessRule.Locked);
 
         var allowances = await AllowancesBeforeItStartsAsync(
-            FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Start, End), membership: contract.MembershipForPlacedBlock(claimsDeficit: false)));
+            FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Start, End), membership: contract.MembershipForPlacedBlock()));
 
         allowances.Should().Be(new BlockChangeAllowances(CanReschedule: true, CanChangePreset: true, CanSplit: false, CanDelete: true));
     }

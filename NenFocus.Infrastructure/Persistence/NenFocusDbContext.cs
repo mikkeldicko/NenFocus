@@ -100,14 +100,13 @@ public class NenFocusDbContext : DbContext
             DateTime.ParseExact(d.WindowEnd, LocalMomentFormat, CultureInfo.InvariantCulture),
             d.Floor is { } hours ? new DailyFloor(hours) : null)));
 
-    private static string SerializeRedemptionEntries(IReadOnlyList<RedemptionEntry> entries) => JsonSerializer.Serialize(
-        entries.Select(e => new RedemptionEntryJson(e.MissedBlockId, e.MinutesCovered)).ToList(),
+    private static string SerializeRedemptionEntries(RedemptionReceipt receipt) => JsonSerializer.Serialize(
+        receipt.Entries.Select(e => new RedemptionEntryJson(e.MissedBlockId, e.MinutesCovered)).ToList(),
         (JsonSerializerOptions?)null);
 
-    private static List<RedemptionEntry> DeserializeRedemptionEntries(string json) =>
+    private static RedemptionReceipt DeserializeRedemptionEntries(string json) => new(
         JsonSerializer.Deserialize<List<RedemptionEntryJson>>(json, (JsonSerializerOptions?)null)!
-            .Select(e => new RedemptionEntry(e.MissedBlockId, e.MinutesCovered))
-            .ToList();
+            .Select(e => new RedemptionEntry(e.MissedBlockId, e.MinutesCovered)));
 
     /// <summary>
     /// A ContractRules is stored flat on its owner's row, under the column names the settings
@@ -354,13 +353,6 @@ public class NenFocusDbContext : DbContext
 
             entity.Property(b => b.CancelledAt);
 
-            entity.Property(b => b.RedemptionEntries)
-                .HasConversion(
-                    entries => SerializeRedemptionEntries(entries),
-                    json => (IReadOnlyList<RedemptionEntry>)DeserializeRedemptionEntries(json))
-                .HasColumnName("RedemptionEntries")
-                .HasDefaultValueSql("'[]'");
-
             entity.HasDiscriminator<string>("BlockKind")
                 .HasValue<FocusBlock>("Focus")
                 .HasValue<BackgroundBlock>("Background");
@@ -372,6 +364,14 @@ public class NenFocusDbContext : DbContext
             // mapped by name, like a slot's Start/End.
             entity.Property<Moment?>("RitualCompletedAt");
             entity.Property<Moment?>("SessionEndedAt");
+
+            // Gap 106: the receipt is a Focus block's own — still the same JSON column.
+            entity.Property(b => b.Receipt)
+                .HasConversion(
+                    receipt => SerializeRedemptionEntries(receipt),
+                    json => DeserializeRedemptionEntries(json))
+                .HasColumnName("RedemptionEntries")
+                .HasDefaultValueSql("'[]'");
         });
 
         modelBuilder.Entity<BlockedAttempt>(entity =>

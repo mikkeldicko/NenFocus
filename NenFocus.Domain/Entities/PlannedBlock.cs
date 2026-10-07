@@ -33,13 +33,6 @@ public abstract class PlannedBlock : AggregateRoot
     /// block was cut short before it ran. Applies uniformly to FocusBlock and BackgroundBlock.</summary>
     public Moment? CancelledAt { get; protected set; }
 
-    /// <summary>
-    /// Empty means an ordinary block. Populated means this is a redemption block covering
-    /// those specific missed/late blocks' deficits. Only ever populated on a FocusBlock —
-    /// Background Blocks have no sessions and cannot contribute toward a Focus-hours deficit.
-    /// </summary>
-    public IReadOnlyList<RedemptionEntry> RedemptionEntries { get; protected set; } = Array.Empty<RedemptionEntry>();
-
     protected PlannedBlock() { }
 
 
@@ -196,8 +189,11 @@ public abstract class PlannedBlock : AggregateRoot
         BlockPresetId = presetId;
     }
 
-    /// <summary>A plain block becomes a member. A block is in one contract at most, and its role never changes.</summary>
-    public void Join(ContractMembership membership)
+    /// <summary>
+    /// A plain block becomes a member. A block is in one contract at most, and its role never changes.
+    /// Internal: membership changes only through contract actions inside the Domain (Gap 106).
+    /// </summary>
+    internal void Join(ContractMembership membership)
     {
         if (Membership is not null)
             throw new InvalidOperationException("This block already belongs to a contract.");
@@ -215,19 +211,6 @@ public abstract class PlannedBlock : AggregateRoot
             throw new InvalidOperationException("Only a Bonus block can leave its contract.");
 
         Membership = null;
-    }
-
-    /// <summary>
-    /// After being placed or moved: a plain block that now sits under <paramref name="governing"/>
-    /// becomes that contract's Bonus block. A block that already belongs to a contract is
-    /// unaffected — no member ever leaves its contract's period by being moved (Gap 93); it
-    /// leaves only when the contract releases it (<see cref="Leave"/>).
-    /// </summary>
-    public void PlaceUnder(NenContract? governing)
-    {
-        if (Membership is not null || governing is null) return;
-
-        Join(governing.MembershipForPlacedBlock(claimsDeficit: false));
     }
 
     public void MarkCancelled(Moment cancelledAt)

@@ -31,13 +31,18 @@ public sealed class BlockChangeChecker : IBlockChangeChecker
     }
 
     public ChangeVerdict CheckReschedule(PlannedBlock block, TimeSlot newSlot, bool presetChanges,
-        NenContract? contract, IEnumerable<PlannedBlock> contractBlocks, Moment asOf, UserTimeZone timeZone)
+        NenContract? contract, IEnumerable<PlannedBlock> contractBlocks, IEnumerable<NenContract> contractsInEffect,
+        Moment asOf, UserTimeZone timeZone)
     {
         if (block.CheckOwnChange(asOf) is { IsAllowed: false } locked)
             return locked;
 
+        // A drag never changes membership (Gap 106, decision 18): a plain block may not move where a
+        // contract governs. Changing only its preset in place is not a move.
         if (block.Membership is null)
-            return ChangeVerdict.Allowed;
+            return newSlot != block.Scheduled && contractsInEffect.Any(c => c.Governs(newSlot, timeZone))
+                ? ChangeVerdict.Refused(ChangeOutcome.WouldJoinContract)
+                : ChangeVerdict.Allowed;
 
         if (contract is null)
             return ChangeVerdict.Refused(ChangeOutcome.ContractIsOver);

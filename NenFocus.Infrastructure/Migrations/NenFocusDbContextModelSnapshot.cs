@@ -254,13 +254,6 @@ namespace NenFocus.Infrastructure.Migrations
                     b.Property<DateTime?>("CancelledAt")
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("RedemptionEntries")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
-                        .HasColumnName("RedemptionEntries")
-                        .HasDefaultValueSql("'[]'");
-
                     b.Property<string>("Title")
                         .HasMaxLength(100)
                         .HasColumnType("TEXT");
@@ -356,6 +349,13 @@ namespace NenFocus.Infrastructure.Migrations
             modelBuilder.Entity("NenFocus.Domain.Entities.FocusBlock", b =>
                 {
                     b.HasBaseType("NenFocus.Domain.Entities.PlannedBlock");
+
+                    b.Property<string>("Receipt")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("RedemptionEntries")
+                        .HasDefaultValueSql("'[]'");
 
                     b.Property<DateTime?>("RitualCompletedAt")
                         .HasColumnType("TEXT");

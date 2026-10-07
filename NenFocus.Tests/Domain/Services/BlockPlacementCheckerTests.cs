@@ -181,24 +181,36 @@ public class BlockPlacementCheckerTests
         Check(Slot(19, 20), null, broken).Should().Be(PlacementVerdict.Allowed);
     }
 
+    // A block with a contract id is judged against its own contract — every role (Gap 106, decision 17).
+    public static TheoryData<string> EveryRole => new() { "Committed", "Redemption", "Bonus" };
+
+    private static ContractMembership MembershipOf(string role, Guid contractId) => role switch
+    {
+        "Committed" => TestContracts.Committed(contractId),
+        "Redemption" => TestContracts.Redemption(contractId),
+        _ => TestContracts.Bonus(contractId)
+    };
+
     [Theory]
-    [InlineData(48 + 19, 48 + 20)]    // after its contract's period — fine for a plain block
-    [InlineData(96 + 10, 96 + 11)]    // days after its contract
-    public void Check_CommittedOrRedemptionBlock_NeverLeavesItsContract(double from, double to)
+    [MemberData(nameof(EveryRole))]
+    public void Check_AMember_NeverLeavesItsContract(string role)
     {
         var contract = Contract();
 
-        Check(Slot(from, to), TestContracts.Committed(contract.Id), contract).Outcome.Should().Be(PlacementOutcome.OutsideContractHours);
-        Check(Slot(from, to), TestContracts.Redemption(contract.Id), contract).Outcome.Should().Be(PlacementOutcome.OutsideContractHours);
+        Check(Slot(48 + 19, 48 + 20), MembershipOf(role, contract.Id), contract).Outcome   // after its period
+            .Should().Be(PlacementOutcome.OutsideContractHours);
+        Check(Slot(96 + 10, 96 + 11), MembershipOf(role, contract.Id), contract).Outcome   // days after it
+            .Should().Be(PlacementOutcome.OutsideContractHours);
     }
 
-    [Fact]
-    public void Check_CommittedBlock_IsHeldToItsOwnContract_NotTheOneTheSlotSitsIn()
+    [Theory]
+    [MemberData(nameof(EveryRole))]
+    public void Check_AMember_IsHeldToItsOwnContract_NotTheOneTheSlotSitsIn(string role)
     {
         var own = Contract();
         var next = Contract(DateOnly.FromDateTime(Day).AddDays(5));
 
-        Check(Slot(120 + 10, 120 + 11), TestContracts.Committed(own.Id), own, next).Outcome
+        Check(Slot(120 + 10, 120 + 11), MembershipOf(role, own.Id), own, next).Outcome
             .Should().Be(PlacementOutcome.OutsideContractHours);
     }
 
@@ -211,12 +223,11 @@ public class BlockPlacementCheckerTests
     }
 
     [Fact]
-    public void Check_BonusBlock_FollowsWhereItIsPlaced()
+    public void Check_BonusBlock_InsideItsContract_FollowsItsHours()
     {
         var contract = Contract();
         var bonus = TestContracts.Bonus(contract.Id);
 
-        Check(Slot(48 + 19, 48 + 20), bonus, contract).Should().Be(PlacementVerdict.Allowed, "moved out: a plain block again");
         Check(Slot(24 + 10, 24 + 11), bonus, contract).GoverningContractId.Should().Be(contract.Id);
         Check(Slot(24 + 19, 24 + 20), bonus, contract).Outcome.Should().Be(PlacementOutcome.OutsideContractHours);
     }

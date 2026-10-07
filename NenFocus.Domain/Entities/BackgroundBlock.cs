@@ -16,6 +16,11 @@ public sealed class BackgroundBlock : PlannedBlock
         string? title = null,
         ContractMembership? membership = null)
     {
+        // Only Focus time redeems (Gap 106): a Background block may be Committed or Bonus, never
+        // Redemption — it would count toward the floor and be bound as one.
+        if (membership is { IsRedemption: true })
+            throw new ArgumentException("Only a Focus block can be a redemption block.", nameof(membership));
+
         return new BackgroundBlock
         {
             Id = id,

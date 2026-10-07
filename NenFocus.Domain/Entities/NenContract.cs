@@ -298,10 +298,9 @@ public class NenContract : AggregateRoot
     /// entirely by RedemptionPlacementPolicy, never by which day the missed block was
     /// originally due (a deficit stays claimable no matter how long it's been outstanding)
     /// and never by StrictnessRule (which only governs whether an already-placed block can
-    /// move afterward — see CheckBlockMove). Deliberately not consulted again once a
-    /// RedemptionEntry already exists — see ComputeRedemptionAttributionQueryHandler's
-    /// carry-forward pass, which rescales an existing claim's amount without re-gating
-    /// whether it's still allowed to exist.
+    /// move afterward — see CheckBlockMove). Asked only when a redemption block is placed
+    /// (<see cref="CheckRedemptionPlacement"/>): its claims are set once, and a move or split
+    /// keeps them (Gap 106).
     /// </summary>
     public RedemptionEligibility CheckRedemptionEligibility(DateOnly proposedDate, DateOnly today)
     {
@@ -359,16 +358,16 @@ public class NenContract : AggregateRoot
     }
 
     /// <summary>
-    /// The membership a block placed on this contract gets: Redemption when it claims a deficit,
-    /// otherwise Bonus. Committed is never handed out here — only drafting (Seal, or an Edit's
-    /// re-draft) commits a block (Gap 97).
+    /// The membership a block created on this contract gets: always Bonus. Committed comes only
+    /// from drafting (Seal, or an Edit's re-draft — Gap 97), Redemption only from
+    /// <see cref="PlaceRedemptionBlock"/> (Gap 106).
     /// </summary>
-    public ContractMembership MembershipForPlacedBlock(bool claimsDeficit)
+    public ContractMembership MembershipForPlacedBlock()
     {
         if (!IsInEffect)
             throw new InvalidOperationException("A finished contract takes no new blocks.");
 
-        return new(Id, claimsDeficit ? ContractRole.Redemption : ContractRole.Bonus);
+        return new(Id, ContractRole.Bonus);
     }
 
     /// <summary>
@@ -410,6 +409,75 @@ public class NenContract : AggregateRoot
 
         return ContractDayLedger.Build(
             _calendar.Days.Select(d => d.Date).ToList(), mine.OfType<FocusBlock>().ToList(), sessions, asOf, timeZone);
+    }
+
+    /// <summary>
+    /// Every missed or late block of this contract still owed, oldest first — what it failed to
+    /// deliver, and what is left once redemptions have paid (Gap 106). <paramref name="blocks"/>
+    /// are this contract's own.
+    /// </summary>
+    public IReadOnlyList<OutstandingDeficit> Deficits(IEnumerable<PlannedBlock> blocks, Moment asOf)
+    {
+        var mine = blocks.ToList();
+        foreach (var block in mine)
+            EnsureMine(block);
+
+        return ContractDeficitLedger.Build(mine.OfType<FocusBlock>().ToList(), asOf);
+    }
+
+    // ── Placing a redemption block (Gap 106) ────────────────────────────────────────────────
+
+    /// <summary>
+    /// May a redemption block of <paramref name="presetId"/> go at <paramref name="slot"/>, and what
+    /// would it cover? Asked in order: inside this contract (a finished contract takes nothing) →
+    /// the redemption day rule → anything of the preset owed. When placed, the receipt claims the
+    /// oldest deficit first and the slot is capped to it. Changes nothing; <see cref="PlaceRedemptionBlock"/>
+    /// builds the block. <paramref name="blocks"/> are this contract's own.
+    /// </summary>
+    public RedemptionVerdict CheckRedemptionPlacement(
+        Guid presetId, TimeSlot slot, IEnumerable<PlannedBlock> blocks, Moment now, UserTimeZone timeZone)
+    {
+        var deficits = Deficits(blocks, now);
+
+        if (!IsInEffect || !AllowsBlockPlacement(slot, timeZone))
+            return RedemptionVerdict.Refused(RedemptionPlacementOutcome.OutsideContract);
+
+        if (CheckRedemptionEligibility(timeZone.DateOf(slot.Start), timeZone.DateOf(now)) != RedemptionEligibility.Allowed)
+            return RedemptionVerdict.Refused(RedemptionPlacementOutcome.WrongDay);
+
+        var entries = new List<RedemptionEntry>();
+        var room = slot.Length.TotalMinutes;
+        foreach (var deficit in deficits.Where(d => d.PresetId == presetId))
+        {
+            if (room <= 0) break;
+            var covered = Math.Min(room, deficit.RemainingMinutes);
+            entries.Add(new RedemptionEntry(deficit.MissedBlockId, covered));
+            room -= covered;
+        }
+
+        if (entries.Count == 0)
+            return RedemptionVerdict.Refused(RedemptionPlacementOutcome.NothingOwed);
+
+        var receipt = new RedemptionReceipt(entries);
+        var capped = FocusBlock.CapEndToRedemptionCoverage(slot, receipt);
+        return RedemptionVerdict.Placed(receipt, capped, FocusBlock.WasRedemptionCoverageMeaningfullyCapped(slot, capped),
+            new ContractMembership(Id, ContractRole.Redemption));
+    }
+
+    /// <summary>
+    /// Builds the redemption block <see cref="CheckRedemptionPlacement"/> allows — a Redemption
+    /// member of this contract holding the receipt, on the capped slot. The only way a block gets
+    /// a receipt when it is made (Gap 106). Throws when the check refuses.
+    /// </summary>
+    public FocusBlock PlaceRedemptionBlock(
+        Guid blockId, Guid presetId, TimeSlot slot, IEnumerable<PlannedBlock> blocks, Moment now, UserTimeZone timeZone)
+    {
+        var verdict = CheckRedemptionPlacement(presetId, slot, blocks, now, timeZone);
+        if (verdict.Outcome != RedemptionPlacementOutcome.Placed)
+            throw new InvalidOperationException($"A redemption block can't go here: {verdict.Outcome}.");
+
+        return FocusBlock.CreateWithReceipt(blockId, presetId, verdict.Slot!, title: null, membership: verdict.Membership,
+            receipt: verdict.Receipt);
     }
 
     // ── May this contract end now? (Gap 95) ─────────────────────────────────────────────────

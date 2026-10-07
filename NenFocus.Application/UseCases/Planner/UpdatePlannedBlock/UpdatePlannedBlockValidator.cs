@@ -78,7 +78,7 @@ public sealed class UpdatePlannedBlockValidator : AbstractValidator<UpdatePlanne
                 }
 
                 var change = changes.CheckReschedule(block, command.Slot, block.BlockPresetId != command.PresetId,
-                    contract, contractBlocks, _clock.Now, _clock.TimeZone);
+                    contract, contractBlocks, await contracts.GetAllInEffectAsync(ct), _clock.Now, _clock.TimeZone);
                 if (!change.IsAllowed)
                 {
                     var property = change.Outcome == ChangeOutcome.PresetFixed

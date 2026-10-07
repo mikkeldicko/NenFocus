@@ -44,11 +44,13 @@ public class BlockChangeCheckerTests
         FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), slot, membership: TestContracts.Committed(contract.Id));
 
     private static FocusBlock Bonus(NenContract contract, TimeSlot slot) =>
-        FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), slot, membership: contract.MembershipForPlacedBlock(claimsDeficit: false));
+        FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), slot, membership: contract.MembershipForPlacedBlock());
 
     private static ChangeVerdict Reschedule(PlannedBlock block, TimeSlot newSlot, NenContract? contract,
-        IEnumerable<PlannedBlock>? contractBlocks = null, bool presetChanges = false, Moment? asOf = null) =>
-        Checker.CheckReschedule(block, newSlot, presetChanges, contract, contractBlocks ?? [block], asOf ?? BeforeItAll, At.UtcZone);
+        IEnumerable<PlannedBlock>? contractBlocks = null, bool presetChanges = false, Moment? asOf = null,
+        IEnumerable<NenContract>? contractsInEffect = null) =>
+        Checker.CheckReschedule(block, newSlot, presetChanges, contract, contractBlocks ?? [block],
+            contractsInEffect ?? (contract is null ? [] : [contract]), asOf ?? BeforeItAll, At.UtcZone);
 
     // ── A block in no contract: only its own lock ────────────────────────────
 
@@ -74,6 +76,51 @@ public class BlockChangeCheckerTests
         Checker.CheckDelete(block, null, running).Outcome.Should().Be(ChangeOutcome.BlockIsRunning);
         Reschedule(block, Slot(Tuesday, 13, 15), null, asOf: ended).Outcome.Should().Be(ChangeOutcome.BlockHasStarted);
         Checker.CheckDelete(block, null, ended).Should().Be(ChangeVerdict.Allowed);
+    }
+
+    // ── Dragging never changes membership (Gap 106, decision 18) ─────────────
+
+    [Fact]
+    public void APlainBlock_MovedIntoAContractsPeriod_WouldJoinIt_AndIsRefused()
+    {
+        var contract = Contract(StrictnessRule.PeriodTimeBudget);
+        var block = Plain(Slot(Wednesday.AddDays(2), 10, 12)); // the Friday after
+
+        Reschedule(block, Slot(Tuesday, 10, 12), contract: null, contractsInEffect: [contract])
+            .Outcome.Should().Be(ChangeOutcome.WouldJoinContract);
+    }
+
+    [Fact]
+    public void APlainBlock_MovedOutsideEveryContract_IsAllowed()
+    {
+        var contract = Contract(StrictnessRule.PeriodTimeBudget);
+        var block = Plain(Slot(Wednesday.AddDays(2), 10, 12));
+
+        Reschedule(block, Slot(Wednesday.AddDays(1), 10, 12), contract: null, contractsInEffect: [contract])
+            .Should().Be(ChangeVerdict.Allowed);
+    }
+
+    [Fact]
+    public void APlainBlockLeftInsideAContract_MayMoveOut_OrChangePresetInPlace_ButNotMoveWithin()
+    {
+        // Bridge until Gap 68: a plain block the contract was sealed around (drafting doesn't adopt yet).
+        var contract = Contract(StrictnessRule.PeriodTimeBudget);
+        var block = Plain(Slot(Tuesday, 10, 12));
+
+        Reschedule(block, Slot(Wednesday.AddDays(1), 10, 12), null, contractsInEffect: [contract]).Should().Be(ChangeVerdict.Allowed);
+        Reschedule(block, block.Scheduled, null, presetChanges: true, contractsInEffect: [contract]).Should().Be(ChangeVerdict.Allowed);
+        Reschedule(block, Slot(Tuesday, 13, 15), null, contractsInEffect: [contract])
+            .Outcome.Should().Be(ChangeOutcome.WouldJoinContract);
+    }
+
+    [Fact]
+    public void AMember_IgnoresTheContractsInEffect()
+    {
+        var contract = Contract(StrictnessRule.PeriodTimeBudget);
+        var other = Contract(StrictnessRule.PeriodTimeBudget);
+        var block = Bonus(contract, Slot(Tuesday, 10, 12));
+
+        Reschedule(block, Slot(Tuesday, 13, 15), contract, contractsInEffect: [contract, other]).Should().Be(ChangeVerdict.Allowed);
     }
 
     // ── A contract's block: the block first, then the contract ───────────────
@@ -233,7 +280,7 @@ public class BlockChangeCheckerTests
         var contract = Contract(StrictnessRule.PeriodTimeBudget);
         var bonus = Bonus(contract, Slot(Tuesday, 13, 15));
 
-        Reschedule(bonus, Slot(Wednesday.AddDays(1), 13, 15), contract).Outcome.Should().Be(ChangeOutcome.OutsideContractPeriod);
+        Reschedule(bonus, Slot(Monday.AddDays(-1), 13, 15), contract).Outcome.Should().Be(ChangeOutcome.OutsideContractPeriod);
     }
 
     // ── Split ────────────────────────────────────────────────────────────────

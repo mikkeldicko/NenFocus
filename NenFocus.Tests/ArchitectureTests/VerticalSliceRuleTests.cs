@@ -85,9 +85,6 @@ public class VerticalSliceRuleTests
 
     private static readonly string[] SharedQueryResultExceptions =
     [
-        // A business rule living in a query: Create/Update/Split block save its answer. → Gap 106
-        // moves attribution into the Domain (Gap 88 phase 8 made it return the final slot, not more).
-        "NenFocus.Application/Queries/ComputeRedemptionAttribution/RedemptionAttributionResult.cs",
     ];
 
     /// <summary>A result type kept in a query's folder belongs to that query alone; shared means DTOs/.

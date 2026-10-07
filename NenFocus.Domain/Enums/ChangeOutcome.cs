@@ -36,6 +36,9 @@ public enum ChangeOutcome
     /// <summary>Split is only for a Focus block that a contract binds.</summary>
     SplitNotOffered,
 
+    /// <summary>A plain block moved where a contract governs would join it; a drag never changes membership (Gap 106).</summary>
+    WouldJoinContract,
+
     /// <summary>A Redemption block keeps the length it was placed with: it may move and be split, never resized (Gap 95).</summary>
     RedemptionLengthFixed,
 

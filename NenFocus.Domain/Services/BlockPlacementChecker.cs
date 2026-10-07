@@ -15,9 +15,9 @@ public sealed class BlockPlacementChecker : IBlockPlacementChecker
 
         var contracts = contractsInEffect.Where(c => c.IsInEffect).ToList();
 
-        // A Committed or Redemption block stays with its own contract wherever it is moved; a
-        // contract no longer in effect governs nothing.
-        var governing = membership is { IsBonus: false }
+        // A block with a contract id is judged against its own contract, whatever its role (Gap 106,
+        // decision 17); a contract no longer in effect governs nothing.
+        var governing = membership is not null
             ? contracts.FirstOrDefault(c => c.Id == membership.ContractId)
             : GoverningContract(slot, contracts, timeZone);
 

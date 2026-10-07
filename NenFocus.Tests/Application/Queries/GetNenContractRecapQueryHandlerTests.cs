@@ -172,8 +172,8 @@ public class GetNenContractRecapQueryHandlerTests
         var startedLate = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now.AddHours(-8), Now.AddHours(-7)), membership: TestContracts.Committed(ContractId));
         var endedEarly = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now.AddHours(-6), Now.AddHours(-5)), membership: TestContracts.Committed(ContractId));
         var missed = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now.AddHours(-4), Now.AddHours(-3)), membership: TestContracts.Committed(ContractId));
-        var redemption = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now.AddHours(-2), Now.AddHours(-1)), membership: TestContracts.Redemption(ContractId),
-            redemptionEntries: [new RedemptionEntry(Guid.NewGuid(), 30)]);
+        var redemption = FocusBlock.CreateWithReceipt(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now.AddHours(-2), Now.AddHours(-1)), title: null, membership: TestContracts.Redemption(ContractId),
+            receipt: new RedemptionReceipt([new RedemptionEntry(Guid.NewGuid(), 30)]));
         var background = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now, Now.AddHours(1)), membership: TestContracts.Committed(ContractId));
 
         _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>())

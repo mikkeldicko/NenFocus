@@ -268,7 +268,7 @@ public class PlannedBlockRepositoryTests : SqliteRepositoryTestBase
         await Context.SaveChangesAsync();
 
         var reloaded = (FocusBlock)(await CreateRepository().GetByIdAsync(block.Id))!;
-        reloaded.RedemptionEntries.Should().BeEmpty();
+        reloaded.Receipt.Entries.Should().BeEmpty();
     }
 
     [Fact]
@@ -276,14 +276,14 @@ public class PlannedBlockRepositoryTests : SqliteRepositoryTestBase
     {
         var repo = CreateRepository();
         var missedBlockId = Guid.NewGuid();
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End),
-            membership: TestContracts.Redemption(Guid.NewGuid()), redemptionEntries: [new RedemptionEntry(missedBlockId, 30)]);
+        var block = FocusBlock.CreateWithReceipt(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End),
+            title: null, membership: TestContracts.Redemption(Guid.NewGuid()), receipt: new RedemptionReceipt([new RedemptionEntry(missedBlockId, 30)]));
 
         await repo.AddAsync(block);
         await Context.SaveChangesAsync();
 
         var reloaded = (FocusBlock)(await CreateRepository().GetByIdAsync(block.Id))!;
-        reloaded.RedemptionEntries.Should().ContainSingle(e =>
+        reloaded.Receipt.Entries.Should().ContainSingle(e =>
             e.MissedBlockId == missedBlockId && e.MinutesCovered == 30);
     }
 

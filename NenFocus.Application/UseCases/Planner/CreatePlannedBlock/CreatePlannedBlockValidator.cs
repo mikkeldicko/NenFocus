@@ -46,7 +46,7 @@ public sealed class CreatePlannedBlockValidator : AbstractValidator<CreatePlanne
             .CustomAsync(async (command, context, ct) =>
             {
                 var verdict = await placement.HandleAsync(
-                    new GetBlockPlacementVerdictQuery(command.Slot, command.BlockPresetType, command.PresetId, command.DeclineRedemption),
+                    new GetBlockPlacementVerdictQuery(command.Slot, command.BlockPresetType, command.PresetId),
                     ct);
                 if (verdict.Outcome != PlacementOutcome.Allowed && verdict.Message is not null)
                     context.AddFailure(nameof(CreatePlannedBlockCommand.Slot), verdict.Message);

@@ -214,7 +214,7 @@ public async Task HandleAsync_ValidDurations_AllSucceed(int durationMinutes)
 
 ## Architecture Tests (Gap 98)
 
-`NenFocus.Tests/ArchitectureTests/` checks the structure `MODULE_STANDARDS.md` describes — layers, the ViewModel Forbidden Zone, vertical slices, naming, interface size, one clock, raw time comparisons, side effects through their one door, queries that only read, ViewModels that neither format values nor do math, use cases run only through the dispatchers outside Application, one builder per DTO, command handlers leaving the session noticeboard to event handlers. Plain xUnit, no library:
+`NenFocus.Tests/ArchitectureTests/` checks the structure `MODULE_STANDARDS.md` describes — layers, the ViewModel Forbidden Zone, vertical slices, naming, interface size, one clock, raw time comparisons, side effects through their one door, queries that only read, command handlers that never hold a query handler (Gap 106), ViewModels that neither format values nor do math, use cases run only through the dispatchers outside Application, one builder per DTO, command handlers leaving the session noticeboard to event handlers. Plain xUnit, no library:
 
 | Rule | Mechanism |
 |------|-----------|
@@ -238,6 +238,8 @@ public async Task HandleAsync_ValidDurations_AllSucceed(int durationMinutes)
 - **An assertion can compile on the wrong type.** After a field became `Moment?`, `x.Should().Be(someDateTime)` still compiled (FluentAssertions' `Be(object)`) and failed only at runtime ("expected 12:00:00, found 12:00:00Z"). After a type change, compare with a value of the new type.
 - **A scripted edit fails in two ways:** a parse error runs none of it, a throw midway has already written the files before it. Check what was written before re-running (Gap 93).
 - **Manual app checks are for what tests can't prove** (architect, 2026-10-02): on-screen wiring (is the button hidden, the field disabled, the message shown), a migration on the real database, timing against the real clock. A rule case the Domain or validator tests already cover doesn't go on the list — a handful per phase, with a line saying what the tests cover.
+- **Tests can reach Domain internals** (`InternalsVisibleTo("NenFocus.Tests")`, Gap 106). Use it only to build a state production makes through a longer path — a block already holding a receipt (`FocusBlock.CreateWithReceipt`), a Redemption membership (`TestContracts.Redemption`) — never to test an internal method instead of the public answer it feeds.
+- **Scripted edits on Windows (Gap 106):** a `perl`/`sed` pattern containing a non-ASCII character (—, →) can silently not match; an `awk -v` path with backslashes is mangled, and the script went on to delete lines without inserting. Use the Edit tool for such lines, and check `git diff --stat` after any scripted doc edit.
 - **Scripted edits:** match the file's line endings (`\r?\n`; a `\n`-only deletion left an orphan `\r` that shifted every later line number); anchor text replacements to a word boundary (replacing `At.X(` also hit `TestAt.X(`); and delete exactly the member a plan names, not its type (read it first).
 
 ---

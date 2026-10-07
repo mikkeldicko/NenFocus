@@ -24,24 +24,22 @@ internal static class PlannerEndTimeOptions
     /// step short of a full 24h (which would place End back exactly on Start).</summary>
     private static readonly TimeSpan JustUnderOneDay = TimeSpan.FromHours(23) + TimeSpan.FromMinutes(30);
 
-    internal static IReadOnlyList<TimeSpan> GenerateOffsets(bool isFocus)
+    /// <param name="maximum">The longest the block may be, offered itself when it isn't a step —
+    /// a Cover Deficit tile stops at the debt (Gap 106, decision 19).</param>
+    internal static IReadOnlyList<TimeSpan> GenerateOffsets(bool isFocus, TimeSpan? maximum = null)
     {
         var maxDuration = isFocus ? TimeSpan.FromHours(FocusBlock.MaxDurationHours) : JustUnderOneDay;
+        if (maximum is { } cap && cap < maxDuration) maxDuration = cap;
         var offsets = new List<TimeSpan>();
 
         for (var minutes = 15; minutes <= 60; minutes += 15)
-        {
-            var offset = TimeSpan.FromMinutes(minutes);
-            if (offset > maxDuration) return offsets;
-            offsets.Add(offset);
-        }
-
+            offsets.Add(TimeSpan.FromMinutes(minutes));
         for (var minutes = 90; minutes <= JustUnderOneDay.TotalMinutes; minutes += 30)
-        {
-            var offset = TimeSpan.FromMinutes(minutes);
-            if (offset > maxDuration) break;
-            offsets.Add(offset);
-        }
+            offsets.Add(TimeSpan.FromMinutes(minutes));
+
+        offsets.RemoveAll(offset => offset > maxDuration);
+        if (maximum is not null && (offsets.Count == 0 || offsets[^1] != maxDuration))
+            offsets.Add(maxDuration);
 
         return offsets;
     }

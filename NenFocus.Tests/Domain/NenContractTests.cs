@@ -530,7 +530,7 @@ public class NenContractTests
         var contract = Seal(workHours: NineToFive);
         contract.Break(At.Utc(StartDate.ToDateTime(new TimeOnly(9, 30))), At.UtcZone);
 
-        var act = () => contract.MembershipForPlacedBlock(claimsDeficit: false);
+        var act = () => contract.MembershipForPlacedBlock();
 
         act.Should().Throw<InvalidOperationException>();
     }

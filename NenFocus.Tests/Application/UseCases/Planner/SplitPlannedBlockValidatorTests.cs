@@ -477,7 +477,7 @@ public class SplitPlannedBlockValidatorTests
         var contract = SealedContract(StrictnessRule.DailyFlexibility, Guid.NewGuid());
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
             .Returns(FocusBlock.Create(blockId, Guid.NewGuid(), TestAt.Slot(OriginalStart, OriginalEnd),
-                membership: contract.MembershipForPlacedBlock(claimsDeficit: false)));
+                membership: contract.MembershipForPlacedBlock()));
         _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
 
         var result = await CreateValidator().ValidateAsync(ValidCommand(blockId));

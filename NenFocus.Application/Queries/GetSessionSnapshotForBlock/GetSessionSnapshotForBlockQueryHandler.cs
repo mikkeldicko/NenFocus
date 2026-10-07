@@ -40,7 +40,7 @@ public sealed class GetSessionSnapshotForBlockQueryHandler
         var redemptionCoverage = new List<RedemptionCoverageDto>();
         if (block is not null)
         {
-            foreach (var entry in block.RedemptionEntries)
+            foreach (var entry in block.Receipt.Entries)
             {
                 var missedBlock = await _blocks.GetByIdAsync(entry.MissedBlockId, cancellationToken);
                 var missedPreset = missedBlock is not null

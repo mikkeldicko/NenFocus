@@ -181,7 +181,7 @@ public class DeletePlannedBlockValidatorTests
     private FocusBlock BonusBlock(NenContract contract, DateTime from, DateTime to)
     {
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(from, to),
-            membership: contract.MembershipForPlacedBlock(claimsDeficit: false));
+            membership: contract.MembershipForPlacedBlock());
         _blocks.GetByIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns(block);
         return block;
     }

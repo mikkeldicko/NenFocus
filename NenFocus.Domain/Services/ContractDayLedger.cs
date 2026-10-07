@@ -32,11 +32,11 @@ internal static class ContractDayLedger
         var blocksById = focusBlocks.ToDictionary(b => b.Id);
         var coverage = focusBlocks
             .Where(b => b.IsRedemption)
-            .SelectMany(b => b.RedemptionEntries.Select(e => (Date: timeZone.DateOf(b.Scheduled.Start), e.MissedBlockId, e.MinutesCovered)))
+            .SelectMany(b => b.Receipt.Entries.Select(e => (Date: timeZone.DateOf(b.Scheduled.Start), e.MissedBlockId, Covering: b)))
             .GroupBy(x => (x.Date, x.MissedBlockId));
         foreach (var claims in coverage)
         {
-            var claimed = claims.Sum(x => x.MinutesCovered);
+            var claimed = claims.Sum(x => x.Covering.Receipt.MinutesFor(x.MissedBlockId));
             var owed = blocksById.TryGetValue(claims.Key.MissedBlockId, out var missed)
                 ? Math.Min(claimed, missed.OwnDeficit(asOf).TotalMinutes)
                 : claimed;

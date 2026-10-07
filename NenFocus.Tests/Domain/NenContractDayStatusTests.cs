@@ -33,8 +33,8 @@ public class NenContractDayStatusTests
         FocusBlock.Create(Guid.NewGuid(), presetId ?? Guid.NewGuid(), slot, membership: TestContracts.Committed(contract.Id));
 
     private static FocusBlock Redemption(NenContract contract, TimeSlot slot, FocusBlock missed, double minutesCovered) =>
-        FocusBlock.Create(Guid.NewGuid(), missed.BlockPresetId, slot, membership: TestContracts.Redemption(contract.Id),
-            redemptionEntries: [new RedemptionEntry(missed.Id, minutesCovered)]);
+        FocusBlock.CreateWithReceipt(Guid.NewGuid(), missed.BlockPresetId, slot, title: null, membership: TestContracts.Redemption(contract.Id),
+            receipt: new RedemptionReceipt([new RedemptionEntry(missed.Id, minutesCovered)]));
 
     private static ContractDayStatus On(IReadOnlyList<ContractDayStatus> statuses, DateOnly date) =>
         statuses.Single(s => s.Date == date);
@@ -141,7 +141,7 @@ public class NenContractDayStatusTests
         var contract = Contract(plan: new Dictionary<DateOnly, double> { [Monday] = 2 });
         var committed = TestBlocks.Worked(Committed(contract, Slot(Monday, 10, 12)), ritualAfterStart: 0, endedAfterStart: 120);
         var bonus = TestBlocks.Worked(
-            FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Slot(Monday, 13, 14), membership: contract.MembershipForPlacedBlock(claimsDeficit: false)),
+            FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Slot(Monday, 13, 14), membership: contract.MembershipForPlacedBlock()),
             ritualAfterStart: 0, endedAfterStart: 60);
 
         On(Statuses(contract, [committed, bonus]), Monday)

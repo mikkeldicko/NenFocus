@@ -17,4 +17,20 @@ public sealed record FocusBlockDeficitDto
     public double RemainingDeficitMinutes { get; init; }
     public double PlannedMinutes { get; init; }
     public double CompletedMinutes { get; init; }
+
+    /// <summary>Planned is the scheduled length; completed is what of it wasn't owed.</summary>
+    public static FocusBlockDeficitDto From(OutstandingDeficit deficit)
+    {
+        var planned = deficit.Scheduled.Length.TotalMinutes;
+        return new FocusBlockDeficitDto
+        {
+            FocusBlockId = deficit.MissedBlockId,
+            BlockPresetId = deficit.PresetId,
+            Scheduled = deficit.Scheduled,
+            Outcome = deficit.Outcome,
+            RemainingDeficitMinutes = deficit.RemainingMinutes,
+            PlannedMinutes = planned,
+            CompletedMinutes = planned - deficit.OwedMinutes
+        };
+    }
 }

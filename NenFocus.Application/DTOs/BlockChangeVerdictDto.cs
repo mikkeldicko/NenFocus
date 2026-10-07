@@ -33,6 +33,8 @@ public sealed record BlockChangeVerdictDto
                 "A Bonus block that isn't bound can be deleted and created again there.",
             ChangeOutcome.PresetFixed => "This block's preset cannot be changed while it belongs to a sealed contract.",
             ChangeOutcome.SplitNotOffered => "Only a Focus block that a Nen Contract binds can be split.",
+            ChangeOutcome.WouldJoinContract =>
+                "This block isn't part of the contract — create a new block inside it instead.",
             ChangeOutcome.RedemptionLengthFixed =>
                 "A redemption block keeps the length it was placed with — move or split it instead.",
             ChangeOutcome.BelowDailyFloor =>

@@ -15,9 +15,9 @@ public interface IBlockPlacementChecker
     /// In order, first failure wins: <paramref name="slot"/> has started → InThePast; the
     /// governing contract's <c>AllowsBlockPlacement</c> is false → OutsideContractHours; then,
     /// Focus only, <see cref="CheckFree"/>. An allowed verdict names the governing contract.
-    /// Which contract governs (Gap 97): a block that is already Committed or Redemption
-    /// (<paramref name="membership"/>) is held to its own contract — it never leaves it; a
-    /// plain or Bonus block is governed by <see cref="GoverningContract"/>, where the slot sits.
+    /// Which contract governs (Gap 97): a block with a <paramref name="membership"/>, whatever its role,
+    /// is held to its own contract — it never leaves it (Gap 106); a plain block is governed by
+    /// <see cref="GoverningContract"/>, where the slot sits.
     /// <paramref name="contractsInEffect"/> are the only contracts that govern anything.
     /// <paramref name="blocks"/> and <paramref name="sessions"/> are the calendar as it will be.
     /// </summary>

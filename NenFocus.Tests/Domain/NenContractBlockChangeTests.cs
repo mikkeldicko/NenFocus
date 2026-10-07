@@ -53,10 +53,10 @@ public class NenContractBlockChangeTests
         FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), slot, membership: TestContracts.Committed(contract.Id));
 
     private static FocusBlock Redemption(NenContract contract, TimeSlot slot) =>
-        FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), slot, membership: contract.MembershipForPlacedBlock(claimsDeficit: true));
+        FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), slot, membership: TestContracts.Redemption(contract.Id));
 
     private static FocusBlock Bonus(NenContract contract, TimeSlot slot) =>
-        FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), slot, membership: contract.MembershipForPlacedBlock(claimsDeficit: false));
+        FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), slot, membership: contract.MembershipForPlacedBlock());
 
     private static readonly Moment BeforeItAll = At.Utc(2026, 1, 4, 13);
 

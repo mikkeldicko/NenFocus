@@ -396,6 +396,25 @@ public class UpdatePlannedBlockValidatorTests
     }
 
     [Fact]
+    public async Task Validate_PlainBlockMovedIntoAContractInEffect_IsInvalid_ADragNeverJoins()
+    {
+        // Gap 106, decision 18: the validator hands the checker every contract in effect.
+        var blockId = Guid.NewGuid();
+        var presetId = Guid.NewGuid();
+        var contract = SealedContract(StrictnessRule.PeriodTimeBudget, Guid.NewGuid()); // today + 7 days
+        _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
+            .Returns(FocusBlock.Create(blockId, presetId, At.Slot(Now.AddDays(10), Now.AddDays(10).AddHours(1))));
+        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
+            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
+        _contracts.GetAllInEffectAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<NenContract>)[contract]);
+
+        var result = await CreateValidator().ValidateAsync(ValidCommand(blockId, presetId)); // into the contract
+
+        result.Errors.Should().ContainSingle(e => e.ErrorMessage ==
+            BlockChangeVerdictDto.From(ChangeVerdict.Refused(ChangeOutcome.WouldJoinContract)).Message);
+    }
+
+    [Fact]
     public async Task Validate_SealedContract_PresetChangeIsInvalidEvenWithoutTimeChange()
     {
         var blockId = Guid.NewGuid();
@@ -531,7 +550,7 @@ public class UpdatePlannedBlockValidatorTests
         var contract = SealedContract(StrictnessRule.Locked, Guid.NewGuid());
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
             .Returns(FocusBlock.Create(blockId, originalPresetId, At.Slot(Now.AddHours(1), Now.AddHours(2)),
-                membership: contract.MembershipForPlacedBlock(claimsDeficit: false)));
+                membership: contract.MembershipForPlacedBlock()));
         _presets.GetByIdAsync(newPresetId, Arg.Any<CancellationToken>())
             .Returns(BlockPreset.Create(newPresetId, "Other", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
         _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);

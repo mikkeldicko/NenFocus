@@ -37,6 +37,12 @@ public sealed class FocusBlock : PlannedBlock
     /// </summary>
     internal Moment? SessionEndedAt { get; private set; }
 
+    /// <summary>
+    /// What this block covers of other blocks' deficits — <see cref="RedemptionReceipt.None"/>
+    /// unless it is a Redemption block (Gap 106).
+    /// </summary>
+    public RedemptionReceipt Receipt { get; private set; } = RedemptionReceipt.None;
+
     private FocusBlock() { }
 
     public override BlockPresetType PresetType => BlockPresetType.Focus;
@@ -146,7 +152,7 @@ public sealed class FocusBlock : PlannedBlock
     /// completed on time, and zero for a redemption block: a block covering someone else's
     /// deficit never becomes a deficit source itself (Rule 13).
     /// </summary>
-    public TimeSpan OwnDeficit(Moment asOf)
+    internal TimeSpan OwnDeficit(Moment asOf)
     {
         if (IsRedemption || !IsFinal(asOf) || Outcome(asOf) == FocusBlockOutcome.CompletedOnTime)
             return TimeSpan.Zero;
@@ -163,12 +169,25 @@ public sealed class FocusBlock : PlannedBlock
         Guid blockPresetId,
         TimeSlot scheduled,
         string? title = null,
-        ContractMembership? membership = null,
-        IReadOnlyList<RedemptionEntry>? redemptionEntries = null)
+        ContractMembership? membership = null)
+        => CreateWithReceipt(id, blockPresetId, scheduled, title, membership, RedemptionReceipt.None);
+
+    /// <summary>
+    /// A block holding <paramref name="receipt"/>. Only the Domain writes a receipt (Gap 106,
+    /// decision 8): <see cref="NenContract.PlaceRedemptionBlock"/> when a redemption block is
+    /// placed, <see cref="SplitInto"/> when one is split.
+    /// </summary>
+    internal static FocusBlock CreateWithReceipt(
+        Guid id,
+        Guid blockPresetId,
+        TimeSlot scheduled,
+        string? title,
+        ContractMembership? membership,
+        RedemptionReceipt receipt)
     {
         ValidateDuration(scheduled);
-        if (redemptionEntries is { Count: > 0 } && membership is not { IsRedemption: true })
-            throw new ArgumentException("Only a redemption block can cover a deficit.", nameof(redemptionEntries));
+        if (receipt is { Entries.Count: > 0 } && membership is not { IsRedemption: true })
+            throw new ArgumentException("Only a redemption block can cover a deficit.", nameof(receipt));
 
         return new FocusBlock
         {
@@ -177,8 +196,24 @@ public sealed class FocusBlock : PlannedBlock
             Scheduled = scheduled,
             Title = title,
             Membership = membership,
-            RedemptionEntries = redemptionEntries ?? Array.Empty<RedemptionEntry>()
+            Receipt = receipt
         };
+    }
+
+    /// <summary>
+    /// The two blocks that replace this one when it is split: each keeps its preset, title and
+    /// membership, and the receipt is divided in time order (<see cref="RedemptionReceipt.SplitAt"/>).
+    /// A split never recalculates and never shortens a piece (Gap 106, decision 2). Throws unless
+    /// the pieces add up to this block's length (Gap 95, decision 16).
+    /// </summary>
+    public (FocusBlock First, FocusBlock Second) SplitInto(Guid firstId, TimeSlot first, Guid secondId, TimeSlot second)
+    {
+        if (first.Length + second.Length != Scheduled.Length)
+            throw new ArgumentException("The two pieces must add up to the block's length.");
+
+        var (firstReceipt, secondReceipt) = Receipt.SplitAt(first.Length);
+        return (CreateWithReceipt(firstId, BlockPresetId, first, Title, Membership, firstReceipt),
+            CreateWithReceipt(secondId, BlockPresetId, second, Title, Membership, secondReceipt));
     }
 
     public override void Reschedule(TimeSlot scheduled)
@@ -247,25 +282,11 @@ public sealed class FocusBlock : PlannedBlock
     }
 
     /// <summary>
-    /// Replaces which missed/late blocks this redemption block covers. Only a block whose role
-    /// is Redemption may cover anything (Gap 97) — a Committed or Bonus block never claims a
-    /// deficit. Same-preset, uncovered-deficit, and same-day constraints are Application-layer
-    /// concerns, not enforced here.
-    /// </summary>
-    public void AssignRedemptionEntries(IReadOnlyList<RedemptionEntry> entries)
-    {
-        if (entries.Count > 0 && !IsRedemption)
-            throw new InvalidOperationException("Only a redemption block can cover a deficit.");
-
-        RedemptionEntries = entries;
-    }
-
-    /// <summary>
     /// A redemption block can never claim more scheduled time than it actually redeems —
     /// covering less than what's owed is fine (the rest stays outstanding for a later
     /// block), but claiming more would let unaccounted "extra" time hide inside a block
     /// whose REDEMPTION badge implies its whole span is accounted-for deficit coverage.
-    /// Pure and self-contained (only this block's own Start/End/RedemptionEntries), so it
+    /// Pure and self-contained (only this block's own Start/End and receipt), so it
     /// lives here rather than in an Application handler — the same justification already
     /// used for MaxDurationHours/ValidateDuration on this entity.
     ///
@@ -274,7 +295,7 @@ public sealed class FocusBlock : PlannedBlock
     /// into a timestamp" rule, but it doesn't: that rule protects a value that gets read
     /// back out of *this* timestamp later and compared against an "at least X" threshold
     /// (e.g. a suggested tile's own size, checked against the deficit it must fully cover).
-    /// `entries` here is the opposite direction — each `RedemptionEntry.MinutesCovered` is
+    /// `receipt` here is the opposite direction — each `RedemptionEntry.MinutesCovered` is
     /// already a precise double, stored as-is and never re-derived from this block's own
     /// End, so nothing downstream re-reads this timestamp to recover it. Previously this
     /// floored to a whole minute, which silently threw away up to 59 seconds of real
@@ -284,11 +305,11 @@ public sealed class FocusBlock : PlannedBlock
     /// arithmetic can never do that: a RedemptionEntry can never be zero or negative, so
     /// AddMinutes(coveredMinutes) can never equal `start`.
     /// </summary>
-    public static TimeSlot CapEndToRedemptionCoverage(TimeSlot requested, IReadOnlyList<RedemptionEntry> entries)
+    internal static TimeSlot CapEndToRedemptionCoverage(TimeSlot requested, RedemptionReceipt receipt)
     {
-        if (entries.Count == 0) return requested;
+        if (receipt.Entries.Count == 0) return requested;
 
-        var coveredMinutes = entries.Sum(e => e.MinutesCovered);
+        var coveredMinutes = receipt.TotalMinutes;
         if (coveredMinutes >= requested.Length.TotalMinutes) return requested;
 
         return requested.Until(requested.Start + TimeSpan.FromMinutes(coveredMinutes));
@@ -304,6 +325,6 @@ public sealed class FocusBlock : PlannedBlock
     /// A UI-notice threshold only (<see cref="MinimumMeaningfulDeficitMinutes"/>) — nothing is
     /// written off: every deficit is whole minutes and recoverable (Gaps 44, 45, 57).
     /// </summary>
-    public static bool WasRedemptionCoverageMeaningfullyCapped(TimeSlot requested, TimeSlot capped)
+    internal static bool WasRedemptionCoverageMeaningfullyCapped(TimeSlot requested, TimeSlot capped)
         => (requested.Length - capped.Length).TotalMinutes >= MinimumMeaningfulDeficitMinutes;
 }
