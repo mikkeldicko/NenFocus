@@ -78,7 +78,7 @@ public class FocusBlockOwnAnswersTests
     [InlineData(0.0, 150.0, 600.0, 0.0)]   // force-ended after the end
     public void OwnDeficit_IsWhatTheBlockFailedToDeliverOnceFinal(double? ritual, double? ended, double now, double expectedMinutes)
     {
-        BlockWith(ritual, ended, cancelled: null).OwnDeficit(Min(now)).Should().Be(TimeSpan.FromMinutes(expectedMinutes));
+        BlockWith(ritual, ended, cancelled: null).OwnDeficit(Min(now)).Should().Be(WholeMinutes.Of((long)expectedMinutes));
     }
 
     [Fact]
@@ -88,7 +88,7 @@ public class FocusBlockOwnAnswersTests
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(ScheduledStart, ScheduledEnd),
             membership: TestContracts.Redemption(Guid.NewGuid()));
 
-        block.OwnDeficit(Min(600)).Should().Be(TimeSpan.Zero);
+        block.OwnDeficit(Min(600)).Should().Be(WholeMinutes.Zero);
     }
 
     // --- Outcome, flags, spans and credit across every shape a block can take ---

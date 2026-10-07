@@ -21,7 +21,6 @@ public class CheckNenContractDateRangeOverlapQueryHandlerTests
         strictnessRule: StrictnessRule.DailyFlexibility,
         calendar: TestCalendars.For(start, end, new DailyFloorRule.None()),
         floorRule: new DailyFloorRule.None(),
-        changeWindow: null,
         allowCancellation: true,
         plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
         sealedAt: At.Utc(start.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)), timeZone: At.UtcZone);
@@ -96,7 +95,7 @@ public class CheckNenContractDateRangeOverlapQueryHandlerTests
         // Break() shrinks EndDate to the day it was actually broken (see NenContract.Break) —
         // confirms this query respects that shrunk EndDate rather than the original one.
         var existing = SealedContract(Guid.NewGuid(), "Study Month", new DateOnly(2026, 1, 1), new DateOnly(2026, 1, 31));
-        existing.Break(At.Utc(new DateOnly(2026, 1, 5).ToDateTime(new TimeOnly(14, 0), DateTimeKind.Utc)), At.UtcZone); // EndDate -> Jan 5
+        existing.Break(At.Utc(new DateOnly(2026, 1, 5).ToDateTime(new TimeOnly(14, 0), DateTimeKind.Utc)), At.UtcZone, sessionRunning: false); // EndDate -> Jan 5
         _contracts.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<NenContract>)[existing]);
 
         var blockedOnBreakDay = await CreateHandler().HandleAsync(

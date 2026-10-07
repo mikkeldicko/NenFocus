@@ -700,7 +700,7 @@ public class PlannedBlockTests
     public void RedemptionEntries_AreRefused_UnlessTheBlockIsARedemptionBlock()
     {
         var contractId = Guid.NewGuid();
-        RedemptionEntry[] entries = [new(Guid.NewGuid(), 30)];
+        RedemptionEntry[] entries = [new(Guid.NewGuid(), WholeMinutes.Of(30))];
         var createPlain = () => FocusBlock.CreateWithReceipt(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Start, End), title: null, membership: null, receipt: new RedemptionReceipt(entries));
         var createCommitted = () => FocusBlock.CreateWithReceipt(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Start, End),
             title: null, membership: TestContracts.Committed(contractId), receipt: new RedemptionReceipt(entries));
@@ -729,7 +729,7 @@ public class PlannedBlockTests
     [Fact]
     public void FocusBlock_Create_WithRedemptionEntries_SetsThem()
     {
-        var entries = new[] { new RedemptionEntry(Guid.NewGuid(), 30) };
+        var entries = new[] { new RedemptionEntry(Guid.NewGuid(), WholeMinutes.Of(30)) };
 
         var block = FocusBlock.CreateWithReceipt(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End), title: null, membership: TestContracts.Redemption(Guid.NewGuid()), receipt: new RedemptionReceipt(entries));
 
@@ -817,4 +817,51 @@ public class PlannedBlockTests
         block.DomainEvents.Should().ContainSingle()
             .Which.Should().BeOfType<PlannedBlockCancelledEvent>();
     }
+
+    // ── A planned block is whole minutes long (Gap 92, V10) ──
+
+    private static readonly DateTime OddEnd = Start.AddMinutes(30).AddSeconds(30);
+
+    [Fact]
+    public void Create_AFocusBlockNotWholeMinutesLong_Throws()
+    {
+        var act = () => CreateFocusBlock(Start, OddEnd);
+
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
+    public void Create_ABackgroundBlockNotWholeMinutesLong_Throws()
+    {
+        var act = () => CreateBackgroundBlock(Start, OddEnd);
+
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
+    public void Create_AWholeMinuteLengthStartingMidMinute_IsFine()
+        // The length is what counts, not where on the clock it starts.
+        => CreateFocusBlock(Start.AddSeconds(20), Start.AddSeconds(20).AddMinutes(45)).Length.Should().Be(WholeMinutes.Of(45));
+
+    [Fact]
+    public void Reschedule_ToALengthNotWholeMinutes_Throws()
+    {
+        var act = () => CreateBackgroundBlock().Reschedule(At.Slot(Start, OddEnd));
+
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
+    public void SplitInto_PiecesNotWholeMinutesLong_Throws_EvenWhenTheyAddUp()
+    {
+        var middle = Start.AddMinutes(30).AddSeconds(30);
+
+        var act = () => CreateFocusBlock().SplitInto(Guid.NewGuid(), At.Slot(Start, middle), Guid.NewGuid(), At.Slot(middle, End));
+
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
+    public void Length_IsTheSlotInWholeMinutes()
+        => CreateFocusBlock().Length.Should().Be(WholeMinutes.Of(60));
 }

@@ -358,7 +358,10 @@
                                             CommandParameter="{Binding}">
 										<StackPanel Spacing="2">
 											<TextBlock Text="{Binding PresetName}" FontSize="13" FontWeight="SemiBold" Foreground="#1A1A2E"/>
-											<TextBlock Text="{Binding TotalRemainingDeficitMinutes, StringFormat='{}{0:0.#} min owed'}" FontSize="11" Foreground="#888899"/>
+											<TextBlock FontSize="11" Foreground="#888899">
+												<Run Text="{Binding TotalRemainingDeficit, Converter={x:Static conv:MinutesToStringConverter.Instance}, Mode=OneWay}"/>
+												<Run Text=" owed"/>
+											</TextBlock>
 										</StackPanel>
 									</Button>
 								</DataTemplate>
@@ -688,7 +691,7 @@
 										<ItemsControl.ItemTemplate>
 											<DataTemplate DataType="dto:RedemptionCoverageDto">
 												<TextBlock FontSize="13" Foreground="#1A1A2E" Margin="0,2" TextWrapping="Wrap">
-													<Run Text="{Binding MinutesCovered, Converter={x:Static conv:MinutesToStringConverter.Instance}, Mode=OneWay}"/>
+													<Run Text="{Binding Covered, Converter={x:Static conv:MinutesToStringConverter.Instance}, Mode=OneWay}"/>
 													<Run Text=" of "/>
 													<Run Text="{Binding MissedBlockPresetName, Mode=OneWay}"/>
 													<Run Text=" missed on "/>

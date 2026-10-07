@@ -22,7 +22,7 @@ public class GetFocusBlockAwaitingRitualQueryHandlerTests
             .Returns(blocks);
 
     private void SessionRunning(bool running) =>
-        _sessions.HasActiveSessionAsync(Arg.Any<CancellationToken>()).Returns(running);
+        _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns(running ? TestSessions.Running() : null);
 
     private static FocusBlock ActiveFocusBlock() =>
         FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),TestAt.Slot(At.AddMinutes(-5), At.AddHours(1)));
@@ -92,7 +92,7 @@ public class GetFocusBlockAwaitingRitualQueryHandlerTests
     {
         // The repository fetch is buffered by ±1s (SQLite datetime slop); the entity is the
         // precise authority, so a block that ended a moment before `At` must not qualify.
-        BlocksAre(FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),TestAt.Slot(At.AddHours(-1), At.AddSeconds(-1))));
+        BlocksAre(FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),TestAt.Slot(At.AddHours(-1).AddSeconds(-1), At.AddSeconds(-1))));
         SessionRunning(false);
 
         var result = await CreateHandler().HandleAsync(new GetFocusBlockAwaitingRitualQuery(TestAt.Utc(At)));

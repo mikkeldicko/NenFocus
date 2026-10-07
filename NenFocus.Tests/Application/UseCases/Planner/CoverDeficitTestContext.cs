@@ -35,7 +35,6 @@ internal sealed class CoverDeficitTestContext
             strictnessRule: StrictnessRule.Locked,
             calendar: TestCalendars.For(new DateOnly(2026, 1, 1), new DateOnly(2026, 1, 9), new DailyFloorRule.None()),
             floorRule: new DailyFloorRule.None(),
-            changeWindow: null,
             allowCancellation: false,
             plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
             sealedAt: At.Utc(2025, 12, 31), timeZone: At.UtcZone);
@@ -46,7 +45,7 @@ internal sealed class CoverDeficitTestContext
         Contracts.GetAllInEffectAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<NenContract>)[Contract]);
         Blocks.GetForContractAsync(Contract.Id, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[Missed]);
         CalendarHas();
-        Sessions.GetActiveSessionsAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<Session>)[]);
+        Sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns((Session?)null);
     }
 
     /// <summary>The blocks already on the calendar, whatever range is asked.</summary>

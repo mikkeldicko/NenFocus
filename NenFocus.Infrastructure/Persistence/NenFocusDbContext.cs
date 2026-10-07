@@ -81,7 +81,8 @@ public class NenFocusDbContext : DbContext
     // never through the UTC DateTime converter above, since a contract's days are local by
     // definition and a window may end at 24:00 (the next day's midnight).
     private sealed record ContractDayJson(string Date, string WindowStart, string WindowEnd, double? Floor);
-    private sealed record RedemptionEntryJson(Guid MissedBlockId, double MinutesCovered);
+    // Whole minutes since Gap 92 (V10); migration RoundRedemptionEntriesToWholeMinutes rounded older rows up.
+    private sealed record RedemptionEntryJson(Guid MissedBlockId, long MinutesCovered);
 
     private const string LocalMomentFormat = "yyyy-MM-ddTHH:mm:ss";
 
@@ -101,12 +102,12 @@ public class NenFocusDbContext : DbContext
             d.Floor is { } hours ? new DailyFloor(hours) : null)));
 
     private static string SerializeRedemptionEntries(RedemptionReceipt receipt) => JsonSerializer.Serialize(
-        receipt.Entries.Select(e => new RedemptionEntryJson(e.MissedBlockId, e.MinutesCovered)).ToList(),
+        receipt.Entries.Select(e => new RedemptionEntryJson(e.MissedBlockId, e.Covered.Minutes)).ToList(),
         (JsonSerializerOptions?)null);
 
     private static RedemptionReceipt DeserializeRedemptionEntries(string json) => new(
         JsonSerializer.Deserialize<List<RedemptionEntryJson>>(json, (JsonSerializerOptions?)null)!
-            .Select(e => new RedemptionEntry(e.MissedBlockId, e.MinutesCovered)));
+            .Select(e => new RedemptionEntry(e.MissedBlockId, WholeMinutes.Of(e.MinutesCovered))));
 
     /// <summary>
     /// A ContractRules is stored flat on its owner's row, under the column names the settings
@@ -164,6 +165,18 @@ public class NenFocusDbContext : DbContext
                 .IsRequired();
 
             entity.Property(s => s.OriginatingBlockId);
+
+            // Storage backstops (Gap 92, C+ and A8b) — the rules live in the Domain (Focus time never
+            // overlaps, BlockPlacementChecker.CheckFree; a block's Ritual is completed once); these
+            // only refuse what slips past: at most one running session, one session per Focus block.
+            entity.HasIndex(s => s.Status)
+                .IsUnique()
+                .HasFilter("\"Status\" = 'Active'")
+                .HasDatabaseName("IX_Sessions_OneActive");
+            entity.HasIndex(s => s.OriginatingBlockId)
+                .IsUnique()
+                .HasFilter("\"OriginatingBlockId\" IS NOT NULL")
+                .HasDatabaseName("IX_Sessions_OnePerOriginatingBlock");
 
             entity.Property(s => s.StartedAt);
             entity.Property(s => s.EndAt);
@@ -578,10 +591,6 @@ public class NenFocusDbContext : DbContext
                 .HasMaxLength(2000);
 
             entity.Property(c => c.PostContractAcknowledgedAt);
-
-            // ChangeWindow stays unmapped — parked for v1, no Application-layer consumer
-            // exists yet (see ARCHITECT_GOVERNANCE.md).
-            entity.Ignore(c => c.ChangeWindow);
         });
     }
 }

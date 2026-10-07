@@ -8,4 +8,4 @@ namespace NenFocus.Application.Queries.CheckNenContractCancellable;
 /// same one the Break validator and handler ask, so the Planner's Cancel button and the command
 /// can't disagree. Null when the contract doesn't exist or is no longer in effect.
 /// </summary>
-public sealed record CheckNenContractCancellableQuery(Guid ContractId) : IQuery<ContractEndVerdictDto?>;
+public sealed record CheckNenContractCancellableQuery(Guid ContractId) : IQuery<ContractActionVerdictDto?>;

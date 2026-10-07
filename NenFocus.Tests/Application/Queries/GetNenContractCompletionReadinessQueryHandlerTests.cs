@@ -43,7 +43,6 @@ public class GetNenContractCompletionReadinessQueryHandlerTests
         strictnessRule: StrictnessRule.Locked,
         calendar: TestCalendars.For(StartDate, EndDate, new DailyFloorRule.None()),
         floorRule: new DailyFloorRule.None(),
-        changeWindow: null,
         allowCancellation: true,
         plannedFocusHoursByDay: new Dictionary<DateOnly, double> { [StartDate] = committedHours },
         sealedAt: At.Utc(StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)), timeZone: At.UtcZone);
@@ -73,7 +72,7 @@ public class GetNenContractCompletionReadinessQueryHandlerTests
     public async Task HandleAsync_ContractNotActive_NotReady()
     {
         var contract = ActiveContract();
-        contract.Break(At.Utc(Now), At.UtcZone);
+        contract.Break(At.Utc(Now), At.UtcZone, sessionRunning: false);
         _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(contract);
 
         var result = await CreateHandler().HandleAsync(new GetNenContractCompletionReadinessQuery(ContractId));

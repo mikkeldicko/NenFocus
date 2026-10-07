@@ -22,15 +22,15 @@ public sealed record NenContractCompletionReadinessDto
     /// <summary>The sentence saying why not, or null when ready.</summary>
     public string? NotReadyReason { get; init; }
 
-    /// <summary>Not ready because the contract isn't Active (or doesn't exist).</summary>
+    /// <summary>Not ready because the contract doesn't exist — worded as the contract's own NotActive refusal.</summary>
     public static NenContractCompletionReadinessDto NotActive { get; } =
-        new() { IsReady = false, NotReadyReason = "Only an active contract can be completed." };
+        From(ContractActionVerdict.Refused(Domain.Enums.ContractActionOutcome.NotActive));
 
-    public static NenContractCompletionReadinessDto From(ContractEndVerdict verdict) => new()
+    public static NenContractCompletionReadinessDto From(ContractActionVerdict verdict) => new()
     {
         IsReady = verdict.IsAllowed,
         RemainingHours = verdict.RemainingHours,
         PendingBlockCount = verdict.PendingBlockCount,
-        NotReadyReason = ContractEndVerdictDto.From(verdict).Message
+        NotReadyReason = ContractActionVerdictDto.From(verdict).Message
     };
 }

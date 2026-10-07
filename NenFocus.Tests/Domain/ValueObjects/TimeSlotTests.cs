@@ -107,24 +107,13 @@ public class TimeSlotTests
 
     [Fact]
     public void Covering_WholeMinutes_IsExactlyThatLong()
-        => TimeSlot.Covering(At.Utc(2026, 9, 29, 10), 30).Should().Be(Slot(10, 10, endMinute: 30));
+        => TimeSlot.Covering(At.Utc(2026, 9, 29, 10), WholeMinutes.Of(30)).Should().Be(Slot(10, 10, endMinute: 30));
 
     [Fact]
-    public void Covering_FractionalMinutes_RoundsUpToTheNextWholeMinute()
+    public void Covering_NothingToCover_Throws()
     {
-        // Gap 33: a fractional deficit must be covered in full, never fall short by tick rounding.
-        var slot = TimeSlot.Covering(At.Utc(2026, 9, 29, 10), 31.896581196666666);
-
-        slot.Should().Be(Slot(10, 10, endMinute: 32));
-        slot.Length.TotalMinutes.Should().BeGreaterThanOrEqualTo(31.896581196666666);
-    }
-
-    [Theory]
-    [InlineData(0)]
-    [InlineData(-5)]
-    public void Covering_NothingToCover_Throws(double minutes)
-    {
-        var act = () => TimeSlot.Covering(At.Utc(2026, 9, 29, 10), minutes);
+        // A fraction or a negative amount can't even be built (WholeMinutes, Gap 92); zero is the one left.
+        var act = () => TimeSlot.Covering(At.Utc(2026, 9, 29, 10), WholeMinutes.Zero);
 
         act.Should().Throw<ArgumentOutOfRangeException>();
     }

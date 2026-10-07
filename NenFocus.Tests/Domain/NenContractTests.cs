@@ -30,7 +30,6 @@ public class NenContractTests
         IReadOnlyDictionary<DateOnly, double>? plannedFocusHoursByDay = null,
         DateTime? sealedAt = null,
         bool allowCancellation = false,
-        ChangeWindow? changeWindow = null,
         StrictnessRule strictnessRule = StrictnessRule.Locked,
         WorkHours? workHours = null,
         IReadOnlyCollection<DateOnly>? restDays = null,
@@ -49,7 +48,6 @@ public class NenContractTests
             strictnessRule: strictnessRule,
             calendar: calendar ?? TestCalendars.For(StartDate, EndDate, rule, floorPlan ?? plan, workHours, restDays, noWorkHoursDays),
             floorRule: rule,
-            changeWindow: changeWindow,
             allowCancellation: allowCancellation,
             plannedFocusHoursByDay: plan,
             sealedAt: At.Utc(sealedAt ?? SealedOnStart), timeZone: At.UtcZone,
@@ -87,9 +85,8 @@ public class NenContractTests
             name: "   ",
             goal: new NenContractGoal("Goal"),
             strictnessRule: StrictnessRule.Locked,
-            calendar: TestCalendars.For(StartDate, EndDate, new DailyFloorRule.Fixed(DailyFloor.None)),
-            floorRule: new DailyFloorRule.Fixed(DailyFloor.None),
-            changeWindow: null,
+            calendar: TestCalendars.For(StartDate, EndDate, new DailyFloorRule.None()),
+            floorRule: new DailyFloorRule.None(),
             allowCancellation: false,
             plannedFocusHoursByDay: FullyPlanned(),
             sealedAt: At.Utc(SealedOnStart), timeZone: At.UtcZone);
@@ -248,21 +245,7 @@ public class NenContractTests
         var contract = Seal(sealedAt: SealedOnStart, allowCancellation: true);
         contract.ClearDomainEvents();
 
-        contract.Break(At.Utc(SealedOnStart.AddDays(2)), At.UtcZone);
-
-        contract.Status.Should().Be(NenContractStatus.Broken);
-        contract.DomainEvents.Should().ContainSingle(e => e is NenContractBrokenEvent);
-    }
-
-    [Fact]
-    public void Break_WhenCancellationNotAllowed_StillSucceeds_InterimUntilStrictModeExists()
-    {
-        // AllowCancellation is deliberately not enforced by Break right now — see the
-        // comment on Break itself. This will change once Strict Mode is the real gate.
-        var contract = Seal(sealedAt: SealedOnStart, allowCancellation: false);
-        contract.ClearDomainEvents();
-
-        contract.Break(At.Utc(SealedOnStart.AddDays(2)), At.UtcZone);
+        contract.Break(At.Utc(SealedOnStart.AddDays(2)), At.UtcZone, sessionRunning: false);
 
         contract.Status.Should().Be(NenContractStatus.Broken);
         contract.DomainEvents.Should().ContainSingle(e => e is NenContractBrokenEvent);
@@ -275,7 +258,7 @@ public class NenContractTests
         var contract = Seal(sealedAt: SealedBeforeStart, allowCancellation: true); // Scheduled
         contract.ClearDomainEvents();
 
-        contract.Break(At.Utc(SealedOnStart), At.UtcZone);
+        contract.Break(At.Utc(SealedOnStart), At.UtcZone, sessionRunning: false);
 
         contract.Status.Should().Be(NenContractStatus.Broken);
         contract.DomainEvents.Should().ContainSingle(e => e is NenContractBrokenEvent);
@@ -287,7 +270,7 @@ public class NenContractTests
         var contract = Seal(sealedAt: SealedOnStart, allowCancellation: true); // Active
         contract.Complete(At.Utc(SealedOnStart.AddDays(8)));
 
-        var act = () => contract.Break(At.Utc(SealedOnStart.AddDays(9)), At.UtcZone);
+        var act = () => contract.Break(At.Utc(SealedOnStart.AddDays(9)), At.UtcZone, sessionRunning: false);
 
         act.Should().Throw<InvalidOperationException>();
     }
@@ -306,7 +289,7 @@ public class NenContractTests
         var contract = Seal(sealedAt: SealedOnStart, allowCancellation: true);
         var breakDate = StartDate.AddDays(2);
 
-        contract.Break(At.Utc(breakDate.ToDateTime(new TimeOnly(14, 0))), At.UtcZone);
+        contract.Break(At.Utc(breakDate.ToDateTime(new TimeOnly(14, 0))), At.UtcZone, sessionRunning: false);
 
         contract.EndDate.Should().Be(breakDate);
     }
@@ -316,7 +299,7 @@ public class NenContractTests
     {
         var contract = Seal(sealedAt: SealedOnStart, allowCancellation: true);
 
-        contract.Break(At.Utc(StartDate.AddDays(2).ToDateTime(new TimeOnly(14, 0))), At.UtcZone);
+        contract.Break(At.Utc(StartDate.AddDays(2).ToDateTime(new TimeOnly(14, 0))), At.UtcZone, sessionRunning: false);
 
         contract.OriginalEndDate.Should().Be(EndDate);
     }
@@ -329,7 +312,7 @@ public class NenContractTests
         // rather than to the literal break date.
         var contract = Seal(sealedAt: SealedBeforeStart, allowCancellation: true); // Scheduled
 
-        contract.Break(At.Utc(SealedBeforeStart), At.UtcZone);
+        contract.Break(At.Utc(SealedBeforeStart), At.UtcZone, sessionRunning: false);
 
         contract.EndDate.Should().Be(StartDate);
         contract.OriginalEndDate.Should().Be(EndDate); // OriginalEndDate is never touched by Break
@@ -443,11 +426,11 @@ public class NenContractTests
     [Fact]
     public void Governs_AFinishedContract_GovernsNothing()
     {
-        var contract = Seal(workHours: NineToFive);
+        var contract = Seal(workHours: NineToFive, allowCancellation: true);
         var inside = At.Slot(StartDate.ToDateTime(new TimeOnly(10, 0)), StartDate.ToDateTime(new TimeOnly(11, 0)));
         contract.Governs(inside, At.UtcZone).Should().BeTrue();
 
-        contract.Break(At.Utc(StartDate.ToDateTime(new TimeOnly(9, 30))), At.UtcZone);
+        contract.Break(At.Utc(StartDate.ToDateTime(new TimeOnly(9, 30))), At.UtcZone, sessionRunning: false);
 
         contract.Governs(inside, At.UtcZone).Should().BeFalse();
     }
@@ -527,8 +510,8 @@ public class NenContractTests
     [Fact]
     public void MembershipForPlacedBlock_AFinishedContract_Throws()
     {
-        var contract = Seal(workHours: NineToFive);
-        contract.Break(At.Utc(StartDate.ToDateTime(new TimeOnly(9, 30))), At.UtcZone);
+        var contract = Seal(workHours: NineToFive, allowCancellation: true);
+        contract.Break(At.Utc(StartDate.ToDateTime(new TimeOnly(9, 30))), At.UtcZone, sessionRunning: false);
 
         var act = () => contract.MembershipForPlacedBlock();
 
@@ -579,7 +562,7 @@ public class NenContractTests
         var contract = Seal(workHours: NineToFive, sealedAt: SealedOnStart, allowCancellation: true);
         var breakDay = StartDate.AddDays(2);
 
-        contract.Break(At.Utc(breakDay.ToDateTime(new TimeOnly(9, 5))), At.UtcZone);
+        contract.Break(At.Utc(breakDay.ToDateTime(new TimeOnly(9, 5))), At.UtcZone, sessionRunning: false);
 
         contract.EndsAt.Should().Be(breakDay.ToDateTime(new TimeOnly(17, 0)));
         contract.FloorHoursFor(breakDay).Should().Be(4);
@@ -632,7 +615,7 @@ public class NenContractTests
     public void IsInEffect_Broken_False()
     {
         var contract = Seal(sealedAt: SealedOnStart, allowCancellation: true);
-        contract.Break(At.Utc(SealedOnStart.AddDays(2)), At.UtcZone);
+        contract.Break(At.Utc(SealedOnStart.AddDays(2)), At.UtcZone, sessionRunning: false);
 
         contract.IsInEffect.Should().BeFalse();
     }
@@ -666,7 +649,7 @@ public class NenContractTests
     public void SetReflection_OnBrokenContract_Succeeds()
     {
         var contract = Seal(sealedAt: SealedOnStart, allowCancellation: true);
-        contract.Break(At.Utc(SealedOnStart.AddDays(2)), At.UtcZone);
+        contract.Break(At.Utc(SealedOnStart.AddDays(2)), At.UtcZone, sessionRunning: false);
 
         contract.SetReflection("Had to stop early");
 
@@ -699,7 +682,7 @@ public class NenContractTests
     public void MarkPostContractAcknowledged_OnBrokenContract_Succeeds()
     {
         var contract = Seal(sealedAt: SealedOnStart, allowCancellation: true);
-        contract.Break(At.Utc(SealedOnStart.AddDays(2)), At.UtcZone);
+        contract.Break(At.Utc(SealedOnStart.AddDays(2)), At.UtcZone, sessionRunning: false);
         var acknowledgedAt = SealedOnStart.AddDays(2);
 
         contract.MarkPostContractAcknowledged(At.Utc(acknowledgedAt));
@@ -1000,7 +983,7 @@ public class NenContractTests
     private static FocusBlock WorkedBlock(NenContract contract, int fromHour, int toHour, double? endedAfterMinutes) =>
         TestBlocks.Worked(BlockAt(fromHour, toHour, TestContracts.Committed(contract.Id)), ritualAfterStart: 0, endedAfterStart: endedAfterMinutes);
 
-    private static ContractEndVerdict Complete(NenContract contract, IEnumerable<PlannedBlock> blocks, bool sessionRunning = false) =>
+    private static ContractActionVerdict Complete(NenContract contract, IEnumerable<PlannedBlock> blocks, bool sessionRunning = false) =>
         contract.CheckComplete(blocks, [], sessionRunning, EndCheckAt, At.UtcZone);
 
     [Fact]
@@ -1010,7 +993,7 @@ public class NenContractTests
 
         var verdict = Complete(contract, [WorkedBlock(contract, 9, 11, endedAfterMinutes: 120)]);
 
-        verdict.Outcome.Should().Be(ContractEndOutcome.Allowed);
+        verdict.Outcome.Should().Be(ContractActionOutcome.Allowed);
         verdict.IsAllowed.Should().BeTrue();
     }
 
@@ -1020,7 +1003,7 @@ public class NenContractTests
         var contract = TwoHoursSigned();
 
         Complete(contract, [WorkedBlock(contract, 9, 11, endedAfterMinutes: 120)], sessionRunning: true)
-            .Outcome.Should().Be(ContractEndOutcome.SessionIsRunning);
+            .Outcome.Should().Be(ContractActionOutcome.SessionIsRunning);
     }
 
     [Fact]
@@ -1030,7 +1013,7 @@ public class NenContractTests
 
         var verdict = Complete(contract, [WorkedBlock(contract, 9, 11, endedAfterMinutes: 30)]);
 
-        verdict.Outcome.Should().Be(ContractEndOutcome.HoursNotDelivered);
+        verdict.Outcome.Should().Be(ContractActionOutcome.HoursNotDelivered);
         verdict.RemainingHours.Should().Be(1.5);
     }
 
@@ -1054,7 +1037,7 @@ public class NenContractTests
 
         var verdict = Complete(contract, [delivered, running, upcoming, cancelled]);
 
-        verdict.Outcome.Should().Be(ContractEndOutcome.BlocksStillPending);
+        verdict.Outcome.Should().Be(ContractActionOutcome.BlocksStillPending);
         verdict.PendingBlockCount.Should().Be(2);
     }
 
@@ -1070,9 +1053,9 @@ public class NenContractTests
     }
 
     [Theory]
-    [InlineData(true, ContractEndOutcome.SessionIsRunning)]
-    [InlineData(false, ContractEndOutcome.Allowed)]
-    public void CheckBreak_IsRefusedOnlyWhileASessionRuns(bool sessionRunning, ContractEndOutcome expected)
+    [InlineData(true, ContractActionOutcome.SessionIsRunning)]
+    [InlineData(false, ContractActionOutcome.Allowed)]
+    public void CheckBreak_IsRefusedOnlyWhileASessionRuns(bool sessionRunning, ContractActionOutcome expected)
     {
         Seal(allowCancellation: true).CheckBreak(sessionRunning).Outcome.Should().Be(expected);
     }
@@ -1083,6 +1066,105 @@ public class NenContractTests
     public void CheckBreak_CancellationOff_IsRefused(bool sessionRunning)
     {
         // The contract's own setting is the gate (decided 2026-10-06, ending the 2026-08-18 interim).
-        Seal(allowCancellation: false).CheckBreak(sessionRunning).Outcome.Should().Be(ContractEndOutcome.CancellationNotAllowed);
+        Seal(allowCancellation: false).CheckBreak(sessionRunning).Outcome.Should().Be(ContractActionOutcome.CancellationNotAllowed);
+    }
+
+    // ── Every lifecycle action is one verdict from the contract, and the action obeys it (Gap 92, D) ──
+
+    private static NenContract Scheduled() => Seal(sealedAt: SealedBeforeStart, allowCancellation: true);
+    private static NenContract Active() => Seal(sealedAt: SealedOnStart, allowCancellation: true);
+
+    private static NenContract Finished(bool broken)
+    {
+        var contract = Active();
+        if (broken) contract.Break(At.Utc(SealedOnStart.AddDays(1)), At.UtcZone, sessionRunning: false);
+        else contract.Complete(At.Utc(SealedOnStart.AddDays(8)));
+        return contract;
+    }
+
+    [Fact]
+    public void CheckEdit_AndCheckDelete_AllowAScheduledContract()
+    {
+        Scheduled().CheckEdit().IsAllowed.Should().BeTrue();
+        Scheduled().CheckDelete().IsAllowed.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData("active")]
+    [InlineData("completed")]
+    [InlineData("broken")]
+    public void CheckEdit_AndCheckDelete_RefuseAnyContractNotScheduled(string state)
+    {
+        var contract = state == "active" ? Active() : Finished(broken: state == "broken");
+
+        contract.CheckEdit().Outcome.Should().Be(ContractActionOutcome.NotScheduled);
+        contract.CheckDelete().Outcome.Should().Be(ContractActionOutcome.NotScheduled);
+    }
+
+    [Fact]
+    public void CheckComplete_AContractNotActive_IsRefusedBeforeAnythingElse()
+    {
+        // Scheduled, with a session running too: the status is the first reason.
+        Scheduled().CheckComplete([], [], sessionRunning: true, EndCheckAt, At.UtcZone)
+            .Outcome.Should().Be(ContractActionOutcome.NotActive);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void CheckBreak_AContractNoLongerInEffect_IsRefusedBeforeAnythingElse(bool broken)
+    {
+        Finished(broken).CheckBreak(sessionRunning: true).Outcome.Should().Be(ContractActionOutcome.NotInEffect);
+    }
+
+    [Fact]
+    public void Break_RefusedByItsOwnVerdict_Throws_WhoeverCallsIt()
+    {
+        var act = () => Seal(sealedAt: SealedOnStart, allowCancellation: false)
+            .Break(At.Utc(SealedOnStart.AddDays(2)), At.UtcZone, sessionRunning: false);
+
+        act.Should().Throw<InvalidOperationException>();
+    }
+
+    [Fact]
+    public void Break_WhileASessionRuns_Throws()
+    {
+        var act = () => Active().Break(At.Utc(SealedOnStart.AddDays(2)), At.UtcZone, sessionRunning: true);
+
+        act.Should().Throw<InvalidOperationException>();
+    }
+
+    [Fact]
+    public void CompleteEarly_WithEverythingDelivered_Completes()
+    {
+        var contract = TwoHoursSigned();
+        contract.ClearDomainEvents();
+
+        contract.CompleteEarly(EndCheckAt, [WorkedBlock(contract, 9, 11, endedAfterMinutes: 120)], [], sessionRunning: false, At.UtcZone);
+
+        contract.Status.Should().Be(NenContractStatus.Completed);
+        contract.DomainEvents.Should().ContainSingle(e => e is NenContractCompletedEvent);
+    }
+
+    [Fact]
+    public void CompleteEarly_RefusedByItsOwnVerdict_Throws_AndChangesNothing()
+    {
+        var contract = TwoHoursSigned();
+
+        var act = () => contract.CompleteEarly(EndCheckAt, [WorkedBlock(contract, 9, 11, endedAfterMinutes: 30)], [], sessionRunning: false, At.UtcZone);
+
+        act.Should().Throw<InvalidOperationException>();
+        contract.Status.Should().Be(NenContractStatus.Active);
+    }
+
+    [Fact]
+    public void Allowed_CarriesNothingOwedOrPending_AndRefusedCannotSayAllowed()
+    {
+        ContractActionVerdict.Allowed.RemainingHours.Should().Be(0);
+        ContractActionVerdict.Allowed.PendingBlockCount.Should().Be(0);
+
+        var act = () => ContractActionVerdict.Refused(ContractActionOutcome.Allowed);
+
+        act.Should().Throw<ArgumentException>();
     }
 }

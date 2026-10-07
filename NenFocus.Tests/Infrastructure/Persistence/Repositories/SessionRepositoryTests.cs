@@ -19,6 +19,14 @@ public class SessionRepositoryTests : SqliteRepositoryTestBase
         return session;
     }
 
+    /// <summary>A session that ran and ended — history. Only one session may run at a time (Gap 92).</summary>
+    private static Session PastSession(Guid? presetId = null, DateTime? startedAt = null)
+    {
+        var session = CreateSession(presetId, startedAt);
+        session.Complete(At.Utc((startedAt ?? DateTime.UtcNow).AddMinutes(30)));
+        return session;
+    }
+
     [Fact]
     public async Task SaveAsync_NewSession_ThenGetById_Retrieves()
     {
@@ -123,24 +131,11 @@ public class SessionRepositoryTests : SqliteRepositoryTestBase
     }
 
     [Fact]
-    public async Task HasActiveSessionAsync_ReflectsCurrentState()
-    {
-        var repo = CreateRepository();
-        (await repo.HasActiveSessionAsync()).Should().BeFalse();
-
-        var session = CreateSession();
-        await repo.SaveAsync(session);
-        await Context.SaveChangesAsync();
-
-        (await CreateRepository().HasActiveSessionAsync()).Should().BeTrue();
-    }
-
-    [Fact]
     public async Task GetHistoryAsync_FiltersByDateRangeOnStartedAt()
     {
         var repo = CreateRepository();
-        var inRange = CreateSession(startedAt: new DateTime(2026, 1, 15, 10, 0, 0, DateTimeKind.Utc));
-        var outOfRange = CreateSession(startedAt: new DateTime(2026, 3, 1, 10, 0, 0, DateTimeKind.Utc));
+        var inRange = PastSession(startedAt: new DateTime(2026, 1, 15, 10, 0, 0, DateTimeKind.Utc));
+        var outOfRange = PastSession(startedAt: new DateTime(2026, 3, 1, 10, 0, 0, DateTimeKind.Utc));
         await repo.SaveAsync(inRange);
         await repo.SaveAsync(outOfRange);
         await Context.SaveChangesAsync();
@@ -158,8 +153,8 @@ public class SessionRepositoryTests : SqliteRepositoryTestBase
         // (UTC+1 in January) 15 January runs from 14 Jan 23:00 UTC to 15 Jan 23:00 UTC.
         var copenhagen = new UserTimeZone(TimeZoneInfo.FindSystemTimeZoneById("Europe/Copenhagen"));
         var repo = CreateRepository();
-        var justAfterLocalMidnight = CreateSession(startedAt: new DateTime(2026, 1, 14, 23, 30, 0, DateTimeKind.Utc)); // 15 Jan 00:30 local
-        var lateOnTheUtcDay = CreateSession(startedAt: new DateTime(2026, 1, 15, 23, 30, 0, DateTimeKind.Utc));       // 16 Jan 00:30 local
+        var justAfterLocalMidnight = PastSession(startedAt: new DateTime(2026, 1, 14, 23, 30, 0, DateTimeKind.Utc)); // 15 Jan 00:30 local
+        var lateOnTheUtcDay = PastSession(startedAt: new DateTime(2026, 1, 15, 23, 30, 0, DateTimeKind.Utc));       // 16 Jan 00:30 local
         await repo.SaveAsync(justAfterLocalMidnight);
         await repo.SaveAsync(lateOnTheUtcDay);
         await Context.SaveChangesAsync();
@@ -174,8 +169,8 @@ public class SessionRepositoryTests : SqliteRepositoryTestBase
     {
         var slot = At.Slot(new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc), new DateTime(2026, 1, 16, 0, 0, 0, DateTimeKind.Utc));
         var repo = CreateRepository();
-        var atStart = CreateSession(startedAt: new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc));
-        var atEnd = CreateSession(startedAt: new DateTime(2026, 1, 16, 0, 0, 0, DateTimeKind.Utc));
+        var atStart = PastSession(startedAt: new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc));
+        var atEnd = PastSession(startedAt: new DateTime(2026, 1, 16, 0, 0, 0, DateTimeKind.Utc));
         var neverStarted = Session.Create(
             Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(30)), Guid.NewGuid(), SessionOrigin.Spontaneous);
         await repo.SaveAsync(atStart);
@@ -193,8 +188,8 @@ public class SessionRepositoryTests : SqliteRepositoryTestBase
     {
         var presetId = Guid.NewGuid();
         var repo = CreateRepository();
-        var matching = CreateSession(presetId, new DateTime(2026, 1, 15, 10, 0, 0, DateTimeKind.Utc));
-        var other = CreateSession(Guid.NewGuid(), new DateTime(2026, 1, 16, 10, 0, 0, DateTimeKind.Utc));
+        var matching = PastSession(presetId, new DateTime(2026, 1, 15, 10, 0, 0, DateTimeKind.Utc));
+        var other = PastSession(Guid.NewGuid(), new DateTime(2026, 1, 16, 10, 0, 0, DateTimeKind.Utc));
         await repo.SaveAsync(matching);
         await repo.SaveAsync(other);
         await Context.SaveChangesAsync();
@@ -209,8 +204,8 @@ public class SessionRepositoryTests : SqliteRepositoryTestBase
     public async Task GetHistoryAsync_OrdersByStartedAtDescending()
     {
         var repo = CreateRepository();
-        var earlier = CreateSession(startedAt: new DateTime(2026, 1, 10, 10, 0, 0, DateTimeKind.Utc));
-        var later = CreateSession(startedAt: new DateTime(2026, 1, 20, 10, 0, 0, DateTimeKind.Utc));
+        var earlier = PastSession(startedAt: new DateTime(2026, 1, 10, 10, 0, 0, DateTimeKind.Utc));
+        var later = PastSession(startedAt: new DateTime(2026, 1, 20, 10, 0, 0, DateTimeKind.Utc));
         await repo.SaveAsync(earlier);
         await repo.SaveAsync(later);
         await Context.SaveChangesAsync();
@@ -221,31 +216,15 @@ public class SessionRepositoryTests : SqliteRepositoryTestBase
     }
 
     [Fact]
-    public async Task GetActiveSessionsAsync_ReturnsOnlyActiveOrOnBreakSessions()
+    public async Task GetByOriginatingBlockIdAsync_NoSessionReferencesBlock_ReturnsNull()
     {
-        var repo = CreateRepository();
-        var active = CreateSession();
-        var completed = CreateSession();
-        completed.Complete(At.Utc(DateTime.UtcNow));
-        await repo.SaveAsync(active);
-        await repo.SaveAsync(completed);
-        await Context.SaveChangesAsync();
+        var result = await CreateRepository().GetByOriginatingBlockIdAsync(Guid.NewGuid());
 
-        var result = await CreateRepository().GetActiveSessionsAsync();
-
-        result.Should().ContainSingle(s => s.Id == active.Id);
+        result.Should().BeNull();
     }
 
     [Fact]
-    public async Task ExistsForOriginatingBlockAsync_NoSessionReferencesBlock_ReturnsFalse()
-    {
-        var result = await CreateRepository().ExistsForOriginatingBlockAsync(Guid.NewGuid());
-
-        result.Should().BeFalse();
-    }
-
-    [Fact]
-    public async Task ExistsForOriginatingBlockAsync_MissedSessionReferencesBlock_ReturnsTrue()
+    public async Task GetByOriginatingBlockIdAsync_MissedSessionReferencesBlock_ReturnsIt()
     {
         var blockId = Guid.NewGuid();
         var repo = CreateRepository();
@@ -257,8 +236,43 @@ public class SessionRepositoryTests : SqliteRepositoryTestBase
         await repo.SaveAsync(session);
         await Context.SaveChangesAsync();
 
-        var result = await CreateRepository().ExistsForOriginatingBlockAsync(blockId);
+        var result = await CreateRepository().GetByOriginatingBlockIdAsync(blockId);
 
-        result.Should().BeTrue();
+        result!.Id.Should().Be(session.Id);
+    }
+
+    // ── Storage backstops (Gap 92, C+ and A8b): the Domain decides, the database refuses what slips past ──
+
+    [Fact]
+    public async Task TwoRunningSessions_CantBeStored()
+    {
+        var repo = CreateRepository();
+        await repo.SaveAsync(CreateSession());
+        await repo.SaveAsync(CreateSession());
+
+        var act = () => Context.SaveChangesAsync();
+
+        await act.Should().ThrowAsync<Microsoft.EntityFrameworkCore.DbUpdateException>();
+    }
+
+    [Fact]
+    public async Task TwoSessionsForOneFocusBlock_CantBeStored()
+    {
+        var blockId = Guid.NewGuid();
+        Session ForTheBlock()
+        {
+            var session = Session.Create(Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(30)),
+                Guid.NewGuid(), SessionOrigin.Planned, originatingBlockId: blockId);
+            session.Miss(new TimeSlot(At.Utc(new DateTime(2026, 1, 1, 9, 0, 0)), At.Utc(new DateTime(2026, 1, 1, 9, 30, 0))));
+            return session;
+        }
+
+        var repo = CreateRepository();
+        await repo.SaveAsync(ForTheBlock());
+        await repo.SaveAsync(ForTheBlock());
+
+        var act = () => Context.SaveChangesAsync();
+
+        await act.Should().ThrowAsync<Microsoft.EntityFrameworkCore.DbUpdateException>();
     }
 }

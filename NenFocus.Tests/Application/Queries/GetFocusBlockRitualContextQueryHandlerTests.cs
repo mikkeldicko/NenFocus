@@ -94,7 +94,7 @@ public class GetFocusBlockRitualContextQueryHandlerTests
             .Returns(FocusBlock.Create(blockId, presetId,At.Slot(Start, End)));
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
             .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Start)));
-        _sessions.ExistsForOriginatingBlockAsync(blockId, Arg.Any<CancellationToken>()).Returns(true);
+        _sessions.GetByOriginatingBlockIdAsync(blockId, Arg.Any<CancellationToken>()).Returns(TestSessions.For(blockId));
         _clock.SetNow(Start);
 
         var result = await CreateHandler().HandleAsync(

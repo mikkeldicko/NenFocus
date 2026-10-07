@@ -30,7 +30,7 @@ public sealed record ContractDay
         if (windowEnd > dayStart.AddDays(1))
             throw new ArgumentException($"Day {date:yyyy-MM-dd}'s window cannot run past midnight.");
 
-        if (floor is not null && floor.Hours > (windowEnd - windowStart).TotalHours)
+        if (floor is not null && !floor.FitsIn(windowEnd - windowStart))
             throw new ArgumentException(
                 $"Day {date:yyyy-MM-dd}'s floor of {floor.Hours}h is longer than its {(windowEnd - windowStart).TotalHours}h window.");
 

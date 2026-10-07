@@ -30,7 +30,6 @@ public class ContractRulesPersistenceTests : SqliteRepositoryTestBase
         goal: new NenContractGoal("Goal"),
         rules: rules,
         calendar: TestCalendars.For(DateOnly.FromDateTime(Day), DateOnly.FromDateTime(Day).AddDays(2), new DailyFloorRule.None()),
-        changeWindow: null,
         plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
         sealedAt: TestAt.Utc(Day),
         timeZone: TestAt.UtcZone);
@@ -117,7 +116,7 @@ public class ContractRulesPersistenceTests : SqliteRepositoryTestBase
         var fixedId = Guid.NewGuid();
         var planId = Guid.NewGuid();
         var noneId = Guid.NewGuid();
-        await context.Database.ExecuteSqlRawAsync(insert, fixedId, "fixed", "Locked", days, "{\"Kind\":\"Fixed\",\"Hours\":2.5}");
+        await context.Database.ExecuteSqlRawAsync(insert, fixedId, "fixed", "Locked", days, "{\"Kind\":\"Fixed\",\"Hours\":2}");
         await context.Database.ExecuteSqlRawAsync(insert, planId, "plan", "DailyFlexibility", days, "{\"Kind\":\"FollowsPlan\",\"Hours\":null}");
         await context.Database.ExecuteSqlRawAsync(insert, noneId, "none", "PeriodTimeBudget", days, "{\"Kind\":\"None\",\"Hours\":null}");
 
@@ -125,7 +124,7 @@ public class ContractRulesPersistenceTests : SqliteRepositoryTestBase
 
         async Task<NenContract> ContractAsync(Guid id) => await context.NenContracts.AsNoTracking().SingleAsync(c => c.Id == id);
         var withFixed = await ContractAsync(fixedId);
-        withFixed.Rules.Should().Be(new ContractRules(StrictnessRule.Locked, new DailyFloor(2.5), allowCancellation: true,
+        withFixed.Rules.Should().Be(new ContractRules(StrictnessRule.Locked, new DailyFloor(2), allowCancellation: true,
             keepBlockingDuringBreaks: true, RedemptionPlacementPolicy.CurrentDayOnly, bonusBlocksFollowStrictness: false));
         (await ContractAsync(planId)).FloorRule.Should().Be(new DailyFloorRule.FollowsPlan());
         (await ContractAsync(noneId)).FloorRule.Should().Be(new DailyFloorRule.None());

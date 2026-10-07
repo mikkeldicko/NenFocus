@@ -27,7 +27,6 @@ public class SaveNenContractReflectionCommandHandlerTests
             strictnessRule: StrictnessRule.Locked,
             calendar: TestCalendars.For(StartDate, EndDate, new DailyFloorRule.None()),
             floorRule: new DailyFloorRule.None(),
-            changeWindow: null,
             allowCancellation: true,
             plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
             sealedAt: At.Utc(StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)), timeZone: At.UtcZone);

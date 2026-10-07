@@ -67,14 +67,14 @@ public sealed record TimeSlot : IComparable<TimeSlot>
     public double ProgressAt(Moment asOf) => Math.Clamp(SinceStart(asOf) / Length, 0.0, 1.0);
 
     /// <summary>
-    /// The shortest whole-minute slot from <paramref name="start"/> covering at least
-    /// <paramref name="minutes"/> — rounded up, so a fractional amount is never left short (Gap 33).
+    /// The slot from <paramref name="start"/> exactly <paramref name="minutes"/> long. Whole minutes, so
+    /// nothing is rounded and nothing can be left short (Gap 33; Gap 92, V10).
     /// </summary>
-    public static TimeSlot Covering(Moment start, double minutes)
+    public static TimeSlot Covering(Moment start, WholeMinutes minutes)
     {
-        if (minutes <= 0)
+        if (minutes <= WholeMinutes.Zero)
             throw new ArgumentOutOfRangeException(nameof(minutes), minutes, "There must be something to cover.");
-        return new TimeSlot(start, start + TimeSpan.FromMinutes(Math.Ceiling(minutes)));
+        return new TimeSlot(start, start + minutes.AsTimeSpan);
     }
 
     /// <summary>By start, then end.</summary>

@@ -33,7 +33,7 @@ public sealed class MarkFocusBlockMissedValidator : AbstractValidator<MarkFocusB
 
         RuleFor(x => x.FocusBlockId)
             .MustAsync(async (id, ct) =>
-                id == Guid.Empty || !await sessions.ExistsForOriginatingBlockAsync(id, ct))
+                id == Guid.Empty || await sessions.GetByOriginatingBlockIdAsync(id, ct) is null)
             .WithMessage("A session already exists for this focus block.");
     }
 }

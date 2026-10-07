@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using NenFocus.Domain.Enums;
+using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.ViewModels.Components;
 
@@ -36,4 +37,15 @@ public sealed record NenContractDraftRules
     /// SealNenContractCommand at Seal.
     /// </summary>
     public Guid? EditingContractId { get; init; }
+
+    // Bridge (Gap 92, option B): the Seal/Edit commands carry typed settings, the wizard chain still
+    // carries loose ones. Both come from a saved preset, which is valid by construction (whole-hour
+    // floor, end after start), so neither conversion can lose anything. Gaps 68 and 82 carry typed
+    // values end to end and delete these.
+
+    /// <summary>The Work Hours as the Seal/Edit commands take them.</summary>
+    public WorkHours? WorkHours => WorkHoursStart is { } start && WorkHoursEnd is { } end ? new WorkHours(start, end) : null;
+
+    /// <summary>The fixed floor as the Seal/Edit commands take it: whole hours.</summary>
+    public int? WholeFixedDailyFloorHours => FixedDailyFloorHours is { } hours ? (int)hours : null;
 }

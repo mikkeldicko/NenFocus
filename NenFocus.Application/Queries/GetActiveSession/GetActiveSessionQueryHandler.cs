@@ -36,12 +36,9 @@ public sealed class GetActiveSessionQueryHandler
             PresetName = preset?.Name ?? "Unknown",
             DurationMinutes = (int)session.Duration.Value.TotalMinutes,
             Status = session.Status,
-            StartedAt = session.StartedAt ?? _clock.Now,
-            EndAt = session.EndAt ?? _clock.Now,
             EndedAt = session.EndedAt,
-            Breaks = SessionDto.MapBreaks(session.BreakSchedule),
-            BreakPresetName = session.BreakPresetName,
-            KeepBlockingDuringBreaks = session.KeepBlockingDuringBreaks
+            Timeline = session.Timeline,
+            BreakPresetName = session.BreakPresetName
         };
     }
 }

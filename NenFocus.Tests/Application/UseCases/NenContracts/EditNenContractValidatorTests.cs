@@ -35,7 +35,6 @@ public class EditNenContractValidatorTests
         strictnessRule: StrictnessRule.DailyFlexibility,
         calendar: TestCalendars.For(StartDate, EndDate, new DailyFloorRule.None()),
         floorRule: new DailyFloorRule.None(),
-        changeWindow: null,
         allowCancellation: true,
         plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
         sealedAt: At.Utc(sealedAt), timeZone: At.UtcZone);
@@ -149,8 +148,7 @@ public class EditNenContractValidatorTests
     [Theory]
     [InlineData(-1)]
     [InlineData(0)] // zero would mean "no floor" by another name — leave it unset instead
-    [InlineData(24.1)]
-    public async Task Validate_FixedDailyFloorHoursOutOfRange_IsInvalid(double floor)
+    public async Task Validate_FixedDailyFloorHoursOutOfRange_IsInvalid(int floor)
     {
         var contract = Seal(sealedAt: StartDate.AddDays(-5).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
         _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
@@ -168,23 +166,10 @@ public class EditNenContractValidatorTests
         var command = BaseCommand(contract.Id) with
         {
             FixedDailyFloorHours = 6,
-            WorkHoursStart = new TimeOnly(10, 0),
-            WorkHoursEnd = new TimeOnly(15, 0)
+            WorkHours = new WorkHours(new TimeOnly(10, 0), new TimeOnly(15, 0))
         };
 
         var result = await CreateValidator().ValidateAsync(command);
-
-        result.IsValid.Should().BeFalse();
-    }
-
-    [Fact]
-    public async Task Validate_WorkHoursOnlyStartSet_IsInvalid()
-    {
-        var contract = Seal(sealedAt: StartDate.AddDays(-5).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
-        _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
-
-        var result = await CreateValidator().ValidateAsync(
-            BaseCommand(contract.Id) with { WorkHoursStart = new TimeOnly(9, 0) });
 
         result.IsValid.Should().BeFalse();
     }

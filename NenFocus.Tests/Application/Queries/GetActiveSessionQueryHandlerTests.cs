@@ -46,7 +46,7 @@ public class GetActiveSessionQueryHandlerTests
         result.Goal.Should().Be("Deep work");
         result.DurationMinutes.Should().Be(45);
         result.Status.Should().Be(SessionStatus.Active);
-        result.Breaks.Should().BeEmpty();
+        result.Timeline!.Breaks.IsEmpty.Should().BeTrue();
     }
 
     [Fact]
@@ -78,8 +78,7 @@ public class GetActiveSessionQueryHandlerTests
         var result = await CreateHandler().HandleAsync(new GetActiveSessionQuery());
 
         result!.BreakPresetName.Should().Be("Classic");
-        result.Breaks.Should().ContainSingle().Which.Should().Be(new SessionBreakDto
-        {
-            Kind = SessionPhaseKind.ShortBreak, Start = TimeSpan.FromMinutes(25), End = TimeSpan.FromMinutes(30)});
+        result.Timeline!.Breaks.Breaks.Should().ContainSingle().Which.Should().Be(
+            new SessionBreak(SessionPhaseKind.ShortBreak, TimeSpan.FromMinutes(25), TimeSpan.FromMinutes(30)));
     }
 }

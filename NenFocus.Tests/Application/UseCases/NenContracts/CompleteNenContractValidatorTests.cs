@@ -30,14 +30,15 @@ public class CompleteNenContractValidatorTests
         strictnessRule: StrictnessRule.Locked,
         calendar: TestCalendars.For(StartDate, EndDate, new DailyFloorRule.None()),
         floorRule: new DailyFloorRule.None(),
-        changeWindow: null,
         allowCancellation: true,
         plannedFocusHoursByDay: new Dictionary<DateOnly, double> { [StartDate] = committedHours },
         sealedAt: At.Utc(StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)), timeZone: At.UtcZone);
 
-    private void StubReadiness(ContractEndOutcome outcome, double remainingHours = 0, int pendingBlockCount = 0)
+    private void StubReadiness(ContractActionOutcome outcome, double remainingHours = 0, int pendingBlockCount = 0)
     {
-        var verdict = new ContractEndVerdict(outcome, remainingHours, pendingBlockCount);
+        var verdict = outcome == ContractActionOutcome.Allowed
+            ? ContractActionVerdict.Allowed
+            : ContractActionVerdict.Refused(outcome, remainingHours, pendingBlockCount);
         _readiness.HandleAsync(Arg.Any<GetNenContractCompletionReadinessQuery>(), Arg.Any<CancellationToken>())
             .Returns(NenContractCompletionReadinessDto.From(verdict));
     }
@@ -56,9 +57,9 @@ public class CompleteNenContractValidatorTests
     public async Task Validate_ContractNotActive_IsInvalid()
     {
         var contract = ActiveContract();
-        contract.Break(At.Utc(Now), At.UtcZone);
+        contract.Break(At.Utc(Now), At.UtcZone, sessionRunning: false);
         _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(contract);
-        StubReadiness(ContractEndOutcome.BlocksStillPending); // Broken -> readiness query itself reports not ready
+        StubReadiness(ContractActionOutcome.BlocksStillPending); // Broken -> readiness query itself reports not ready
 
         var result = await CreateValidator().ValidateAsync(new CompleteNenContractCommand { ContractId = ContractId });
 
@@ -69,7 +70,7 @@ public class CompleteNenContractValidatorTests
     public async Task Validate_ReadinessQuerySaysNotReady_RemainingHours_IsInvalidWithMessage()
     {
         _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(ActiveContract(committedHours: 4));
-        StubReadiness(ContractEndOutcome.HoursNotDelivered, remainingHours: 1);
+        StubReadiness(ContractActionOutcome.HoursNotDelivered, remainingHours: 1);
 
         var result = await CreateValidator().ValidateAsync(new CompleteNenContractCommand { ContractId = ContractId });
 
@@ -81,7 +82,7 @@ public class CompleteNenContractValidatorTests
     public async Task Validate_ReadinessQuerySaysNotReady_PendingBlock_IsInvalidWithMessage()
     {
         _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(ActiveContract(committedHours: 4));
-        StubReadiness(ContractEndOutcome.BlocksStillPending, pendingBlockCount: 1);
+        StubReadiness(ContractActionOutcome.BlocksStillPending, pendingBlockCount: 1);
 
         var result = await CreateValidator().ValidateAsync(new CompleteNenContractCommand { ContractId = ContractId });
 
@@ -93,7 +94,7 @@ public class CompleteNenContractValidatorTests
     public async Task Validate_ReadinessQuerySaysASessionIsRunning_IsInvalidWithMessage()
     {
         _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(ActiveContract(committedHours: 4));
-        StubReadiness(ContractEndOutcome.SessionIsRunning);
+        StubReadiness(ContractActionOutcome.SessionIsRunning);
 
         var result = await CreateValidator().ValidateAsync(new CompleteNenContractCommand { ContractId = ContractId });
 
@@ -105,7 +106,7 @@ public class CompleteNenContractValidatorTests
     public async Task Validate_ReadinessQuerySaysReady_IsValid()
     {
         _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(ActiveContract(committedHours: 4));
-        StubReadiness(ContractEndOutcome.Allowed);
+        StubReadiness(ContractActionOutcome.Allowed);
 
         var result = await CreateValidator().ValidateAsync(new CompleteNenContractCommand { ContractId = ContractId });
 

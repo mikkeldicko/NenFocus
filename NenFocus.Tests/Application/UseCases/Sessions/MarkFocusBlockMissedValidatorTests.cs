@@ -37,7 +37,7 @@ public class MarkFocusBlockMissedValidatorTests
     {
         var blockId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns((PlannedBlock?)null);
-        _sessions.ExistsForOriginatingBlockAsync(blockId, Arg.Any<CancellationToken>()).Returns(false);
+        _sessions.GetByOriginatingBlockIdAsync(blockId, Arg.Any<CancellationToken>()).Returns((Session?)null);
 
         var result = await CreateValidator().ValidateAsync(
             new MarkFocusBlockMissedCommand { FocusBlockId = blockId });
@@ -50,7 +50,7 @@ public class MarkFocusBlockMissedValidatorTests
     {
         var block = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End));
         _blocks.GetByIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns(block);
-        _sessions.ExistsForOriginatingBlockAsync(block.Id, Arg.Any<CancellationToken>()).Returns(false);
+        _sessions.GetByOriginatingBlockIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns((Session?)null);
 
         var result = await CreateValidator().ValidateAsync(
             new MarkFocusBlockMissedCommand { FocusBlockId = block.Id });
@@ -64,7 +64,7 @@ public class MarkFocusBlockMissedValidatorTests
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End));
         block.MarkRitualCompleted(At.Utc(Start));
         _blocks.GetByIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns(block);
-        _sessions.ExistsForOriginatingBlockAsync(block.Id, Arg.Any<CancellationToken>()).Returns(false);
+        _sessions.GetByOriginatingBlockIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns((Session?)null);
 
         var result = await CreateValidator().ValidateAsync(
             new MarkFocusBlockMissedCommand { FocusBlockId = block.Id });
@@ -80,7 +80,7 @@ public class MarkFocusBlockMissedValidatorTests
         _clock.SetNow(End.AddMinutes(-1));
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Start, End));
         _blocks.GetByIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns(block);
-        _sessions.ExistsForOriginatingBlockAsync(block.Id, Arg.Any<CancellationToken>()).Returns(false);
+        _sessions.GetByOriginatingBlockIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns((Session?)null);
 
         var result = await CreateValidator().ValidateAsync(new MarkFocusBlockMissedCommand { FocusBlockId = block.Id });
 
@@ -93,7 +93,7 @@ public class MarkFocusBlockMissedValidatorTests
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Start, End));
         block.MarkCancelled(At.Utc(Start.AddMinutes(10)));
         _blocks.GetByIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns(block);
-        _sessions.ExistsForOriginatingBlockAsync(block.Id, Arg.Any<CancellationToken>()).Returns(false);
+        _sessions.GetByOriginatingBlockIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns((Session?)null);
 
         var result = await CreateValidator().ValidateAsync(new MarkFocusBlockMissedCommand { FocusBlockId = block.Id });
 
@@ -105,7 +105,7 @@ public class MarkFocusBlockMissedValidatorTests
     {
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End));
         _blocks.GetByIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns(block);
-        _sessions.ExistsForOriginatingBlockAsync(block.Id, Arg.Any<CancellationToken>()).Returns(true);
+        _sessions.GetByOriginatingBlockIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns(TestSessions.For(block.Id));
 
         var result = await CreateValidator().ValidateAsync(
             new MarkFocusBlockMissedCommand { FocusBlockId = block.Id });
@@ -118,7 +118,7 @@ public class MarkFocusBlockMissedValidatorTests
     {
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End));
         _blocks.GetByIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns(block);
-        _sessions.ExistsForOriginatingBlockAsync(block.Id, Arg.Any<CancellationToken>()).Returns(false);
+        _sessions.GetByOriginatingBlockIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns((Session?)null);
 
         var result = await CreateValidator().ValidateAsync(
             new MarkFocusBlockMissedCommand { FocusBlockId = block.Id });

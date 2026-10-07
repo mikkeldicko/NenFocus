@@ -1,6 +1,6 @@
 using FluentValidation;
+using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
-using NenFocus.Domain.Enums;
 
 namespace NenFocus.Application.UseCases.NenContracts.Delete;
 
@@ -20,13 +20,15 @@ public sealed class DeleteNenContractValidator : AbstractValidator<DeleteNenCont
             })
             .WithMessage("Contract not found.");
 
+        // The contract's own answer (NenContract.CheckDelete, Gap 92): only before it starts.
         RuleFor(x => x)
-            .MustAsync(async (command, ct) =>
+            .CustomAsync(async (command, context, ct) =>
             {
-                if (command.ContractId == Guid.Empty) return true;
-                var contract = await contracts.GetByIdAsync(command.ContractId, ct);
-                return contract is null || contract.Status == NenContractStatus.Scheduled;
-            })
-            .WithMessage("Only a Scheduled contract can be deleted — an Active contract must be cancelled instead.");
+                if (command.ContractId == Guid.Empty) return;
+                if (await contracts.GetByIdAsync(command.ContractId, ct) is not { } contract) return; // reported above
+
+                if (ContractActionVerdictDto.From(contract.CheckDelete()).Message is { } message)
+                    context.AddFailure(nameof(DeleteNenContractCommand.ContractId), message);
+            });
     }
 }

@@ -26,7 +26,6 @@ public class NenContractRedemptionPlacementTests
             strictnessRule: StrictnessRule.Locked,
             calendar: TestCalendars.For(from ?? Today.AddDays(-7), to ?? Today.AddDays(7), new DailyFloorRule.None()),
             floorRule: new DailyFloorRule.None(),
-            changeWindow: null,
             allowCancellation: false,
             plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
             sealedAt: At.Utc(Now.AddDays(-30)), timeZone: timeZone ?? At.UtcZone,
@@ -152,7 +151,7 @@ public class NenContractRedemptionPlacementTests
         var verdict = Check(contract, At.Slot(Now, Now.AddHours(1)), [missed]);
 
         verdict.Outcome.Should().Be(RedemptionPlacementOutcome.Placed);
-        verdict.Receipt.Entries.Should().Equal(new RedemptionEntry(missed.Id, 40));
+        verdict.Receipt.Entries.Should().Equal(new RedemptionEntry(missed.Id, WholeMinutes.Of(40)));
     }
 
     [Fact]
@@ -163,7 +162,7 @@ public class NenContractRedemptionPlacementTests
         var missed = Missed(contract, Now.AddDays(-1), 40);
 
         Check(contract, At.Slot(Now, Now.AddHours(1)), [missed])
-            .Receipt.Entries.Should().Equal(new RedemptionEntry(missed.Id, 40));
+            .Receipt.Entries.Should().Equal(new RedemptionEntry(missed.Id, WholeMinutes.Of(40)));
     }
 
     [Fact]
@@ -201,7 +200,7 @@ public class NenContractRedemptionPlacementTests
         // 100 minutes: 30 to the older, 50 to the newer, 20 left over.
         var verdict = Check(contract, At.Slot(Now, Now.AddMinutes(100)), [newer, older]);
 
-        verdict.Receipt.Entries.Should().Equal(new RedemptionEntry(older.Id, 30), new RedemptionEntry(newer.Id, 50));
+        verdict.Receipt.Entries.Should().Equal(new RedemptionEntry(older.Id, WholeMinutes.Of(30)), new RedemptionEntry(newer.Id, WholeMinutes.Of(50)));
         verdict.Slot.Should().Be(At.Slot(Now, Now.AddMinutes(80)));
     }
 
@@ -214,7 +213,7 @@ public class NenContractRedemptionPlacementTests
             [missed], At.Utc(Now), At.UtcZone);
 
         Check(contract, At.Slot(Now.AddHours(3), Now.AddHours(4)), [missed, earlier])
-            .Receipt.Entries.Should().Equal(new RedemptionEntry(missed.Id, 20));
+            .Receipt.Entries.Should().Equal(new RedemptionEntry(missed.Id, WholeMinutes.Of(20)));
     }
 
     // ── Placed: the slot ──
@@ -244,14 +243,15 @@ public class NenContractRedemptionPlacementTests
     }
 
     [Fact]
-    public void TrimmedBySeconds_IsCappedButNotWorthSaying()
+    public void ASuggestionSizedTile_IsNotCapped()
     {
-        // Decision 15: suggestions are rounded up to whole minutes on purpose (Gap 33), so nearly
-        // every save trims seconds; that isn't worth a notice.
+        // Decision 15's intent — an ordinary Cover Deficit save shows no notice — now holds by
+        // construction: the suggestion is sized exactly to the whole-minute debt (Gap 92, V10), so
+        // nothing is trimmed. Any trim at all is whole minutes, and worth telling.
         var contract = Contract();
         var missed = TestBlocks.Worked(Missed(contract, Now.AddHours(-3), 60), 0, 60 - 97 / 60.0); // owes 2 whole minutes
 
-        var verdict = Check(contract, At.Slot(Now, Now.AddMinutes(2.5)), [missed]);
+        var verdict = Check(contract, TimeSlot.Covering(At.Utc(Now), WholeMinutes.Of(2)), [missed]);
 
         verdict.Slot.Should().Be(At.Slot(Now, Now.AddMinutes(2)));
         verdict.WasCapped.Should().BeFalse();
@@ -273,7 +273,7 @@ public class NenContractRedemptionPlacementTests
         block.IsRedemption.Should().BeTrue();
         block.Membership!.ContractId.Should().Be(contract.Id);
         block.Scheduled.Should().Be(At.Slot(Now, Now.AddMinutes(45)));
-        block.Receipt.Entries.Should().Equal(new RedemptionEntry(missed.Id, 45));
+        block.Receipt.Entries.Should().Equal(new RedemptionEntry(missed.Id, WholeMinutes.Of(45)));
     }
 
     [Fact]

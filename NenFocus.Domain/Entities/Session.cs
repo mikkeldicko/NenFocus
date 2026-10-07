@@ -120,6 +120,16 @@ public class Session : AggregateRoot
         Raise(new SessionStartedEvent(Id, BlockPresetId, Goal.Value, startedAt));
     }
 
+    /// <summary>
+    /// This session's run, its breaks and its keep-blocking rule, once started — the one answer to "where is
+    /// it at a moment" (<see cref="SessionTimeline.ReadingAt"/>) that the break questions below, enforcement and
+    /// the Main page all read (Gap 92, A4). Worked out from the stored fields, never stored itself.
+    /// </summary>
+    public SessionTimeline? Timeline =>
+        StartedAt is { } startedAt && EndAt is { } endAt
+            ? new SessionTimeline(new TimeSlot(startedAt, endAt), BreakSchedule, KeepBlockingDuringBreaks)
+            : null;
+
     /// <summary>True while <paramref name="at"/> falls inside one of this running
     /// session's break slots — whether it *is* a break; see LiftsBlockingAt for what it does.</summary>
     public bool IsOnBreakAt(Moment at) => CurrentBreakAt(at) is not null;
@@ -127,25 +137,21 @@ public class Session : AggregateRoot
     /// <summary>True when this session's own preset should stop being enforced at
     /// <paramref name="at"/>: it is inside a break slot and its contract doesn't keep
     /// blocking through breaks. The one question PolicyEngine and the UI ask (Gap 64).</summary>
-    public bool LiftsBlockingAt(Moment at) => IsOnBreakAt(at) && !KeepBlockingDuringBreaks;
+    public bool LiftsBlockingAt(Moment at) =>
+        Status == SessionStatus.Active && Timeline is { } timeline && timeline.ReadingAt(at).LiftsBlocking;
 
     /// <summary>The break slot covering <paramref name="at"/>, or null while working or
     /// when the session isn't running.</summary>
     public SessionBreak? CurrentBreakAt(Moment at) =>
-        Status == SessionStatus.Active && StartedAt is { } startedAt
-            ? BreakSchedule.BreakAt(at - startedAt)
-            : null;
+        Status == SessionStatus.Active && Timeline is { } timeline ? timeline.ReadingAt(at).CurrentBreak : null;
 
     /// <summary>Every break boundary this session crossed in (from, to] — what the
     /// clock-watching monitor asks each tick instead of tracking phases itself.</summary>
     public IReadOnlyList<BreakTransition> BreakTransitionsBetween(Moment from, Moment to) =>
-        StartedAt is { } startedAt
-            ? BreakSchedule.TransitionsBetween(from - startedAt, to - startedAt)
-            : [];
+        Timeline?.TransitionsBetween(from, to) ?? [];
 
     /// <summary>Breaks begun by <paramref name="at"/>.</summary>
-    public int BreaksTakenBy(Moment at) =>
-        StartedAt is { } startedAt ? BreakSchedule.BreaksStartedBy(at - startedAt) : 0;
+    public int BreaksTakenBy(Moment at) => Timeline?.ReadingAt(at).BreaksTaken ?? 0;
 
     /// <summary>Final break count, once the session has ended; 0 before then.</summary>
     public int BreaksTaken => EndedAt is { } endedAt ? BreaksTakenBy(endedAt) : 0;
@@ -241,7 +247,7 @@ public class Session : AggregateRoot
         if (Status == SessionStatus.Missed) return TimeSpan.Zero;
         if (StartedAt is null) return null;
         var raw = (EndedAt ?? asOf) - StartedAt.Value;
-        return TimeSpan.FromMinutes(Math.Floor(raw.TotalMinutes));
+        return WholeMinutes.RoundDown(raw).AsTimeSpan;
     }
 
     /// <summary>

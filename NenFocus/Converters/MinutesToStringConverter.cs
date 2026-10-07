@@ -1,11 +1,12 @@
 using System;
 using System.Globalization;
 using Avalonia.Data.Converters;
+using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Converters;
 
-/// <summary>Compact "1h 30m"/"1h"/"30 min" format for a raw double-minutes value (e.g.
-/// RedemptionEntry.MinutesCovered) — mirrors DurationToStringConverter's shape, adjusted so
+/// <summary>Compact "1h 30m"/"1h"/"30 min" format for a minutes value — whole minutes
+/// (<c>WholeMinutes</c>: a deficit, a redemption's coverage) or a raw number — mirrors DurationToStringConverter's shape, adjusted so
 /// a whole-hour value never shows a pointless "0m" and a sub-hour value spells out "min"
 /// (only "h"+"m" combine into the abbreviated form when both are non-zero).</summary>
 public sealed class MinutesToStringConverter : IValueConverter
@@ -15,6 +16,7 @@ public sealed class MinutesToStringConverter : IValueConverter
     public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
         => value switch
         {
+            WholeMinutes minutes => FormatMinutes(minutes.Minutes),
             double minutes => FormatMinutes(minutes),
             int minutes => FormatMinutes(minutes),
             _ => string.Empty

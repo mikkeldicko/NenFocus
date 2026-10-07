@@ -28,7 +28,7 @@ public class GetNenContractDeficitsQueryHandlerTests
         var rules = TestRules.Of(StrictnessRule.Locked, null);
         var plan = new Dictionary<DateOnly, double>();
         _contract = NenContract.Seal(Guid.NewGuid(), "Contract", new NenContractGoal("Goal"), rules,
-            TestCalendars.For(monday, monday.AddDays(2), rules.FloorRule, plan), null, plan, At.Utc(2026, 1, 4, 12), At.UtcZone);
+            TestCalendars.For(monday, monday.AddDays(2), rules.FloorRule, plan), plan, At.Utc(2026, 1, 4, 12), At.UtcZone);
         _contracts.GetByIdAsync(_contract.Id, Arg.Any<CancellationToken>()).Returns(_contract);
     }
 
@@ -61,8 +61,6 @@ public class GetNenContractDeficitsQueryHandlerTests
         dto.BlockPresetId.Should().Be(block.BlockPresetId);
         dto.Scheduled.Should().Be(block.Scheduled);
         dto.Outcome.Should().Be(FocusBlockOutcome.EndedEarly);
-        dto.PlannedMinutes.Should().Be(120);
-        dto.CompletedMinutes.Should().Be(45);
-        dto.RemainingDeficitMinutes.Should().Be(75);
+        dto.RemainingDeficit.Should().Be(WholeMinutes.Of(75));
     }
 }

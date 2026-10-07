@@ -13,7 +13,7 @@ namespace NenFocus.Domain.Entities;
 /// invariant: enforcement and scoring are computed by Application-layer
 /// guards that load this contract and the blocks separately.
 /// </summary>
-public class NenContract : AggregateRoot
+public partial class NenContract : AggregateRoot
 {
     public Guid Id { get; private set; }
     public string Name { get; private set; } = null!;
@@ -57,7 +57,6 @@ public class NenContract : AggregateRoot
     /// </summary>
     public DailyFloorRule FloorRule => Rules.FloorRule;
 
-    public ChangeWindow? ChangeWindow { get; private set; }
     public bool AllowCancellation => Rules.AllowCancellation;
     public NenContractStatus Status { get; private set; }
     public Guid? ContractPresetId { get; private set; }
@@ -127,7 +126,6 @@ public class NenContract : AggregateRoot
         NenContractGoal goal,
         ContractRules rules,
         ContractCalendar calendar,
-        ChangeWindow? changeWindow,
         IReadOnlyDictionary<DateOnly, double> plannedFocusHoursByDay,
         Moment sealedAt,
         UserTimeZone timeZone,
@@ -154,7 +152,6 @@ public class NenContract : AggregateRoot
             OriginalEndDate = calendar.LastDate,
             // Its own copy: a stored value object belongs to one row (Gap 97's lesson).
             Rules = rules with { },
-            ChangeWindow = changeWindow,
             ContractPresetId = contractPresetId,
             CommittedFocusHours = plannedFocusHoursByDay.Values.Sum(),
             Status = calendar.StartsAt <= localSealedAt
@@ -166,7 +163,7 @@ public class NenContract : AggregateRoot
         // The plan must meet every floor it signs — the same check later changes are held to (Gap 95).
         if (contract.CheckFloor(plannedFocusHoursByDay) is { Outcome: ChangeOutcome.BelowDailyFloor, Day: { } shortDay } verdict)
             throw new ArgumentException(
-                $"Day {shortDay:yyyy-MM-dd} is planned below the daily floor of {verdict.FloorHours}h (planned: {plannedFocusHoursByDay.GetValueOrDefault(shortDay)}h).");
+                $"Day {shortDay:yyyy-MM-dd} is planned below the daily floor of {verdict.RequiredHours}h (planned: {plannedFocusHoursByDay.GetValueOrDefault(shortDay)}h).");
 
         contract.Raise(new NenContractSealedEvent(id, contract.Name, contract.StartDate, contract.EndDate, sealedAt));
 
@@ -203,7 +200,7 @@ public class NenContract : AggregateRoot
     /// Canonical definition of "ready to complete" — the contract's end moment has come.
     /// </summary>
     public bool IsDueForCompletion(DateTime localNow)
-        => Status == NenContractStatus.Active && localNow >= EndsAt;
+        => IsActive && localNow >= EndsAt;
 
     /// <summary>
     /// The local moment this contract begins — the first day's window start: the start the
@@ -234,14 +231,44 @@ public class NenContract : AggregateRoot
         Raise(new NenContractActivatedEvent(Id, activatedAt));
     }
 
+    /// <summary>
+    /// The contract's end has arrived (the lifecycle sweep, <see cref="IsDueForCompletion"/>) —
+    /// whatever was delivered. Completing before the end is <see cref="CompleteEarly"/>.
+    /// </summary>
     public void Complete(Moment completedAt)
     {
-        if (Status != NenContractStatus.Active)
+        if (!IsActive)
             throw new InvalidOperationException("Only an active contract can be completed.");
 
         Status = NenContractStatus.Completed;
         Raise(new NenContractCompletedEvent(Id, completedAt));
     }
+
+    /// <summary>
+    /// The user completes the contract before its end: allowed only by its own
+    /// <see cref="CheckComplete"/> — every committed hour delivered, every block done, no session
+    /// running — which it asks itself, so no caller can skip it (Gap 92, D).
+    /// </summary>
+    public void CompleteEarly(
+        Moment completedAt, IEnumerable<PlannedBlock> members, IEnumerable<Session> sessions, bool sessionRunning, UserTimeZone timeZone)
+    {
+        if (CheckComplete(members, sessions, sessionRunning, completedAt, timeZone) is { IsAllowed: false } verdict)
+            throw new InvalidOperationException($"This contract can't be completed now ({verdict.Outcome}).");
+
+        Complete(completedAt);
+    }
+
+    /// <summary>May the contract be edited (re-drafted)? Only before it starts (Gap 92, D).</summary>
+    public ContractActionVerdict CheckEdit() => IsScheduledVerdict;
+
+    /// <summary>May the contract be deleted? Only before it starts — once Active it is completed or broken (Gap 92, D).</summary>
+    public ContractActionVerdict CheckDelete() => IsScheduledVerdict;
+
+    private ContractActionVerdict IsScheduledVerdict => Status == NenContractStatus.Scheduled
+        ? ContractActionVerdict.Allowed
+        : ContractActionVerdict.Refused(ContractActionOutcome.NotScheduled);
+
+    private bool IsActive => Status == NenContractStatus.Active;
 
     public void SetReflection(string? reflection)
     {
@@ -263,12 +290,15 @@ public class NenContract : AggregateRoot
         PostContractAcknowledgedAt = acknowledgedAt;
     }
 
-    // Whether the user may break it now is CheckBreak's answer (cancellation allowed, no session
-    // running) — asked by the Break validator and handler before this is called.
-    public void Break(Moment brokenAt, UserTimeZone timeZone)
+    /// <summary>
+    /// The user cancels the contract. Allowed only by its own <see cref="CheckBreak"/> — still in
+    /// effect, sealed with cancellation on, no session running — which it asks itself, so no
+    /// caller can skip it (Gap 92, D).
+    /// </summary>
+    public void Break(Moment brokenAt, UserTimeZone timeZone, bool sessionRunning)
     {
-        if (!IsInEffect)
-            throw new InvalidOperationException("Only a contract that is still in effect (Scheduled or Active) can be broken.");
+        if (CheckBreak(sessionRunning) is { IsAllowed: false } verdict)
+            throw new InvalidOperationException($"This contract can't be cancelled now ({verdict.Outcome}).");
 
         // The days after the break day disappear — they were never going to happen, so they
         // shouldn't still "reserve" the calendar (blocking a new contract from starting there)
@@ -392,38 +422,8 @@ public class NenContract : AggregateRoot
         return block.IsFinal(brokenAt) ? BlockFateOnBreak.Leave : BlockFateOnBreak.Cancel;
     }
 
-    // ── What each day owes and got (Gap 95, decisions 5 and 6) ──────────────────────────────
-
-    /// <summary>
-    /// Every day of this contract as it stands: what it owes, what was done toward it, the Bonus
-    /// hours earned apart from it, and whether it was met — the one day rule the Planner badge,
-    /// the banner, the recap and completion all read. <paramref name="blocks"/> are this
-    /// contract's own; <paramref name="sessions"/> may be any, the contract decides which count.
-    /// </summary>
-    public IReadOnlyList<ContractDayStatus> DayStatuses(
-        IEnumerable<PlannedBlock> blocks, IEnumerable<Session> sessions, Moment asOf, UserTimeZone timeZone)
-    {
-        var mine = blocks.ToList();
-        foreach (var block in mine)
-            EnsureMine(block);
-
-        return ContractDayLedger.Build(
-            _calendar.Days.Select(d => d.Date).ToList(), mine.OfType<FocusBlock>().ToList(), sessions, asOf, timeZone);
-    }
-
-    /// <summary>
-    /// Every missed or late block of this contract still owed, oldest first — what it failed to
-    /// deliver, and what is left once redemptions have paid (Gap 106). <paramref name="blocks"/>
-    /// are this contract's own.
-    /// </summary>
-    public IReadOnlyList<OutstandingDeficit> Deficits(IEnumerable<PlannedBlock> blocks, Moment asOf)
-    {
-        var mine = blocks.ToList();
-        foreach (var block in mine)
-            EnsureMine(block);
-
-        return ContractDeficitLedger.Build(mine.OfType<FocusBlock>().ToList(), asOf);
-    }
+    // What each day owes and got (DayStatuses) and what missed blocks still owe (Deficits) are in
+    // NenContract.DayStatuses.cs and NenContract.Deficits.cs.
 
     // ── Placing a redemption block (Gap 106) ────────────────────────────────────────────────
 
@@ -446,11 +446,13 @@ public class NenContract : AggregateRoot
             return RedemptionVerdict.Refused(RedemptionPlacementOutcome.WrongDay);
 
         var entries = new List<RedemptionEntry>();
-        var room = slot.Length.TotalMinutes;
+        // Whole minutes of room, never more than the slot holds: a requested slot with a partial
+        // minute is trimmed to whole minutes by the cap below (Gap 92, V10).
+        var room = WholeMinutes.RoundDown(slot.Length);
         foreach (var deficit in deficits.Where(d => d.PresetId == presetId))
         {
-            if (room <= 0) break;
-            var covered = Math.Min(room, deficit.RemainingMinutes);
+            if (room == WholeMinutes.Zero) break;
+            var covered = WholeMinutes.Min(room, deficit.Remaining);
             entries.Add(new RedemptionEntry(deficit.MissedBlockId, covered));
             room -= covered;
         }
@@ -460,7 +462,7 @@ public class NenContract : AggregateRoot
 
         var receipt = new RedemptionReceipt(entries);
         var capped = FocusBlock.CapEndToRedemptionCoverage(slot, receipt);
-        return RedemptionVerdict.Placed(receipt, capped, FocusBlock.WasRedemptionCoverageMeaningfullyCapped(slot, capped),
+        return RedemptionVerdict.Placed(receipt, capped, wasCapped: capped.Length < slot.Length,
             new ContractMembership(Id, ContractRole.Redemption));
     }
 
@@ -487,15 +489,19 @@ public class NenContract : AggregateRoot
     // whether a session runs; the contract owns what that means.
 
     /// <summary>
-    /// Whether the user may complete this contract early: no session running, every committed
-    /// hour delivered, and every block of its own done (<see cref="PlannedBlock.IsFinal"/>;
-    /// cancelled blocks don't count) — so completing never leaves anything to clean up. The
-    /// verdict carries the hours still owed and the blocks not done either way. Completed hours are
-    /// the days' own (<see cref="DayStatuses"/>), so completing and the Planner can't disagree.
+    /// Whether the user may complete this contract early: it is Active, no session is running,
+    /// every committed hour is delivered, and every block of its own is done
+    /// (<see cref="PlannedBlock.IsFinal"/>; cancelled blocks don't count) — so completing never
+    /// leaves anything to clean up. Past the status check, the verdict carries the hours still owed
+    /// and the blocks not done either way. Completed hours are the days' own
+    /// (<see cref="DayStatuses"/>), so completing and the Planner can't disagree.
     /// </summary>
-    public ContractEndVerdict CheckComplete(
+    public ContractActionVerdict CheckComplete(
         IEnumerable<PlannedBlock> members, IEnumerable<Session> sessions, bool sessionRunning, Moment asOf, UserTimeZone timeZone)
     {
+        if (!IsActive)
+            return ContractActionVerdict.Refused(ContractActionOutcome.NotActive);
+
         var blocks = members.ToList();
         var completedFocusHours = DayStatuses(blocks, sessions, asOf, timeZone).Sum(d => d.CompletedHours);
 
@@ -509,22 +515,26 @@ public class NenContract : AggregateRoot
         }
 
         var remainingHours = Math.Max(0, CommittedFocusHours - completedFocusHours);
-        var outcome = sessionRunning ? ContractEndOutcome.SessionIsRunning
-            : remainingHours > 0 ? ContractEndOutcome.HoursNotDelivered
-            : pending > 0 ? ContractEndOutcome.BlocksStillPending
-            : ContractEndOutcome.Allowed;
-        return new ContractEndVerdict(outcome, remainingHours, pending);
+        if (sessionRunning)
+            return ContractActionVerdict.Refused(ContractActionOutcome.SessionIsRunning, remainingHours, pending);
+        if (remainingHours > 0)
+            return ContractActionVerdict.Refused(ContractActionOutcome.HoursNotDelivered, remainingHours, pending);
+        if (pending > 0)
+            return ContractActionVerdict.Refused(ContractActionOutcome.BlocksStillPending, remainingHours, pending);
+        return ContractActionVerdict.Allowed;
     }
 
     /// <summary>
-    /// Whether the user may break this contract now: not if it was sealed with cancellation off —
-    /// the contract's own setting is the gate (decided 2026-10-06, ending the 2026-08-18 interim;
-    /// Strict Mode may add more in Gap 83) — and not while a session runs.
+    /// Whether the user may break this contract now: only while it is still in effect; not if it
+    /// was sealed with cancellation off — the contract's own setting is the gate (decided
+    /// 2026-10-06, ending the 2026-08-18 interim; Strict Mode may add more in Gap 83) — and not
+    /// while a session runs.
     /// </summary>
-    public ContractEndVerdict CheckBreak(bool sessionRunning)
-        => new(!AllowCancellation ? ContractEndOutcome.CancellationNotAllowed
-            : sessionRunning ? ContractEndOutcome.SessionIsRunning
-            : ContractEndOutcome.Allowed);
+    public ContractActionVerdict CheckBreak(bool sessionRunning)
+        => !IsInEffect ? ContractActionVerdict.Refused(ContractActionOutcome.NotInEffect)
+            : !AllowCancellation ? ContractActionVerdict.Refused(ContractActionOutcome.CancellationNotAllowed)
+            : sessionRunning ? ContractActionVerdict.Refused(ContractActionOutcome.SessionIsRunning)
+            : ContractActionVerdict.Allowed;
 
     // ── What may happen to one of this contract's blocks (Gap 93) ───────────────────────────
 

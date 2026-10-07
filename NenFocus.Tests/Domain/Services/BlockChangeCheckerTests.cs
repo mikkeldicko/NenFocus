@@ -20,16 +20,17 @@ public class BlockChangeCheckerTests
     private static readonly WorkHours NineToFive = new(new TimeOnly(9, 0), new TimeOnly(17, 0));
     private static readonly Moment BeforeItAll = At.Utc(2026, 1, 4, 13);
 
-    private static readonly BlockChangeChecker Checker = new(new PlannedFocusHoursCalculator());
+    private static readonly BlockChangeChecker Checker = new();
 
     private static NenContract Contract(StrictnessRule strictness, bool bonusBlocksFollowStrictness = false,
         double? fixedFloorHours = null, IReadOnlyDictionary<DateOnly, double>? plan = null)
     {
+        // Cancellation on, so a test can finish a contract by breaking it (Break obeys CheckBreak, Gap 92).
         var rules = TestRules.Of(strictness, fixedFloorHours is { } hours ? new DailyFloor(hours) : null,
-            bonusBlocksFollowStrictness: bonusBlocksFollowStrictness);
+            allowCancellation: true, bonusBlocksFollowStrictness: bonusBlocksFollowStrictness);
         plan ??= new Dictionary<DateOnly, double>();
         return NenContract.Seal(Guid.NewGuid(), "Contract", new NenContractGoal("Goal"), rules,
-            TestCalendars.For(Monday, Wednesday, rules.FloorRule, plan, NineToFive), null, plan,
+            TestCalendars.For(Monday, Wednesday, rules.FloorRule, plan, NineToFive), plan,
             At.Utc(2026, 1, 4, 12), At.UtcZone);
     }
 
@@ -427,7 +428,7 @@ public class BlockChangeCheckerTests
     {
         var contract = Contract(StrictnessRule.PeriodTimeBudget);
         var block = Committed(contract, Slot(Monday, 10, 12));
-        contract.Break(At.Utc(2026, 1, 4, 14), At.UtcZone);
+        contract.Break(At.Utc(2026, 1, 4, 14), At.UtcZone, sessionRunning: false);
 
         Checker.AllowancesFor(block, contract, BeforeItAll).Should().Be(new BlockChangeAllowances(false, false, false, false));
     }

@@ -336,6 +336,16 @@ namespace NenFocus.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("OriginatingBlockId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Sessions_OnePerOriginatingBlock")
+                        .HasFilter("\"OriginatingBlockId\" IS NOT NULL");
+
+                    b.HasIndex("Status")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Sessions_OneActive")
+                        .HasFilter("\"Status\" = 'Active'");
+
                     b.ToTable("Sessions", (string)null);
                 });
 

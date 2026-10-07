@@ -137,10 +137,7 @@ public sealed class SessionStateService : ISessionStateService
         BlockPresetId = s.BlockPresetId,
         DurationMinutes = (int)s.Duration.Value.TotalMinutes,
         Status = s.Status,
-        StartedAt = s.StartedAt ?? now,
-        EndAt = s.EndAt ?? now,
-        Breaks = SessionDto.MapBreaks(s.BreakSchedule),
-        BreakPresetName = s.BreakPresetName,
-        KeepBlockingDuringBreaks = s.KeepBlockingDuringBreaks
+        Timeline = s.Timeline,
+        BreakPresetName = s.BreakPresetName
     };
 }

@@ -38,9 +38,9 @@ public sealed record BlockChangeVerdictDto
             ChangeOutcome.RedemptionLengthFixed =>
                 "A redemption block keeps the length it was placed with — move or split it instead.",
             ChangeOutcome.BelowDailyFloor =>
-                $"This would drop {verdict.Day:MMM d}'s total below its {verdict.FloorHours:0.#}h daily floor.",
+                $"This would drop {verdict.Day:MMM d}'s total below its {verdict.RequiredHours:0.#}h daily floor.",
             ChangeOutcome.BelowPeriodTarget =>
-                $"This would drop the contract's total planned hours below its {verdict.FloorHours:0.#}h target.",
+                $"This would drop the contract's total planned hours below its {verdict.RequiredHours:0.#}h target.",
             _ => null
         }
     };

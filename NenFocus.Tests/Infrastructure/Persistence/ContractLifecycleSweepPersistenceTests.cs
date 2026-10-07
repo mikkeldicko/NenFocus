@@ -26,7 +26,6 @@ public class ContractLifecycleSweepPersistenceTests : SqliteRepositoryTestBase
         calendar: TestCalendars.For(Tomorrow, Tomorrow.AddDays(6), new DailyFloorRule.None(),
             workHours: new WorkHours(new TimeOnly(9, 0), new TimeOnly(18, 0))),
         floorRule: new DailyFloorRule.None(),
-        changeWindow: null,
         allowCancellation: true,
         plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
         sealedAt: At.Utc(Tomorrow.AddDays(-1).ToDateTime(new TimeOnly(16, 38))), timeZone: At.UtcZone);

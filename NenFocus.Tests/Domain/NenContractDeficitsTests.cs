@@ -21,13 +21,13 @@ public class NenContractDeficitsTests
         var rules = TestRules.Of(StrictnessRule.Locked, null);
         var plan = new Dictionary<DateOnly, double>();
         return NenContract.Seal(Guid.NewGuid(), "Contract", new NenContractGoal("Goal"), rules,
-            TestCalendars.For(monday, monday.AddDays(2), rules.FloorRule, plan), null, plan, At.Utc(2026, 1, 4, 12), At.UtcZone);
+            TestCalendars.For(monday, monday.AddDays(2), rules.FloorRule, plan), plan, At.Utc(2026, 1, 4, 12), At.UtcZone);
     }
 
     private static FocusBlock Committed(DateTime start, DateTime end) =>
         FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(start, end), membership: TestContracts.Committed(Contract.Id));
 
-    private static FocusBlock Redemption(FocusBlock missed, DateTime start, DateTime end, double minutesCovered) =>
+    private static FocusBlock Redemption(FocusBlock missed, DateTime start, DateTime end, WholeMinutes minutesCovered) =>
         FocusBlock.CreateWithReceipt(Guid.NewGuid(), missed.BlockPresetId, At.Slot(start, end),
             title: null, membership: TestContracts.Redemption(Contract.Id), receipt: new RedemptionReceipt([new RedemptionEntry(missed.Id, minutesCovered)]));
 
@@ -89,7 +89,7 @@ public class NenContractDeficitsTests
         var block = Committed(Now.AddHours(-3), Now.AddHours(-1));
 
         Deficits(block).Should().ContainSingle().Which.Should().Be(new OutstandingDeficit(
-            block.Id, block.BlockPresetId, block.Scheduled, FocusBlockOutcome.Missed, OwedMinutes: 120, RemainingMinutes: 120));
+            block.Id, block.BlockPresetId, block.Scheduled, FocusBlockOutcome.Missed, Owed: WholeMinutes.Of(120), Remaining: WholeMinutes.Of(120)));
     }
 
     [Fact]
@@ -98,8 +98,8 @@ public class NenContractDeficitsTests
         var deficit = Deficits(Worked(Committed(Now.AddHours(-3), Now.AddHours(-1)), 20, 120)).Should().ContainSingle().Subject;
 
         deficit.Outcome.Should().Be(FocusBlockOutcome.StartedLate);
-        deficit.OwedMinutes.Should().Be(20);
-        deficit.RemainingMinutes.Should().Be(20);
+        deficit.Owed.Should().Be(WholeMinutes.Of(20));
+        deficit.Remaining.Should().Be(WholeMinutes.Of(20));
     }
 
     [Fact]
@@ -108,7 +108,7 @@ public class NenContractDeficitsTests
         var deficit = Deficits(Worked(Committed(Now.AddHours(-3), Now.AddHours(-1)), 0, 45)).Should().ContainSingle().Subject;
 
         deficit.Outcome.Should().Be(FocusBlockOutcome.EndedEarly);
-        deficit.RemainingMinutes.Should().Be(75);
+        deficit.Remaining.Should().Be(WholeMinutes.Of(75));
     }
 
     [Fact]
@@ -116,7 +116,7 @@ public class NenContractDeficitsTests
     {
         // 40 late, ran 150 from there: credit stops at the block's end (80 of 120).
         Deficits(Worked(Committed(Now.AddHours(-3), Now.AddHours(-1)), 40, 190))
-            .Should().ContainSingle().Which.RemainingMinutes.Should().Be(40);
+            .Should().ContainSingle().Which.Remaining.Should().Be(WholeMinutes.Of(40));
     }
 
     [Fact]
@@ -124,7 +124,7 @@ public class NenContractDeficitsTests
     {
         var missed = Committed(Now.AddHours(-3), Now.AddHours(-1));
 
-        Deficits(missed, Redemption(missed, Now.AddHours(1), Now.AddHours(3), 120)).Should().BeEmpty();
+        Deficits(missed, Redemption(missed, Now.AddHours(1), Now.AddHours(3), WholeMinutes.Of(120))).Should().BeEmpty();
     }
 
     [Fact]
@@ -132,7 +132,7 @@ public class NenContractDeficitsTests
     {
         var missed = Committed(Now.AddHours(-5), Now.AddHours(-3));
         // 130 minutes long, 10 late, ran to the end: 120 credited, covering it all.
-        var redemption = Worked(Redemption(missed, Now.AddMinutes(-150), Now.AddMinutes(-20), 120), 10, 130);
+        var redemption = Worked(Redemption(missed, Now.AddMinutes(-150), Now.AddMinutes(-20), WholeMinutes.Of(120)), 10, 130);
 
         Deficits(missed, redemption).Should().BeEmpty();
     }
@@ -142,10 +142,10 @@ public class NenContractDeficitsTests
     {
         var missed = Committed(Now.AddHours(-3), Now.AddHours(-1));
 
-        var deficit = Deficits(missed, Redemption(missed, Now.AddHours(1), Now.AddHours(2), 50)).Should().ContainSingle().Subject;
+        var deficit = Deficits(missed, Redemption(missed, Now.AddHours(1), Now.AddHours(2), WholeMinutes.Of(50))).Should().ContainSingle().Subject;
 
-        deficit.OwedMinutes.Should().Be(120);
-        deficit.RemainingMinutes.Should().Be(70);
+        deficit.Owed.Should().Be(WholeMinutes.Of(120));
+        deficit.Remaining.Should().Be(WholeMinutes.Of(70));
     }
 
     [Fact]
@@ -154,17 +154,17 @@ public class NenContractDeficitsTests
         // Rule 13: a redemption that never happened pays nothing.
         var missed = Committed(Now.AddHours(-5), Now.AddHours(-3));
 
-        Deficits(missed, Redemption(missed, Now.AddHours(-2), Now.AddHours(-1), 60))
-            .Should().ContainSingle().Which.RemainingMinutes.Should().Be(120);
+        Deficits(missed, Redemption(missed, Now.AddHours(-2), Now.AddHours(-1), WholeMinutes.Of(60)))
+            .Should().ContainSingle().Which.Remaining.Should().Be(WholeMinutes.Of(120));
     }
 
     [Fact]
     public void CoveringRedemptionEndedEarly_PaysOnlyWhatItDelivered()
     {
         var missed = Committed(Now.AddHours(-5), Now.AddHours(-3));
-        var redemption = Worked(Redemption(missed, Now.AddHours(-2), Now.AddHours(-1), 60), 0, 20);
+        var redemption = Worked(Redemption(missed, Now.AddHours(-2), Now.AddHours(-1), WholeMinutes.Of(60)), 0, 20);
 
-        Deficits(missed, redemption).Should().ContainSingle().Which.RemainingMinutes.Should().Be(100);
+        Deficits(missed, redemption).Should().ContainSingle().Which.Remaining.Should().Be(WholeMinutes.Of(100));
     }
 
     [Fact]
@@ -172,25 +172,16 @@ public class NenContractDeficitsTests
     {
         // Rule 18: not final yet, so the whole claim counts until its session ends.
         var missed = Committed(Now.AddHours(-5), Now.AddHours(-3));
-        var redemption = Worked(Redemption(missed, Now.AddMinutes(-20), Now.AddMinutes(40), 60), 0, null);
+        var redemption = Worked(Redemption(missed, Now.AddMinutes(-20), Now.AddMinutes(40), WholeMinutes.Of(60)), 0, null);
 
-        Deficits(missed, redemption).Should().ContainSingle().Which.RemainingMinutes.Should().Be(60);
-    }
-
-    [Fact]
-    public void CoverageWithinFloatingPointTolerance_IsSettled()
-    {
-        // A claim that lost a sliver through tick rounding must not keep Cover Deficit alive.
-        var missed = Committed(Now.AddHours(-3), Now.AddHours(-1));
-
-        Deficits(missed, Redemption(missed, Now.AddHours(1), Now.AddHours(3), 120 - 1.7e-9)).Should().BeEmpty();
+        Deficits(missed, redemption).Should().ContainSingle().Which.Remaining.Should().Be(WholeMinutes.Of(60));
     }
 
     [Fact]
     public void DeficitOfExactlyOneMinute_IsOwed()
     {
         Deficits(Worked(Committed(Now.AddHours(-3), Now.AddHours(-1)), 0, 119))
-            .Should().ContainSingle().Which.RemainingMinutes.Should().Be(1);
+            .Should().ContainSingle().Which.Remaining.Should().Be(WholeMinutes.Of(1));
     }
 
     [Fact]
@@ -198,7 +189,7 @@ public class NenContractDeficitsTests
     {
         // 1 min 37 s short: credit rounds down to 118 whole minutes, so 2 are owed.
         Deficits(Worked(Committed(Now.AddHours(-3), Now.AddHours(-1)), 0, 120 - 97 / 60.0))
-            .Should().ContainSingle().Which.RemainingMinutes.Should().Be(2);
+            .Should().ContainSingle().Which.Remaining.Should().Be(WholeMinutes.Of(2));
     }
 
     [Fact]
@@ -208,5 +199,21 @@ public class NenContractDeficitsTests
         var earlier = Committed(Now.AddHours(-5), Now.AddHours(-4));
 
         Deficits(later, earlier).Select(d => d.MissedBlockId).Should().Equal(earlier.Id, later.Id);
+    }
+
+    [Fact]
+    public void Gap33_AnEarlyEndToTheMillisecond_CoveredByItsSuggestedTile_IsPaidExactly()
+    {
+        // Gap 33's case: a session ended to the millisecond (31.906 min into a 60 min block). Credit
+        // rounds down to 31, so 29 whole minutes are owed; the suggested tile covers exactly that, and
+        // the ledger clears to nothing — no tolerance needed, because no fraction exists (Gap 92, V10).
+        var missed = Worked(Committed(Now.AddHours(-5), Now.AddHours(-4)), 0, 31.906);
+        var owed = Deficits(missed).Should().ContainSingle().Subject.Remaining;
+        owed.Should().Be(WholeMinutes.Of(29));
+
+        var tile = TimeSlot.Covering(At.Utc(Now.AddHours(1)), owed);
+        var redemption = Redemption(missed, Now.AddHours(1), Now.AddHours(1) + tile.Length, owed);
+
+        Deficits(missed, redemption).Should().BeEmpty();
     }
 }

@@ -46,7 +46,6 @@ public class GetNenContractRecapQueryHandlerTests
             strictnessRule: strictness,
             calendar: TestCalendars.For(StartDate, EndDate, new DailyFloorRule.None()),
             floorRule: new DailyFloorRule.None(),
-            changeWindow: null,
             allowCancellation: true,
             plannedFocusHoursByDay: new Dictionary<DateOnly, double> { [StartDate] = committedHours },
             sealedAt: At.Utc(StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)), timeZone: At.UtcZone);
@@ -58,7 +57,7 @@ public class GetNenContractRecapQueryHandlerTests
         strictnessRule: StrictnessRule.Locked,
         calendar: TestCalendars.For(StartDate, EndDate, new DailyFloorRule.Fixed(new DailyFloor(4)), restDays: restDays),
         floorRule: new DailyFloorRule.Fixed(new DailyFloor(4)),
-        changeWindow: null, allowCancellation: true,
+        allowCancellation: true,
         plannedFocusHoursByDay: new Dictionary<DateOnly, double>
         {
             [StartDate] = 4, [StartDate.AddDays(1)] = 4, [StartDate.AddDays(2)] = 4, [StartDate.AddDays(3)] = 4,
@@ -72,10 +71,8 @@ public class GetNenContractRecapQueryHandlerTests
     {
         var days = Enumerable.Range(0, 7).Select(i => StartDate.AddDays(i)).Select(date =>
         {
-            var isRest = restDays.Contains(date);
-            var target = isRest ? 0 : 4;
-            var done = hoursByDay.GetValueOrDefault(date);
-            return new ContractDayStatus(date, target, done, 0, isRest, isRest || done >= target);
+            var target = restDays.Contains(date) ? 0 : 4;
+            return new ContractDayStatus(date, target, hoursByDay.GetValueOrDefault(date), 0);
         }).ToList();
         _dayStatuses.HandleAsync(Arg.Any<GetNenContractDayStatusesQuery>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<ContractDayStatus>)days);
@@ -173,7 +170,7 @@ public class GetNenContractRecapQueryHandlerTests
         var endedEarly = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now.AddHours(-6), Now.AddHours(-5)), membership: TestContracts.Committed(ContractId));
         var missed = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now.AddHours(-4), Now.AddHours(-3)), membership: TestContracts.Committed(ContractId));
         var redemption = FocusBlock.CreateWithReceipt(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now.AddHours(-2), Now.AddHours(-1)), title: null, membership: TestContracts.Redemption(ContractId),
-            receipt: new RedemptionReceipt([new RedemptionEntry(Guid.NewGuid(), 30)]));
+            receipt: new RedemptionReceipt([new RedemptionEntry(Guid.NewGuid(), WholeMinutes.Of(30))]));
         var background = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now, Now.AddHours(1)), membership: TestContracts.Committed(ContractId));
 
         _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>())
@@ -271,7 +268,6 @@ public class GetNenContractRecapQueryHandlerTests
             strictnessRule: StrictnessRule.Locked,
             calendar: TestCalendars.For(StartDate, EndDate, new DailyFloorRule.None()),
             floorRule: new DailyFloorRule.None(),
-            changeWindow: null,
             allowCancellation: true,
             plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
             sealedAt: At.Utc(StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)), timeZone: At.UtcZone);

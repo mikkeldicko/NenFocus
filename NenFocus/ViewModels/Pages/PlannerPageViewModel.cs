@@ -404,12 +404,12 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
     // One format for every strictness rule — total completed vs. total committed hours,
     // plus outstanding deficit. Uniform across Locked/DailyFlexibility/PeriodTimeBudget
-    // (with or without a whole-period target) since TotalFloorHours/TotalCompletedHours are
+    // (with or without a whole-period target) since TotalCommittedHours/TotalCompletedHours are
     // already computed the same way for all of them.
     public string SelectedContractBannerText => SelectedContract is not { } c
         ? string.Empty
         : $"Contract: {c.Name} — Day {c.DayNumber}/{c.TotalDays} — " +
-          $"{c.TotalCompletedHours:0.#}h / {c.TotalFloorHours:0.#}h completed" +
+          $"{c.TotalCompletedHours:0.#}h / {c.TotalCommittedHours:0.#}h completed" +
           (c.DeficitHours > 0 ? $" — {MinutesToStringConverter.FormatMinutes(c.DeficitHours * 60)} deficit" : string.Empty) +
           (c.TotalBonusHours > 0 ? $" — {MinutesToStringConverter.FormatMinutes(c.TotalBonusHours * 60)} bonus" : string.Empty);
 
@@ -497,7 +497,8 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     // contract's week while a different one is Active elsewhere).
     private async Task RefreshCanCompleteSelectedContractAsync()
     {
-        CanCompleteSelectedContract = SelectedContract is { Status: NenContractStatus.Active } c &&
+        // The contract's own answer covers its status too (CheckComplete refuses a non-Active one, Gap 92).
+        CanCompleteSelectedContract = SelectedContract is { } c &&
             (await _queryDispatcher.QueryAsync(new GetNenContractCompletionReadinessQuery(c.Id))).IsReady;
     }
 
@@ -538,7 +539,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
             foreach (var d in contract.DayStatuses)
             {
                 merged[d.Date] = new DayFloorPreviewViewModel(
-                    d.Date, d.CurrentHours, d.IsRestDay ? null : d.FloorHours, d.IsRestDay, d.Timing,
+                    d.Date, d.CurrentHours, d.IsRestDay ? null : d.TargetHours, d.IsRestDay, d.Timing,
                     contract.StrictnessRule, contract.HasPeriodTarget, d.BonusHours,
                     contract.Status, d.IsMet);
             }
@@ -2113,10 +2114,9 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
                     EndDate = _draftRules.EndDate,
                     StrictnessRule = _draftRules.StrictnessRule,
                     AllowCancellation = _draftRules.AllowCancellation,
-                    FixedDailyFloorHours = _draftRules.FixedDailyFloorHours,
+                    FixedDailyFloorHours = _draftRules.WholeFixedDailyFloorHours,
                     RestDays = _draftRules.RestDays,
-                    WorkHoursStart = _draftRules.WorkHoursStart,
-                    WorkHoursEnd = _draftRules.WorkHoursEnd,
+                    WorkHours = _draftRules.WorkHours,
                     Blocks = blocks,
                     ContractPresetId = _draftRules.ContractPresetId,
                     RedemptionPlacementPolicy = _draftRules.RedemptionPlacementPolicy,
@@ -2136,10 +2136,9 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
                     EndDate = _draftRules.EndDate,
                     StrictnessRule = _draftRules.StrictnessRule,
                     AllowCancellation = _draftRules.AllowCancellation,
-                    FixedDailyFloorHours = _draftRules.FixedDailyFloorHours,
+                    FixedDailyFloorHours = _draftRules.WholeFixedDailyFloorHours,
                     RestDays = _draftRules.RestDays,
-                    WorkHoursStart = _draftRules.WorkHoursStart,
-                    WorkHoursEnd = _draftRules.WorkHoursEnd,
+                    WorkHours = _draftRules.WorkHours,
                     Blocks = blocks,
                     ContractPresetId = _draftRules.ContractPresetId,
                     RedemptionPlacementPolicy = _draftRules.RedemptionPlacementPolicy,

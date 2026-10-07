@@ -21,33 +21,33 @@ public sealed class RedemptionReceipt : IEquatable<RedemptionReceipt>
         Entries = list;
     }
 
-    public double TotalMinutes => Entries.Sum(e => e.MinutesCovered);
+    public WholeMinutes Total => Entries.Aggregate(WholeMinutes.Zero, (sum, e) => sum + e.Covered);
 
-    public double MinutesFor(Guid missedBlockId)
-        => Entries.FirstOrDefault(e => e.MissedBlockId == missedBlockId)?.MinutesCovered ?? 0;
+    public WholeMinutes CoveredFor(Guid missedBlockId)
+        => Entries.FirstOrDefault(e => e.MissedBlockId == missedBlockId)?.Covered ?? WholeMinutes.Zero;
 
     /// <summary>
     /// Divides the receipt across a split whose first piece is <paramref name="firstLength"/> long:
     /// the first piece fills first, in entry order; an entry straddling the cut is split in two
     /// against the same missed block. Nothing is recalculated or lost (Gap 106, decision 2).
     /// </summary>
-    public (RedemptionReceipt First, RedemptionReceipt Second) SplitAt(TimeSpan firstLength)
+    public (RedemptionReceipt First, RedemptionReceipt Second) SplitAt(WholeMinutes firstLength)
     {
         var first = new List<RedemptionEntry>();
         var second = new List<RedemptionEntry>();
-        var room = firstLength.TotalMinutes;
+        var room = firstLength;
 
         foreach (var entry in Entries)
         {
-            var toFirst = Math.Min(room, entry.MinutesCovered);
-            if (toFirst > 0)
+            var toFirst = WholeMinutes.Min(room, entry.Covered);
+            if (toFirst > WholeMinutes.Zero)
             {
                 first.Add(new RedemptionEntry(entry.MissedBlockId, toFirst));
                 room -= toFirst;
             }
 
-            var toSecond = entry.MinutesCovered - toFirst;
-            if (toSecond > 0)
+            var toSecond = entry.Covered - toFirst;
+            if (toSecond > WholeMinutes.Zero)
                 second.Add(new RedemptionEntry(entry.MissedBlockId, toSecond));
         }
 

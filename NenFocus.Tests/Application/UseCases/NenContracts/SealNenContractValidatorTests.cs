@@ -90,19 +90,10 @@ public class SealNenContractValidatorTests
     [Theory]
     [InlineData(-1)]
     [InlineData(0)] // zero would mean "no floor" by another name — leave it unset instead
-    [InlineData(24.1)]
     [InlineData(25)]
-    public async Task Validate_FixedDailyFloorHoursOutOfRange_IsInvalid(double floor)
+    public async Task Validate_FixedDailyFloorHoursOutOfRange_IsInvalid(int floor)
     {
         var result = await CreateValidator().ValidateAsync(ValidCommand() with { FixedDailyFloorHours = floor });
-
-        result.IsValid.Should().BeFalse();
-    }
-
-    [Fact]
-    public async Task Validate_FixedDailyFloorHoursNotWholeNumber_IsInvalid()
-    {
-        var result = await CreateValidator().ValidateAsync(ValidCommand() with { FixedDailyFloorHours = 3.5 });
 
         result.IsValid.Should().BeFalse();
     }
@@ -121,8 +112,7 @@ public class SealNenContractValidatorTests
         var command = ValidCommand() with
         {
             FixedDailyFloorHours = 6,
-            WorkHoursStart = new TimeOnly(10, 0),
-            WorkHoursEnd = new TimeOnly(15, 0) // 5h window — a 6h floor could never fit
+            WorkHours = new WorkHours(new TimeOnly(10, 0), new TimeOnly(15, 0)) // 5h window — a 6h floor could never fit
         };
 
         var result = await CreateValidator().ValidateAsync(command);
@@ -136,8 +126,7 @@ public class SealNenContractValidatorTests
         var command = ValidCommand() with
         {
             FixedDailyFloorHours = 5,
-            WorkHoursStart = new TimeOnly(10, 0),
-            WorkHoursEnd = new TimeOnly(15, 0)
+            WorkHours = new WorkHours(new TimeOnly(10, 0), new TimeOnly(15, 0))
         };
 
         var result = await CreateValidator().ValidateAsync(command);
@@ -146,27 +135,9 @@ public class SealNenContractValidatorTests
     }
 
     [Fact]
-    public async Task Validate_OnlyWorkHoursStartSet_IsInvalid()
-    {
-        var result = await CreateValidator().ValidateAsync(ValidCommand() with { WorkHoursStart = new TimeOnly(9, 0) });
-
-        result.IsValid.Should().BeFalse();
-    }
-
-    [Fact]
-    public async Task Validate_WorkHoursEndBeforeStart_IsInvalid()
-    {
-        var command = ValidCommand() with { WorkHoursStart = new TimeOnly(17, 0), WorkHoursEnd = new TimeOnly(9, 0) };
-
-        var result = await CreateValidator().ValidateAsync(command);
-
-        result.IsValid.Should().BeFalse();
-    }
-
-    [Fact]
     public async Task Validate_BothWorkHoursSetCorrectly_IsValid()
     {
-        var command = ValidCommand() with { WorkHoursStart = new TimeOnly(9, 0), WorkHoursEnd = new TimeOnly(17, 0) };
+        var command = ValidCommand() with { WorkHours = new WorkHours(new TimeOnly(9, 0), new TimeOnly(17, 0)) };
 
         var result = await CreateValidator().ValidateAsync(command);
 

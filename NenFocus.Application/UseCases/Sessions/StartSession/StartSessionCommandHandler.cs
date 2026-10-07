@@ -45,15 +45,20 @@ public sealed class StartSessionCommandHandler
     {
         var now = _clock.Now;
 
-        // Is the requested run free of other Focus blocks? BlockPlacementChecker.CheckFree (Gap 88),
-        // leaving out the block this session is for. Running sessions aren't passed yet: only one
-        // runs at a time today, and phase 8 words that case properly.
+        // Is the requested run free Focus time? BlockPlacementChecker.CheckFree (Gap 88), leaving out
+        // the block this session is for. The running session is Focus time too, so a new session —
+        // which starts now — always lands inside it: "one session at a time" is this same rule
+        // (Gap 92, C+; a unique index backs it in storage).
         var requested = new TimeSlot(now, now + TimeSpan.FromMinutes(command.DurationMinutes));
         var calendar = (await _plannedBlocks.GetForRangeAsync(requested, ct)).Where(b => b.Id != command.OriginatingBlockId);
-        var verdict = _placement.CheckFree(requested, calendar, [], now);
+        var running = await _sessions.GetActiveAsync(ct);
+        var verdict = _placement.CheckFree(requested, calendar, running, now);
 
         if (verdict.Conflict is { } conflict)
         {
+            if (running?.ReservedSlot is { } runningSlot && conflict == runningSlot)
+                return StartSessionResult.Fail("A session is already running — end it before starting another.");
+
             var minutesAvailable = (int)conflict.StartsIn(now).TotalMinutes;
             if (minutesAvailable > 0)
                 return StartSessionResult.Fail(
@@ -76,7 +81,7 @@ public sealed class StartSessionCommandHandler
                 return StartSessionResult.Fail(
                     "This focus block's window has already closed. It will be recorded as missed instead.");
 
-            if (await _sessions.ExistsForOriginatingBlockAsync(command.OriginatingBlockId.Value, ct))
+            if (await _sessions.GetByOriginatingBlockIdAsync(command.OriginatingBlockId.Value, ct) is not null)
                 return StartSessionResult.Fail("A session already exists for this focus block.");
         }
 
@@ -153,14 +158,11 @@ public sealed class StartSessionCommandHandler
             PresetName = presetName,
             BlockPresetId = session.BlockPresetId,
             DurationMinutes = (int)duration.TotalMinutes,
-            StartedAt = session.StartedAt ?? now,
-            EndAt = session.EndAt ?? now,
             Status = session.Status,
             Origin = session.Origin,
             OriginatingBlockId = session.OriginatingBlockId,
-            Breaks = SessionDto.MapBreaks(session.BreakSchedule),
-            BreakPresetName = session.BreakPresetName,
-            KeepBlockingDuringBreaks = session.KeepBlockingDuringBreaks
+            Timeline = session.Timeline,
+            BreakPresetName = session.BreakPresetName
         });
 
         return StartSessionResult.Ok(session.Id);

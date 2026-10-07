@@ -32,14 +32,14 @@ public class CheckNenContractCancellableQueryHandlerTests
             id: Guid.NewGuid(), name: "Focused Week", goal: new NenContractGoal("Ship it"),
             strictnessRule: StrictnessRule.Locked,
             calendar: TestCalendars.For(StartDate, StartDate.AddDays(6), new DailyFloorRule.None()),
-            floorRule: new DailyFloorRule.None(), changeWindow: null, allowCancellation: allowCancellation,
+            floorRule: new DailyFloorRule.None(), allowCancellation: allowCancellation,
             plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
             sealedAt: At.Utc(StartDate.ToDateTime(TimeOnly.MinValue)), timeZone: At.UtcZone);
         _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
         return contract;
     }
 
-    private Task<NenFocus.Application.DTOs.ContractEndVerdictDto?> Ask(Guid contractId) =>
+    private Task<NenFocus.Application.DTOs.ContractActionVerdictDto?> Ask(Guid contractId) =>
         CreateHandler().HandleAsync(new CheckNenContractCancellableQuery(contractId));
 
     [Fact]
@@ -57,7 +57,7 @@ public class CheckNenContractCancellableQueryHandlerTests
 
         var answer = await Ask(contract.Id);
 
-        answer!.Outcome.Should().Be(ContractEndOutcome.CancellationNotAllowed);
+        answer!.Outcome.Should().Be(ContractActionOutcome.CancellationNotAllowed);
         answer.IsAllowed.Should().BeFalse();
         answer.Message.Should().Contain("sealed without cancellation");
     }
@@ -71,14 +71,14 @@ public class CheckNenContractCancellableQueryHandlerTests
         session.Start(At.Utc(StartDate.ToDateTime(new TimeOnly(9, 0))));
         _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns(session);
 
-        (await Ask(contract.Id))!.Outcome.Should().Be(ContractEndOutcome.SessionIsRunning);
+        (await Ask(contract.Id))!.Outcome.Should().Be(ContractActionOutcome.SessionIsRunning);
     }
 
     [Fact]
     public async Task HandleAsync_AContractNoLongerInEffect_HasNoAnswer()
     {
         var contract = ContractInEffect(allowCancellation: true);
-        contract.Break(At.Utc(StartDate.ToDateTime(new TimeOnly(12, 0))), At.UtcZone);
+        contract.Break(At.Utc(StartDate.ToDateTime(new TimeOnly(12, 0))), At.UtcZone, sessionRunning: false);
 
         (await Ask(contract.Id)).Should().BeNull();
     }

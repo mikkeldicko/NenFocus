@@ -49,4 +49,31 @@ public class ContractRulesTests
     {
         Rules(StrictnessRule.Locked, new DailyFloor(2)).Should().Be(Rules(StrictnessRule.Locked, new DailyFloor(2)));
     }
+
+    // ── A fixed floor is whole hours, 1–24 (Gap 92, V9) ──
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(8)]
+    [InlineData(24)]
+    public void AFixedFloorOfWholeHoursFrom1To24_IsAccepted(double hours)
+        => Rules(StrictnessRule.Locked, new DailyFloor(hours)).FixedDailyFloor!.Hours.Should().Be(hours);
+
+    [Theory]
+    [InlineData(0)]   // "no floor" is null, never 0
+    [InlineData(1.5)] // a fixed floor is whole hours
+    public void AFixedFloorThatIsntWholeHoursFrom1To24_IsRefused(double hours)
+    {
+        var act = () => Rules(StrictnessRule.Locked, new DailyFloor(hours));
+
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Theory]
+    [InlineData(1, true)]
+    [InlineData(24, true)]
+    [InlineData(0, false)]
+    [InlineData(25, false)]
+    public void IsValidFixedFloor_IsWholeHoursFrom1To24(int hours, bool expected)
+        => ContractRules.IsValidFixedFloor(hours).Should().Be(expected);
 }

@@ -33,7 +33,6 @@ public class KeepBlockingDuringBreaksPersistenceTests : SqliteRepositoryTestBase
             strictnessRule: StrictnessRule.Locked,
             calendar: TestCalendars.For(DateOnly.FromDateTime(At), DateOnly.FromDateTime(At).AddDays(7), new DailyFloorRule.None()),
             floorRule: new DailyFloorRule.None(),
-            changeWindow: null,
             allowCancellation: false,
             plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
             sealedAt: TestAt.Utc(At.Date), timeZone: TestAt.UtcZone,

@@ -18,6 +18,9 @@ public sealed record ContractRules
         RedemptionPlacementPolicy redemptionPlacement,
         bool bonusBlocksFollowStrictness)
     {
+        if (fixedDailyFloor is { } floor && (floor.Hours % 1 != 0 || !IsValidFixedFloor((int)floor.Hours)))
+            throw new ArgumentException("A fixed daily floor is a whole number of hours, from 1 to 24.", nameof(fixedDailyFloor));
+
         Strictness = strictness;
         FixedDailyFloor = fixedDailyFloor;
         AllowCancellation = allowCancellation;
@@ -31,10 +34,14 @@ public sealed record ContractRules
 
     public StrictnessRule Strictness { get; private set; }
 
-    /// <summary>The same floor every day except rest days, or none — then <see cref="FloorRule"/> says where floors come from.</summary>
+    /// <summary>
+    /// The same floor every day except rest days, or none — then <see cref="FloorRule"/> says where
+    /// floors come from. Whole hours, 1 to 24 (<see cref="IsValidFixedFloor"/>): "no floor" is null,
+    /// never 0. A floor that follows the plan may be fractional; a fixed one may not (Gap 92, V9).
+    /// </summary>
     public DailyFloor? FixedDailyFloor { get; private set; }
 
-    /// <summary>Stored and shown, not enforced yet — Strict Mode is the intended gate (Gap 83).</summary>
+    /// <summary>Whether the contract may be broken before its end — its own gate (NenContract.CheckBreak, Gap 95).</summary>
     public bool AllowCancellation { get; private set; }
 
     /// <summary>Whether sessions of the contract's blocks keep their preset enforced through their breaks (Gap 64).</summary>
@@ -48,6 +55,9 @@ public sealed record ContractRules
     /// is free, like a plain block. On: it is treated as a Committed block is, except for the floor.
     /// </summary>
     public bool BonusBlocksFollowStrictness { get; private set; }
+
+    /// <summary>The one rule for a fixed daily floor: a whole number of hours from 1 to 24 (Gap 92, V9).</summary>
+    public static bool IsValidFixedFloor(int hours) => hours is >= 1 and <= 24;
 
     /// <summary>
     /// How the contract's days get their floor when they are generated: the fixed floor when one

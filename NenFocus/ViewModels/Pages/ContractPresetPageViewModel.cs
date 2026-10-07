@@ -13,6 +13,7 @@ using NenFocus.Application.UseCases.ContractPresets.DeleteContractPreset;
 using NenFocus.Application.UseCases.ContractPresets.UpdateContractPreset;
 using NenFocus.Converters;
 using NenFocus.Domain.Enums;
+using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.ViewModels.Pages;
 
@@ -181,18 +182,21 @@ public partial class ContractPresetPageViewModel : ViewModelBase
         var name = FormName.Trim();
         if (string.IsNullOrEmpty(name)) { FormError = "Preset name is required."; return; }
 
-        double? floor = null;
+        // The form's own input checks: what the text boxes can't turn into a command at all. The
+        // settings' rules (1–24, fits the Work Hours) are ContractPreset.CheckSettings', asked by
+        // the command (Gap 92, V9).
+        int? floor = null;
         if (IsDailyFloorEnabled)
         {
-            if (!double.TryParse(DailyFloorHoursText, out var parsedFloor))
+            if (!int.TryParse(DailyFloorHoursText, out var parsedFloor))
             {
-                FormError = "Daily floor must be a number.";
+                FormError = "Daily floor must be a whole number of hours.";
                 return;
             }
             floor = parsedFloor;
         }
 
-        TimeOnly? workHoursStart = null, workHoursEnd = null;
+        WorkHours? workHours = null;
         if (IsWorkHoursEnabled)
         {
             if (!TryParseTime(WorkHoursStartText, out var start) || !TryParseTime(WorkHoursEndText, out var end))
@@ -200,8 +204,12 @@ public partial class ContractPresetPageViewModel : ViewModelBase
                 FormError = "Work hours must be valid times.";
                 return;
             }
-            workHoursStart = start;
-            workHoursEnd = end;
+            workHours = WorkHours.TryCreate(start, end);
+            if (workHours is null)
+            {
+                FormError = "Work hours end must be after start.";
+                return;
+            }
         }
 
         if (IsEditing && _editingPresetId.HasValue)
@@ -212,8 +220,7 @@ public partial class ContractPresetPageViewModel : ViewModelBase
                 Name = name,
                 StrictnessRule = FormStrictnessRule,
                 DailyFloorHours = floor,
-                WorkHoursStart = workHoursStart,
-                WorkHoursEnd = workHoursEnd,
+                WorkHours = workHours,
                 AllowCancellation = AllowCancellation,
                 RedemptionPlacementPolicy = FormRedemptionPlacementPolicy,
                 KeepBlockingDuringBreaks = KeepBlockingDuringBreaks,
@@ -228,8 +235,7 @@ public partial class ContractPresetPageViewModel : ViewModelBase
                 Name = name,
                 StrictnessRule = FormStrictnessRule,
                 DailyFloorHours = floor,
-                WorkHoursStart = workHoursStart,
-                WorkHoursEnd = workHoursEnd,
+                WorkHours = workHours,
                 AllowCancellation = AllowCancellation,
                 RedemptionPlacementPolicy = FormRedemptionPlacementPolicy,
                 KeepBlockingDuringBreaks = KeepBlockingDuringBreaks,

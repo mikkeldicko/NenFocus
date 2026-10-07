@@ -19,11 +19,11 @@ public interface IBlockPlacementChecker
     /// is held to its own contract — it never leaves it (Gap 106); a plain block is governed by
     /// <see cref="GoverningContract"/>, where the slot sits.
     /// <paramref name="contractsInEffect"/> are the only contracts that govern anything.
-    /// <paramref name="blocks"/> and <paramref name="sessions"/> are the calendar as it will be.
+    /// <paramref name="blocks"/> are the calendar as it will be; <paramref name="running"/> is the session running now, if any — at most one runs (Gap 92).
     /// </summary>
     PlacementVerdict Check(TimeSlot slot, BlockPresetType type, ContractMembership? membership,
         IEnumerable<NenContract> contractsInEffect,
-        IEnumerable<PlannedBlock> blocks, IEnumerable<Session> sessions, Moment asOf, UserTimeZone timeZone);
+        IEnumerable<PlannedBlock> blocks, Session? running, Moment asOf, UserTimeZone timeZone);
 
     /// <summary>
     /// The contract whose planned period <paramref name="slot"/> touches, or null — the contract
@@ -36,8 +36,8 @@ public interface IBlockPlacementChecker
     /// Is this time free for Focus? Allowed, or TimeTaken with the first Focus time in the way
     /// (earliest first): a Focus block's <see cref="PlannedBlock.ReservedSlot"/> as of
     /// <paramref name="asOf"/>, or a running session's <see cref="Session.ReservedSlot"/>.
-    /// Background blocks never clash. <paramref name="blocks"/> and <paramref name="sessions"/>
-    /// are the calendar as it will be — leave out a block that is being moved or replaced.
+    /// Background blocks never clash. <paramref name="blocks"/> are the calendar as it will be, <paramref name="running"/> the session
+    /// running now (at most one, Gap 92) — leave out a block that is being moved or replaced.
     /// </summary>
-    PlacementVerdict CheckFree(TimeSlot slot, IEnumerable<PlannedBlock> blocks, IEnumerable<Session> sessions, Moment asOf);
+    PlacementVerdict CheckFree(TimeSlot slot, IEnumerable<PlannedBlock> blocks, Session? running, Moment asOf);
 }

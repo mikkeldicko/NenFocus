@@ -95,7 +95,7 @@ public class UpdatePlannedBlockCommandHandlerTests
         // keeps them (and its length — Gap 95, decision 16), even when the debt has since shrunk.
         var presetId = Guid.NewGuid();
         var contractId = Guid.NewGuid();
-        var receipt = new RedemptionReceipt([new RedemptionEntry(Guid.NewGuid(), 40), new RedemptionEntry(Guid.NewGuid(), 20)]);
+        var receipt = new RedemptionReceipt([new RedemptionEntry(Guid.NewGuid(), WholeMinutes.Of(40)), new RedemptionEntry(Guid.NewGuid(), WholeMinutes.Of(20))]);
         var block = FocusBlock.CreateWithReceipt(Guid.NewGuid(), presetId, At.Slot(Start, End),
             title: null, membership: TestContracts.Redemption(contractId), receipt: receipt);
         _blocks.GetByIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns(block);

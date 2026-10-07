@@ -47,9 +47,8 @@ public sealed class GetSuggestedRedemptionPlacementsQueryHandler
         if (coverableToday.Count == 0) return [];
 
         // The suggestion only pre-fills the block form — it isn't a placement decision (Gap 88,
-        // decided 2026-09-29). Start at the next quarter hour from now, sized to the deficit
-        // rounded up to a whole minute (TimeSlot.Covering keeps Gap 33's guarantee: accepting
-        // the suggestion as-is can only meet-or-exceed the deficit, never fall short). Whether
+        // decided 2026-09-29). Start at the next quarter hour from now, sized exactly to the deficit
+        // (whole minutes, Gap 92 V10 — accepting the suggestion as-is pays it exactly). Whether
         // it overlaps something or falls outside the contract is Save's job
         // (BlockPlacementChecker.Check).
         var start = _clock.TimeZone.ToMoment(SnapUpToQuarterHour(localNow));
@@ -57,14 +56,14 @@ public sealed class GetSuggestedRedemptionPlacementsQueryHandler
         var results = new List<SuggestedRedemptionPlacementDto>();
         foreach (var group in coverableToday)
         {
-            var remaining = group.Sum(d => d.RemainingDeficitMinutes);
+            var remaining = group.Aggregate(WholeMinutes.Zero, (sum, d) => sum + d.RemainingDeficit);
             var preset = await _presets.GetByIdAsync(group.Key, ct);
 
             results.Add(new SuggestedRedemptionPlacementDto
             {
                 PresetId = group.Key,
                 PresetName = preset?.Name ?? "Unknown preset",
-                TotalRemainingDeficitMinutes = remaining,
+                TotalRemainingDeficit = remaining,
                 Suggested = TimeSlot.Covering(start, remaining)
             });
         }

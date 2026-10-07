@@ -2,7 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
-using NenFocus.Application.DTOs;
+using NenFocus.Domain.ValueObjects;
 using NenFocus.ViewModels.Pages;
 using System;
 using System.Collections.Generic;
@@ -46,7 +46,7 @@ public partial class MainPageView : UserControl
     /// BreakMarkers changes. Purely visual layout, not business logic — the
     /// fractions themselves already came from the session's BreakSchedule.
     /// </summary>
-    private void RenderBreakMarkers(IReadOnlyList<BreakMarkerDto> markers)
+    private void RenderBreakMarkers(IReadOnlyList<BreakMark> markers)
     {
         var grid = BreakMarkersGrid;
         grid.ColumnDefinitions.Clear();

@@ -32,7 +32,6 @@ public class SweepNenContractLifecycleCommandHandlerTests
         strictnessRule: StrictnessRule.Locked,
         calendar: TestCalendars.For(startDate, startDate.AddDays(6), new DailyFloorRule.None()),
         floorRule: new DailyFloorRule.None(),
-        changeWindow: null,
         allowCancellation: false,
         plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
         sealedAt: At.Utc(startDate.AddDays(-1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)), timeZone: At.UtcZone); // seals as Scheduled
@@ -46,7 +45,6 @@ public class SweepNenContractLifecycleCommandHandlerTests
             strictnessRule: StrictnessRule.Locked,
             calendar: TestCalendars.For(startDate, endDate, new DailyFloorRule.None()),
             floorRule: new DailyFloorRule.None(),
-            changeWindow: null,
             allowCancellation: false,
             plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
             sealedAt: At.Utc(startDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)), timeZone: At.UtcZone); // seals as Active

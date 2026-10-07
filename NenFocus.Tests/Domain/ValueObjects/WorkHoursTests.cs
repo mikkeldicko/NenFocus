@@ -39,4 +39,18 @@ public class WorkHoursTests
 
         workHours.ContainsRange(start, end).Should().Be(expected);
     }
+
+    [Fact]
+    public void TryCreate_EndAfterStart_IsTheWorkHours()
+        => WorkHours.TryCreate(new TimeOnly(9, 0), new TimeOnly(17, 0)).Should().Be(new WorkHours(new TimeOnly(9, 0), new TimeOnly(17, 0)));
+
+    [Theory]
+    [InlineData(17, 9)]
+    [InlineData(9, 9)]
+    public void TryCreate_EndNotAfterStart_IsNothing(int startHour, int endHour)
+        => WorkHours.TryCreate(new TimeOnly(startHour, 0), new TimeOnly(endHour, 0)).Should().BeNull();
+
+    [Fact]
+    public void Length_IsTheWindow()
+        => new WorkHours(new TimeOnly(9, 0), new TimeOnly(12, 30)).Length.Should().Be(TimeSpan.FromHours(3.5));
 }

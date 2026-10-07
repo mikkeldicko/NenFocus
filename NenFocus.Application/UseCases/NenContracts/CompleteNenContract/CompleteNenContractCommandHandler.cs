@@ -1,6 +1,5 @@
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
-using NenFocus.Application.Queries.GetNenContractCompletionReadiness;
 using NenFocus.Application.Queries.GetNenContractRecap;
 
 namespace NenFocus.Application.UseCases.NenContracts.CompleteNenContract;
@@ -9,20 +8,23 @@ public sealed class CompleteNenContractCommandHandler
     : ICommandHandler<CompleteNenContractCommand, CompleteNenContractResult>
 {
     private readonly INenContractRepository _contracts;
+    private readonly IPlannedBlockRepository _blocks;
+    private readonly ISessionRepository _sessions;
     private readonly ISystemClock _clock;
     private readonly IQueryHandler<GetNenContractRecapQuery, NenContractRecapDto?> _recap;
-    private readonly IQueryHandler<GetNenContractCompletionReadinessQuery, NenContractCompletionReadinessDto> _readiness;
 
     public CompleteNenContractCommandHandler(
         INenContractRepository contracts,
+        IPlannedBlockRepository blocks,
+        ISessionRepository sessions,
         ISystemClock clock,
-        IQueryHandler<GetNenContractRecapQuery, NenContractRecapDto?> recap,
-        IQueryHandler<GetNenContractCompletionReadinessQuery, NenContractCompletionReadinessDto> readiness)
+        IQueryHandler<GetNenContractRecapQuery, NenContractRecapDto?> recap)
     {
         _contracts = contracts;
+        _blocks = blocks;
+        _sessions = sessions;
         _clock = clock;
         _recap = recap;
-        _readiness = readiness;
     }
 
     public async Task<CompleteNenContractResult> HandleAsync(CompleteNenContractCommand command, CancellationToken ct = default)
@@ -30,17 +32,25 @@ public sealed class CompleteNenContractCommandHandler
         var contract = await _contracts.GetByIdAsync(command.ContractId, ct);
         if (contract is null) return CompleteNenContractResult.Fail("Contract not found.");
 
-        // The contract's own answer again, so a caller that skipped the validator still can't
-        // complete it mid-session or with hours owed (Gap 95).
-        var readiness = await _readiness.HandleAsync(new GetNenContractCompletionReadinessQuery(contract.Id), ct);
-        if (!readiness.IsReady)
-            return CompleteNenContractResult.Fail(readiness.NotReadyReason!);
+        // What the contract needs to answer for itself — the same inputs the readiness query
+        // gathers for the Planner's button (Gap 95). Every member, Bonus blocks included (Gap 97).
+        var now = _clock.Now;
+        var members = await _blocks.GetForContractAsync(contract.Id, ct);
+        var sessions = await _sessions.GetHistoryAsync(
+            _clock.TimeZone.SlotCovering(contract.StartDate, contract.EndDate), presetId: null, ct);
+        var sessionRunning = await _sessions.GetActiveAsync(ct) is not null;
+
+        // Asked first for its sentence; CompleteEarly asks it again itself, so no caller can
+        // complete mid-session or with hours owed (Gap 92, D).
+        var verdict = contract.CheckComplete(members, sessions, sessionRunning, now, _clock.TimeZone);
+        if (!verdict.IsAllowed)
+            return CompleteNenContractResult.Fail(ContractActionVerdictDto.From(verdict).Message!);
 
         // EndDate is deliberately left untouched — historically accurate ("sealed for 10
         // days, finished by day 7"), and NenContract.IsInEffect (Scheduled/Active only)
         // already governs the date-range-overlap check, so completing here frees the
         // calendar for a new contract immediately regardless of the old EndDate.
-        contract.Complete(_clock.Now);
+        contract.CompleteEarly(now, members, sessions, sessionRunning, _clock.TimeZone);
 
         await _contracts.SaveAsync(contract, ct);
 

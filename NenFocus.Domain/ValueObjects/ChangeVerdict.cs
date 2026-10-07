@@ -9,11 +9,11 @@ namespace NenFocus.Domain.ValueObjects;
 /// </summary>
 public sealed record ChangeVerdict
 {
-    private ChangeVerdict(ChangeOutcome outcome, DateOnly? day = null, double? floorHours = null)
+    private ChangeVerdict(ChangeOutcome outcome, DateOnly? day = null, double? requiredHours = null)
     {
         Outcome = outcome;
         Day = day;
-        FloorHours = floorHours;
+        RequiredHours = requiredHours;
     }
 
     public ChangeOutcome Outcome { get; }
@@ -21,8 +21,8 @@ public sealed record ChangeVerdict
     /// <summary>The day that would fall short — set exactly when <see cref="Outcome"/> is BelowDailyFloor.</summary>
     public DateOnly? Day { get; }
 
-    /// <summary>The floor or target that would be missed — set for the two floor outcomes.</summary>
-    public double? FloorHours { get; }
+    /// <summary>The hours that would be missed — the day's floor for BelowDailyFloor, the whole-period target for BelowPeriodTarget.</summary>
+    public double? RequiredHours { get; }
 
     public bool IsAllowed => Outcome == ChangeOutcome.Allowed;
 

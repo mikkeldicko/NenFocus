@@ -50,17 +50,9 @@ public class UpdateContractPresetTests
     [InlineData(-1)]
     [InlineData(0)] // zero would mean "no floor" by another name — leave it unset instead
     [InlineData(25)]
-    public async Task Validate_DailyFloorOutOfRange_IsInvalid(double hours)
+    public async Task Validate_DailyFloorOutOfRange_IsInvalid(int hours)
     {
         var result = await CreateValidator().ValidateAsync(ValidCommand(Guid.NewGuid()) with { DailyFloorHours = hours });
-
-        result.IsValid.Should().BeFalse();
-    }
-
-    [Fact]
-    public async Task Validate_DailyFloorNotWholeNumber_IsInvalid()
-    {
-        var result = await CreateValidator().ValidateAsync(ValidCommand(Guid.NewGuid()) with { DailyFloorHours = 3.5 });
 
         result.IsValid.Should().BeFalse();
     }
@@ -79,8 +71,7 @@ public class UpdateContractPresetTests
         var command = ValidCommand(Guid.NewGuid()) with
         {
             DailyFloorHours = 6,
-            WorkHoursStart = new TimeOnly(10, 0),
-            WorkHoursEnd = new TimeOnly(15, 0)
+            WorkHours = new WorkHours(new TimeOnly(10, 0), new TimeOnly(15, 0))
         };
 
         var result = await CreateValidator().ValidateAsync(command);
@@ -134,8 +125,7 @@ public class UpdateContractPresetTests
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>()).Returns(existing);
         var command = ValidCommand(presetId) with
         {
-            WorkHoursStart = new TimeOnly(9, 0),
-            WorkHoursEnd = new TimeOnly(17, 0)
+            WorkHours = new WorkHours(new TimeOnly(9, 0), new TimeOnly(17, 0))
         };
 
         var result = await CreateHandler().HandleAsync(command, CancellationToken.None);

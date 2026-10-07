@@ -79,11 +79,11 @@ public class SplitPlannedBlockCommandHandlerTests
         var missedBlockId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
             .Returns(FocusBlock.CreateWithReceipt(blockId, Guid.NewGuid(), At.Slot(OriginalStart, OriginalEnd), "My Block",
-                TestContracts.Redemption(Guid.NewGuid()), receipt: new RedemptionReceipt([new(missedBlockId, 90)])));
+                TestContracts.Redemption(Guid.NewGuid()), receipt: new RedemptionReceipt([new(missedBlockId, WholeMinutes.Of(90))])));
 
         var (first, second) = await SavedPiecesAsync(ValidCommand(blockId));
 
-        first.Receipt.Entries.Should().Equal(new RedemptionEntry(missedBlockId, 90));
+        first.Receipt.Entries.Should().Equal(new RedemptionEntry(missedBlockId, WholeMinutes.Of(90)));
         second.Receipt.Should().Be(RedemptionReceipt.None);
         first.Scheduled.Should().Be(At.Slot(OriginalStart, OriginalStart.AddHours(2)));
         second.Scheduled.Should().Be(At.Slot(OriginalStart.AddHours(2), OriginalEnd));

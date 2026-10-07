@@ -10,6 +10,6 @@ public sealed record SuggestedRedemptionPlacementDto
 {
     public Guid PresetId { get; init; }
     public string PresetName { get; init; } = string.Empty;
-    public double TotalRemainingDeficitMinutes { get; init; }
+    public WholeMinutes TotalRemainingDeficit { get; init; }
     public TimeSlot Suggested { get; init; } = null!;
 }

@@ -48,8 +48,6 @@ public class CqrsRuleTests
         // The recap is handed back to the screen that shows it, never saved.
         "BreakNenContractCommandHandler → GetNenContractRecapQuery",
         "CompleteNenContractCommandHandler → GetNenContractRecapQuery",
-        // Readiness decides whether to complete — a Domain answer (NenContract.CheckComplete) behind a loader.
-        "CompleteNenContractCommandHandler → GetNenContractCompletionReadinessQuery",
     ];
 
     // The repositories' write methods, and EF's own save.

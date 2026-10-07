@@ -3,7 +3,6 @@ using Microsoft.Extensions.Logging;
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.UseCases.Sessions.EndSession;
-using NenFocus.Domain.Enums;
 using NenFocus.Domain.ValueObjects;
 using System.Timers;
 
@@ -11,8 +10,8 @@ namespace NenFocus.Infrastructure.Services;
 
 /// <summary>
 /// Owns the 1-second countdown timer, keeping all timer logic out of ViewModels. Holds
-/// no break state of its own (Gap 63): every tick it reads the session's BreakSchedule
-/// against the clock, so nothing can get stuck or drift — a missed tick, sleep or a
+/// no break state of its own (Gap 63): every tick it asks the session's SessionTimeline
+/// where it is (Gap 92, A4), so nothing can get stuck or drift — a missed tick, sleep or a
 /// clock jump is simply re-read on the next one. Its only memory is a cursor ("when did
 /// I last look") so it can ask which break boundaries were crossed since, and hand
 /// those to IBreakTransitionResponder.
@@ -27,22 +26,13 @@ public sealed class ActiveSessionMonitor : IActiveSessionMonitor, IDisposable
     private System.Timers.Timer? _timer;
 
     private Guid? _sessionId;
-    private TimeSlot? _run;
-    private BreakSchedule _schedule = BreakSchedule.None;
-    private bool _keepBlockingDuringBreaks;
+    private SessionTimeline? _timeline;
     private Moment _lastCheckedAt;
     private bool _autoEndPending;
 
-    public TimeSpan SessionTimeRemaining { get; private set; } = TimeSpan.Zero;
-    public double SessionProgress { get; private set; }
-    public bool IsOnBreak { get; private set; }
-    public bool KeepsBlockingDuringBreak { get; private set; }
-    public TimeSpan BreakTimeRemaining { get; private set; } = TimeSpan.Zero;
-    public double BreakProgress { get; private set; }
-    public int BreaksTaken { get; private set; }
-    public IReadOnlyList<BreakMarkerDto> BreakMarkers { get; private set; } = [];
+    public TimelineReading Current { get; private set; } = TimelineReading.None;
 
-    public event EventHandler? Tick;
+    public event EventHandler<TimelineReading>? Tick;
     public event EventHandler<PostSessionDto>? SessionAutoEnded;
 
     public ActiveSessionMonitor(
@@ -59,7 +49,7 @@ public sealed class ActiveSessionMonitor : IActiveSessionMonitor, IDisposable
         // startup (Program.Main) before any DI singleton — including this one — is ever
         // constructed. Its SessionChanged notification for an already-active session
         // fired before the subscription above existed to hear it, and unlike a plain
-        // UI refresh, this monitor only ever populates _run
+        // UI refresh, this monitor only ever populates _timeline
         // and starts its countdown timer inside OnSessionChanged — missing that one
         // notification means the timer never starts at all, not just a stale display.
         // Catch up directly on whatever session is already active.
@@ -74,18 +64,11 @@ public sealed class ActiveSessionMonitor : IActiveSessionMonitor, IDisposable
         {
             _autoEndPending = false;
 
-            if (session is null)
+            if (session?.Timeline is null)
             {
                 _sessionId = null;
-                _run = null;
-                _schedule = BreakSchedule.None;
-                _keepBlockingDuringBreaks = false;
-                KeepsBlockingDuringBreak = false;
-                BreakMarkers = [];
-                IsOnBreak = false;
-                BreaksTaken = 0;
-                BreakTimeRemaining = TimeSpan.Zero;
-                BreakProgress = 0;
+                _timeline = null;
+                Current = TimelineReading.None;
                 return;
             }
 
@@ -97,19 +80,9 @@ public sealed class ActiveSessionMonitor : IActiveSessionMonitor, IDisposable
                 _lastCheckedAt = _clock.Now;
 
             _sessionId = session.Id;
-            _run = new TimeSlot(session.StartedAt, session.EndAt);
-            _keepBlockingDuringBreaks = session.KeepBlockingDuringBreaks;
-
-            // Rebuilt on every SessionChanged, not once per session, so any future
-            // mid-session revision of the schedule is picked up with no change here.
-            _schedule = new BreakSchedule(session.Breaks.Select(b => new SessionBreak(b.Kind, b.Start, b.End)));
-            BreakMarkers = _schedule.Breaks
-                .Select(b => new BreakMarkerDto
-                {
-                    ProgressFraction = b.Start / _run.Length,
-                    IsLongBreak = b.Kind == SessionPhaseKind.LongBreak
-                })
-                .ToList();
+            // Taken on every SessionChanged, not once per session, so any future mid-session
+            // revision of the schedule is picked up with no change here.
+            _timeline = session.Timeline;
 
             Recalculate();
         }
@@ -135,29 +108,26 @@ public sealed class ActiveSessionMonitor : IActiveSessionMonitor, IDisposable
 
     private void OnElapsed(object? sender, ElapsedEventArgs e)
     {
+        TimelineReading reading;
         lock (_gate)
         {
             if (_sessionId is null) return;
             Recalculate();
+            reading = Current;
         }
-        Tick?.Invoke(this, EventArgs.Empty);
+        Tick?.Invoke(this, reading);
     }
 
     // Caller holds _gate — System.Timers ticks can overlap, and the cursor must only
     // ever move forward from one reader at a time.
     private void Recalculate()
     {
-        if (_run is not { } run) return; // no session — nothing to count down
+        if (_timeline is not { } timeline) return; // no session — nothing to count down
         var now = _clock.Now;
 
-        if (run.HasEnded(now))
+        Current = timeline.ReadingAt(now);
+        if (Current.HasEnded)
         {
-            SessionTimeRemaining = TimeSpan.Zero;
-            SessionProgress = 1.0;
-            IsOnBreak = false;
-            KeepsBlockingDuringBreak = false;
-            BreakTimeRemaining = TimeSpan.Zero;
-            BreakProgress = 0;
             if (!_autoEndPending)
             {
                 _autoEndPending = true;
@@ -167,31 +137,10 @@ public sealed class ActiveSessionMonitor : IActiveSessionMonitor, IDisposable
             return;
         }
 
-        SessionTimeRemaining = run.RemainingAt(now);
-        SessionProgress = run.ProgressAt(now);
-
-        var offset = run.SinceStart(now);
-        var transitions = _schedule.TransitionsBetween(run.SinceStart(_lastCheckedAt), offset);
+        var transitions = timeline.TransitionsBetween(_lastCheckedAt, now);
         _lastCheckedAt = now;
         if (transitions.Count > 0)
-            _ = HandleBreakTransitionsAsync(transitions, now, _keepBlockingDuringBreaks);
-
-        BreaksTaken = _schedule.BreaksStartedBy(offset);
-
-        if (_schedule.BreakAt(offset) is { } current)
-        {
-            IsOnBreak = true;
-            KeepsBlockingDuringBreak = _keepBlockingDuringBreaks;
-            BreakTimeRemaining = current.RemainingAt(offset);
-            BreakProgress = current.ProgressAt(offset);
-        }
-        else
-        {
-            IsOnBreak = false;
-            KeepsBlockingDuringBreak = false;
-            BreakTimeRemaining = TimeSpan.Zero;
-            BreakProgress = 0;
-        }
+            _ = HandleBreakTransitionsAsync(transitions, now, timeline.KeepsBlockingDuringBreaks);
     }
 
     // Fire-and-forget. Nothing needs retrying on failure: blocking is already correct on

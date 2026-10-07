@@ -4,6 +4,7 @@ using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.GetNenContractForEdit;
 using NenFocus.Application.UseCases.NenContracts.Seal;
 using NenFocus.Domain.Enums;
+using NenFocus.Domain.ValueObjects;
 using NenFocus.Domain.Services;
 using NenFocus.Infrastructure.Persistence.Repositories;
 using NenFocus.ViewModels.Contracts;
@@ -38,7 +39,7 @@ public class ContractEditRoundTripTests : SqliteRepositoryTestBase
         var blockRepo = new PlannedBlockRepository(Context);
         var seal = new SealNenContractCommandHandler(
             new NenContractRepository(Context), blockRepo,
-            new ContractBlockBatchPreparer(new PlannedFocusHoursCalculator()),
+            new ContractBlockBatchPreparer(),
             new SessionRepository(Context), new BlockPlacementChecker(), clock);
 
         var sealed_ = await seal.HandleAsync(new SealNenContractCommand
@@ -51,8 +52,7 @@ public class ContractEditRoundTripTests : SqliteRepositoryTestBase
             AllowCancellation = true,
             FixedDailyFloorHours = 2,
             RestDays = [restDay],
-            WorkHoursStart = new TimeOnly(9, 0),
-            WorkHoursEnd = new TimeOnly(18, 0),
+            WorkHours = new WorkHours(new TimeOnly(9, 0), new TimeOnly(18, 0)),
             ContractPresetId = presetId,
             Blocks = blocks
         });

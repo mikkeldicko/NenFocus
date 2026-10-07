@@ -18,7 +18,6 @@ public class EditNenContractCommandHandlerTests
 
     private readonly INenContractRepository _contracts = Substitute.For<INenContractRepository>();
     private readonly IPlannedBlockRepository _blocks = Substitute.For<IPlannedBlockRepository>();
-    private readonly IPlannedFocusHoursCalculator _calculator = Substitute.For<IPlannedFocusHoursCalculator>();
     private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
     private readonly ISystemClock _clock = TestClock.Create();
 
@@ -26,16 +25,14 @@ public class EditNenContractCommandHandlerTests
     {
         _clock.SetNow(Now);
         _clock.SetTimeZoneOffset(TimeSpan.Zero);
-        _sessions.GetActiveSessionsAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<Session>)[]);
+        _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns((Session?)null);
         _blocks.GetForRangeAsync(Arg.Any<TimeSlot>(), Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[]);
         _blocks.GetForContractAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[]);
-        _calculator.Calculate(Arg.Any<IEnumerable<TimeSlot>>(), Arg.Any<UserTimeZone>())
-            .Returns(new Dictionary<DateOnly, double>());
     }
 
     private EditNenContractCommandHandler CreateHandler() =>
-        new(_contracts, _blocks, new ContractBlockBatchPreparer(_calculator), _sessions, new BlockPlacementChecker(), _clock);
+        new(_contracts, _blocks, new ContractBlockBatchPreparer(), _sessions, new BlockPlacementChecker(), _clock);
 
     private static NenContract ScheduledContract(Guid id) => TestContracts.Seal(
         id: id,
@@ -44,14 +41,13 @@ public class EditNenContractCommandHandlerTests
         strictnessRule: StrictnessRule.DailyFlexibility,
         calendar: TestCalendars.For(StartDate, EndDate, new DailyFloorRule.None()),
         floorRule: new DailyFloorRule.None(),
-        changeWindow: null,
         allowCancellation: true,
         plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
         sealedAt: At.Utc(StartDate.AddDays(-10).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)), timeZone: At.UtcZone);
 
     private static EditNenContractCommand BaseCommand(
         Guid contractId,
-        double? fixedFloor = 0,
+        int? fixedFloor = null,
         IReadOnlyList<NenContractBlockSpec>? blocks = null) => new()
     {
         ContractId = contractId,
@@ -130,8 +126,6 @@ public class EditNenContractCommandHandlerTests
         _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
 
         var newBlockSpec = new NenContractBlockSpec(Guid.NewGuid(), At.Slot(StartDate.ToDateTime(new TimeOnly(9, 0)), StartDate.ToDateTime(new TimeOnly(10, 0))), IsFocus: true);
-        _calculator.Calculate(Arg.Any<IEnumerable<TimeSlot>>(), Arg.Any<UserTimeZone>())
-            .Returns(new Dictionary<DateOnly, double> { [StartDate] = 1 });
 
         PlannedBlock? savedBlock = null;
         await _blocks.AddAsync(Arg.Do<PlannedBlock>(b => savedBlock = b), Arg.Any<CancellationToken>());
@@ -207,8 +201,6 @@ public class EditNenContractCommandHandlerTests
         _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
         _blocks.GetForContractAsync(contract.Id, Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(StartDate.ToDateTime(new TimeOnly(9, 0)), StartDate.ToDateTime(new TimeOnly(10, 0))), membership: TestContracts.Committed(contract.Id))]);
-        _calculator.Calculate(Arg.Any<IEnumerable<TimeSlot>>(), Arg.Any<UserTimeZone>())
-            .Returns(new Dictionary<DateOnly, double> { [StartDate] = 1 });
 
         var result = await CreateHandler().HandleAsync(
             BaseCommand(contract.Id, fixedFloor: 4), CancellationToken.None);
@@ -239,12 +231,11 @@ public class EditNenContractCommandHandlerTests
     {
         var contract = ScheduledContract(Guid.NewGuid());
         _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
-        var block = new NenContractBlockSpec(Guid.NewGuid(), At.Slot(StartDate.ToDateTime(new TimeOnly(9, 0)), StartDate.ToDateTime(new TimeOnly(11, 0))), IsFocus: true);
-        _calculator.Calculate(Arg.Any<IEnumerable<TimeSlot>>(), Arg.Any<UserTimeZone>())
-            .Returns(new Dictionary<DateOnly, double> { [StartDate] = 3, [StartDate.AddDays(1)] = 4, [StartDate.AddDays(2)] = 2 });
+        NenContractBlockSpec Focus(int day, int fromHour, int toHour) => new(Guid.NewGuid(),
+            At.Slot(StartDate.AddDays(day).ToDateTime(new TimeOnly(fromHour, 0)), StartDate.AddDays(day).ToDateTime(new TimeOnly(toHour, 0))), IsFocus: true);
         NenContract? saved = null;
         await _contracts.AddAsync(Arg.Do<NenContract>(c => saved = c), Arg.Any<CancellationToken>());
-        var command = BaseCommand(contract.Id, fixedFloor: null, blocks: [block])
+        var command = BaseCommand(contract.Id, fixedFloor: null, blocks: [Focus(0, 9, 12), Focus(1, 9, 13), Focus(2, 9, 11)])
             with
         { StrictnessRule = StrictnessRule.PeriodTimeBudget };
 

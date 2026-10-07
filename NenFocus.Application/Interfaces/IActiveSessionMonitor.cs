@@ -1,33 +1,21 @@
 using NenFocus.Application.DTOs;
+using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Application.Interfaces;
 
+/// <summary>
+/// The 1-second clock behind the Main page's countdown. Each tick it asks the running session's
+/// <see cref="SessionTimeline"/> where the session is and hands that one reading over — so a reader
+/// never mixes values from two seconds, and the screen shows exactly what enforcement reads
+/// (Gap 92, A4: it used to re-derive the break answers itself and expose ten separate values).
+/// </summary>
 public interface IActiveSessionMonitor
 {
-    TimeSpan SessionTimeRemaining { get; }
-    double SessionProgress { get; }
+    /// <summary>The latest reading; <see cref="TimelineReading.None"/> when nothing runs.</summary>
+    TimelineReading Current { get; }
 
-    /// <summary>True while the clock is inside one of the session's break slots. The
-    /// session itself stays Active throughout — a break is a stretch of its schedule,
-    /// not a state (Gap 63).</summary>
-    bool IsOnBreak { get; }
+    /// <summary>Each second, the new reading — delivered with the event.</summary>
+    event EventHandler<TimelineReading>? Tick;
 
-    /// <summary>True during a break whose session keeps its preset blocked through breaks
-    /// (its contract's rule, Gap 64) — so the Main Page can say so.</summary>
-    bool KeepsBlockingDuringBreak { get; }
-    TimeSpan BreakTimeRemaining { get; }
-    double BreakProgress { get; }
-
-    /// <summary>Breaks begun so far this session.</summary>
-    int BreaksTaken { get; }
-
-    /// <summary>
-    /// Empty for "No timer". Otherwise one entry per break in the session's own
-    /// BreakSchedule — the same list that decides when it is on a break, so the Main
-    /// Page never re-derives break positions itself.
-    /// </summary>
-    IReadOnlyList<BreakMarkerDto> BreakMarkers { get; }
-
-    event EventHandler? Tick;
     event EventHandler<PostSessionDto>? SessionAutoEnded;
 }

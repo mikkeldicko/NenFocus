@@ -23,8 +23,10 @@ public class NenContractBlockChangeTests
         double? fixedFloorHours = null,
         IReadOnlyDictionary<DateOnly, double>? plan = null)
     {
+        // Cancellation on, so a test can finish a contract by breaking it (Break obeys CheckBreak, Gap 92).
         var rules = TestRules.Of(strictness,
             fixedFloorHours is { } hours ? new DailyFloor(hours) : null,
+            allowCancellation: true,
             bonusBlocksFollowStrictness: bonusBlocksFollowStrictness);
         plan ??= new Dictionary<DateOnly, double>();
         return NenContract.Seal(
@@ -33,7 +35,6 @@ public class NenContractBlockChangeTests
             goal: new NenContractGoal("Goal"),
             rules: rules,
             calendar: TestCalendars.For(Monday, Wednesday, rules.FloorRule, plan, NineToFive),
-            changeWindow: null,
             plannedFocusHoursByDay: plan,
             sealedAt: SealedAt,
             timeZone: At.UtcZone);
@@ -42,7 +43,7 @@ public class NenContractBlockChangeTests
     private static NenContract Finished(StrictnessRule strictness)
     {
         var contract = Contract(strictness);
-        contract.Break(At.Utc(2026, 1, 6, 12), At.UtcZone);
+        contract.Break(At.Utc(2026, 1, 6, 12), At.UtcZone, sessionRunning: false);
         return contract;
     }
 
@@ -201,7 +202,7 @@ public class NenContractBlockChangeTests
         // No Work Hours here, so a block can run across midnight at all.
         var rules = TestRules.Of(StrictnessRule.DailyFlexibility);
         var contract = NenContract.Seal(Guid.NewGuid(), "Contract", new NenContractGoal("Goal"), rules,
-            TestCalendars.For(Monday, Wednesday, rules.FloorRule), null, new Dictionary<DateOnly, double>(), SealedAt, At.UtcZone);
+            TestCalendars.For(Monday, Wednesday, rules.FloorRule), new Dictionary<DateOnly, double>(), SealedAt, At.UtcZone);
         var block = Committed(contract, At.Slot(new DateTime(2026, 1, 5, 22, 0, 0), new DateTime(2026, 1, 6, 1, 0, 0)));
 
         contract.CheckBlockMove(block, At.Slot(new DateTime(2026, 1, 5, 23, 0, 0), new DateTime(2026, 1, 6, 2, 0, 0)), At.UtcZone)

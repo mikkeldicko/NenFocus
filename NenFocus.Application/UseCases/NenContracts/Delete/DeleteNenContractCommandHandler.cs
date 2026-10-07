@@ -1,3 +1,4 @@
+using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 
 namespace NenFocus.Application.UseCases.NenContracts.Delete;
@@ -18,6 +19,9 @@ public sealed class DeleteNenContractCommandHandler : ICommandHandler<DeleteNenC
         var contract = await _contracts.GetByIdAsync(command.ContractId, ct);
         if (contract is null)
             return DeleteNenContractResult.Fail("Contract not found.");
+
+        if (contract.CheckDelete() is { IsAllowed: false } verdict)
+            return DeleteNenContractResult.Fail(ContractActionVerdictDto.From(verdict).Message!);
 
         // A Scheduled contract's StartDate hasn't arrived yet, so none of its blocks can
         // have already ended — its drafted blocks never ran and are deleted with it, no

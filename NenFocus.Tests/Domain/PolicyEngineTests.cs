@@ -53,7 +53,7 @@ public class PolicyEngineTests
     [Fact]
     public void ComputeSlice_NoPresetsAndNoSessions_ReturnsMinimalEmptySlice()
     {
-        var slice = _engine.ComputeSlice(TestAt.Utc(At), [], [], []);
+        var slice = _engine.ComputeSlice(TestAt.Utc(At), [], null, []);
 
         slice.SliceStart.Should().Be(TestAt.Utc(At));
         slice.SliceEnd.Should().Be(TestAt.Utc(At.AddMinutes(1)));
@@ -72,7 +72,7 @@ public class PolicyEngineTests
         // the slice at all — see GetFocusBlockAwaitingRitualQuery, Gap 62.)
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),TestAt.Slot(At, At.AddHours(1)));
 
-        var slice = _engine.ComputeSlice(TestAt.Utc(At), [], [], [block]);
+        var slice = _engine.ComputeSlice(TestAt.Utc(At), [], null, [block]);
 
         slice.SliceEnd.Should().Be(TestAt.End(block.Scheduled));
         slice.BlockedApps.Should().BeEmpty();
@@ -88,7 +88,7 @@ public class PolicyEngineTests
         var blockB = CreateActiveBlock(presetB.Id);
         var session = CreateActiveSession(temporaryBlockedApps: ["notepad.exe"]);
 
-        var slice = _engine.ComputeSlice(TestAt.Utc(At), [presetA, presetB], [session], [blockA, blockB]);
+        var slice = _engine.ComputeSlice(TestAt.Utc(At), [presetA, presetB], session, [blockA, blockB]);
 
         slice.BlockedApps.Should().BeEquivalentTo(["chrome", "spotify", "notepad"]);
     }
@@ -101,7 +101,7 @@ public class PolicyEngineTests
         var blockA = CreateActiveBlock(presetA.Id);
         var blockB = CreateActiveBlock(presetB.Id);
 
-        var slice = _engine.ComputeSlice(TestAt.Utc(At), [presetA, presetB], [], [blockA, blockB]);
+        var slice = _engine.ComputeSlice(TestAt.Utc(At), [presetA, presetB], null, [blockA, blockB]);
 
         slice.BlockedApps.Should().ContainSingle().Which.Should().Be("chrome");
     }
@@ -114,7 +114,7 @@ public class PolicyEngineTests
         var blockA = CreateActiveBlock(presetA.Id);
         var blockB = CreateActiveBlock(presetB.Id);
 
-        var slice = _engine.ComputeSlice(TestAt.Utc(At), [presetA, presetB], [], [blockA, blockB]);
+        var slice = _engine.ComputeSlice(TestAt.Utc(At), [presetA, presetB], null, [blockA, blockB]);
 
         slice.WebsiteFilterTypeMode.Should().Be(WebsiteFilterType.Blocklist);
         slice.BlockedSites.Should().BeEquivalentTo(["facebook.com", "youtube.com"]);
@@ -128,7 +128,7 @@ public class PolicyEngineTests
         var block = CreateActiveBlock(preset.Id);
         var session = CreateActiveSession(temporaryBlockedSites: ["reddit.com"]);
 
-        var slice = _engine.ComputeSlice(TestAt.Utc(At), [preset], [session], [block]);
+        var slice = _engine.ComputeSlice(TestAt.Utc(At), [preset], session, [block]);
 
         slice.BlockedSites.Should().BeEquivalentTo(["facebook.com", "reddit.com"]);
     }
@@ -139,7 +139,7 @@ public class PolicyEngineTests
         var preset = CreatePreset(WebsiteFilterType.Allowlist, sites: ["work.com"]);
         var block = CreateActiveBlock(preset.Id);
 
-        var slice = _engine.ComputeSlice(TestAt.Utc(At), [preset], [], [block]);
+        var slice = _engine.ComputeSlice(TestAt.Utc(At), [preset], null, [block]);
 
         slice.WebsiteFilterTypeMode.Should().Be(WebsiteFilterType.Allowlist);
         slice.AllowedSites.Should().BeEquivalentTo(["work.com"]);
@@ -153,7 +153,7 @@ public class PolicyEngineTests
         var blockA = CreateActiveBlock(presetA.Id);
         var blockB = CreateActiveBlock(presetB.Id);
 
-        var slice = _engine.ComputeSlice(TestAt.Utc(At), [presetA, presetB], [], [blockA, blockB]);
+        var slice = _engine.ComputeSlice(TestAt.Utc(At), [presetA, presetB], null, [blockA, blockB]);
 
         slice.AllowedSites.Should().BeEquivalentTo(["b.com"]);
     }
@@ -166,7 +166,7 @@ public class PolicyEngineTests
         var allowBlock = CreateActiveBlock(allowPreset.Id);
         var blockBlock = CreateActiveBlock(blockPreset.Id);
 
-        var slice = _engine.ComputeSlice(TestAt.Utc(At), [allowPreset, blockPreset], [], [allowBlock, blockBlock]);
+        var slice = _engine.ComputeSlice(TestAt.Utc(At), [allowPreset, blockPreset], null, [allowBlock, blockBlock]);
 
         slice.AllowedSites.Should().BeEquivalentTo(["a.com"]);
         slice.BlockedSites.Should().BeEquivalentTo(["b.com"]);
@@ -178,7 +178,7 @@ public class PolicyEngineTests
         var allowPreset = CreatePreset(WebsiteFilterType.Allowlist, sites: ["a.com", "temp.com"]);
         var session = CreateActiveSession(blockPresetId: allowPreset.Id, temporaryBlockedSites: ["temp.com"]);
 
-        var slice = _engine.ComputeSlice(TestAt.Utc(At), [allowPreset], [session], []);
+        var slice = _engine.ComputeSlice(TestAt.Utc(At), [allowPreset], session, []);
 
         slice.AllowedSites.Should().BeEquivalentTo(["a.com"]);
         slice.BlockedSites.Should().BeEquivalentTo(["temp.com"]);
@@ -189,7 +189,7 @@ public class PolicyEngineTests
     {
         var preset = CreatePreset(WebsiteFilterType.Blocklist);
 
-        var slice = _engine.ComputeSlice(TestAt.Utc(At), [preset], [], []);
+        var slice = _engine.ComputeSlice(TestAt.Utc(At), [preset], null, []);
 
         slice.SliceEnd.Should().Be(TestAt.Utc(At.AddMinutes(1)));
     }
@@ -201,7 +201,7 @@ public class PolicyEngineTests
         var earlierBlock = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(),TestAt.Slot(At, At.AddMinutes(30)));
         var laterBlock = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(),TestAt.Slot(At, At.AddHours(2)));
 
-        var slice = _engine.ComputeSlice(TestAt.Utc(At), [preset], [], [earlierBlock, laterBlock]);
+        var slice = _engine.ComputeSlice(TestAt.Utc(At), [preset], null, [earlierBlock, laterBlock]);
 
         slice.SliceEnd.Should().Be(TestAt.Utc(At.AddHours(2)));
     }
@@ -214,7 +214,7 @@ public class PolicyEngineTests
         cancelledBlock.MarkCancelled(TestAt.Utc(At));
         var liveBlock = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(),TestAt.Slot(At, At.AddHours(1)));
 
-        var slice = _engine.ComputeSlice(TestAt.Utc(At), [preset], [], [cancelledBlock, liveBlock]);
+        var slice = _engine.ComputeSlice(TestAt.Utc(At), [preset], null, [cancelledBlock, liveBlock]);
 
         slice.SliceEnd.Should().Be(TestAt.Utc(At.AddHours(1)));
     }
@@ -228,7 +228,7 @@ public class PolicyEngineTests
         var cancelledBlock = CreateActiveBlock(preset.Id);
         cancelledBlock.MarkCancelled(TestAt.Utc(At.AddMinutes(-1)));
 
-        var slice = _engine.ComputeSlice(TestAt.Utc(At), [preset], [], [cancelledBlock]);
+        var slice = _engine.ComputeSlice(TestAt.Utc(At), [preset], null, [cancelledBlock]);
 
         slice.IsEmpty.Should().BeTrue();
     }
@@ -240,7 +240,7 @@ public class PolicyEngineTests
         var cancelledBlock = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(),TestAt.Slot(At, At.AddHours(3)));
         cancelledBlock.MarkCancelled(TestAt.Utc(At));
 
-        var slice = _engine.ComputeSlice(TestAt.Utc(At), [preset], [], [cancelledBlock]);
+        var slice = _engine.ComputeSlice(TestAt.Utc(At), [preset], null, [cancelledBlock]);
 
         slice.SliceEnd.Should().Be(TestAt.Utc(At.AddMinutes(1)));
     }
@@ -253,9 +253,9 @@ public class PolicyEngineTests
         // could still be handed to ComputeSlice even though it's genuinely past its own
         // scheduled end. PolicyEngine must be the final, precise authority.
         var preset = CreatePreset(WebsiteFilterType.Blocklist, sites: ["youtube.com"]);
-        var endedBlock = FocusBlock.Create(Guid.NewGuid(), preset.Id,TestAt.Slot(At.AddHours(-1), At.AddSeconds(-1)));
+        var endedBlock = FocusBlock.Create(Guid.NewGuid(), preset.Id,TestAt.Slot(At.AddHours(-1).AddSeconds(-1), At.AddSeconds(-1)));
 
-        var slice = _engine.ComputeSlice(TestAt.Utc(At), [preset], [], [endedBlock]);
+        var slice = _engine.ComputeSlice(TestAt.Utc(At), [preset], null, [endedBlock]);
 
         slice.IsEmpty.Should().BeTrue();
     }
@@ -275,7 +275,7 @@ public class PolicyEngineTests
         endedEarlyBlock.MarkRitualCompleted(TestAt.Utc(At.AddHours(-1)));
         endedEarlyBlock.MarkSessionEnded(TestAt.Utc(At.AddMinutes(-2))); // ended early, well before its raw End
 
-        var slice = _engine.ComputeSlice(TestAt.Utc(At), [preset], [], [endedEarlyBlock]);
+        var slice = _engine.ComputeSlice(TestAt.Utc(At), [preset], null, [endedEarlyBlock]);
 
         slice.BlockedSites.Should().BeEmpty();
         slice.BlockedApps.Should().BeEmpty();
@@ -294,7 +294,7 @@ public class PolicyEngineTests
         endedEarlyBlock.MarkSessionEnded(TestAt.Utc(At.AddMinutes(-2)));
         var backgroundBlock = BackgroundBlock.Create(Guid.NewGuid(), backgroundPreset.Id,TestAt.Slot(At.AddHours(-1), At.AddHours(1)));
 
-        var slice = _engine.ComputeSlice(TestAt.Utc(At), [focusPreset, backgroundPreset], [], [endedEarlyBlock, backgroundBlock]);
+        var slice = _engine.ComputeSlice(TestAt.Utc(At), [focusPreset, backgroundPreset], null, [endedEarlyBlock, backgroundBlock]);
 
         slice.BlockedSites.Should().BeEquivalentTo(["reddit.com"]);
     }
@@ -305,7 +305,7 @@ public class PolicyEngineTests
         var preset = CreatePreset(WebsiteFilterType.Blocklist);
         var session = CreateActiveSession();
 
-        var slice = _engine.ComputeSlice(TestAt.Utc(At), [preset], [session], []);
+        var slice = _engine.ComputeSlice(TestAt.Utc(At), [preset], session, []);
 
         slice.ActiveSessionId.Should().Be(session.Id);
     }
@@ -316,7 +316,7 @@ public class PolicyEngineTests
         var preset = CreatePreset(WebsiteFilterType.Blocklist);
         var block = CreateActiveBlock(preset.Id);
 
-        var slice = _engine.ComputeSlice(TestAt.Utc(At), [preset], [], [block]);
+        var slice = _engine.ComputeSlice(TestAt.Utc(At), [preset], null, [block]);
 
         slice.IsEmpty.Should().BeTrue();
     }
@@ -327,7 +327,7 @@ public class PolicyEngineTests
         var preset = CreatePreset(WebsiteFilterType.Allowlist);
         var block = CreateActiveBlock(preset.Id);
 
-        var slice = _engine.ComputeSlice(TestAt.Utc(At), [preset], [], [block]);
+        var slice = _engine.ComputeSlice(TestAt.Utc(At), [preset], null, [block]);
 
         slice.IsEmpty.Should().BeFalse();
     }
@@ -354,7 +354,7 @@ public class PolicyEngineTests
         var block = FocusBlock.Create(Guid.NewGuid(), preset.Id,TestAt.Slot(At.AddMinutes(-26), At.AddHours(1)));
         var session = StartPlannedSessionInsideBreakAt(block, preset.Id);
 
-        var slice = _engine.ComputeSlice(TestAt.Utc(At), [preset], [session], [block]);
+        var slice = _engine.ComputeSlice(TestAt.Utc(At), [preset], session, [block]);
 
         slice.BlockedApps.Should().BeEmpty();
     }
@@ -366,7 +366,7 @@ public class PolicyEngineTests
         var block = FocusBlock.Create(Guid.NewGuid(), preset.Id,TestAt.Slot(At.AddMinutes(-26), At.AddHours(1)));
         var session = StartPlannedSessionInsideBreakAt(block, preset.Id);
 
-        var slice = _engine.ComputeSlice(TestAt.Utc(At.AddMinutes(5)), [preset], [session], [block]);
+        var slice = _engine.ComputeSlice(TestAt.Utc(At.AddMinutes(5)), [preset], session, [block]);
 
         slice.BlockedApps.Should().BeEquivalentTo(["chrome"]);
     }
@@ -379,7 +379,7 @@ public class PolicyEngineTests
         var block = FocusBlock.Create(Guid.NewGuid(), preset.Id,TestAt.Slot(At.AddMinutes(-26), At.AddHours(1)));
         var session = StartPlannedSessionInsideBreakAt(block, preset.Id, keepBlockingDuringBreaks: true);
 
-        var slice = _engine.ComputeSlice(TestAt.Utc(At), [preset], [session], [block]);
+        var slice = _engine.ComputeSlice(TestAt.Utc(At), [preset], session, [block]);
 
         slice.BlockedApps.Should().BeEquivalentTo(["chrome"]);
     }
@@ -396,7 +396,7 @@ public class PolicyEngineTests
         var backgroundBlock = BackgroundBlock.Create(Guid.NewGuid(), backgroundPreset.Id,TestAt.Slot(At, At.AddHours(1)));
         var session = StartPlannedSessionInsideBreakAt(focusBlock, focusPreset.Id);
 
-        var slice = _engine.ComputeSlice(TestAt.Utc(At), [focusPreset, backgroundPreset], [session], [focusBlock, backgroundBlock]);
+        var slice = _engine.ComputeSlice(TestAt.Utc(At), [focusPreset, backgroundPreset], session, [focusBlock, backgroundBlock]);
 
         slice.BlockedApps.Should().BeEquivalentTo(["spotify"]);
     }

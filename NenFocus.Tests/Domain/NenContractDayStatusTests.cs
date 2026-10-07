@@ -23,7 +23,7 @@ public class NenContractDayStatusTests
         var rules = TestRules.Of(strictness, fixedFloorHours is { } hours ? new DailyFloor(hours) : null);
         plan ??= new Dictionary<DateOnly, double>();
         return NenContract.Seal(Guid.NewGuid(), "Contract", new NenContractGoal("Goal"), rules,
-            TestCalendars.For(Monday, Wednesday, rules.FloorRule, plan), null, plan, At.Utc(2026, 1, 4, 12), At.UtcZone);
+            TestCalendars.For(Monday, Wednesday, rules.FloorRule, plan), plan, At.Utc(2026, 1, 4, 12), At.UtcZone);
     }
 
     private static TimeSlot Slot(DateOnly day, double fromHour, double toHour) =>
@@ -32,9 +32,9 @@ public class NenContractDayStatusTests
     private static FocusBlock Committed(NenContract contract, TimeSlot slot, Guid? presetId = null) =>
         FocusBlock.Create(Guid.NewGuid(), presetId ?? Guid.NewGuid(), slot, membership: TestContracts.Committed(contract.Id));
 
-    private static FocusBlock Redemption(NenContract contract, TimeSlot slot, FocusBlock missed, double minutesCovered) =>
+    private static FocusBlock Redemption(NenContract contract, TimeSlot slot, FocusBlock missed, long minutesCovered) =>
         FocusBlock.CreateWithReceipt(Guid.NewGuid(), missed.BlockPresetId, slot, title: null, membership: TestContracts.Redemption(contract.Id),
-            receipt: new RedemptionReceipt([new RedemptionEntry(missed.Id, minutesCovered)]));
+            receipt: new RedemptionReceipt([new RedemptionEntry(missed.Id, WholeMinutes.Of(minutesCovered))]));
 
     private static ContractDayStatus On(IReadOnlyList<ContractDayStatus> statuses, DateOnly date) =>
         statuses.Single(s => s.Date == date);
@@ -52,9 +52,9 @@ public class NenContractDayStatusTests
 
         var statuses = Statuses(contract, [worked, missed]);
 
-        On(statuses, Monday).Should().Be(new ContractDayStatus(Monday, 2, 2, 0, IsRest: false, IsMet: true));
-        On(statuses, Tuesday).Should().Be(new ContractDayStatus(Tuesday, 2, 0, 0, IsRest: false, IsMet: false));
-        On(statuses, Wednesday).Should().Be(new ContractDayStatus(Wednesday, 0, 0, 0, IsRest: true, IsMet: true));
+        On(statuses, Monday).Should().Be(new ContractDayStatus(Monday, 2, 2, 0));
+        On(statuses, Tuesday).Should().Be(new ContractDayStatus(Tuesday, 2, 0, 0));
+        On(statuses, Wednesday).Should().Be(new ContractDayStatus(Wednesday, 0, 0, 0));
     }
 
     [Fact]
@@ -145,7 +145,7 @@ public class NenContractDayStatusTests
             ritualAfterStart: 0, endedAfterStart: 60);
 
         On(Statuses(contract, [committed, bonus]), Monday)
-            .Should().Be(new ContractDayStatus(Monday, 2, 2, 1, IsRest: false, IsMet: true));
+            .Should().Be(new ContractDayStatus(Monday, 2, 2, 1));
     }
 
     [Fact]

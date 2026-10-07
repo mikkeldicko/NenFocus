@@ -44,7 +44,7 @@ public sealed class GetFocusBlockRitualContextQueryHandler
             Schedule = new FocusBlockSchedule { Slot = block.Scheduled },
             LateBy = -block.Scheduled.StartsIn(now),
             IsLate = block.IsLateAt(now),
-            AlreadyHasSession = await _sessions.ExistsForOriginatingBlockAsync(block.Id, ct)
+            AlreadyHasSession = await _sessions.GetByOriginatingBlockIdAsync(block.Id, ct) is not null
         };
     }
 }

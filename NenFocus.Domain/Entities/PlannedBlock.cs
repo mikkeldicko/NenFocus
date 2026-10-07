@@ -10,9 +10,23 @@ public abstract class PlannedBlock : AggregateRoot
     public Guid BlockPresetId { get; protected set; }
     /// <summary>
     /// The time this block was planned for — its one source of truth for when it is (Gap 88).
-    /// What it really occupies (early end, missed, cancelled) is <see cref="ReservedSlot"/>.
+    /// What it really occupies (early end, missed, cancelled) is <see cref="ReservedSlot"/>. Always a
+    /// whole number of minutes long, Focus and Background alike — every way of setting it goes
+    /// through here (Gap 92, V10). EF loads through the field.
     /// </summary>
-    public TimeSlot Scheduled { get; protected set; } = null!;
+    public TimeSlot Scheduled
+    {
+        get => _scheduled;
+        protected set => _scheduled = WholeMinutes.TryExact(value.Length) is not null
+            ? value
+            : throw new ArgumentException("A planned block is a whole number of minutes long.", nameof(Scheduled));
+    }
+
+    private TimeSlot _scheduled = null!;
+
+    /// <summary>How long the block is planned for, in the whole minutes focus is counted in.</summary>
+    public WholeMinutes Length => WholeMinutes.TryExact(Scheduled.Length)
+        ?? throw new InvalidOperationException($"Block {Id} is not a whole number of minutes long.");
 
     public string? Title { get; protected set; }
 

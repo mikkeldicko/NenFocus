@@ -46,7 +46,7 @@ public class CoverDeficitCommandHandlerTests
         saved.Membership!.ContractId.Should().Be(_context.Contract.Id);
         saved.BlockPresetId.Should().Be(_context.PresetId);
         saved.Scheduled.Should().Be(At.Slot(Now.AddHours(1), Now.AddHours(2)));
-        saved.Receipt.Entries.Should().Equal(new RedemptionEntry(_context.Missed.Id, 60));
+        saved.Receipt.Entries.Should().Equal(new RedemptionEntry(_context.Missed.Id, WholeMinutes.Of(60)));
     }
 
     [Fact]

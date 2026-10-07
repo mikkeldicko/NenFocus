@@ -6,13 +6,6 @@ namespace NenFocus.Domain.Services;
 
 public sealed class BlockChangeChecker : IBlockChangeChecker
 {
-    private readonly IPlannedFocusHoursCalculator _plannedHours;
-
-    public BlockChangeChecker(IPlannedFocusHoursCalculator plannedHours)
-    {
-        _plannedHours = plannedHours;
-    }
-
     public BlockChangeAllowances AllowancesFor(PlannedBlock block, NenContract? contract, Moment asOf)
     {
         var mayChange = block.CheckOwnChange(asOf).IsAllowed;
@@ -115,6 +108,6 @@ public sealed class BlockChangeChecker : IBlockChangeChecker
             .Select(b => b.Scheduled)
             .Concat(replacement);
 
-        return contract.CheckFloor(_plannedHours.Calculate(focusTime, timeZone));
+        return contract.CheckFloor(timeZone.HoursPerDay(focusTime));
     }
 }

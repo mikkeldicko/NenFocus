@@ -64,13 +64,13 @@ public class GetNenContractsForDateRangeQueryHandlerTests
             strictnessRule: strictness,
             calendar: TestCalendars.For(startDate ?? StartDate, endDate ?? EndDate, new DailyFloorRule.None()),
             floorRule: new DailyFloorRule.None(),
-            changeWindow: null, allowCancellation: false,
+            allowCancellation: false,
             plannedFocusHoursByDay: plan,
             sealedAt: At.Utc(sealedAt ?? (startDate ?? StartDate).ToDateTime(TimeOnly.MinValue)), timeZone: At.UtcZone);
     }
 
     private static ContractDayStatus Day(DateOnly date, double target, double done, double bonus = 0) =>
-        new(date, target, done, bonus, IsRest: target <= 0, IsMet: target <= 0 || done >= target);
+        new(date, target, done, bonus);
 
     private void StubDays(params ContractDayStatus[] days) =>
         _dayStatuses.HandleAsync(Arg.Any<GetNenContractDayStatusesQuery>(), Arg.Any<CancellationToken>())
@@ -202,8 +202,8 @@ public class GetNenContractsForDateRangeQueryHandlerTests
         _deficits.HandleAsync(Arg.Any<GetNenContractDeficitsQuery>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<FocusBlockDeficitDto>)
             [
-                new FocusBlockDeficitDto { FocusBlockId = Guid.NewGuid(), RemainingDeficitMinutes = 90 },
-                new FocusBlockDeficitDto { FocusBlockId = Guid.NewGuid(), RemainingDeficitMinutes = 30 }
+                new FocusBlockDeficitDto { FocusBlockId = Guid.NewGuid(), RemainingDeficit = WholeMinutes.Of(90) },
+                new FocusBlockDeficitDto { FocusBlockId = Guid.NewGuid(), RemainingDeficit = WholeMinutes.Of(30) }
             ]);
 
         var result = (await CreateHandler().HandleAsync(AnyRange)).Single();
@@ -223,7 +223,6 @@ public class GetNenContractsForDateRangeQueryHandlerTests
             strictnessRule: StrictnessRule.DailyFlexibility,
             calendar: TestCalendars.For(StartDate, EndDate, new DailyFloorRule.None()),
             floorRule: new DailyFloorRule.None(),
-            changeWindow: null,
             allowCancellation: allowCancellation,
             plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
             sealedAt: At.Utc(StartDate.ToDateTime(TimeOnly.MinValue)), timeZone: At.UtcZone);
@@ -318,7 +317,7 @@ public class GetNenContractsForDateRangeQueryHandlerTests
 
         day.Should().BeEquivalentTo(new NenContractDayStatusDto
         {
-            Date = StartDate.AddDays(1), CurrentHours = 1.5, FloorHours = 2, IsMet = false, IsRestDay = false,
+            Date = StartDate.AddDays(1), CurrentHours = 1.5, TargetHours = 2, IsMet = false, IsRestDay = false,
             Timing = DayTiming.Past, BonusHours = 0.5
         });
     }
@@ -347,7 +346,7 @@ public class GetNenContractsForDateRangeQueryHandlerTests
 
         day.Timing.Should().Be(DayTiming.Future);
         day.CurrentHours.Should().Be(3);
-        day.FloorHours.Should().Be(3);
+        day.TargetHours.Should().Be(3);
         day.IsMet.Should().BeTrue();
         day.BonusHours.Should().Be(0);
     }
@@ -362,7 +361,7 @@ public class GetNenContractsForDateRangeQueryHandlerTests
 
         day.IsRestDay.Should().BeTrue();
         day.IsMet.Should().BeTrue();
-        day.FloorHours.Should().Be(0);
+        day.TargetHours.Should().Be(0);
     }
 
     [Fact]
@@ -390,7 +389,7 @@ public class GetNenContractsForDateRangeQueryHandlerTests
 
         var result = (await CreateHandler().HandleAsync(AnyRange)).Single();
 
-        result.TotalFloorHours.Should().Be(6);
+        result.TotalCommittedHours.Should().Be(6);
         result.TotalCompletedHours.Should().Be(3.5);
         result.TotalBonusHours.Should().Be(1.5);
     }

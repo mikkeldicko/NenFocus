@@ -46,7 +46,6 @@ public class GetNenContractForEditQueryHandlerTests
             strictnessRule: StrictnessRule.DailyFlexibility,
             calendar: TestCalendars.For(StartDate, EndDate, new DailyFloorRule.FollowsPlan(), plannedFocusHoursByDay: new Dictionary<DateOnly, double> { [StartDate] = 2 }),
             floorRule: new DailyFloorRule.FollowsPlan(),
-            changeWindow: null,
             allowCancellation: true,
             plannedFocusHoursByDay: new Dictionary<DateOnly, double> { [StartDate] = 2 },
             sealedAt: At.Utc(StartDate.AddDays(-1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)), timeZone: At.UtcZone);
@@ -78,7 +77,7 @@ public class GetNenContractForEditQueryHandlerTests
                 workHours: new WorkHours(new TimeOnly(9, 0), new TimeOnly(17, 0)),
                 restDays: [restDay], noWorkHoursDays: [noWorkHoursDay]),
             floorRule: new DailyFloorRule.Fixed(new DailyFloor(3)),
-            changeWindow: null, allowCancellation: false,
+            allowCancellation: false,
             plannedFocusHoursByDay: plannedHours,
             sealedAt: At.Utc(StartDate.AddDays(-1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)), timeZone: At.UtcZone);
         _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(contract);
@@ -104,7 +103,6 @@ public class GetNenContractForEditQueryHandlerTests
             strictnessRule: StrictnessRule.DailyFlexibility,
             calendar: TestCalendars.For(StartDate, EndDate, new DailyFloorRule.None()),
             floorRule: new DailyFloorRule.None(),
-            changeWindow: null,
             allowCancellation: true,
             plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
             sealedAt: At.Utc(StartDate.AddDays(-1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)), timeZone: At.UtcZone);

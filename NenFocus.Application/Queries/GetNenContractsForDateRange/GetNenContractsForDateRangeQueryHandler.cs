@@ -64,7 +64,7 @@ public sealed class GetNenContractsForDateRangeQueryHandler
         var daysBehind = days.Count(d => d.Date <= clampedToday && !d.IsRest && !d.IsMet);
 
         var deficits = await _deficits.HandleAsync(new GetNenContractDeficitsQuery(contract.Id), cancellationToken);
-        var deficitHours = deficits.Sum(d => d.RemainingDeficitMinutes) / 60.0;
+        var deficitHours = deficits.Aggregate(WholeMinutes.Zero, (sum, d) => sum + d.RemainingDeficit).Hours;
 
         var dayStatuses = days.Select(d =>
         {
@@ -76,7 +76,7 @@ public sealed class GetNenContractsForDateRangeQueryHandler
                 // A future day shows its plan: by the one rule the plan is exactly what the day
                 // owes, so it is met as planned. A day under way or past shows what was done.
                 CurrentHours = future ? d.TargetHours : d.CompletedHours,
-                FloorHours = d.TargetHours,
+                TargetHours = d.TargetHours,
                 IsMet = future || d.IsMet,
                 IsRestDay = d.IsRest,
                 Timing = timing,
@@ -102,7 +102,7 @@ public sealed class GetNenContractsForDateRangeQueryHandler
             AllowCancellation = contract.AllowCancellation,
             DayStatuses = dayStatuses,
             HasPeriodTarget = contract.HasPeriodTarget,
-            TotalFloorHours = contract.CommittedFocusHours,
+            TotalCommittedHours = contract.CommittedFocusHours,
             TotalCompletedHours = days.Sum(d => d.CompletedHours),
             TotalBonusHours = days.Sum(d => d.BonusHours)
         };

@@ -84,6 +84,24 @@ public class StartSessionCommandHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_ASessionAlreadyRunning_IsRefused()
+    {
+        // One session at a time is "Focus time never overlaps" (Gap 92, C+): the running session holds
+        // its time, and a new session starting now always lands inside it. Before, nothing but the UI
+        // stopped it — StartSession passed no running session to the check.
+        var running = Session.Create(Guid.NewGuid(), new SessionGoal("Already focusing"),
+            new SessionDuration(TimeSpan.FromHours(1)), Guid.NewGuid(), SessionOrigin.Spontaneous);
+        running.Start(At.Utc(Now.AddMinutes(-10)));
+        _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns(running);
+
+        var result = await CreateHandler().HandleAsync(SpontaneousCommand(), CancellationToken.None);
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("already running");
+        await _sessions.DidNotReceive().SaveAsync(Arg.Any<Session>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task HandleAsync_FocusBlockAlreadyActive_IsRejected()
     {
         var activeBlock = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now.AddMinutes(-5), Now.AddHours(1)));
@@ -129,7 +147,7 @@ public class StartSessionCommandHandlerTests
         await _sessions.Received(1).SaveAsync(
             Arg.Is<Session>(s => s.BreakSchedule.Equals(expected) && s.BreakPresetName == "Classic"),
             Arg.Any<CancellationToken>());
-        _sessionState.Received(1).SetActive(Arg.Is<SessionDto>(d => d.Breaks.Count == 1 && d.BreakPresetName == "Classic"));
+        _sessionState.Received(1).SetActive(Arg.Is<SessionDto>(d => d.Timeline!.Breaks.Breaks.Count == 1 && d.BreakPresetName == "Classic"));
     }
 
     [Fact]
@@ -223,7 +241,7 @@ public class StartSessionCommandHandlerTests
         await _sessions.Received(1).SaveAsync(
             Arg.Is<Session>(s => s.EndAt == At.Utc(blockEnd)),
             Arg.Any<CancellationToken>());
-        _sessionState.Received(1).SetActive(Arg.Is<SessionDto>(d => d.EndAt == At.Utc(blockEnd)));
+        _sessionState.Received(1).SetActive(Arg.Is<SessionDto>(d => d.Timeline!.Run.Equals(At.Slot(Now, blockEnd))));
     }
 
     [Fact]
@@ -342,7 +360,7 @@ public class StartSessionCommandHandlerTests
         var blockId = Guid.NewGuid();
         var focusBlock = FocusBlock.Create(blockId, Guid.NewGuid(),At.Slot(Now.AddMinutes(-1), Now.AddHours(1)));
         _plannedBlocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns(focusBlock);
-        _sessions.ExistsForOriginatingBlockAsync(blockId, Arg.Any<CancellationToken>()).Returns(true);
+        _sessions.GetByOriginatingBlockIdAsync(blockId, Arg.Any<CancellationToken>()).Returns(TestSessions.For(blockId));
 
         var command = SpontaneousCommand() with { OriginatingBlockId = blockId };
         var result = await CreateHandler().HandleAsync(command, CancellationToken.None);
@@ -360,7 +378,6 @@ public class StartSessionCommandHandlerTests
         strictnessRule: StrictnessRule.Locked,
         calendar: TestCalendars.For(DateOnly.FromDateTime(Now), DateOnly.FromDateTime(Now).AddDays(7), new DailyFloorRule.None()),
         floorRule: new DailyFloorRule.None(),
-        changeWindow: null,
         allowCancellation: false,
         plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
         sealedAt: At.Utc(Now.Date), timeZone: At.UtcZone,
@@ -387,7 +404,7 @@ public class StartSessionCommandHandlerTests
         result.Success.Should().BeTrue();
         await _sessions.Received(1).SaveAsync(
             Arg.Is<Session>(s => s.KeepBlockingDuringBreaks == keepBlocking), Arg.Any<CancellationToken>());
-        _sessionState.Received(1).SetActive(Arg.Is<SessionDto>(d => d.KeepBlockingDuringBreaks == keepBlocking));
+        _sessionState.Received(1).SetActive(Arg.Is<SessionDto>(d => d.Timeline!.KeepsBlockingDuringBreaks == keepBlocking));
     }
 
     [Fact]

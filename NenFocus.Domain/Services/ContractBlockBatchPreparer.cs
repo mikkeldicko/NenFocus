@@ -6,13 +6,6 @@ namespace NenFocus.Domain.Services;
 
 public sealed class ContractBlockBatchPreparer : IContractBlockBatchPreparer
 {
-    private readonly IPlannedFocusHoursCalculator _calculator;
-
-    public ContractBlockBatchPreparer(IPlannedFocusHoursCalculator calculator)
-    {
-        _calculator = calculator;
-    }
-
     public ContractBlockBatchPreparation Prepare(
         IReadOnlyList<(Guid PresetId, TimeSlot Slot, bool IsFocus, string? Title)> specs,
         Guid? contractId,
@@ -34,7 +27,7 @@ public sealed class ContractBlockBatchPreparer : IContractBlockBatchPreparer
                 return ContractBlockBatchPreparation.Fail(ContractBlockBatchOutcome.OverlapsWithinBatch);
         }
 
-        var plannedFocusHoursByDay = _calculator.Calculate(focusBlocks.Select(b => b.Scheduled), timeZone);
+        var plannedFocusHoursByDay = timeZone.HoursPerDay(focusBlocks.Select(b => b.Scheduled));
 
         return ContractBlockBatchPreparation.Ok(blocks, plannedFocusHoursByDay);
     }

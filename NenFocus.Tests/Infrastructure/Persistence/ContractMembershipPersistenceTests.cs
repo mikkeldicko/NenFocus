@@ -146,4 +146,32 @@ public class ContractMembershipPersistenceTests : SqliteRepositoryTestBase
             .SingleAsync();
         withoutRole.Should().Be(0);
     }
+
+    [Fact]
+    public async Task Migration_RoundsFractionalRedemptionEntriesUpToWholeMinutes()
+    {
+        // Gap 92 (V10): coverage is whole minutes, stored as a JSON integer. An older fraction is
+        // rounded up, never down, so no stored coverage shrinks; a whole value stays as it was.
+        await using var connection = new SqliteConnection("DataSource=:memory:");
+        await connection.OpenAsync();
+        await using var context = new NenFocusDbContext(
+            new DbContextOptionsBuilder<NenFocusDbContext>().UseSqlite(connection).Options);
+        var migrator = context.GetService<IMigrator>();
+
+        await migrator.MigrateAsync("20261007130417_MoveRedemptionReceiptToFocusBlock");
+        var redeeming = Guid.NewGuid();
+        var firstMissed = Guid.NewGuid();
+        var secondMissed = Guid.NewGuid();
+        await context.Database.ExecuteSqlRawAsync(
+            "INSERT INTO PlannedBlocks (Id, BlockKind, BlockPresetId, Start, \"End\", ContractId, ContractRole, RedemptionEntries) " +
+            "VALUES ({0}, 'Focus', {1}, '2026-01-02 10:00:00', '2026-01-02 11:00:00', {2}, 'Redemption', {3});",
+            redeeming, Guid.NewGuid(), Guid.NewGuid(),
+            $"[{{\"MissedBlockId\":\"{firstMissed}\",\"MinutesCovered\":31.9}},{{\"MissedBlockId\":\"{secondMissed}\",\"MinutesCovered\":28}}]");
+
+        await migrator.MigrateAsync();
+
+        var receipt = ((FocusBlock)await context.PlannedBlocks.AsNoTracking().SingleAsync(b => b.Id == redeeming)).Receipt;
+        receipt.CoveredFor(firstMissed).Should().Be(WholeMinutes.Of(32));
+        receipt.CoveredFor(secondMissed).Should().Be(WholeMinutes.Of(28));
+    }
 }

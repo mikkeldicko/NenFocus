@@ -44,7 +44,6 @@ public class CreatePlannedBlockCommandHandlerTests
             strictnessRule: StrictnessRule.Locked,
             calendar: TestCalendars.For(DateOnly.FromDateTime(Start), DateOnly.FromDateTime(Start).AddDays(7), new DailyFloorRule.None()),
             floorRule: new DailyFloorRule.None(),
-            changeWindow: null,
             allowCancellation: false,
             plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
             sealedAt: At.Utc(Start.Date), timeZone: At.UtcZone);

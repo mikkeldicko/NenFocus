@@ -1,4 +1,5 @@
 using FluentValidation;
+using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.CheckNenContractDateRangeOverlap;
 
@@ -40,34 +41,15 @@ public sealed class SealNenContractValidator : AbstractValidator<SealNenContract
                         $"This date range overlaps with your existing contract '{overlapping}'.");
             });
 
-        // Null means no fixed floor — a deliberate, unambiguous choice. When present it
-        // must be a whole number and at least 1: zero would mean "no floor" by another
-        // name, reintroducing the exact 0-vs-blank confusion leaving it unset already avoids.
-        RuleFor(x => x.FixedDailyFloorHours)
-            .Must(f => f % 1 == 0)
-            .When(x => x.FixedDailyFloorHours.HasValue)
-            .WithMessage("Daily floor must be a whole number of hours.");
-
-        RuleFor(x => x.FixedDailyFloorHours)
-            .InclusiveBetween(1, 24)
-            .When(x => x.FixedDailyFloorHours.HasValue)
-            .WithMessage("Daily floor must be between 1 and 24 hours.");
-
+        // One question to the Domain (ContractPreset.CheckSettings, Gap 92 V9): a whole-hour floor
+        // from 1 to 24 that fits the Work Hours. "End after start" and "both or neither" can't be
+        // sent: the command carries a WorkHours.
         RuleFor(x => x)
-            .Must(x => x.WorkHoursStart.HasValue == x.WorkHoursEnd.HasValue)
-            .WithMessage("Work hours start and end must both be set, or both left empty.");
-
-        RuleFor(x => x.WorkHoursEnd)
-            .GreaterThan(x => x.WorkHoursStart)
-            .When(x => x.WorkHoursStart.HasValue && x.WorkHoursEnd.HasValue)
-            .WithMessage("Work hours end must be after start.");
-
-        // A floor that can never be satisfied within the enforced work hours window makes
-        // no sense to allow — e.g. a 5h window can never fit a 6h daily floor.
-        RuleFor(x => x)
-            .Must(x => x.FixedDailyFloorHours!.Value <= (x.WorkHoursEnd!.Value - x.WorkHoursStart!.Value).TotalHours)
-            .When(x => x.FixedDailyFloorHours.HasValue && x.WorkHoursStart.HasValue && x.WorkHoursEnd.HasValue)
-            .WithMessage("Daily floor cannot exceed the total work hours window.");
+            .Custom((command, context) =>
+            {
+                if (ContractSettingsVerdictDto.Check(command.FixedDailyFloorHours, command.WorkHours).Message is { } message)
+                    context.AddFailure(nameof(SealNenContractCommand.FixedDailyFloorHours), message);
+            });
 
         RuleForEach(x => x.Blocks)
             .MustAsync(async (b, ct) =>

@@ -24,7 +24,7 @@ public class DeletePlannedBlockValidatorTests
         _clock.SetNow(Now);
     }
 
-    private DeletePlannedBlockValidator CreateValidator() => new(_blocks, _contracts, _clock, new BlockChangeChecker(new PlannedFocusHoursCalculator()));
+    private DeletePlannedBlockValidator CreateValidator() => new(_blocks, _contracts, _clock, new BlockChangeChecker());
 
     [Fact]
     public async Task Validate_ValidBlockId_IsValid()
@@ -173,7 +173,7 @@ public class DeletePlannedBlockValidatorTests
         var rules = TestRules.Of(StrictnessRule.Locked, bonusBlocksFollowStrictness: bonusBlocksFollowStrictness);
         var contract = NenContract.Seal(Guid.NewGuid(), "Contract", new NenContractGoal("Goal"), rules,
             TestCalendars.For(DateOnly.FromDateTime(Now), DateOnly.FromDateTime(Now).AddDays(7), rules.FloorRule),
-            null, new Dictionary<DateOnly, double>(), At.Utc(Now.Date), At.UtcZone);
+            new Dictionary<DateOnly, double>(), At.Utc(Now.Date), At.UtcZone);
         _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
         return contract;
     }

@@ -24,7 +24,6 @@ public class GetInEffectNenContractsQueryHandlerTests
             strictnessRule: rule,
             calendar: TestCalendars.For(start, end, new DailyFloorRule.None()),
             floorRule: new DailyFloorRule.None(),
-            changeWindow: null,
             allowCancellation: true,
             plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
             sealedAt: At.Utc(start.AddDays(-1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)), timeZone: At.UtcZone);
@@ -36,7 +35,6 @@ public class GetInEffectNenContractsQueryHandlerTests
         strictnessRule: StrictnessRule.DailyFlexibility,
         calendar: TestCalendars.For(start, end, new DailyFloorRule.None()),
         floorRule: new DailyFloorRule.None(),
-        changeWindow: null,
         allowCancellation: true,
         plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
         sealedAt: At.Utc(start.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)), timeZone: At.UtcZone); // sealedAt == start -> auto-activates

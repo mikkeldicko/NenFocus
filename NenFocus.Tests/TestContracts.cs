@@ -17,7 +17,7 @@ internal static class TestContracts
 
     /// <summary>What a drafted, sealed block carries.</summary>
     public static ContractMembership Committed(Guid contractId) =>
-        new ContractBlockBatchPreparer(new PlannedFocusHoursCalculator())
+        new ContractBlockBatchPreparer()
             .Prepare([(Guid.NewGuid(), At.Slot(Day, Day.AddHours(1)), true, null)], contractId, At.UtcZone)
             .Blocks[0].Membership!;
 
@@ -35,7 +35,6 @@ internal static class TestContracts
         strictnessRule: StrictnessRule.Locked,
         calendar: TestCalendars.For(DateOnly.FromDateTime(Day), DateOnly.FromDateTime(Day).AddDays(7), new DailyFloorRule.None()),
         floorRule: new DailyFloorRule.None(),
-        changeWindow: null,
         allowCancellation: false,
         plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
         sealedAt: At.Utc(Day),
@@ -52,7 +51,6 @@ internal static class TestContracts
         StrictnessRule strictnessRule,
         ContractCalendar calendar,
         DailyFloorRule floorRule,
-        ChangeWindow? changeWindow,
         bool allowCancellation,
         IReadOnlyDictionary<DateOnly, double> plannedFocusHoursByDay,
         Moment sealedAt,
@@ -63,5 +61,5 @@ internal static class TestContracts
         => NenContract.Seal(id, name, goal,
             TestRules.Of(strictnessRule, (floorRule as DailyFloorRule.Fixed)?.Floor, allowCancellation,
                 keepBlockingDuringBreaks, redemptionPlacementPolicy),
-            calendar, changeWindow, plannedFocusHoursByDay, sealedAt, timeZone, contractPresetId);
+            calendar, plannedFocusHoursByDay, sealedAt, timeZone, contractPresetId);
 }

@@ -277,14 +277,14 @@ public class PlannedBlockRepositoryTests : SqliteRepositoryTestBase
         var repo = CreateRepository();
         var missedBlockId = Guid.NewGuid();
         var block = FocusBlock.CreateWithReceipt(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End),
-            title: null, membership: TestContracts.Redemption(Guid.NewGuid()), receipt: new RedemptionReceipt([new RedemptionEntry(missedBlockId, 30)]));
+            title: null, membership: TestContracts.Redemption(Guid.NewGuid()), receipt: new RedemptionReceipt([new RedemptionEntry(missedBlockId, WholeMinutes.Of(30))]));
 
         await repo.AddAsync(block);
         await Context.SaveChangesAsync();
 
         var reloaded = (FocusBlock)(await CreateRepository().GetByIdAsync(block.Id))!;
         reloaded.Receipt.Entries.Should().ContainSingle(e =>
-            e.MissedBlockId == missedBlockId && e.MinutesCovered == 30);
+            e.MissedBlockId == missedBlockId && e.Covered == WholeMinutes.Of(30));
     }
 
     [Fact]

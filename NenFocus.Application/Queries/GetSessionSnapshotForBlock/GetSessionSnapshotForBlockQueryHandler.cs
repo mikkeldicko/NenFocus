@@ -54,7 +54,7 @@ public sealed class GetSessionSnapshotForBlockQueryHandler
                     MissedBlockDate = missedBlock is not null
                         ? DateOnly.FromDateTime(_clock.TimeZone.ToCalendarTimes(missedBlock.Scheduled).Start)
                         : default,
-                    MinutesCovered = entry.MinutesCovered
+                    Covered = entry.Covered
                 });
             }
         }

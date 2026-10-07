@@ -35,14 +35,15 @@ public sealed class BreakNenContractCommandHandler : ICommandHandler<BreakNenCon
         if (contract is null)
             return BreakNenContractResult.Fail("Contract not found.");
 
-        // The contract's own answer again, so a caller that skipped the validator still can't
-        // break it mid-session (Gap 95). With no session running, nothing below can cut one short.
-        var verdict = contract.CheckBreak(sessionRunning: await _sessions.GetActiveAsync(ct) is not null);
+        // The contract's own answer, asked first for its sentence; Break asks it again itself, so
+        // no caller can skip it (Gap 92, D). With no session running, nothing below can cut one short.
+        var sessionRunning = await _sessions.GetActiveAsync(ct) is not null;
+        var verdict = contract.CheckBreak(sessionRunning);
         if (!verdict.IsAllowed)
-            return BreakNenContractResult.Fail(ContractEndVerdictDto.From(verdict).Message!);
+            return BreakNenContractResult.Fail(ContractActionVerdictDto.From(verdict).Message!);
 
         var now = _clock.Now;
-        contract.Break(now, _clock.TimeZone);
+        contract.Break(now, _clock.TimeZone, sessionRunning);
         await _contracts.SaveAsync(contract, ct);
 
         var linkedBlocks = await _blocks.GetForContractAsync(command.ContractId, ct);

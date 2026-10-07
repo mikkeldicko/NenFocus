@@ -30,7 +30,7 @@ public class GetBlockPlacementVerdictQueryHandlerTests
         _clock.SetNow(Now);
         _clock.SetTimeZoneOffset(TimeSpan.Zero);
         _blocks.GetForRangeAsync(Arg.Any<TimeSlot>(), Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[]);
-        _sessions.GetActiveSessionsAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<Session>)[]);
+        _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns((Session?)null);
     }
 
     private GetBlockPlacementVerdictQueryHandler CreateHandler() =>
@@ -46,9 +46,8 @@ public class GetBlockPlacementVerdictQueryHandlerTests
             goal: new NenContractGoal("Goal"),
             strictnessRule: StrictnessRule.DailyFlexibility,
             calendar: TestCalendars.For(DateOnly.FromDateTime(Now), DateOnly.FromDateTime(Now).AddDays(7),
-                new DailyFloorRule.Fixed(DailyFloor.None), workHours: new WorkHours(new TimeOnly(9, 0), new TimeOnly(17, 0))),
-            floorRule: new DailyFloorRule.Fixed(DailyFloor.None),
-            changeWindow: null,
+                new DailyFloorRule.None(), workHours: new WorkHours(new TimeOnly(9, 0), new TimeOnly(17, 0))),
+            floorRule: new DailyFloorRule.None(),
             allowCancellation: false,
             plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
             sealedAt: At.Utc(Now.Date), timeZone: At.UtcZone);
@@ -96,8 +95,8 @@ public class GetBlockPlacementVerdictQueryHandlerTests
     [Fact]
     public async Task HandleAsync_OverlapsRunningSession_IsTimeTaken()
     {
-        _sessions.GetActiveSessionsAsync(Arg.Any<CancellationToken>())
-            .Returns((IReadOnlyList<Session>)[RunningSession(Start.AddMinutes(-30), TimeSpan.FromHours(2))]);
+        _sessions.GetActiveAsync(Arg.Any<CancellationToken>())
+            .Returns(RunningSession(Start.AddMinutes(-30), TimeSpan.FromHours(2)));
 
         var result = await CreateHandler().HandleAsync(NewFocus(At.Slot(Start, End)));
 
@@ -113,7 +112,7 @@ public class GetBlockPlacementVerdictQueryHandlerTests
         var session = Session.Create(Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromHours(1)),
             Guid.NewGuid(), SessionOrigin.Planned, originatingBlockId: Guid.NewGuid());
         session.Start(At.Utc(Start.AddMinutes(-55)), plannedWindow: At.PlannedWindowEnding(Start));
-        _sessions.GetActiveSessionsAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<Session>)[session]);
+        _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns(session);
 
         var result = await CreateHandler().HandleAsync(NewFocus(At.Slot(Start, End)));
 
@@ -220,7 +219,7 @@ public class GetBlockPlacementVerdictQueryHandlerTests
         var presetId = Guid.NewGuid();
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>())
             .Returns(FocusBlock.CreateWithReceipt(blockId, presetId, At.Slot(Start, End), title: null, membership: TestContracts.Redemption(contractId),
-                receipt: new RedemptionReceipt([new RedemptionEntry(Guid.NewGuid(), 30)])));
+                receipt: new RedemptionReceipt([new RedemptionEntry(Guid.NewGuid(), WholeMinutes.Of(30))])));
         var requested = At.Slot(Start.AddHours(1), End.AddHours(1));
 
         await CreateHandler().HandleAsync(new GetBlockPlacementVerdictQuery(requested, BlockPresetType.Focus, presetId, ExistingBlockId: blockId));

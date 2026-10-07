@@ -1,21 +1,20 @@
 namespace NenFocus.Domain.ValueObjects;
 
 /// <summary>
-/// Ties a redemption Focus Block to one specific missed or late Focus Block it covers.
-/// The Application layer enforces that MinutesCovered does not exceed the referenced
-/// block's remaining deficit and that all linked blocks share the redemption block's preset.
+/// Ties a redemption Focus Block to one specific missed or late Focus Block it covers, and how much
+/// of it — whole minutes, above zero (Gap 92, V10). Written only by the Domain (Gap 106).
 /// </summary>
 public record RedemptionEntry
 {
     public Guid MissedBlockId { get; }
-    public double MinutesCovered { get; }
+    public WholeMinutes Covered { get; }
 
-    public RedemptionEntry(Guid missedBlockId, double minutesCovered)
+    public RedemptionEntry(Guid missedBlockId, WholeMinutes covered)
     {
-        if (minutesCovered <= 0)
-            throw new ArgumentException("Minutes covered must be greater than zero.", nameof(minutesCovered));
+        if (covered <= WholeMinutes.Zero)
+            throw new ArgumentException("A redemption entry must cover something.", nameof(covered));
 
         MissedBlockId = missedBlockId;
-        MinutesCovered = minutesCovered;
+        Covered = covered;
     }
 }

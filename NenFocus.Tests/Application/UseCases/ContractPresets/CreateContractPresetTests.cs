@@ -3,6 +3,7 @@ using NenFocus.Application.Interfaces;
 using NenFocus.Application.UseCases.ContractPresets.CreateContractPreset;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
+using NenFocus.Domain.ValueObjects;
 using NSubstitute;
 
 namespace NenFocus.Tests.Application.UseCases.ContractPresets;
@@ -48,17 +49,9 @@ public class CreateContractPresetTests
     [InlineData(-1)]
     [InlineData(0)] // zero would mean "no floor" by another name — leave it unset instead
     [InlineData(25)]
-    public async Task Validate_DailyFloorOutOfRange_IsInvalid(double hours)
+    public async Task Validate_DailyFloorOutOfRange_IsInvalid(int hours)
     {
         var result = await CreateValidator().ValidateAsync(ValidCommand() with { DailyFloorHours = hours });
-
-        result.IsValid.Should().BeFalse();
-    }
-
-    [Fact]
-    public async Task Validate_DailyFloorNotWholeNumber_IsInvalid()
-    {
-        var result = await CreateValidator().ValidateAsync(ValidCommand() with { DailyFloorHours = 3.5 });
 
         result.IsValid.Should().BeFalse();
     }
@@ -77,8 +70,7 @@ public class CreateContractPresetTests
         var command = ValidCommand() with
         {
             DailyFloorHours = 6,
-            WorkHoursStart = new TimeOnly(10, 0),
-            WorkHoursEnd = new TimeOnly(15, 0) // 5h window — a 6h floor could never fit
+            WorkHours = new WorkHours(new TimeOnly(10, 0), new TimeOnly(15, 0)) // 5h window — a 6h floor could never fit
         };
 
         var result = await CreateValidator().ValidateAsync(command);
@@ -92,8 +84,7 @@ public class CreateContractPresetTests
         var command = ValidCommand() with
         {
             DailyFloorHours = 5,
-            WorkHoursStart = new TimeOnly(10, 0),
-            WorkHoursEnd = new TimeOnly(15, 0)
+            WorkHours = new WorkHours(new TimeOnly(10, 0), new TimeOnly(15, 0))
         };
 
         var result = await CreateValidator().ValidateAsync(command);
@@ -102,27 +93,9 @@ public class CreateContractPresetTests
     }
 
     [Fact]
-    public async Task Validate_OnlyWorkHoursStartSet_IsInvalid()
-    {
-        var result = await CreateValidator().ValidateAsync(ValidCommand() with { WorkHoursStart = new TimeOnly(9, 0) });
-
-        result.IsValid.Should().BeFalse();
-    }
-
-    [Fact]
-    public async Task Validate_WorkHoursEndBeforeStart_IsInvalid()
-    {
-        var command = ValidCommand() with { WorkHoursStart = new TimeOnly(17, 0), WorkHoursEnd = new TimeOnly(9, 0) };
-
-        var result = await CreateValidator().ValidateAsync(command);
-
-        result.IsValid.Should().BeFalse();
-    }
-
-    [Fact]
     public async Task Validate_BothWorkHoursSetCorrectly_IsValid()
     {
-        var command = ValidCommand() with { WorkHoursStart = new TimeOnly(9, 0), WorkHoursEnd = new TimeOnly(17, 0) };
+        var command = ValidCommand() with { WorkHours = new WorkHours(new TimeOnly(9, 0), new TimeOnly(17, 0)) };
 
         var result = await CreateValidator().ValidateAsync(command);
 
@@ -160,8 +133,7 @@ public class CreateContractPresetTests
         {
             StrictnessRule = StrictnessRule.PeriodTimeBudget,
             DailyFloorHours = 6,
-            WorkHoursStart = new TimeOnly(9, 0),
-            WorkHoursEnd = new TimeOnly(17, 0),
+            WorkHours = new WorkHours(new TimeOnly(9, 0), new TimeOnly(17, 0)),
             AllowCancellation = true
         };
 
@@ -183,17 +155,6 @@ public class CreateContractPresetTests
         // proves the handler defends its own boundary too, matching
         // SealNenContractCommandHandler's precedent, not just trusting the validator.
         var command = ValidCommand() with { DailyFloorHours = -1 };
-
-        var result = await CreateHandler().HandleAsync(command, CancellationToken.None);
-
-        result.Success.Should().BeFalse();
-        await _presets.DidNotReceive().AddAsync(Arg.Any<ContractPreset>(), Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
-    public async Task HandleAsync_InvalidWorkHoursBypassingValidator_FailsCleanlyInsteadOfThrowing()
-    {
-        var command = ValidCommand() with { WorkHoursStart = new TimeOnly(17, 0), WorkHoursEnd = new TimeOnly(9, 0) };
 
         var result = await CreateHandler().HandleAsync(command, CancellationToken.None);
 

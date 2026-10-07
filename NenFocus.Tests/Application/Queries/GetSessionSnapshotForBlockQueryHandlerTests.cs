@@ -85,7 +85,7 @@ public class GetSessionSnapshotForBlockQueryHandlerTests
         var coveringBlockId = Guid.NewGuid();
         var coveringPresetId = Guid.NewGuid();
         var coveringBlock = FocusBlock.CreateWithReceipt(coveringBlockId, coveringPresetId,At.Slot(Start, End),
-            title: null, membership: TestContracts.Redemption(Guid.NewGuid()), receipt: new RedemptionReceipt([new RedemptionEntry(missedBlockId, 30)]));
+            title: null, membership: TestContracts.Redemption(Guid.NewGuid()), receipt: new RedemptionReceipt([new RedemptionEntry(missedBlockId, WholeMinutes.Of(30))]));
 
         var session = CreateCompletedSession(coveringBlockId);
         _sessions.GetByOriginatingBlockIdAsync(coveringBlockId, Arg.Any<CancellationToken>()).Returns(session);
@@ -101,7 +101,7 @@ public class GetSessionSnapshotForBlockQueryHandlerTests
         coverage.MissedBlockId.Should().Be(missedBlockId);
         coverage.MissedBlockPresetName.Should().Be("Deep Work");
         coverage.MissedBlockDate.Should().Be(DateOnly.FromDateTime(missedStart));
-        coverage.MinutesCovered.Should().Be(30);
+        coverage.Covered.Should().Be(WholeMinutes.Of(30));
     }
 
     [Fact]
@@ -115,7 +115,7 @@ public class GetSessionSnapshotForBlockQueryHandlerTests
 
         var coveringBlockId = Guid.NewGuid();
         var coveringBlock = FocusBlock.CreateWithReceipt(coveringBlockId, Guid.NewGuid(),At.Slot(Start, End),
-            title: null, membership: TestContracts.Redemption(Guid.NewGuid()), receipt: new RedemptionReceipt([new RedemptionEntry(missedBlockId, 30)]));
+            title: null, membership: TestContracts.Redemption(Guid.NewGuid()), receipt: new RedemptionReceipt([new RedemptionEntry(missedBlockId, WholeMinutes.Of(30))]));
 
         var session = CreateCompletedSession(coveringBlockId);
         _sessions.GetByOriginatingBlockIdAsync(coveringBlockId, Arg.Any<CancellationToken>()).Returns(session);

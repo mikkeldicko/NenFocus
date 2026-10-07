@@ -35,7 +35,6 @@ public class NenContractRepositoryTests : SqliteRepositoryTestBase
             strictnessRule: strictnessRule,
             calendar: TestCalendars.For(StartDate, EndDate, rule, plan, workHours, restDays, noWorkHoursDays),
             floorRule: rule,
-            changeWindow: null,
             allowCancellation: allowCancellation,
             plannedFocusHoursByDay: plan,
             sealedAt: At.Utc(sealedAt ?? SealedOnStart), timeZone: At.UtcZone,
@@ -172,7 +171,7 @@ public class NenContractRepositoryTests : SqliteRepositoryTestBase
         await repo.AddAsync(contract);
         await Context.SaveChangesAsync();
 
-        contract.Break(At.Utc(StartDate.AddDays(2).ToDateTime(new TimeOnly(10, 0))), At.UtcZone);
+        contract.Break(At.Utc(StartDate.AddDays(2).ToDateTime(new TimeOnly(10, 0))), At.UtcZone, sessionRunning: false);
         await repo.SaveAsync(contract);
         await Context.SaveChangesAsync();
 
@@ -321,7 +320,6 @@ public class NenContractRepositoryTests : SqliteRepositoryTestBase
             strictnessRule: StrictnessRule.Locked,
             calendar: TestCalendars.For(StartDate.AddDays(30), EndDate.AddDays(30), new DailyFloorRule.None()),
             floorRule: new DailyFloorRule.None(),
-            changeWindow: null,
             allowCancellation: false,
             plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
             sealedAt: At.Utc(StartDate.AddDays(30).ToDateTime(TimeOnly.MinValue)), timeZone: At.UtcZone); // Active
@@ -376,7 +374,7 @@ public class NenContractRepositoryTests : SqliteRepositoryTestBase
     {
         var repo = CreateRepository();
         var contract = Seal(sealedAt: SealedOnStart, allowCancellation: true);
-        contract.Break(At.Utc(SealedOnStart.AddDays(2)), At.UtcZone);
+        contract.Break(At.Utc(SealedOnStart.AddDays(2)), At.UtcZone, sessionRunning: false);
         await repo.AddAsync(contract);
         await Context.SaveChangesAsync();
 
@@ -397,7 +395,6 @@ public class NenContractRepositoryTests : SqliteRepositoryTestBase
             strictnessRule: StrictnessRule.Locked,
             calendar: TestCalendars.For(StartDate.AddDays(30), EndDate.AddDays(30), new DailyFloorRule.None()),
             floorRule: new DailyFloorRule.None(),
-            changeWindow: null,
             allowCancellation: false,
             plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
             sealedAt: At.Utc(StartDate.AddDays(30).ToDateTime(TimeOnly.MinValue)), timeZone: At.UtcZone); // Active

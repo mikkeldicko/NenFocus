@@ -1,7 +1,7 @@
 using FluentValidation;
+using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.CheckNenContractDateRangeOverlap;
-using NenFocus.Domain.Enums;
 
 namespace NenFocus.Application.UseCases.NenContracts.Edit;
 
@@ -31,14 +31,16 @@ public sealed class EditNenContractValidator : AbstractValidator<EditNenContract
             })
             .WithMessage("Contract not found.");
 
+        // The contract's own answer (NenContract.CheckEdit, Gap 92): only before it starts.
         RuleFor(x => x)
-            .MustAsync(async (command, ct) =>
+            .CustomAsync(async (command, context, ct) =>
             {
-                if (command.ContractId == Guid.Empty) return true;
-                var contract = await contracts.GetByIdAsync(command.ContractId, ct);
-                return contract is null || contract.Status == NenContractStatus.Scheduled;
-            })
-            .WithMessage("Only a Scheduled contract can be edited — an Active contract has no edit path.");
+                if (command.ContractId == Guid.Empty) return;
+                if (await contracts.GetByIdAsync(command.ContractId, ct) is not { } contract) return; // reported above
+
+                if (ContractActionVerdictDto.From(contract.CheckEdit()).Message is { } message)
+                    context.AddFailure(nameof(EditNenContractCommand.ContractId), message);
+            });
 
         RuleFor(x => x.Name)
             .NotEmpty().WithMessage("Contract name is required.");
@@ -61,31 +63,15 @@ public sealed class EditNenContractValidator : AbstractValidator<EditNenContract
                         $"This date range overlaps with your existing contract '{overlapping}'.");
             });
 
-        // See SealNenContractValidator for the full rationale — null means no fixed floor
-        // deliberately; when present it must be a whole number, at least 1.
-        RuleFor(x => x.FixedDailyFloorHours)
-            .Must(f => f % 1 == 0)
-            .When(x => x.FixedDailyFloorHours.HasValue)
-            .WithMessage("Daily floor must be a whole number of hours.");
-
-        RuleFor(x => x.FixedDailyFloorHours)
-            .InclusiveBetween(1, 24)
-            .When(x => x.FixedDailyFloorHours.HasValue)
-            .WithMessage("Daily floor must be between 1 and 24 hours.");
-
+        // One question to the Domain (ContractPreset.CheckSettings, Gap 92 V9): a whole-hour floor
+        // from 1 to 24 that fits the Work Hours. "End after start" and "both or neither" can't be
+        // sent: the command carries a WorkHours.
         RuleFor(x => x)
-            .Must(x => x.WorkHoursStart.HasValue == x.WorkHoursEnd.HasValue)
-            .WithMessage("Work hours start and end must both be set, or both left empty.");
-
-        RuleFor(x => x.WorkHoursEnd)
-            .GreaterThan(x => x.WorkHoursStart)
-            .When(x => x.WorkHoursStart.HasValue && x.WorkHoursEnd.HasValue)
-            .WithMessage("Work hours end must be after start.");
-
-        RuleFor(x => x)
-            .Must(x => x.FixedDailyFloorHours!.Value <= (x.WorkHoursEnd!.Value - x.WorkHoursStart!.Value).TotalHours)
-            .When(x => x.FixedDailyFloorHours.HasValue && x.WorkHoursStart.HasValue && x.WorkHoursEnd.HasValue)
-            .WithMessage("Daily floor cannot exceed the total work hours window.");
+            .Custom((command, context) =>
+            {
+                if (ContractSettingsVerdictDto.Check(command.FixedDailyFloorHours, command.WorkHours).Message is { } message)
+                    context.AddFailure(nameof(EditNenContractCommand.FixedDailyFloorHours), message);
+            });
 
         RuleForEach(x => x.Blocks)
             .MustAsync(async (b, ct) =>

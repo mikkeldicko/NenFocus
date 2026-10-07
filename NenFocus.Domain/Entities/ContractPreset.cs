@@ -33,6 +33,7 @@ public sealed class ContractPreset : AggregateRoot
     {
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Preset name cannot be empty.", nameof(name));
+        EnsureFits(rules, workHours);
 
         return new ContractPreset
         {
@@ -54,9 +55,32 @@ public sealed class ContractPreset : AggregateRoot
     {
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Preset name cannot be empty.", nameof(name));
+        EnsureFits(rules, workHours);
 
         Name = name.Trim();
         Rules = rules with { };
         WorkHours = workHours;
+    }
+
+    /// <summary>
+    /// Can this fixed floor and these Work Hours go together? A floor of whole hours from 1 to 24
+    /// (<see cref="ContractRules.IsValidFixedFloor"/>) that fits the window (<see cref="DailyFloor.FitsIn"/>).
+    /// The one question the preset form and the Seal/Edit validators ask — a contract's settings are a
+    /// preset's copy — and the one Create and Update obey, so a preset can't be impossible (Gap 92, V9).
+    /// </summary>
+    public static ContractSettingsOutcome CheckSettings(int? fixedFloorHours, WorkHours? workHours)
+    {
+        if (fixedFloorHours is not { } hours) return ContractSettingsOutcome.Allowed;
+        if (!ContractRules.IsValidFixedFloor(hours)) return ContractSettingsOutcome.FloorOutOfRange;
+        if (workHours is not null && !new DailyFloor(hours).FitsIn(workHours.Length)) return ContractSettingsOutcome.FloorLongerThanWorkHours;
+        return ContractSettingsOutcome.Allowed;
+    }
+
+    private static void EnsureFits(ContractRules rules, WorkHours? workHours)
+    {
+        // A fixed floor is whole hours by construction (ContractRules), so the cast is exact.
+        var outcome = CheckSettings((int?)rules.FixedDailyFloor?.Hours, workHours);
+        if (outcome != ContractSettingsOutcome.Allowed)
+            throw new ArgumentException($"These settings can't go together ({outcome}).", nameof(workHours));
     }
 }

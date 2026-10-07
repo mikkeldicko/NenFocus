@@ -1,6 +1,7 @@
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Domain.Enums;
+using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Application.UseCases.NenContracts.Seal;
 
@@ -24,21 +25,21 @@ public sealed record SealNenContractCommand : ICommand<SealNenContractResult>
     /// Set for Advanced contracts: one fixed floor applied to every day except <see cref="RestDays"/>.
     /// Null for Simple contracts: each day's floor is instead derived from that day's own
     /// planned Focus hours (computed from <see cref="Blocks"/>), so every planned day passes
-    /// by construction and every unplanned day is a rest day automatically.
+    /// by construction and every unplanned day is a rest day automatically. Whole hours, so a
+    /// fraction can't be sent; 1–24 and fitting the Work Hours are the Domain's (Gap 92, V9).
     /// </summary>
-    public double? FixedDailyFloorHours { get; init; }
+    public int? FixedDailyFloorHours { get; init; }
 
     /// <summary>Advanced-only: days that are exempt from <see cref="FixedDailyFloorHours"/>.</summary>
     public IReadOnlyList<DateOnly> RestDays { get; init; } = [];
 
     /// <summary>
     /// Advanced-only, optional: one work-hours window applied to every day except
-    /// <see cref="NoWorkHoursDays"/>. Both must be set together, or both left null — there
-    /// is no work hours constraint at all if either is missing. Simple contracts always
-    /// leave both null (Work Hours is Advanced-only, per DOMAIN_DICTIONARY.md).
+    /// <see cref="NoWorkHoursDays"/>, or null for no Work Hours at all. One value, so a start
+    /// without an end can't be sent, and a <c>WorkHours</c> ending before it starts can't be
+    /// built (Gap 92, V9). Simple contracts always leave it null (Work Hours is Advanced-only).
     /// </summary>
-    public TimeOnly? WorkHoursStart { get; init; }
-    public TimeOnly? WorkHoursEnd { get; init; }
+    public WorkHours? WorkHours { get; init; }
 
     /// <summary>
     /// Advanced-only: days that are exempt from the work-hours window — same per-day

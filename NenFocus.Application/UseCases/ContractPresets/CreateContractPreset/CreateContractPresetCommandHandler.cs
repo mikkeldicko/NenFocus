@@ -24,9 +24,7 @@ public sealed class CreateContractPresetCommandHandler
         ContractPreset preset;
         try
         {
-            var workHours = command.WorkHoursStart is { } start && command.WorkHoursEnd is { } end
-                ? new WorkHours(start, end)
-                : null;
+            var workHours = command.WorkHours;
 
             preset = ContractPreset.Create(
                 Guid.NewGuid(),

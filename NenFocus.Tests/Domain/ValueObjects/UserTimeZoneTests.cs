@@ -176,6 +176,78 @@ public class UserTimeZoneTests
         Copenhagen.SplitByDay(slot).Should().ContainSingle().Which.Part.Length.Should().Be(TimeSpan.FromHours(25));
     }
 
+    // HoursPerDay — how many hours of the given slots land on each local day (Gap 92 S4; moved
+    // here from PlannedFocusHoursCalculator, which was only this sum over SplitByDay).
+
+    private static IReadOnlyDictionary<DateOnly, double> HoursPerDay(params TimeSlot[] slots) => Copenhagen.HoursPerDay(slots);
+
+    [Fact]
+    public void HoursPerDay_NoSlots_IsEmpty()
+        => HoursPerDay().Should().BeEmpty();
+
+    [Fact]
+    public void HoursPerDay_OneSlotWithinADay_CountsOnThatDay()
+        => HoursPerDay(LocalSlot(new DateTime(2026, 1, 1, 9, 0, 0), new DateTime(2026, 1, 1, 11, 0, 0)))
+            .Should().ContainKey(new DateOnly(2026, 1, 1)).WhoseValue.Should().Be(2);
+
+    [Fact]
+    public void HoursPerDay_SlotsOnTheSameDay_AddUp()
+    {
+        var result = HoursPerDay(
+            LocalSlot(new DateTime(2026, 1, 1, 9, 0, 0), new DateTime(2026, 1, 1, 10, 0, 0)),
+            LocalSlot(new DateTime(2026, 1, 1, 14, 0, 0), new DateTime(2026, 1, 1, 16, 0, 0)));
+
+        result[new DateOnly(2026, 1, 1)].Should().Be(3);
+    }
+
+    [Fact]
+    public void HoursPerDay_SlotsOnDifferentDays_CountSeparately()
+    {
+        var result = HoursPerDay(
+            LocalSlot(new DateTime(2026, 1, 1, 9, 0, 0), new DateTime(2026, 1, 1, 10, 0, 0)),
+            LocalSlot(new DateTime(2026, 1, 2, 9, 0, 0), new DateTime(2026, 1, 2, 12, 0, 0)));
+
+        result[new DateOnly(2026, 1, 1)].Should().Be(1);
+        result[new DateOnly(2026, 1, 2)].Should().Be(3);
+    }
+
+    [Fact]
+    public void HoursPerDay_SlotCrossingMidnight_GivesEachDayItsShare()
+    {
+        var result = HoursPerDay(LocalSlot(new DateTime(2026, 1, 1, 23, 0, 0), new DateTime(2026, 1, 2, 1, 0, 0)));
+
+        result[new DateOnly(2026, 1, 1)].Should().Be(1);
+        result[new DateOnly(2026, 1, 2)].Should().Be(1);
+    }
+
+    [Fact]
+    public void HoursPerDay_SlotSpanningSeveralDays_CountsEachDay()
+    {
+        var result = HoursPerDay(LocalSlot(new DateTime(2026, 1, 1, 22, 0, 0), new DateTime(2026, 1, 3, 2, 0, 0)));
+
+        result[new DateOnly(2026, 1, 1)].Should().Be(2);   // 22:00-24:00
+        result[new DateOnly(2026, 1, 2)].Should().Be(24);  // full day
+        result[new DateOnly(2026, 1, 3)].Should().Be(2);   // 00:00-02:00
+    }
+
+    [Fact]
+    public void HoursPerDay_JustAfterLocalMidnight_CountsOnTheLocalDay()
+        // 00:30–01:30 local is the previous day in UTC; the user's day is what counts.
+        => HoursPerDay(LocalSlot(new DateTime(2026, 1, 2, 0, 30, 0), new DateTime(2026, 1, 2, 1, 30, 0)))
+            .Should().Equal(new Dictionary<DateOnly, double> { [new DateOnly(2026, 1, 2)] = 1 });
+
+    [Fact]
+    public void HoursPerDay_SpringForwardNight_CountsTheRealHours()
+        // 01:00–04:00 on 29 March 2026 reads as 3 hours but lasts 2: 02:00 jumps to 03:00.
+        => HoursPerDay(LocalSlot(new DateTime(2026, 3, 29, 1, 0, 0), new DateTime(2026, 3, 29, 4, 0, 0)))
+            [new DateOnly(2026, 3, 29)].Should().Be(2);
+
+    [Fact]
+    public void HoursPerDay_FallBackNight_CountsTheRealHours()
+        // 01:00–04:00 on 25 October 2026 reads as 3 hours but lasts 4: 03:00 falls back to 02:00.
+        => HoursPerDay(LocalSlot(new DateTime(2026, 10, 25, 1, 0, 0), new DateTime(2026, 10, 25, 4, 0, 0)))
+            [new DateOnly(2026, 10, 25)].Should().Be(4);
+
     [Fact]
     public void MachineZone_MatchesTodaysConversions_EveryQuarterHourOfTheYear()
     {

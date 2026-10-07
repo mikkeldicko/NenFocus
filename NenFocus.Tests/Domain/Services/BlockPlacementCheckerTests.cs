@@ -30,8 +30,8 @@ public class BlockPlacementCheckerTests
         return session;
     }
 
-    private PlacementVerdict CheckFree(TimeSlot slot, PlannedBlock[]? blocks = null, Session[]? sessions = null) =>
-        _checker.CheckFree(slot, blocks ?? [], sessions ?? [], Now);
+    private PlacementVerdict CheckFree(TimeSlot slot, PlannedBlock[]? blocks = null, Session? running = null) =>
+        _checker.CheckFree(slot, blocks ?? [], running, Now);
 
     [Fact]
     public void EmptyCalendar_IsAllowed()
@@ -57,7 +57,7 @@ public class BlockPlacementCheckerTests
     [Fact]
     public void RunningSessionInTheWay_IsTimeTaken_WithItsSlot()
     {
-        var verdict = CheckFree(Slot(8.5, 9.5), sessions: [RunningSession(8, 9)]);
+        var verdict = CheckFree(Slot(8.5, 9.5), running: RunningSession(8, 9));
 
         verdict.Outcome.Should().Be(PlacementOutcome.TimeTaken);
         verdict.Conflict.Should().Be(Slot(8, 9));
@@ -69,7 +69,7 @@ public class BlockPlacementCheckerTests
         var session = RunningSession(7, 9);
         session.Complete(At.Utc(Day.AddHours(7.5)));
 
-        CheckFree(Slot(8, 9), sessions: [session]).Should().Be(PlacementVerdict.Allowed);
+        CheckFree(Slot(8, 9), running: session).Should().Be(PlacementVerdict.Allowed);
     }
 
     [Fact]
@@ -91,7 +91,7 @@ public class BlockPlacementCheckerTests
         // GetOverlappingAsync tests, Gap 88).
         var block = Focus(6, 7);
 
-        _checker.CheckFree(Slot(6, 7), [block], [], At.Utc(Day.AddHours(7.5))).Should().Be(PlacementVerdict.Allowed);
+        _checker.CheckFree(Slot(6, 7), [block], null, At.Utc(Day.AddHours(7.5))).Should().Be(PlacementVerdict.Allowed);
     }
 
     [Fact]
@@ -99,7 +99,7 @@ public class BlockPlacementCheckerTests
     {
         var block = Focus(6, 7);
 
-        _checker.CheckFree(Slot(6, 7), [block], [], At.Utc(Day.AddHours(6.2))).Conflict.Should().Be(Slot(6, 7));
+        _checker.CheckFree(Slot(6, 7), [block], null, At.Utc(Day.AddHours(6.2))).Conflict.Should().Be(Slot(6, 7));
     }
 
     [Fact]
@@ -126,13 +126,12 @@ public class BlockPlacementCheckerTests
         calendar: TestCalendars.For(firstDay ?? DateOnly.FromDateTime(Day), (firstDay ?? DateOnly.FromDateTime(Day)).AddDays(2),
             new DailyFloorRule.None(), workHours: new WorkHours(new TimeOnly(9, 0), new TimeOnly(17, 0))),
         floorRule: new DailyFloorRule.None(),
-        changeWindow: null,
         allowCancellation: true,
         plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
         sealedAt: Now, timeZone: At.UtcZone);
 
     private PlacementVerdict Check(TimeSlot slot, ContractMembership? membership, params NenContract[] contracts) =>
-        _checker.Check(slot, BlockPresetType.Focus, membership, contracts, [], [], Now, At.UtcZone);
+        _checker.Check(slot, BlockPresetType.Focus, membership, contracts, [], null, Now, At.UtcZone);
 
     [Fact]
     public void Check_SlotAlreadyStarted_IsInThePast()
@@ -176,7 +175,7 @@ public class BlockPlacementCheckerTests
     public void Check_FinishedContract_GovernsNothing()
     {
         var broken = Contract();
-        broken.Break(Now, At.UtcZone);
+        broken.Break(Now, At.UtcZone, sessionRunning: false);
 
         Check(Slot(19, 20), null, broken).Should().Be(PlacementVerdict.Allowed);
     }
@@ -235,7 +234,7 @@ public class BlockPlacementCheckerTests
     [Fact]
     public void Check_TimeTaken_WinsAfterTheContractAllows()
     {
-        var verdict = _checker.Check(Slot(10, 11), BlockPresetType.Focus, null, [Contract()], [Focus(10.5, 12)], [], Now, At.UtcZone);
+        var verdict = _checker.Check(Slot(10, 11), BlockPresetType.Focus, null, [Contract()], [Focus(10.5, 12)], null, Now, At.UtcZone);
 
         verdict.Outcome.Should().Be(PlacementOutcome.TimeTaken);
         verdict.GoverningContractId.Should().BeNull();
@@ -246,9 +245,9 @@ public class BlockPlacementCheckerTests
     {
         var contract = Contract();
 
-        _checker.Check(Slot(10, 11), BlockPresetType.Background, null, [contract], [Focus(10, 11)], [], Now, At.UtcZone)
+        _checker.Check(Slot(10, 11), BlockPresetType.Background, null, [contract], [Focus(10, 11)], null, Now, At.UtcZone)
             .GoverningContractId.Should().Be(contract.Id);
-        _checker.Check(Slot(24 + 19, 24 + 20), BlockPresetType.Background, null, [contract], [], [], Now, At.UtcZone)
+        _checker.Check(Slot(24 + 19, 24 + 20), BlockPresetType.Background, null, [contract], [], null, Now, At.UtcZone)
             .Outcome.Should().Be(PlacementOutcome.OutsideContractHours);
     }
 

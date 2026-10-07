@@ -30,7 +30,6 @@ public class BreakNenContractValidatorTests
         strictnessRule: StrictnessRule.DailyFlexibility,
         calendar: TestCalendars.For(StartDate, EndDate, new DailyFloorRule.None()),
         floorRule: new DailyFloorRule.None(),
-        changeWindow: null,
         allowCancellation: allowCancellation,
         plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
         sealedAt: At.Utc(sealedAt), timeZone: At.UtcZone);

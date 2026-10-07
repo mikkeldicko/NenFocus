@@ -14,7 +14,7 @@ public class ContractBlockBatchPreparerTests
     // The real calculator, not a mock — this is pure domain-to-domain composition, and
     // using the real implementation is what makes these tests meaningful without mocks,
     // the same reason the preparer itself was extracted.
-    private readonly ContractBlockBatchPreparer _preparer = new(new PlannedFocusHoursCalculator());
+    private readonly ContractBlockBatchPreparer _preparer = new();
 
     private static readonly Guid PresetId = Guid.NewGuid();
     private static readonly Guid ContractId = Guid.NewGuid();

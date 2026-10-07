@@ -8,7 +8,7 @@ public sealed class BlockPlacementChecker : IBlockPlacementChecker
 {
     public PlacementVerdict Check(TimeSlot slot, BlockPresetType type, ContractMembership? membership,
         IEnumerable<NenContract> contractsInEffect,
-        IEnumerable<PlannedBlock> blocks, IEnumerable<Session> sessions, Moment asOf, UserTimeZone timeZone)
+        IEnumerable<PlannedBlock> blocks, Session? running, Moment asOf, UserTimeZone timeZone)
     {
         if (slot.HasStarted(asOf))
             return PlacementVerdict.Refused(PlacementOutcome.InThePast);
@@ -24,7 +24,7 @@ public sealed class BlockPlacementChecker : IBlockPlacementChecker
         if (governing is not null && !governing.AllowsBlockPlacement(slot, timeZone))
             return PlacementVerdict.Refused(PlacementOutcome.OutsideContractHours);
 
-        if (type == BlockPresetType.Focus && CheckFree(slot, blocks, sessions, asOf) is { Outcome: not PlacementOutcome.Allowed } taken)
+        if (type == BlockPresetType.Focus && CheckFree(slot, blocks, running, asOf) is { Outcome: not PlacementOutcome.Allowed } taken)
             return taken;
 
         return PlacementVerdict.AllowedUnder(governing?.Id);
@@ -33,10 +33,10 @@ public sealed class BlockPlacementChecker : IBlockPlacementChecker
     public NenContract? GoverningContract(TimeSlot slot, IEnumerable<NenContract> contractsInEffect, UserTimeZone timeZone)
         => contractsInEffect.FirstOrDefault(c => c.Governs(slot, timeZone));
 
-    public PlacementVerdict CheckFree(TimeSlot slot, IEnumerable<PlannedBlock> blocks, IEnumerable<Session> sessions, Moment asOf)
+    public PlacementVerdict CheckFree(TimeSlot slot, IEnumerable<PlannedBlock> blocks, Session? running, Moment asOf)
     {
         var focusTime = blocks.OfType<FocusBlock>().Select(b => b.ReservedSlot(asOf))
-            .Concat(sessions.Select(s => s.ReservedSlot));
+            .Append(running?.ReservedSlot);
 
         var firstInTheWay = focusTime
             .OfType<TimeSlot>()

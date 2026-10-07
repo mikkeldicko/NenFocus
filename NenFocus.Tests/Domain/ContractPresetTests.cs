@@ -119,4 +119,36 @@ public class ContractPresetTests
     {
         Create().KeepBlockingDuringBreaks.Should().BeFalse();
     }
+
+    // ── A preset is always valid (Gap 92, V9) ──
+
+    private static readonly WorkHours NineToTwelve = new(new TimeOnly(9, 0), new TimeOnly(12, 0));
+
+    [Fact]
+    public void Create_AFloorLongerThanItsWorkHours_IsRefused()
+    {
+        var act = () => Create(dailyFloor: new DailyFloor(4), workHours: NineToTwelve);
+
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
+    public void Update_ToAFloorLongerThanItsWorkHours_IsRefused()
+    {
+        var preset = Create(dailyFloor: new DailyFloor(3), workHours: NineToTwelve);
+
+        var act = () => preset.Update("Study Month", TestRules.Of(StrictnessRule.Locked, new DailyFloor(4)), NineToTwelve);
+
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Theory]
+    [InlineData(null, false, ContractSettingsOutcome.Allowed)]
+    [InlineData(3, true, ContractSettingsOutcome.Allowed)]  // exactly the window
+    [InlineData(4, false, ContractSettingsOutcome.Allowed)] // no Work Hours: the whole day
+    [InlineData(4, true, ContractSettingsOutcome.FloorLongerThanWorkHours)]
+    [InlineData(0, false, ContractSettingsOutcome.FloorOutOfRange)]
+    [InlineData(25, false, ContractSettingsOutcome.FloorOutOfRange)]
+    public void CheckSettings_IsTheOneAnswerForAFloorAndItsWorkHours(int? floorHours, bool nineToTwelve, ContractSettingsOutcome expected)
+        => ContractPreset.CheckSettings(floorHours, nineToTwelve ? NineToTwelve : null).Should().Be(expected);
 }

@@ -31,24 +31,21 @@ public class GetSuggestedRedemptionPlacementsQueryHandlerTests
             name: "Contract",
             goal: new NenContractGoal("Goal"),
             strictnessRule: StrictnessRule.Locked,
-            calendar: TestCalendars.For(Today.AddDays(-1), Today.AddDays(7), new DailyFloorRule.Fixed(DailyFloor.None), workHours: workHours),
-            floorRule: new DailyFloorRule.Fixed(DailyFloor.None),
-            changeWindow: null,
+            calendar: TestCalendars.For(Today.AddDays(-1), Today.AddDays(7), new DailyFloorRule.None(), workHours: workHours),
+            floorRule: new DailyFloorRule.None(),
             allowCancellation: false,
             plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
             sealedAt: At.Utc(Today.AddDays(-1).ToDateTime(TimeOnly.MinValue)), timeZone: At.UtcZone,
             redemptionPlacementPolicy: RedemptionPlacementPolicy.CurrentDayOnly);
 
-    private static FocusBlockDeficitDto Deficit(Guid presetId, DateTime scheduledStart, double remaining) =>
+    private static FocusBlockDeficitDto Deficit(Guid presetId, DateTime scheduledStart, long remaining) =>
         new()
         {
             FocusBlockId = Guid.NewGuid(),
             BlockPresetId = presetId,
             Scheduled = At.Slot(scheduledStart, scheduledStart.AddHours(1)),
             Outcome = FocusBlockOutcome.Missed,
-            RemainingDeficitMinutes = remaining,
-            PlannedMinutes = 60,
-            CompletedMinutes = 0
+            RemainingDeficit = WholeMinutes.Of(remaining)
         };
 
     [Fact]
@@ -94,7 +91,7 @@ public class GetSuggestedRedemptionPlacementsQueryHandlerTests
         var result = await CreateHandler().HandleAsync(
             new GetSuggestedRedemptionPlacementsQuery(contractId, At.Utc(Today.ToDateTime(new TimeOnly(10, 0)))), CancellationToken.None);
 
-        result.Should().ContainSingle(p => p.PresetId == presetId && p.TotalRemainingDeficitMinutes == 30);
+        result.Should().ContainSingle(p => p.PresetId == presetId && p.TotalRemainingDeficit == WholeMinutes.Of(30));
     }
 
     [Fact]
@@ -107,9 +104,8 @@ public class GetSuggestedRedemptionPlacementsQueryHandlerTests
             name: "Contract",
             goal: new NenContractGoal("Goal"),
             strictnessRule: StrictnessRule.Locked,
-            calendar: TestCalendars.For(Today.AddDays(-1), Today.AddDays(7), new DailyFloorRule.Fixed(DailyFloor.None)),
-            floorRule: new DailyFloorRule.Fixed(DailyFloor.None),
-            changeWindow: null,
+            calendar: TestCalendars.For(Today.AddDays(-1), Today.AddDays(7), new DailyFloorRule.None()),
+            floorRule: new DailyFloorRule.None(),
             allowCancellation: false,
             plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
             sealedAt: At.Utc(Today.AddDays(-1).ToDateTime(TimeOnly.MinValue)), timeZone: At.UtcZone,
@@ -124,7 +120,7 @@ public class GetSuggestedRedemptionPlacementsQueryHandlerTests
         var result = await CreateHandler().HandleAsync(
             new GetSuggestedRedemptionPlacementsQuery(contractId, At.Utc(Today.ToDateTime(new TimeOnly(10, 0)))), CancellationToken.None);
 
-        result.Should().ContainSingle(p => p.PresetId == presetId && p.TotalRemainingDeficitMinutes == 30);
+        result.Should().ContainSingle(p => p.PresetId == presetId && p.TotalRemainingDeficit == WholeMinutes.Of(30));
     }
 
     [Fact]
@@ -146,35 +142,8 @@ public class GetSuggestedRedemptionPlacementsQueryHandlerTests
         var placement = result.Should().ContainSingle().Subject;
         placement.PresetId.Should().Be(presetId);
         placement.PresetName.Should().Be("Deep Work");
-        placement.TotalRemainingDeficitMinutes.Should().Be(40);
+        placement.TotalRemainingDeficit.Should().Be(WholeMinutes.Of(40));
         placement.Suggested.Should().Be(At.Slot(Today.ToDateTime(new TimeOnly(10, 15)), Today.ToDateTime(new TimeOnly(10, 55))));
-    }
-
-    [Fact]
-    public async Task HandleAsync_FractionalDeficit_SuggestionRoundsUpToWholeMinute()
-    {
-        // A fractional deficit (e.g. from an EndedEarly session, timestamped to the
-        // millisecond) must round UP to a whole minute, not size the tile to the raw
-        // fractional value — a whole-minute duration converts to DateTime ticks with zero
-        // rounding loss, so the created tile always meets or exceeds the real deficit
-        // instead of landing a tick short of it. TimeSlot.Covering owns the rounding (Gap 88
-        // phase 7); the raw sum stays on TotalRemainingDeficitMinutes.
-        var contractId = Guid.NewGuid();
-        var presetId = Guid.NewGuid();
-        var now = Today.ToDateTime(new TimeOnly(10, 0));
-        _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>()).Returns(SameDayContract(contractId));
-        var deficit = Deficit(presetId, now, remaining: 31.896581196666666);
-        _deficits.HandleAsync(new GetNenContractDeficitsQuery(contractId), Arg.Any<CancellationToken>())
-            .Returns((IReadOnlyList<FocusBlockDeficitDto>)[deficit]);
-        _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(presetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(now)));
-
-        var result = await CreateHandler().HandleAsync(
-            new GetSuggestedRedemptionPlacementsQuery(contractId, At.Utc(now)), CancellationToken.None);
-
-        var placement = result.Should().ContainSingle().Subject;
-        placement.TotalRemainingDeficitMinutes.Should().Be(31.896581196666666);
-        placement.Suggested.Length.Should().Be(TimeSpan.FromMinutes(32));
     }
 
     [Fact]
@@ -196,8 +165,8 @@ public class GetSuggestedRedemptionPlacementsQueryHandlerTests
             new GetSuggestedRedemptionPlacementsQuery(contractId, At.Utc(now)), CancellationToken.None);
 
         result.Should().HaveCount(2);
-        result.Should().ContainSingle(p => p.PresetId == presetA && p.TotalRemainingDeficitMinutes == 20);
-        result.Should().ContainSingle(p => p.PresetId == presetB && p.TotalRemainingDeficitMinutes == 15);
+        result.Should().ContainSingle(p => p.PresetId == presetA && p.TotalRemainingDeficit == WholeMinutes.Of(20));
+        result.Should().ContainSingle(p => p.PresetId == presetB && p.TotalRemainingDeficit == WholeMinutes.Of(15));
     }
 
     [Fact]
@@ -215,6 +184,6 @@ public class GetSuggestedRedemptionPlacementsQueryHandlerTests
         var result = await CreateHandler().HandleAsync(
             new GetSuggestedRedemptionPlacementsQuery(contractId, At.Utc(now)), CancellationToken.None);
 
-        result.Should().ContainSingle(p => p.TotalRemainingDeficitMinutes == 35);
+        result.Should().ContainSingle(p => p.TotalRemainingDeficit == WholeMinutes.Of(35));
     }
 }

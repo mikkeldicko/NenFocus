@@ -21,12 +21,6 @@ public sealed class FocusBlock : PlannedBlock
     /// </summary>
     public const int GracePeriodMinutes = 5;
 
-    /// <summary>
-    /// How short a redemption block's save-time trim must be before the user is told about it
-    /// (<see cref="WasRedemptionCoverageMeaningfullyCapped"/>). Not a write-off of any kind.
-    /// </summary>
-    public const double MinimumMeaningfulDeficitMinutes = 1;
-
     /// <summary>Null means the Ritual was never completed for this block.</summary>
     internal Moment? RitualCompletedAt { get; private set; }
 
@@ -127,17 +121,22 @@ public sealed class FocusBlock : PlannedBlock
 
     /// <summary>
     /// The Focus time this block has earned by <paramref name="asOf"/>: <see cref="WorkSlot"/>
-    /// cut at <paramref name="asOf"/>, rounded down to whole minutes — rounding is credit's only
-    /// rule of its own. Null when nothing is earned.
+    /// cut at <paramref name="asOf"/>, rounded down to whole minutes (<see cref="WholeMinutes.RoundDown"/>) —
+    /// the one rounding in focus accounting: a block is whole minutes long, so its deficit needs none
+    /// (Gap 92, V10). Null when nothing is earned.
     /// </summary>
     public TimeSlot? CreditedSlot(Moment asOf)
     {
         if (WorkSlot() is not { } worked) return null;
 
         var end = asOf < worked.End ? asOf : worked.End;
-        var wholeMinutes = Math.Floor((end - worked.Start).TotalMinutes);
-        return wholeMinutes > 0 ? worked.Until(worked.Start + TimeSpan.FromMinutes(wholeMinutes)) : null;
+        var credit = WholeMinutes.RoundDown(end - worked.Start);
+        return credit > WholeMinutes.Zero ? worked.Until(worked.Start + credit.AsTimeSpan) : null;
     }
+
+    /// <summary>The whole minutes <see cref="CreditedSlot"/> holds — zero when nothing is earned.</summary>
+    internal WholeMinutes CreditAt(Moment asOf) =>
+        CreditedSlot(asOf) is { } slot ? WholeMinutes.TryExact(slot.Length) ?? WholeMinutes.Zero : WholeMinutes.Zero; // exact by construction
 
     /// <summary>
     /// The block's story has concluded: its session ended, or it was missed. A session still
@@ -150,15 +149,15 @@ public sealed class FocusBlock : PlannedBlock
     /// What this block failed to deliver of its own schedule — its side of the deficit ledger,
     /// however many blocks have since tried to redeem it. Zero until final, zero when it was
     /// completed on time, and zero for a redemption block: a block covering someone else's
-    /// deficit never becomes a deficit source itself (Rule 13).
+    /// deficit never becomes a deficit source itself (Rule 13). Whole
+    /// minutes: the block's whole-minute length less its whole-minute credit, nothing rounded.
     /// </summary>
-    internal TimeSpan OwnDeficit(Moment asOf)
+    internal WholeMinutes OwnDeficit(Moment asOf)
     {
         if (IsRedemption || !IsFinal(asOf) || Outcome(asOf) == FocusBlockOutcome.CompletedOnTime)
-            return TimeSpan.Zero;
+            return WholeMinutes.Zero;
 
-        var credited = CreditedSlot(asOf)?.Length ?? TimeSpan.Zero;
-        return credited < Scheduled.Length ? Scheduled.Length - credited : TimeSpan.Zero;
+        return Length.Less(CreditAt(asOf));
     }
 
     /// <summary>Once the Ritual is done, a session owns this block's ending and announces it.</summary>
@@ -211,7 +210,9 @@ public sealed class FocusBlock : PlannedBlock
         if (first.Length + second.Length != Scheduled.Length)
             throw new ArgumentException("The two pieces must add up to the block's length.");
 
-        var (firstReceipt, secondReceipt) = Receipt.SplitAt(first.Length);
+        var firstLength = WholeMinutes.TryExact(first.Length)
+            ?? throw new ArgumentException("A planned block is a whole number of minutes long.", nameof(first));
+        var (firstReceipt, secondReceipt) = Receipt.SplitAt(firstLength);
         return (CreateWithReceipt(firstId, BlockPresetId, first, Title, Membership, firstReceipt),
             CreateWithReceipt(secondId, BlockPresetId, second, Title, Membership, secondReceipt));
     }
@@ -288,43 +289,15 @@ public sealed class FocusBlock : PlannedBlock
     /// whose REDEMPTION badge implies its whole span is accounted-for deficit coverage.
     /// Pure and self-contained (only this block's own Start/End and receipt), so it
     /// lives here rather than in an Application handler — the same justification already
-    /// used for MaxDurationHours/ValidateDuration on this entity.
-    ///
-    /// Caps to the *exact* covered amount — not rounded to a whole minute. This looks like
-    /// it should collide with MODULE_STANDARDS.md's "round up before persisting a fraction
-    /// into a timestamp" rule, but it doesn't: that rule protects a value that gets read
-    /// back out of *this* timestamp later and compared against an "at least X" threshold
-    /// (e.g. a suggested tile's own size, checked against the deficit it must fully cover).
-    /// `receipt` here is the opposite direction — each `RedemptionEntry.MinutesCovered` is
-    /// already a precise double, stored as-is and never re-derived from this block's own
-    /// End, so nothing downstream re-reads this timestamp to recover it. Previously this
-    /// floored to a whole minute, which silently threw away up to 59 seconds of real
-    /// coverage on every redemption whose deficit wasn't a clean whole number (i.e. nearly
-    /// all of them) and, when the remaining coverage was itself under a minute, floored to
-    /// zero — producing an End equal to Start and crashing FocusBlock.Create. Exact
-    /// arithmetic can never do that: a RedemptionEntry can never be zero or negative, so
-    /// AddMinutes(coveredMinutes) can never equal `start`.
+    /// used for MaxDurationHours/ValidateDuration on this entity. Exact: the receipt is whole
+    /// minutes, so the capped end is too and nothing is rounded (Gap 92, V10 — this used to need a
+    /// long argument with MODULE_STANDARDS.md's "round a fraction before persisting" rule).
     /// </summary>
     internal static TimeSlot CapEndToRedemptionCoverage(TimeSlot requested, RedemptionReceipt receipt)
     {
         if (receipt.Entries.Count == 0) return requested;
 
-        var coveredMinutes = receipt.TotalMinutes;
-        if (coveredMinutes >= requested.Length.TotalMinutes) return requested;
-
-        return requested.Until(requested.Start + TimeSpan.FromMinutes(coveredMinutes));
+        var covered = receipt.Total.AsTimeSpan;
+        return covered >= requested.Length ? requested : requested.Until(requested.Start + covered);
     }
-
-    /// <summary>
-    /// True when CapEndToRedemptionCoverage's shortening is large enough to be worth
-    /// surfacing to the user, as opposed to merely trimming off the sub-minute safety
-    /// margin every Cover Deficit suggestion is deliberately over-sized by (see
-    /// GetSuggestedRedemptionPlacementsQueryHandler's own whole-minute rounding, required by
-    /// the same MODULE_STANDARDS.md rule referenced above). Without this, "shortened to
-    /// match" would fire on that deliberate safety margin every ordinary Cover Deficit save.
-    /// A UI-notice threshold only (<see cref="MinimumMeaningfulDeficitMinutes"/>) — nothing is
-    /// written off: every deficit is whole minutes and recoverable (Gaps 44, 45, 57).
-    /// </summary>
-    internal static bool WasRedemptionCoverageMeaningfullyCapped(TimeSlot requested, TimeSlot capped)
-        => (requested.Length - capped.Length).TotalMinutes >= MinimumMeaningfulDeficitMinutes;
 }

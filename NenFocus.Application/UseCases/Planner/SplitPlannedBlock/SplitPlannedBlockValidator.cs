@@ -89,7 +89,7 @@ public sealed class SplitPlannedBlockValidator : AbstractValidator<SplitPlannedB
                 }
 
                 var contractsInEffect = await contracts.GetAllInEffectAsync(ct);
-                var running = await sessions.GetActiveSessionsAsync(ct);
+                var running = await sessions.GetActiveAsync(ct);
                 foreach (var (slot, property, label) in new[]
                 {
                     (command.First, nameof(SplitPlannedBlockCommand.First), "First block"),

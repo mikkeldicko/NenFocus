@@ -22,7 +22,7 @@ public class UpdatePlannedBlockValidatorTests
     // The real permission answer (Gap 93) — a Domain service with no I/O. Its rules are tested on
     // NenContract, PlannedBlock and BlockChangeChecker; here only that the validator asks it,
     // hands it the right things, and passes its refusal on.
-    private readonly IBlockChangeChecker _changes = new BlockChangeChecker(new PlannedFocusHoursCalculator());
+    private readonly IBlockChangeChecker _changes = new BlockChangeChecker();
     // Placement (past, contract hours, free for Focus) is GetBlockPlacementVerdictQuery's answer
     // since Gap 88 phase 8 — tested in GetBlockPlacementVerdictQueryHandlerTests. Allowed by default here.
     private readonly IQueryHandler<GetBlockPlacementVerdictQuery, BlockPlacementVerdictDto> _placement =
@@ -247,9 +247,8 @@ public class UpdatePlannedBlockValidatorTests
             name: "Contract",
             goal: new NenContractGoal("Goal"),
             strictnessRule: rule,
-            calendar: TestCalendars.For(DateOnly.FromDateTime(Now), DateOnly.FromDateTime(Now).AddDays(7), new DailyFloorRule.Fixed(DailyFloor.None)),
-            floorRule: new DailyFloorRule.Fixed(DailyFloor.None),
-            changeWindow: null,
+            calendar: TestCalendars.For(DateOnly.FromDateTime(Now), DateOnly.FromDateTime(Now).AddDays(7), new DailyFloorRule.None()),
+            floorRule: new DailyFloorRule.None(),
             allowCancellation: false,
             plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
             sealedAt: At.Utc(Now.Date), timeZone: At.UtcZone); // Active on seal
@@ -466,7 +465,6 @@ public class UpdatePlannedBlockValidatorTests
             goal: new NenContractGoal("Goal"),
             rules: TestRules.Of(rule, new DailyFloor(floorHours)),
             calendar: TestCalendars.For(DateOnly.FromDateTime(Now), DateOnly.FromDateTime(Now).AddDays(7), new DailyFloorRule.Fixed(new DailyFloor(floorHours))),
-            changeWindow: null,
             plannedFocusHoursByDay: Enumerable.Range(0, 8).ToDictionary(i => DateOnly.FromDateTime(Now).AddDays(i), _ => floorHours),
             sealedAt: At.Utc(Now.Date), timeZone: At.UtcZone);
 

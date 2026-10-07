@@ -31,7 +31,7 @@ NenFocus.Tests/
 ├── Domain/
 │   ├── SessionTests.cs, BlockPresetTests.cs, NenContractTests.cs, PolicyEngineTests.cs, ...  ← entity/service state-machine tests (zero mocks)
 │   ├── ValueObjects/          ← WorkHoursTests.cs, DailyFloorTests.cs, BreakScheduleTests.cs, etc.
-│   └── Services/              ← ContractBlockBatchPreparerTests.cs, PlannedFocusHoursCalculatorTests.cs
+│   └── Services/              ← ContractBlockBatchPreparerTests.cs, BlockPlacementCheckerTests.cs
 ├── Application/
 │   ├── UseCases/{BlockPresets,ContractPresets,NenContracts,Planner,Sessions}/  ← one *CommandHandlerTests.cs + *ValidatorTests.cs pair per vertical slice
 │   ├── Queries/                ← one *QueryHandlerTests.cs per query

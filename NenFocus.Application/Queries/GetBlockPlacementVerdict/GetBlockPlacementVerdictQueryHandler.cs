@@ -44,7 +44,7 @@ public sealed class GetBlockPlacementVerdictQueryHandler
 
         // The calendar as it will be — without the block being moved/split.
         var calendar = (await _blocks.GetForRangeAsync(slot, ct)).Where(b => b.Id != query.ExistingBlockId);
-        var sessions = await _sessions.GetActiveSessionsAsync(ct);
+        var sessions = await _sessions.GetActiveAsync(ct);
 
         // The checker decides which contract governs: a Committed or Redemption block's own, or
         // the one whose period the slot sits in.

@@ -1,3 +1,4 @@
+using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
@@ -45,6 +46,11 @@ public sealed class SealNenContractCommandHandler : ICommandHandler<SealNenContr
 
         var now = _clock.Now;
 
+        // The settings' own answer, asked again here so a caller that skipped the validator gets the
+        // sentence, not ContractRules' exception (Gap 92, V9).
+        if (ContractSettingsVerdictDto.Check(command.FixedDailyFloorHours, command.WorkHours).Message is { } settingsMessage)
+            return SealNenContractResult.Fail(settingsMessage);
+
         var rules = new ContractRules(
             command.StrictnessRule,
             command.FixedDailyFloorHours is { } fixedHours ? new DailyFloor(fixedHours) : null,
@@ -57,9 +63,7 @@ public sealed class SealNenContractCommandHandler : ICommandHandler<SealNenContr
         // obligation, whatever was drafted is the whole-period target (NenContract.HasPeriodTarget).
         var floorRule = rules.FloorRule;
 
-        var workHours = command.WorkHoursStart is { } workHoursStart && command.WorkHoursEnd is { } workHoursEnd
-            ? new WorkHours(workHoursStart, workHoursEnd)
-            : null;
+        var workHours = command.WorkHours;
 
         var localNow = _clock.TimeZone.ToCalendarTime(now);
 
@@ -84,7 +88,6 @@ public sealed class SealNenContractCommandHandler : ICommandHandler<SealNenContr
                 goal: new NenContractGoal(command.Goal),
                 rules: rules,
                 calendar: calendar,
-                changeWindow: null,
                 plannedFocusHoursByDay: preparation.PlannedFocusHoursByDay,
                 sealedAt: now,
                 timeZone: _clock.TimeZone,
@@ -98,7 +101,7 @@ public sealed class SealNenContractCommandHandler : ICommandHandler<SealNenContr
         // Every block asks the one placement answer, BlockPlacementChecker.Check (Gap 88 phase 8):
         // not in the past → inside its day's window of this contract → free for Focus, against the
         // calendar as it will be and the running session. Seal's own batch sentences, by outcome.
-        var running = await _sessions.GetActiveSessionsAsync(ct);
+        var running = await _sessions.GetActiveAsync(ct);
         foreach (var block in preparation.Blocks)
         {
             var calendar = await _blocks.GetForRangeAsync(block.Scheduled, ct);

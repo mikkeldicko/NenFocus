@@ -31,7 +31,7 @@ public class GetPlannedBlocksForDayQueryHandlerTests
     }
 
     private GetPlannedBlocksForDayQueryHandler CreateHandler() => new(_blocks, _presets, _contracts, _clock,
-        new BlockChangeChecker(new PlannedFocusHoursCalculator()));
+        new BlockChangeChecker());
 
     [Fact]
     public async Task HandleAsync_FocusBlock_MapsPresetNameAndBlockPresetType()
@@ -58,7 +58,7 @@ public class GetPlannedBlocksForDayQueryHandlerTests
     {
         var presetId = Guid.NewGuid();
         var block = FocusBlock.CreateWithReceipt(Guid.NewGuid(), presetId,At.Slot(Start, End),
-            title: null, membership: TestContracts.Redemption(Guid.NewGuid()), receipt: new RedemptionReceipt([new RedemptionEntry(Guid.NewGuid(), 30)]));
+            title: null, membership: TestContracts.Redemption(Guid.NewGuid()), receipt: new RedemptionReceipt([new RedemptionEntry(Guid.NewGuid(), WholeMinutes.Of(30))]));
         _blocks.GetForRangeAsync(At.UtcZone.SlotCovering(Day), Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
         _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
 
@@ -306,7 +306,7 @@ public class GetPlannedBlocksForDayQueryHandlerTests
         var rules = TestRules.Of(strictness);
         var contract = NenContract.Seal(contractId, "Contract", new NenContractGoal("Goal"), rules,
             TestCalendars.For(DateOnly.FromDateTime(Start), DateOnly.FromDateTime(Start).AddDays(7), rules.FloorRule),
-            null, new Dictionary<DateOnly, double>(), At.Utc(Start.Date), At.UtcZone);
+            new Dictionary<DateOnly, double>(), At.Utc(Start.Date), At.UtcZone);
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>()).Returns(contract);
         return contract;
     }
@@ -378,13 +378,12 @@ public class GetPlannedBlocksForDayQueryHandlerTests
             name: "Study Month",
             goal: new NenContractGoal("Goal"),
             strictnessRule: StrictnessRule.Locked,
-            calendar: TestCalendars.For(Day.AddDays(-1), Day.AddDays(5), new DailyFloorRule.Fixed(DailyFloor.None)),
-            floorRule: new DailyFloorRule.Fixed(DailyFloor.None),
-            changeWindow: null,
+            calendar: TestCalendars.For(Day.AddDays(-1), Day.AddDays(5), new DailyFloorRule.None()),
+            floorRule: new DailyFloorRule.None(),
             allowCancellation: true,
             plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
             sealedAt: At.Utc(Start.Date.AddDays(-1)), timeZone: At.UtcZone);
-        if (broken) contract.Break(At.Utc(Start), At.UtcZone);
+        if (broken) contract.Break(At.Utc(Start), At.UtcZone, sessionRunning: false);
         _contracts.GetByIdAsync(contractId, Arg.Any<CancellationToken>()).Returns(contract);
         return contract;
     }

@@ -29,5 +29,5 @@ public sealed record RedemptionCoverageDto
     public Guid MissedBlockId { get; init; }
     public string MissedBlockPresetName { get; init; } = string.Empty;
     public DateOnly MissedBlockDate { get; init; }
-    public double MinutesCovered { get; init; }
+    public WholeMinutes Covered { get; init; }
 }

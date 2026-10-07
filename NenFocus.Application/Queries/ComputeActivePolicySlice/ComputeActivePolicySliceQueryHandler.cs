@@ -29,10 +29,10 @@ public sealed class ComputeActivePolicySliceQueryHandler
     {
         // Loose fetch; PolicyEngine asks each block IsActive, which already rules out cancelled ones.
         var blocks = await _blocks.GetForRangeAsync(new TimeSlot(query.At - TimeSpan.FromSeconds(1), query.At + TimeSpan.FromSeconds(1)), ct);
-        var sessions = await _sessions.GetActiveSessionsAsync(ct);
+        var running = await _sessions.GetActiveAsync(ct);
 
         var presetIds = blocks.Select(b => b.BlockPresetId)
-            .Concat(sessions.Select(s => s.BlockPresetId))
+            .Append(running?.BlockPresetId ?? Guid.Empty)
             .Where(id => id != Guid.Empty)
             .Distinct();
 
@@ -43,6 +43,6 @@ public sealed class ComputeActivePolicySliceQueryHandler
             if (preset != null) presets.Add(preset);
         }
 
-        return _policyEngine.ComputeSlice(query.At, presets, sessions, blocks);
+        return _policyEngine.ComputeSlice(query.At, presets, running, blocks);
     }
 }

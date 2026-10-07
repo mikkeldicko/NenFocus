@@ -13,20 +13,13 @@ public sealed record SessionDto
     public SessionOrigin Origin { get; init; }
     public Guid BlockPresetId { get; init; }
     public Guid? OriginatingBlockId { get; init; }
-    public Moment StartedAt { get; init; }
-    public Moment EndAt { get; init; }
     public Moment? EndedAt { get; init; }
 
-    /// <summary>The session's break schedule (offsets from StartedAt) — empty for "No
-    /// timer". Everything live about breaks is read off this against the clock.</summary>
-    public IReadOnlyList<SessionBreakDto> Breaks { get; init; } = [];
+    /// <summary>
+    /// The session's run, breaks and keep-blocking rule — the same <see cref="SessionTimeline"/> the
+    /// session answers from (Gap 92, A4), so the Main page reads exactly what enforcement reads.
+    /// Null before the session has started.
+    /// </summary>
+    public SessionTimeline? Timeline { get; init; }
     public string? BreakPresetName { get; init; }
-
-    /// <summary>Whether this session's preset stays blocked through its breaks (Gap 64).</summary>
-    public bool KeepBlockingDuringBreaks { get; init; }
-
-    public static IReadOnlyList<SessionBreakDto> MapBreaks(Domain.ValueObjects.BreakSchedule schedule) =>
-        schedule.Breaks
-            .Select(b => new SessionBreakDto { Kind = b.Kind, Start = b.Start, End = b.End })
-            .ToList();
 }

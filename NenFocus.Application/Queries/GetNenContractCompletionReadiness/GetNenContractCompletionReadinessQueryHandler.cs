@@ -1,13 +1,13 @@
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
-using NenFocus.Domain.Enums;
 
 namespace NenFocus.Application.Queries.GetNenContractCompletionReadiness;
 
 /// <summary>
 /// Gathers what NenContract.CheckComplete needs — its blocks, the sessions on its days, whether any
-/// session is running — and returns its answer (Gap 95). The Complete validator, the Complete
-/// handler and the Planner's "Complete Contract" button all read this one answer.
+/// session is running — and returns its answer (Gap 95). The Complete validator and the Planner's
+/// "Complete Contract" button read this one answer; the Complete handler gathers the same inputs
+/// for NenContract.CompleteEarly, which asks it itself (Gap 92, D).
 /// </summary>
 public sealed class GetNenContractCompletionReadinessQueryHandler
     : IQueryHandler<GetNenContractCompletionReadinessQuery, NenContractCompletionReadinessDto>
@@ -33,7 +33,7 @@ public sealed class GetNenContractCompletionReadinessQueryHandler
         GetNenContractCompletionReadinessQuery query, CancellationToken ct = default)
     {
         var contract = await _contracts.GetByIdAsync(query.ContractId, ct);
-        if (contract is null || contract.Status != NenContractStatus.Active)
+        if (contract is null)
             return NenContractCompletionReadinessDto.NotActive;
 
         // Every member, Bonus blocks included (Gap 97): completing must leave nothing to clean up.

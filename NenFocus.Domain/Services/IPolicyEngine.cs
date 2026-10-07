@@ -14,6 +14,6 @@ public interface IPolicyEngine
     ActivePolicySlice ComputeSlice(
         Moment at,
         IEnumerable<BlockPreset> presets,
-        IEnumerable<Session> sessions,
+        Session? running,
         IEnumerable<PlannedBlock> blocks);
 }

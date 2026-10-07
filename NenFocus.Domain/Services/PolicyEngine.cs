@@ -10,11 +10,12 @@ public sealed class PolicyEngine : IPolicyEngine
     public ActivePolicySlice ComputeSlice(
         Moment at,
         IEnumerable<BlockPreset> presets,
-        IEnumerable<Session> sessions,
+        Session? running,
         IEnumerable<PlannedBlock> blocks)
     {
         var allPresets = presets.ToList();
-        var activeSessions = sessions.ToList();
+        // At most one session runs (Gap 92) — a list only so the merge below reads the same for blocks and sessions.
+        var activeSessions = running is null ? new List<Session>() : [running];
         // IsActive(at) is the authoritative boundary check, independent of whatever window
         // the caller's own block query used to fetch candidates. ComputeActivePolicySliceQueryHandler's
         // range query deliberately over-fetches with a buffer around "now" (SQLite datetime

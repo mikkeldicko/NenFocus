@@ -29,12 +29,6 @@ public class DailyFloorTests
         act.Should().NotThrow();
     }
 
-    [Fact]
-    public void None_HasZeroHours()
-    {
-        DailyFloor.None.Hours.Should().Be(0);
-    }
-
     [Theory]
     [InlineData(0, 0, true)]
     [InlineData(4, 3.9, false)]
@@ -47,12 +41,14 @@ public class DailyFloorTests
         floor.IsSatisfiedBy(focusHours).Should().Be(expected);
     }
 
+    // ── One floor-vs-window rule (Gap 92, V9) ──
+
     [Theory]
-    [InlineData(0)]
-    [InlineData(0.5)]
-    [InlineData(24)]
-    public void IsSatisfiedBy_WhenNone_SatisfiedByAnyValue(double focusHours)
+    [InlineData(3, 3, true)]   // exactly the window
+    [InlineData(3, 2.5, false)]
+    [InlineData(1.5, 2, true)] // a plan-following floor may be fractional
+    public void FitsIn_TheWindowIsAtLeastTheFloor(double floorHours, double windowHours, bool expected)
     {
-        DailyFloor.None.IsSatisfiedBy(focusHours).Should().BeTrue();
+        new DailyFloor(floorHours).FitsIn(TimeSpan.FromHours(windowHours)).Should().Be(expected);
     }
 }

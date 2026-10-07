@@ -49,7 +49,7 @@ public sealed record NenContractRangeViewDto
     /// True for a Period Time Budget contract held to a whole-period target instead of per-day
     /// floors (<c>NenContract.HasPeriodTarget</c>, Gap 95). Drives DayStatuses' per-day badge behavior
     /// (no rest days, Past shows a single completed-hours number). The target itself is
-    /// TotalFloorHours below — this is only the mode.
+    /// TotalCommittedHours below — this is only the mode.
     /// </summary>
     public bool HasPeriodTarget { get; init; }
 
@@ -57,15 +57,15 @@ public sealed record NenContractRangeViewDto
     /// The banner's denominator for every contract: CommittedFocusHours, what was planned at
     /// Seal — computed the same way regardless of strictness.
     /// </summary>
-    public double TotalFloorHours { get; init; }
+    public double TotalCommittedHours { get; init; }
 
     /// <summary>Total completed Focus hours across the whole contract so far — the banner's
-    /// numerator, paired with TotalFloorHours. Same value for every contract regardless of
+    /// numerator, paired with TotalCommittedHours. Same value for every contract regardless of
     /// strictness or period-target mode — a straight sum of completed hours per day.</summary>
     public double TotalCompletedHours { get; init; }
 
     /// <summary>Completed hours from Bonus blocks across the whole contract — never part of
-    /// TotalFloorHours/TotalCompletedHours above, shown as its own separate banner stat.</summary>
+    /// TotalCommittedHours/TotalCompletedHours above, shown as its own separate banner stat.</summary>
     public double TotalBonusHours { get; init; }
 
     /// <summary>

@@ -24,7 +24,7 @@ public class SplitPlannedBlockValidatorTests
     // The real permission answer (Gap 93) — a Domain service with no I/O; its rules are tested on
     // NenContract, PlannedBlock and BlockChangeChecker. Here: that the validator asks it with the
     // contract's blocks as they stand, and passes its refusal on.
-    private readonly IBlockChangeChecker _changes = new BlockChangeChecker(new PlannedFocusHoursCalculator());
+    private readonly IBlockChangeChecker _changes = new BlockChangeChecker();
 
     public SplitPlannedBlockValidatorTests()
     {
@@ -35,7 +35,7 @@ public class SplitPlannedBlockValidatorTests
             .Returns((Session?)null);
         _blocks.GetForRangeAsync(Arg.Any<TimeSlot>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[]);
-        // Default: the contract has no other blocks — combined with DailyFloor.None (every
+        // Default: the contract has no other blocks — combined with no fixed floor (every
         // SealedContract fixture below), the floor check trivially passes unless a test
         // configures a real floor and real blocks.
         _blocks.GetForContractAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
@@ -58,9 +58,8 @@ public class SplitPlannedBlockValidatorTests
             name: "Contract",
             goal: new NenContractGoal("Goal"),
             strictnessRule: rule,
-            calendar: TestCalendars.For(DateOnly.FromDateTime(Now), DateOnly.FromDateTime(Now).AddDays(30), new DailyFloorRule.Fixed(DailyFloor.None)),
-            floorRule: new DailyFloorRule.Fixed(DailyFloor.None),
-            changeWindow: null,
+            calendar: TestCalendars.For(DateOnly.FromDateTime(Now), DateOnly.FromDateTime(Now).AddDays(30), new DailyFloorRule.None()),
+            floorRule: new DailyFloorRule.None(),
             allowCancellation: false,
             plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
             sealedAt: TestAt.Utc(Now.Date), timeZone: TestAt.UtcZone);
@@ -356,7 +355,6 @@ public class SplitPlannedBlockValidatorTests
             goal: new NenContractGoal("Goal"),
             rules: TestRules.Of(rule, new DailyFloor(floorHours)),
             calendar: TestCalendars.For(day1, day2, new DailyFloorRule.Fixed(new DailyFloor(floorHours))),
-            changeWindow: null,
             plannedFocusHoursByDay: new Dictionary<DateOnly, double> { [day1] = floorHours, [day2] = floorHours },
             sealedAt: TestAt.Utc(Now), timeZone: TestAt.UtcZone);
 
@@ -411,12 +409,12 @@ public class SplitPlannedBlockValidatorTests
     [Fact]
     public async Task Validate_CrossMidnightOriginal_PiecesOnEitherDay_BothDaysMeetTheFloor_IsValid()
     {
-        var (blockId, day1, day2) = CrossMidnightBlockUnder(StrictnessRule.DailyFlexibility, floorHours: 0.5);
+        var (blockId, day1, day2) = CrossMidnightBlockUnder(StrictnessRule.DailyFlexibility, floorHours: 1);
         var command = new SplitPlannedBlockCommand
         {
             OriginalBlockId = blockId,
-            First = At.Slot(day1.AddHours(23), day1.AddHours(23).AddMinutes(30)), // 30 min, entirely Day1
-            Second = At.Slot(day2, day2.AddHours(1).AddMinutes(30)), // 90 min, entirely Day2
+            First = At.Slot(day1.AddHours(23), day2), // 60 min, entirely Day1 — meets its 1h floor
+            Second = At.Slot(day2, day2.AddHours(1)), // 60 min, entirely Day2 — meets its 1h floor
         };
 
         var result = await CreateValidator().ValidateAsync(command);
@@ -431,7 +429,6 @@ public class SplitPlannedBlockValidatorTests
             goal: new NenContractGoal("Goal"),
             rules: TestRules.Of(StrictnessRule.PeriodTimeBudget),
             calendar: TestCalendars.For(day1, day2, new DailyFloorRule.None()),
-            changeWindow: null,
             plannedFocusHoursByDay: new Dictionary<DateOnly, double> { [day1] = contractFloorHours }, // the target is what was signed
             sealedAt: TestAt.Utc(day1.ToDateTime(TimeOnly.MinValue)), timeZone: TestAt.UtcZone);
 
@@ -498,9 +495,8 @@ public class SplitPlannedBlockValidatorTests
                 name: "Contract",
                 goal: new NenContractGoal("Goal"),
                 strictnessRule: StrictnessRule.DailyFlexibility,
-                calendar: TestCalendars.For(DateOnly.FromDateTime(Now), DateOnly.FromDateTime(Now).AddDays(30), new DailyFloorRule.Fixed(DailyFloor.None), workHours: new WorkHours(new TimeOnly(15, 0), new TimeOnly(18, 0))),
-                floorRule: new DailyFloorRule.Fixed(DailyFloor.None),
-                changeWindow: null,
+                calendar: TestCalendars.For(DateOnly.FromDateTime(Now), DateOnly.FromDateTime(Now).AddDays(30), new DailyFloorRule.None(), workHours: new WorkHours(new TimeOnly(15, 0), new TimeOnly(18, 0))),
+                floorRule: new DailyFloorRule.None(),
                 allowCancellation: false,
                 plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
                 sealedAt: TestAt.Utc(Now), timeZone: TestAt.UtcZone);
@@ -526,9 +522,8 @@ public class SplitPlannedBlockValidatorTests
                 name: "Contract",
                 goal: new NenContractGoal("Goal"),
                 strictnessRule: StrictnessRule.DailyFlexibility,
-                calendar: TestCalendars.For(DateOnly.FromDateTime(Now), DateOnly.FromDateTime(Now).AddDays(30), new DailyFloorRule.Fixed(DailyFloor.None), workHours: new WorkHours(new TimeOnly(9, 0), new TimeOnly(16, 0))),
-                floorRule: new DailyFloorRule.Fixed(DailyFloor.None),
-                changeWindow: null,
+                calendar: TestCalendars.For(DateOnly.FromDateTime(Now), DateOnly.FromDateTime(Now).AddDays(30), new DailyFloorRule.None(), workHours: new WorkHours(new TimeOnly(9, 0), new TimeOnly(16, 0))),
+                floorRule: new DailyFloorRule.None(),
                 allowCancellation: false,
                 plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
                 sealedAt: TestAt.Utc(Now), timeZone: TestAt.UtcZone);
@@ -553,9 +548,8 @@ public class SplitPlannedBlockValidatorTests
                 name: "Contract",
                 goal: new NenContractGoal("Goal"),
                 strictnessRule: StrictnessRule.DailyFlexibility,
-                calendar: TestCalendars.For(DateOnly.FromDateTime(Now), DateOnly.FromDateTime(Now).AddDays(30), new DailyFloorRule.Fixed(DailyFloor.None), workHours: new WorkHours(new TimeOnly(9, 0), new TimeOnly(18, 0))),
-                floorRule: new DailyFloorRule.Fixed(DailyFloor.None),
-                changeWindow: null,
+                calendar: TestCalendars.For(DateOnly.FromDateTime(Now), DateOnly.FromDateTime(Now).AddDays(30), new DailyFloorRule.None(), workHours: new WorkHours(new TimeOnly(9, 0), new TimeOnly(18, 0))),
+                floorRule: new DailyFloorRule.None(),
                 allowCancellation: false,
                 plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
                 sealedAt: TestAt.Utc(Now), timeZone: TestAt.UtcZone));
@@ -599,7 +593,7 @@ public class SplitPlannedBlockValidatorTests
         var running = Session.Create(Guid.NewGuid(), new SessionGoal("Focus"),
             new SessionDuration(TimeSpan.FromHours(1)), Guid.NewGuid(), SessionOrigin.Spontaneous);
         running.Start(TestAt.Utc(OriginalStart.AddMinutes(30)));
-        _sessions.GetActiveSessionsAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<Session>)[running]);
+        _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns(running);
 
         var result = await CreateValidator().ValidateAsync(ValidCommand(blockId));
 

@@ -43,7 +43,7 @@ public sealed class CoverDeficitValidator : AbstractValidator<CoverDeficitComman
                 var verdict = placement.Check(slot, BlockPresetType.Focus, redemption.Membership,
                     await contracts.GetAllInEffectAsync(ct),
                     await blocks.GetForRangeAsync(slot, ct),
-                    await sessions.GetActiveSessionsAsync(ct),
+                    await sessions.GetActiveAsync(ct),
                     now, clock.TimeZone);
                 if (verdict.Outcome != PlacementOutcome.Allowed)
                     context.AddFailure(nameof(CoverDeficitCommand.Slot), BlockPlacementVerdictDto.From(verdict).Message!);

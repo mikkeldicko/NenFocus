@@ -14,6 +14,12 @@ public record WorkHours
         End = end;
     }
 
+    /// <summary>The Work Hours from <paramref name="start"/> to <paramref name="end"/>, or null when end isn't after start — for a form, so it can say so instead of catching (Gap 92).</summary>
+    public static WorkHours? TryCreate(TimeOnly start, TimeOnly end) => end > start ? new WorkHours(start, end) : null;
+
+    /// <summary>How long the window is each day.</summary>
+    public TimeSpan Length => End - Start;
+
     /// <summary>
     /// Standard interval containment: the block's time-of-day range must fit inside
     /// [Start, End] — a block ending exactly at End (e.g. a 9-to-5 block against 9:00-17:00

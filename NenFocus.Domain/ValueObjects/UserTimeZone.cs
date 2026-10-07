@@ -70,4 +70,20 @@ public sealed record UserTimeZone
             cursor = partEnd;
         }
     }
+
+    /// <summary>
+    /// How many hours of <paramref name="slots"/> land on each local day, in real time — a slot
+    /// crossing midnight gives each day its share, and a daylight-saving night counts real hours.
+    /// Which slots count (only Focus, only Committed, only credited time) is the caller's choice.
+    /// Days with none are absent.
+    /// </summary>
+    public IReadOnlyDictionary<DateOnly, double> HoursPerDay(IEnumerable<TimeSlot> slots)
+    {
+        var hoursByDay = new Dictionary<DateOnly, double>();
+        foreach (var slot in slots)
+            foreach (var (date, part) in SplitByDay(slot))
+                hoursByDay[date] = hoursByDay.GetValueOrDefault(date) + part.Length.TotalHours;
+
+        return hoursByDay;
+    }
 }

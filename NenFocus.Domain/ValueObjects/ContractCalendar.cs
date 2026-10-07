@@ -104,7 +104,7 @@ public sealed class ContractCalendar
 
             // Never shrunk to fit — a floor that no longer fits (a late same-day start, or
             // drafting that ran long) is refused, so a day's floor can't move under the user.
-            if (floor is not null && floor.Hours > (windowEnd - windowStart).TotalHours)
+            if (floor is not null && !floor.FitsIn(windowEnd - windowStart))
                 throw new ArgumentException(
                     $"Not enough time left on {date:ddd d MMM} for its {floor.Hours:0.##}h floor — start on a later day or lower the floor.");
 

@@ -46,14 +46,6 @@ public sealed class SessionRepository : ISessionRepository
             .ToListAsync(cancellationToken);
     }
 
-    public async Task<bool> HasActiveSessionAsync(CancellationToken cancellationToken = default)
-    {
-        return await _context.Sessions
-            .AnyAsync(
-                s => s.Status == SessionStatus.Active,
-                cancellationToken);
-    }
-
     public async Task SaveAsync(Session session, CancellationToken cancellationToken = default)
     {
         var exists = await _context.Sessions
@@ -63,19 +55,6 @@ public sealed class SessionRepository : ISessionRepository
             _context.Sessions.Update(session);
         else
             await _context.Sessions.AddAsync(session, cancellationToken);
-    }
-
-    public async Task<IReadOnlyList<Session>> GetActiveSessionsAsync(CancellationToken ct = default)
-    {
-        return await _context.Sessions
-            .Where(s => s.Status == SessionStatus.Active)
-            .ToListAsync(ct);
-    }
-
-    public async Task<bool> ExistsForOriginatingBlockAsync(Guid focusBlockId, CancellationToken ct = default)
-    {
-        return await _context.Sessions
-            .AnyAsync(s => s.OriginatingBlockId == focusBlockId, ct);
     }
 
     public async Task<Session?> GetByOriginatingBlockIdAsync(Guid focusBlockId, CancellationToken ct = default)

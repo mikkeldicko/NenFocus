@@ -32,7 +32,7 @@ public sealed class GetFocusBlockAwaitingRitualQueryHandler
 
         // Read from the database, not ISessionStateService's in-memory copy, so both halves
         // of the answer come from the same source and can't disagree.
-        if (await _sessions.HasActiveSessionAsync(ct))
+        if (await _sessions.GetActiveAsync(ct) is not null)
             return null;
 
         return awaiting.Id;

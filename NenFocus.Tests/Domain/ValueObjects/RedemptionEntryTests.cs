@@ -8,7 +8,7 @@ public class RedemptionEntryTests
     [Fact]
     public void Constructor_ZeroMinutesCovered_Throws()
     {
-        var act = () => new RedemptionEntry(Guid.NewGuid(), 0);
+        var act = () => new RedemptionEntry(Guid.NewGuid(), WholeMinutes.Of(0));
 
         act.Should().Throw<ArgumentException>();
     }
@@ -16,7 +16,7 @@ public class RedemptionEntryTests
     [Fact]
     public void Constructor_NegativeMinutesCovered_Throws()
     {
-        var act = () => new RedemptionEntry(Guid.NewGuid(), -5);
+        var act = () => new RedemptionEntry(Guid.NewGuid(), WholeMinutes.Of(-5)); // a negative amount can't even be built
 
         act.Should().Throw<ArgumentException>();
     }
@@ -26,9 +26,9 @@ public class RedemptionEntryTests
     {
         var missedBlockId = Guid.NewGuid();
 
-        var entry = new RedemptionEntry(missedBlockId, 30);
+        var entry = new RedemptionEntry(missedBlockId, WholeMinutes.Of(30));
 
         entry.MissedBlockId.Should().Be(missedBlockId);
-        entry.MinutesCovered.Should().Be(30);
+        entry.Covered.Should().Be(WholeMinutes.Of(30));
     }
 }

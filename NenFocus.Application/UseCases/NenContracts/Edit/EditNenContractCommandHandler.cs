@@ -1,3 +1,4 @@
+using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
@@ -49,8 +50,8 @@ public sealed class EditNenContractCommandHandler : ICommandHandler<EditNenContr
         if (oldContract is null)
             return EditNenContractResult.Fail("Contract not found.");
 
-        if (oldContract.Status != NenContractStatus.Scheduled)
-            return EditNenContractResult.Fail("Only a Scheduled contract can be edited.");
+        if (oldContract.CheckEdit() is { IsAllowed: false } editVerdict)
+            return EditNenContractResult.Fail(ContractActionVerdictDto.From(editVerdict).Message!);
 
         // Reuses the SAME id — literal identity preservation, not a new contract.
         var contractId = command.ContractId;
@@ -65,6 +66,11 @@ public sealed class EditNenContractCommandHandler : ICommandHandler<EditNenContr
 
         var now = _clock.Now;
 
+        // The settings' own answer, asked again here so a caller that skipped the validator gets the
+        // sentence, not ContractRules' exception (Gap 92, V9).
+        if (ContractSettingsVerdictDto.Check(command.FixedDailyFloorHours, command.WorkHours).Message is { } settingsMessage)
+            return EditNenContractResult.Fail(settingsMessage);
+
         var rules = new ContractRules(
             command.StrictnessRule,
             command.FixedDailyFloorHours is { } fixedHours ? new DailyFloor(fixedHours) : null,
@@ -77,9 +83,7 @@ public sealed class EditNenContractCommandHandler : ICommandHandler<EditNenContr
         // obligation, whatever was drafted is the whole-period target (NenContract.HasPeriodTarget).
         var floorRule = rules.FloorRule;
 
-        var workHours = command.WorkHoursStart is { } workHoursStart && command.WorkHoursEnd is { } workHoursEnd
-            ? new WorkHours(workHoursStart, workHoursEnd)
-            : null;
+        var workHours = command.WorkHours;
 
         var localNow = _clock.TimeZone.ToCalendarTime(now);
 
@@ -103,7 +107,6 @@ public sealed class EditNenContractCommandHandler : ICommandHandler<EditNenContr
                 goal: new NenContractGoal(command.Goal),
                 rules: rules,
                 calendar: calendar,
-                changeWindow: null,
                 plannedFocusHoursByDay: preparation.PlannedFocusHoursByDay,
                 sealedAt: now,
                 timeZone: _clock.TimeZone,
@@ -117,7 +120,7 @@ public sealed class EditNenContractCommandHandler : ICommandHandler<EditNenContr
         // Same check as SealNenContractCommandHandler — every block asks BlockPlacementChecker.Check
         // (Gap 88 phase 8), against the calendar as it will be: without this contract's own old
         // blocks, which its new ones replace.
-        var running = await _sessions.GetActiveSessionsAsync(ct);
+        var running = await _sessions.GetActiveAsync(ct);
         foreach (var block in preparation.Blocks)
         {
             var calendar = (await _blocks.GetForRangeAsync(block.Scheduled, ct)).Where(b => b.Membership?.ContractId != contractId);

@@ -152,7 +152,7 @@ Tactical implementation details, current build state, and platform-specific gotc
 
 ### Session Rules
 
-- Only one Focus session at a time (`HasActiveSessionAsync` check on start).
+- Only one Focus session at a time: StartSession passes the running session to `BlockPlacementChecker.CheckFree` (Focus time never overlaps), backed by the unique index `IX_Sessions_OneActive` (Gap 92).
 - Once a session starts, the preset is **locked** — it cannot be edited mid-session.
 - Session-only adjustments (Ren page) are not persisted to the preset; they apply only for the duration.
 - Users can **extend** the timer (make longer). Ending early is also currently possible — `MainPageViewModel.EndSession()` has no guard beyond `EndSessionCommandHandler`'s own `Status == Active || OnBreak` check, so any active or on-break session can be ended at any point (this doc previously claimed the opposite; corrected 2026-08-12, drift found and fixed against `DOMAIN_DICTIONARY.md`'s already-accurate note). Ending early stamps the originating `FocusBlock.SessionEndedAt` (closed 2026-08-12, `DESIGN_GAP_HISTORY.md` Gap 22) rather than mutating `End` — the original schedule is preserved for deficit/credited-hours accuracy, and the Planner tile is shortened only for display (`GetPlannedBlocksForDayQueryHandler`). A future Strict Mode Settings toggle (already tracked under Not Yet Built) will prevent ending early when enabled — see `DOMAIN_DICTIONARY.md`'s Session section.

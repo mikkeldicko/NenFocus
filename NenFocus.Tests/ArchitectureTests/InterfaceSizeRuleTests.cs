@@ -22,15 +22,13 @@ public class InterfaceSizeRuleTests
     [
         // Three jobs: active session, Ritual prompt, post-session/post-contract relays. → Gap 92 A3, Gap 89 area 4.
         "ISessionStateService has 15",
-        // Possibly fine as a UI read model — to be decided deliberately. → Gap 92 A4.
-        "IActiveSessionMonitor has 10",
 
         // Repositories: in DDD a collection-like door to one aggregate. Each extra query method is
         // usually a business rule moving into SQL (e.g. HasFutureBlocksForPresetAsync, Gap 92 A6),
         // so these are capped too — a new method is a decision, not a habit.
         "IPlannedBlockRepository has 9",
         "INenContractRepository has 9",
-        "ISessionRepository has 9",
+        "ISessionRepository has 6",
         "IBlockPresetRepository has 7",
         "IBreakTimerPresetRepository has 6",
         "IContractPresetRepository has 6",

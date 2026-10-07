@@ -19,8 +19,8 @@ public sealed record RedemptionVerdict
     public TimeSlot? Slot { get; }
 
     /// <summary>
-    /// Shortened by enough to tell the user (at least <see cref="Entities.FocusBlock.MinimumMeaningfulDeficitMinutes"/>):
-    /// suggestions are rounded up to whole minutes on purpose (Gap 33), so most saves trim seconds.
+    /// The slot was shortened to what it covers — always by whole minutes, so any shortening is worth
+    /// telling the user (Gap 92, V10: suggestions are now exactly sized, no sub-minute margin to ignore).
     /// </summary>
     public bool WasCapped { get; }
 

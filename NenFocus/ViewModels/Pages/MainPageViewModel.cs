@@ -5,6 +5,7 @@ using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.UseCases.Sessions.EndSession;
 using NenFocus.Domain.Enums;
+using NenFocus.Domain.ValueObjects;
 using NenFocus.ViewModels.Components;
 using System;
 using System.Collections.Generic;
@@ -58,10 +59,10 @@ public partial class MainPageViewModel : ViewModelBase
     [ObservableProperty]
     private bool _isRitualBannerVisible;
 
-    /// <summary>Ready-to-bind marker positions for the session progress bar — see
-    /// BreakMarkerDto. Empty for "No timer".</summary>
+    /// <summary>Ready-to-bind marker positions for the session progress bar — the session's own
+    /// <c>SessionTimeline.Marks</c> (Gap 92). Empty for "No timer".</summary>
     [ObservableProperty]
-    private IReadOnlyList<BreakMarkerDto> _breakMarkers = [];
+    private IReadOnlyList<BreakMark> _breakMarkers = [];
 
     public string Greeting => _clock.TimeZone.ToCalendarTime(_clock.Now).Hour switch
     {
@@ -118,20 +119,20 @@ public partial class MainPageViewModel : ViewModelBase
         });
     }
 
-    private void OnMonitorTick(object? sender, EventArgs e)
+    // One reading per tick, delivered with the event — the eight values below always come from the
+    // same second (Gap 92, A4: they used to be read one by one while the timer moved on).
+    private void OnMonitorTick(object? sender, TimelineReading reading) =>
+        Dispatcher.UIThread.Post(() => ShowReading(reading));
+
+    private void ShowReading(TimelineReading reading)
     {
-        Dispatcher.UIThread.Post(() =>
-        {
-            SessionTimeRemaining = _monitor.SessionTimeRemaining;
-            SessionProgress = _monitor.SessionProgress;
-            BreakTimeRemaining = _monitor.BreakTimeRemaining;
-            IsOnBreak = _monitor.IsOnBreak;
-        KeepsBlockingDuringBreak = _monitor.KeepsBlockingDuringBreak;
-            KeepsBlockingDuringBreak = _monitor.KeepsBlockingDuringBreak;
-            BreaksTaken = _monitor.BreaksTaken;
-            BreakProgress = _monitor.BreakProgress;
-            BreakMarkers = _monitor.BreakMarkers;
-        });
+        SessionTimeRemaining = reading.TimeRemaining;
+        SessionProgress = reading.Progress;
+        IsOnBreak = reading.IsOnBreak;
+        KeepsBlockingDuringBreak = reading.KeepsBlockingDuringBreak;
+        BreakTimeRemaining = reading.BreakTimeRemaining;
+        BreakProgress = reading.BreakProgress;
+        BreaksTaken = reading.BreaksTaken;
     }
 
     private void OnSessionAutoEnded(object? sender, PostSessionDto postSession)
@@ -149,21 +150,14 @@ public partial class MainPageViewModel : ViewModelBase
         SessionGoal = session.Goal;
         ActivePresetName = session.PresetName;
         HasActiveSession = true;
-        BreaksTaken = _monitor.BreaksTaken;
-        IsOnBreak = _monitor.IsOnBreak;
-        BreakMarkers = _monitor.BreakMarkers;
+        BreakMarkers = session.Timeline?.Marks ?? [];
+        ShowReading(_monitor.Current);
     }
 
     private void ClearSession()
     {
         HasActiveSession = false;
-        IsOnBreak = false;
-        KeepsBlockingDuringBreak = false;
-        SessionTimeRemaining = TimeSpan.Zero;
-        BreakTimeRemaining = TimeSpan.Zero;
-        SessionProgress = 0;
-        BreakProgress = 0;
-        BreaksTaken = 0;
+        ShowReading(TimelineReading.None);
         SessionGoal = string.Empty;
         ActivePresetName = string.Empty;
         BreakMarkers = [];

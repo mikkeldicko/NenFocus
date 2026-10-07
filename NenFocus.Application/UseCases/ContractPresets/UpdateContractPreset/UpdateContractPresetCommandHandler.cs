@@ -26,9 +26,7 @@ public sealed class UpdateContractPresetCommandHandler
 
         try
         {
-            var workHours = command.WorkHoursStart is { } start && command.WorkHoursEnd is { } end
-                ? new WorkHours(start, end)
-                : null;
+            var workHours = command.WorkHours;
 
             preset.Update(
                 command.Name,

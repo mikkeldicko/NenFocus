@@ -1,6 +1,7 @@
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Domain.Enums;
+using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Application.UseCases.NenContracts.Edit;
 
@@ -24,10 +25,9 @@ public sealed record EditNenContractCommand : ICommand<EditNenContractResult>
     public DateOnly EndDate { get; init; }
     public StrictnessRule StrictnessRule { get; init; }
     public bool AllowCancellation { get; init; }
-    public double? FixedDailyFloorHours { get; init; }
+    public int? FixedDailyFloorHours { get; init; }
     public IReadOnlyList<DateOnly> RestDays { get; init; } = [];
-    public TimeOnly? WorkHoursStart { get; init; }
-    public TimeOnly? WorkHoursEnd { get; init; }
+    public WorkHours? WorkHours { get; init; }
     public IReadOnlyList<DateOnly> NoWorkHoursDays { get; init; } = [];
     public IReadOnlyList<NenContractBlockSpec> Blocks { get; init; } = [];
     public Guid? ContractPresetId { get; init; }
