@@ -213,6 +213,8 @@ public async Task HandleAsync_ValidDurations_AllSucceed(int durationMinutes)
 
 `NenFocus.Tests/ArchitectureTests/` checks the structure `MODULE_STANDARDS.md` describes — layers, the ViewModel Forbidden Zone, vertical slices, naming, interface size, one clock, raw time comparisons, side effects through their one door, queries that only read, command handlers that never hold a query handler (Gap 106), ViewModels that neither format values nor do math, use cases run only through the dispatchers outside Application, one builder per DTO, command handlers leaving the session noticeboard to event handlers. Plain xUnit, no library:
 
+**They run automatically (added 2026-10-08):** a Claude Code Stop hook (`.claude/settings.json` → `.claude/hooks/arch-tests.sh`) runs them at the end of any Claude turn in which C# code changed since the last green run, and blocks the hand-back on a failure. Disable or inspect it with `/hooks`.
+
 | Rule | Mechanism |
 |------|-----------|
 | Type rules (references, what a class holds, names) | reflection over the compiled assemblies |
@@ -238,6 +240,33 @@ public async Task HandleAsync_ValidDurations_AllSucceed(int durationMinutes)
 - **Tests can reach Domain internals** (`InternalsVisibleTo("NenFocus.Tests")`, Gap 106). Use it only to build a state production makes through a longer path — a block already holding a receipt (`FocusBlock.CreateWithReceipt`), a Redemption membership (`TestContracts.Redemption`) — never to test an internal method instead of the public answer it feeds.
 - **Scripted edits on Windows (Gap 106):** a `perl`/`sed` pattern containing a non-ASCII character (—, →) can silently not match; an `awk -v` path with backslashes is mangled, and the script went on to delete lines without inserting. Use the Edit tool for such lines, and check `git diff --stat` after any scripted doc edit.
 - **Scripted edits:** match the file's line endings (`\r?\n`; a `\n`-only deletion left an orphan `\r` that shifted every later line number; a whole-file CRLF pass added `\r` to a last line with no newline, and git then saw the file as binary — `git ls-files --eol` shows `w/-text` — and diffed every line, Gap 92); anchor text replacements to a word boundary (replacing `At.X(` also hit `TestAt.X(`); and delete exactly the member a plan names, not its type (read it first).
+
+---
+
+## Mutation Testing (added 2026-10-08, Gap 113)
+
+Coverage says a test *ran* a line; mutation testing says a test would *notice* if the line were wrong. Stryker.NET (`dotnet tool install -g dotnet-stryker`) makes one small change to the Domain at a time — a "mutant": `<` → `<=`, `&&` → `||`, `+=` → `-=`, a statement removed — and runs the tests that cover that line. A test fails → the mutant is **killed** (good). Every test passes → it **survived**: the rule could be wrong and nothing would say so.
+
+**When (`ARCHITECT_GOVERNANCE.md` → Step 5):** at a gap close that changed Domain code, on the changed files only; at the end of each box, over the whole Domain.
+
+```bash
+cd NenFocus.Tests
+# Gap close: only Domain files changed since the commit before the gap
+dotnet stryker --project NenFocus.Domain.csproj --since:<commit-before-the-gap>
+# End of a box: the whole Domain (~16 min on 2026-10-08)
+dotnet stryker --project NenFocus.Domain.csproj
+```
+
+Reports go to `NenFocus.Tests/StrykerOutput/` (git-ignored); open the HTML report to see each survivor inline. **Don't build or run tests in parallel** — Stryker swaps mutated assemblies into the test project's `bin`.
+
+**Reading the result** — only one kind needs action:
+- *String mutation* survivors (an exception message blanked): ignore; wording isn't a rule (→ Gap 100).
+- *Equivalent* mutants (`asOf < End ? asOf : End` → `<=`: equal values give the same answer either way): ignore.
+- *Compile error* / *Ignored*: Stryker's own bookkeeping.
+- *NoCoverage*: no test runs the line at all — a test, or a reason.
+- **Any other survivor** — a behaviour change nothing caught: write the test, and probe it red by applying that exact mutant by hand.
+
+Baseline: 84.5% over the whole Domain on 2026-10-08, before Gap 113.
 
 ---
 

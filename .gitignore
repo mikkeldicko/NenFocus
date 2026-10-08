@@ -368,3 +368,7 @@ BuildHost-netcore/
 migration_temp.db
 *.db-shm
 *.db-wal
+# Stryker.NET mutation reports (TESTING_GUIDE.md → Mutation Testing)
+StrykerOutput/
+# Architecture-test Stop hook: fingerprint of the last green run
+.claude/hooks/.arch-tests-green
