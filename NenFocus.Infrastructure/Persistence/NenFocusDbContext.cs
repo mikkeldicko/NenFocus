@@ -25,16 +25,8 @@ public class NenFocusDbContext : DbContext
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
-        // Pass the TYPE of the converter, not an instance
-        configurationBuilder
-            .Properties<DateTime>()
-            .HaveConversion<UtcDateTimeConverter>();
-
-        configurationBuilder
-            .Properties<DateTime?>()
-            .HaveConversion<NullableUtcDateTimeConverter>();
-
         // Gap 88: a Moment is stored as the same UTC DateTime column as today — no migration.
+        // Every stored time is a Moment, so there is no DateTime converter.
         configurationBuilder
             .Properties<Moment>()
             .HaveConversion<MomentConverter>();
@@ -48,30 +40,6 @@ public class NenFocusDbContext : DbContext
                 v => Moment.FromStorage(DateTime.SpecifyKind(v, DateTimeKind.Utc)))
         {
         }
-    }
-
-    private class UtcDateTimeConverter : ValueConverter<DateTime, DateTime>
-    {
-        public UtcDateTimeConverter()
-            : base(
-                v => v.Kind == DateTimeKind.Utc ? v : ThrowNonUtc(),
-                v => DateTime.SpecifyKind(v, DateTimeKind.Utc))
-        {
-        }
-
-        private static DateTime ThrowNonUtc() => throw new ArgumentException("Stored DateTimes must be UTC.");
-    }
-
-    private class NullableUtcDateTimeConverter : ValueConverter<DateTime?, DateTime?>
-    {
-        public NullableUtcDateTimeConverter()
-            : base(
-                v => !v.HasValue ? v : (v.Value.Kind == DateTimeKind.Utc ? v : ThrowNonUtc()),
-                v => !v.HasValue ? v : DateTime.SpecifyKind(v.Value, DateTimeKind.Utc))
-        {
-        }
-
-        private static DateTime? ThrowNonUtc() => throw new ArgumentException("Stored DateTimes must be UTC.");
     }
 
     // JSON round-tripping DTOs for the value objects below — DateOnly dictionary keys are

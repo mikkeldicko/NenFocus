@@ -18,6 +18,10 @@ public sealed class WindowsEnforcementService : IEnforcementService, IDisposable
     private const string BlockMarkerStart = "# NEN_FOCUS_START";
     private const string BlockMarkerEnd = "# NEN_FOCUS_END";
 
+    // Executables signed by these publishers are never killed.
+    private const string MicrosoftPublisher = "O=Microsoft Corporation";
+    private const string NenFocusPublisher = "PC-NenFocus-Developer";
+
     private static readonly string[] BlockAddresses = { "0.0.0.0", "::" };
 
     private const int ProcessPollIntervalMs = 2000;
@@ -45,12 +49,6 @@ public sealed class WindowsEnforcementService : IEnforcementService, IDisposable
         EnsureRegistryPolicies();
         StartLocalServer();
     }
-
-    public Task<ActivePolicySlice?> GetCurrentPolicyAsync(CancellationToken ct = default)
-        => Task.FromResult(_currentPolicy);
-
-    public Task<bool> IsActiveAsync(CancellationToken ct = default)
-        => Task.FromResult(_isEnforcing);
 
     public async Task ApplyPolicyAsync(ActivePolicySlice policy, CancellationToken ct = default)
     {
@@ -141,8 +139,8 @@ public sealed class WindowsEnforcementService : IEnforcementService, IDisposable
             try
             {
                 using var cert = X509CertificateLoader.LoadCertificateFromFile(path);
-                return cert.Subject.Contains(SystemSafetyConstants.MicrosoftPublisher) ||
-                       cert.Subject.Contains(SystemSafetyConstants.NenFocusPublisher);
+                return cert.Subject.Contains(MicrosoftPublisher) ||
+                       cert.Subject.Contains(NenFocusPublisher);
             }
             catch { return false; }
         });

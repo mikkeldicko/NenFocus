@@ -84,7 +84,7 @@ public sealed class BlockPresetRepository : IBlockPresetRepository
         CancellationToken cancellationToken = default)
     {
         var query = _context.BlockPresets
-            .Where(p => p.Name.ToLower() == name.ToLower().Trim() && p.PresetType == presetType);
+            .Where(p => p.Name == name.Trim() && p.PresetType == presetType); // Name is NOCASE
 
         if (excludeId.HasValue)
             query = query.Where(p => p.Id != excludeId.Value);

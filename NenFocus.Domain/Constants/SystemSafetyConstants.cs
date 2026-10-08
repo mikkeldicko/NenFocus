@@ -7,7 +7,4 @@ public static class SystemSafetyConstants
         "explorer", "taskmgr", "lsass", "csrss", "wininit", "services",
         "winlogon", "smss", "svchost", "fontdrvhost", "dwm", "nenfocus"
     };
-
-    public const string MicrosoftPublisher = "O=Microsoft Corporation";
-    public const string NenFocusPublisher = "PC-NenFocus-Developer";
 }

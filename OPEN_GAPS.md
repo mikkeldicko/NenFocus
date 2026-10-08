@@ -545,6 +545,28 @@ After Gap 65, extending means appending Contract Days generated with `ContractCa
 
 \---
 
+### Gap 112 — Infrastructure Holds No Rules (raised 2026-10-08 during a review of the Infrastructure layer; findings recorded, not interrogated; after Gap 110)
+
+**Why it's a gap:** a read of every Infrastructure file (2026-10-08) found three business rules living in Infrastructure, and three services there that touch nothing outside the app. Infrastructure's job is the outside world (`MODULE_STANDARDS.md` → Layer Responsibilities: "Forbidden: business rules that belong in Domain or Application").
+
+**Findings:**
+- **I1 — every unique-index failure says "That name is already in use."** (a bug, only reached on a race). `TransactionalCommandHandler` catches every `SQLITE_CONSTRAINT_UNIQUE` (2067) and answers with that sentence. Since Gap 92 two session indexes are unique as well (`IX_Sessions_OneActive`, `IX_Sessions_OnePerOriginatingBlock`), so two session starts that collide would tell the user a *name* is taken. The sentence is also English written outside a wording home (→ Gap 100). Question to settle: tell the indexes apart (by name) and return a typed reason for each, or keep the translation only for the three name indexes and let a session race fail as an error.
+- **I2 — "is this website blocked?" is decided in `WindowsEnforcementService`.** The `/check` endpoint chooses allowlist vs blocklist itself and owns `NormalizeDomain` (strip scheme, path, port, `www.`). `PolicyEngine` owns the merge, but the question asked of its answer lives in Infrastructure. Candidate home: the slice, e.g. `ActivePolicySlice.Blocks(domain)`. Related: what a site *is* (`BlockedSite`) only trims and lowercases, so a site saved as `https://www.youtube.com/` is cleaned up only by the hosts writer; decide whether `BlockedSite` normalizes on construction (data question: existing rows).
+- **I3 — "the same resource counts once within 2 seconds" lives in `BlockedAttemptTracker`.** A rule about what counts as an attempt, in Infrastructure. The port `IBlockedAttemptTracker` also mixes the write with a read (`GetAttemptsForSessionAsync`) used by three Application handlers (`EndSession`, `GetUnacknowledgedPostSessions`, `GetSessionSnapshotForBlock`) — decide whether the read becomes a repository read. Gap 110 keeps the tracker's own save; settle together.
+- **I4 — `ActiveSessionState`, `RitualPrompt` and `RecapRelay` live in Infrastructure but use only `IQueryDispatcher` and Application types.** By `MODULE_STANDARDS.md` → Where a Rule Lives they are Application services (like `EnforcementSynchronizer`). `RecapRelay` waits for Gap 107's owner anyway — move it there, or leave it until then.
+
+**Deletions found in the same review — no design needed. Done 2026-10-08 (all 1756 tests green); the publisher strings moved into `WindowsEnforcementService` as private constants. `HostExtensions`' patch was for a migration that no longer exists — the migrations were squashed into `InitialCreate` on 2026-07-06:**
+- `IEnforcementService.GetCurrentPolicyAsync` and `IsActiveAsync` have no callers (`DOMAIN_DICTIONARY.md` already says the interface has 2 methods).
+- `UtcDateTimeConverter` / `NullableUtcDateTimeConverter` in `NenFocusDbContext` match no column — every stored time is a `Moment` since Gap 88.
+- `HostExtensions.SkipAddColumnsIfAlreadyExist` patches a June 2026 migration every database has passed.
+- The three `ExistsWithNameAsync` calls `ToLower()` columns that already have `NOCASE` collation; `SystemSafetyConstants.MicrosoftPublisher`/`NenFocusPublisher` sit in the Domain but only Infrastructure reads them.
+
+**Not part of this gap (already tracked):** repositories' update/save/delete-by-id → Gap 110; the three services that fetch handlers by hand, the two heartbeats and `PlannerClockService`'s real cadence → Gap 89 area 3 (`DispatcherRuleTests` exceptions); the toast's `DateTime.Now` → `ClockRuleTests` exception; enforcement living in the GUI process → Gap 76.
+
+**Guard (to settle at interrogation):** a candidate is an architecture test that Infrastructure doesn't read `ActivePolicySlice.WebsiteFilterTypeMode` or the site lists to decide anything (I2), and that nothing in `NenFocus.Infrastructure/Services/` is free of outside-world dependencies (I4).
+
+\---
+
 ### Gap 107 — One Owner for What the Shell Shows Next (raised 2026-10-01 during Gap 97's interrogation; findings recorded, not interrogated)
 
 **The question:** "what does the user need to be shown next, and in what order?" (unacknowledged post-sessions, unacknowledged contract recaps, a pending Ritual). Today `ShellViewModel` answers it itself.

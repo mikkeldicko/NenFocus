@@ -61,7 +61,7 @@ public sealed class BreakTimerPresetRepository : IBreakTimerPresetRepository
         CancellationToken cancellationToken = default)
     {
         var query = _context.BreakTimerPresets
-            .Where(p => p.Name.ToLower() == name.ToLower().Trim());
+            .Where(p => p.Name == name.Trim()); // Name is NOCASE
 
         if (excludeId.HasValue)
             query = query.Where(p => p.Id != excludeId.Value);
