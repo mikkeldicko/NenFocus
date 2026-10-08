@@ -61,3 +61,5 @@
 #*.PDF   diff=astextplain
 #*.rtf   diff=astextplain
 #*.RTF   diff=astextplain
+# Shell scripts must keep LF line endings or bash fails on the  (the Claude Code Stop hook)
+*.sh text eol=lf
