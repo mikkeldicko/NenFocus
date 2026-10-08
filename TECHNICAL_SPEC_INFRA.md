@@ -133,6 +133,7 @@ Tactical implementation details, current build state, and platform-specific gotc
 - **Value object and service review (Gap 92):** `ChangeWindow` and `PlannedFocusHoursCalculator` deleted; contract lifecycle verdicts on `NenContract`; preset floor/Work Hours rules in the Domain; `WholeMinutes`; one door for the running session with storage backstops (migrations `RoundRedemptionEntriesToWholeMinutes`, `SessionStorageBackstops`); `SessionTimeline`; `ISessionStateService` split into `IActiveSessionState`, `IRitualPrompt` and the interim `IRecapRelay`. See `DESIGN_GAP_HISTORY.md` Gap 92. Gotcha: a SQLite partial unique index (`HasFilter`) is the storage backstop for "at most one" rules — it lets any number of rows sit outside the filter (Completed sessions, spontaneous ones with no block).
 - **Seeded contract presets (2026-10-02):** Lockdown, Daily Flex and Period Study ship as ordinary rows (migration `SeedContractPresets`), editable and deletable like the seeded block and break timer presets.
 - **Domain services without interfaces (Gap 111):** the four Domain services are sealed classes registered as themselves; Interface First became Contract First — see `DESIGN_GAP_HISTORY.md` Gap 111.
+- **The Domain's untested rules tested (Gap 113):** tests for the 11 rules a Stryker run found unproven, plus case-insensitive preset names; Domain mutation score 84.5% → 86.4% — see `DESIGN_GAP_HISTORY.md` Gap 113.
 
 ### Not Yet Built
 

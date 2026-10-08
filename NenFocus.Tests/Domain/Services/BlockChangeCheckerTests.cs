@@ -378,6 +378,16 @@ public class BlockChangeCheckerTests
             });
     }
 
+    [Fact]
+    public void AllowancesFor_AStartedCommittedBlock_IsNotOfferedSplit_ThoughItsContractWouldAllowIt()
+    {
+        // The block's own lock refuses first; the Planner must not offer what the validator refuses (Gap 113, S5).
+        var contract = Contract(StrictnessRule.DailyFlexibility);
+        var block = Committed(contract, Slot(Tuesday, 10, 12));
+
+        Checker.AllowancesFor(block, contract, At.Utc(2026, 1, 6, 11)).CanSplit.Should().BeFalse();
+    }
+
     [Theory]
     [InlineData(StrictnessRule.Locked, false)]
     [InlineData(StrictnessRule.DailyFlexibility, false)]

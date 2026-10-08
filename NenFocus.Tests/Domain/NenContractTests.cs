@@ -1018,6 +1018,26 @@ public class NenContractTests
     }
 
     [Fact]
+    public void CheckComplete_HoursDeliveredOverSeveralDays_AddUp()
+    {
+        // Gap 113, S4: an hour signed and delivered on each of two days is two hours, not the best day's one.
+        var secondDay = StartDate.AddDays(1);
+        var contract = Seal(floorRule: new DailyFloorRule.FollowsPlan(),
+            floorPlan: new Dictionary<DateOnly, double> { [StartDate] = 1, [secondDay] = 1 },
+            plannedFocusHoursByDay: new Dictionary<DateOnly, double> { [StartDate] = 1, [secondDay] = 1 });
+        FocusBlock DeliveredHour(DateOnly day) => TestBlocks.Worked(
+            FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),
+                At.Slot(day.ToDateTime(new TimeOnly(9, 0)), day.ToDateTime(new TimeOnly(10, 0))),
+                membership: TestContracts.Committed(contract.Id)),
+            ritualAfterStart: 0, endedAfterStart: 60);
+
+        var verdict = contract.CheckComplete([DeliveredHour(StartDate), DeliveredHour(secondDay)], [], sessionRunning: false,
+            At.Utc(secondDay.ToDateTime(new TimeOnly(12, 0))), At.UtcZone);
+
+        verdict.Outcome.Should().Be(ContractActionOutcome.Allowed);
+    }
+
+    [Fact]
     public void CheckComplete_OverDelivered_HasNoHoursLeft()
     {
         var contract = TwoHoursSigned();

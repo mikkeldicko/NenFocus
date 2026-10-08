@@ -205,6 +205,41 @@ public class NenContractRedemptionPlacementTests
     }
 
     [Fact]
+    public void TwoDeficits_RoomRunsOutPartWayThroughTheSecond()
+    {
+        // Gap 113, S3: the room the first claim uses is gone for the second.
+        var contract = Contract();
+        var newer = Missed(contract, Now.AddHours(-2), 50);
+        var older = Missed(contract, Now.AddHours(-5), 40);
+
+        Check(contract, At.Slot(Now, Now.AddMinutes(60)), [newer, older])
+            .Receipt.Entries.Should().Equal(new RedemptionEntry(older.Id, WholeMinutes.Of(40)), new RedemptionEntry(newer.Id, WholeMinutes.Of(20)));
+    }
+
+    [Fact]
+    public void TwoDeficits_RoomUsedUpByTheFirst_ClaimsNothingOfTheSecond()
+    {
+        var contract = Contract();
+        var newer = Missed(contract, Now.AddHours(-2), 50);
+        var older = Missed(contract, Now.AddHours(-5), 40);
+
+        Check(contract, At.Slot(Now, Now.AddMinutes(40)), [newer, older])
+            .Receipt.Entries.Should().Equal(new RedemptionEntry(older.Id, WholeMinutes.Of(40)));
+    }
+
+    [Fact]
+    public void AnywhereInContract_TheFirstAndLastDaysAreInside()
+    {
+        // Gap 113, S7: the period's own edges are eligible days.
+        var contract = Contract(RedemptionPlacementPolicy.AnywhereInContract, from: Today.AddDays(-2), to: Today.AddDays(2));
+
+        contract.CheckRedemptionEligibility(Today.AddDays(-2), Today).Should().Be(RedemptionEligibility.Allowed);
+        contract.CheckRedemptionEligibility(Today.AddDays(2), Today).Should().Be(RedemptionEligibility.Allowed);
+        contract.CheckRedemptionEligibility(Today.AddDays(-3), Today).Should().Be(RedemptionEligibility.WrongDay);
+        contract.CheckRedemptionEligibility(Today.AddDays(3), Today).Should().Be(RedemptionEligibility.WrongDay);
+    }
+
+    [Fact]
     public void PartlyCoveredDeficit_ClaimsOnlyWhatIsLeft()
     {
         var contract = Contract();

@@ -123,6 +123,7 @@ public class FocusBlockOwnAnswersTests
         { "on time, cancelled mid-way",    0,      40,    600,  40,    FocusBlockOutcome.EndedEarly,        false, true,  [0, 40],      [0, 40] },
         { "on time, seconds in end",       0,      60.5,  600,  null,  FocusBlockOutcome.EndedEarly,        false, true,  [0, 60.5],    [0, 60] },
         { "late with seconds, ended",      6.25,   60.1,  600,  null,  FocusBlockOutcome.EndedEarly,        true,  true,  [6.25, 60.1], [6.25, 59.25] },
+        { "ended within first minute",     0,      0.5,   600,  null,  FocusBlockOutcome.EndedEarly,        false, true,  [0, 0.5],     null },  // Gap 113, S9
     };
 
     [Theory]

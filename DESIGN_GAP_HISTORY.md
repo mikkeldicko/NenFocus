@@ -2535,3 +2535,34 @@ ComputePlannedFocusHoursQuery(IReadOnlyList<TimeSlot> DraftFocusBlockRanges)   /
 **Guard (step 5):** yes, two tests. `DomainRuleTests.DomainDeclaresNoInterfaces` — probed red by the four interfaces themselves before they were deleted. `InterfaceSizeRuleTests.DomainServicesStaySmall` — removing the interfaces would have silently removed their 5-member cap, since the size test only counted interfaces; it now counts a Domain service's declared public members too, probed red by two extra methods on `BlockChangeChecker` ("has 6").
 
 **Principle demonstrated:** an abstraction earns its place by something that varies behind it. Ask "what would ever swap this?" — if nothing does, the class's public methods already are the contract, and the interface is a second file to keep in step with the first.
+
+
+## Gap 113 — Close the Domain's Untested Rules *(closed, 2026-10-08; tests only)*
+
+**Raised by** a Stryker.NET mutation run over `NenFocus.Domain` (84.5%, 1,116 mutants tested): after wording-only, equivalent and programming-error-guard survivors were set aside, 11 rules remained that the code gets right but no test proves (S1–S11). R1 was added from `18df45b`, where `ExistsWithNameAsync` stopped lowercasing and the `NOCASE` collation became the only thing making two differently-cased names the same — tested for block presets only. Done before Gap 110 because S2 and R1 guard repository behaviour Gap 110 rewrites.
+
+**Changed (tests only, no production code):**
+- **S1** `BreakTimerTests`: each zero setting throws, naming its parameter.
+- **S2** `TimeSlotTests`: `Filters.Overlaps` and `Filters.Contains` compiled and checked against slots, and an unset moment.
+- **S3** `NenContractRedemptionPlacementTests`: room running out part-way through a second deficit, and used up by the first.
+- **S4** `NenContractTests`: an hour delivered on each of two days completes a two-hour contract.
+- **S5** `BlockChangeCheckerTests`: a started Committed block under Daily Flex isn't offered Split.
+- **S6** `BreakScheduleTests`: a tick landing exactly on a break's end reports BreakEnded once.
+- **S7** `NenContractRedemptionPlacementTests`: under AnywhereInContract, the first and last days are eligible and the days outside them aren't.
+- **S8** `TimeSlotTests`: `Contains(TimeSlot)` counts a shared start or end as inside.
+- **S9** `FocusBlockOwnAnswersTests`: a session ended in its first minute earns no credit.
+- **S10** `SessionTimelineTests`: not on a break, `KeepsBlockingDuringBreak` is false.
+- **S11** `PlannedBlockTests`: cancelled after its end, `EffectiveEnd` is still the scheduled end — the promise repositories' "`End > now`" narrowing relies on.
+- **R1** new `BreakTimerPresetRepositoryTests` and `ContractPresetRepositoryTests`: names compare case-insensitively.
+
+Each was probed red by applying the surviving change by hand, then reverted; R1 by removing that table's `NOCASE` collation.
+
+**Found along the way:**
+- **S1's headline mutant can't be killed.** `cyclesCompleted++` → `--` is equivalent: `-n % k == 0` exactly when `n % k == 0`, so the long break still lands on every Nth cycle. The existing 180-minute test already proves that rule; probing confirmed the mutant stays green.
+- **S5's survivor was not the one the text suggested.** Two hand edits of the line were already killed by existing tests. Stryker mutates the parsed tree: `isMember && own && contract` is `(isMember && own) && contract`, so its mutant is `(isMember || own) && contract`, which only the new started-block test kills. Recorded in `TESTING_GUIDE.md` → Mutation Testing as how to probe by hand.
+
+**Confirmed via** the full suite (1,786 passing) and a full Stryker re-run of the Domain: **86.4%** (1,123 tested, 991 killed, 132 survived). S1–S11 are off the survivor list except S1's equivalent mutant. The non-wording survivors left in the touched files are equivalent `<`/`<=` swaps, the `EnsureMine` guards, and one `TimelineReading.None` boolean outside the findings.
+
+**Guard (step 5):** the tests are the guard. The gap's open question, whether to run Stryker at each Architecture-box close, was settled the day it was raised: `ARCHITECT_GOVERNANCE.md` Step 5 already requires a Domain-wide run at the end of each box and a `--since` run at any gap close that changed Domain code. No architecture test applies — no layer or shape rule was at stake, only rules missing tests. No exception entry retired.
+
+**Principle demonstrated:** coverage says a line ran; only a test that would fail if the line were wrong proves the rule. Each of these rules was "covered", and each could have been inverted without a red test.

@@ -430,6 +430,16 @@ public class PlannedBlockTests
     }
 
     [Fact]
+    public void EffectiveEnd_CancelledAfterItEnded_IsTheScheduledEnd()
+    {
+        // Never later than End: repositories narrow with "End > now" on that promise (Gap 113, S11).
+        var block = CreateBackgroundBlock();
+        block.MarkCancelled(At.Utc(End.AddHours(1)));
+
+        block.EffectiveEnd(At.Utc(End.AddHours(2))).Should().Be(At.Utc(End));
+    }
+
+    [Fact]
     public void EffectiveEnd_FocusBlock_EarliestReasonWins()
     {
         var endedFirst = CreateFocusBlock();

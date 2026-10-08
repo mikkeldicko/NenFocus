@@ -174,6 +174,17 @@ public class BreakScheduleTests
     }
 
     [Fact]
+    public void TransitionsBetween_TickLandingExactlyOnABreakEnd_ReportsEndedOnce()
+    {
+        // Two ticks either side of the boundary: BreakEnded must fire on the first, not again on the second (Gap 113, S6).
+        var schedule = new BreakSchedule([Short(25, 30)]);
+        var ended = new BreakTransition(BreakTransitionKind.Ended, SessionPhaseKind.ShortBreak, M(30));
+
+        schedule.TransitionsBetween(M(29), M(30)).Should().Equal(ended);
+        schedule.TransitionsBetween(M(30), M(31)).Should().BeEmpty();
+    }
+
+    [Fact]
     public void TransitionsBetween_WholeBreakSkipped_ReportsBothInOrder()
     {
         var schedule = new BreakSchedule([Long(115, 130)]);

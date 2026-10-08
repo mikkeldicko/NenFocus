@@ -61,6 +61,45 @@ public class TimeSlotTests
         slot.Contains(At.Utc(2026, 9, 29, 11)).Should().BeFalse();
     }
 
+    [Theory]
+    [InlineData(10, 12, 10, 12, true)]  // the same slot
+    [InlineData(10, 12, 10, 11, true)]  // sharing the start
+    [InlineData(10, 12, 11, 12, true)]  // sharing the end — a block ending exactly at the period's end (Gap 113, S8)
+    [InlineData(10, 12, 9, 11, false)]  // starts before
+    [InlineData(10, 12, 11, 13, false)] // ends after
+    public void Contains_Slot_WholeOfItInside_SharingAStartOrEndCounts(int aStart, int aEnd, int bStart, int bEnd, bool expected)
+        => Slot(aStart, aEnd).Contains(Slot(bStart, bEnd)).Should().Be(expected);
+
+    // ── The SQL forms repositories run (Gap 113, S2): compiled here, they must answer as the methods do ──
+
+    [Theory]
+    [InlineData(10, 11, 10, 11, true)]
+    [InlineData(10, 12, 11, 13, true)]
+    [InlineData(10, 13, 11, 12, true)]
+    [InlineData(10, 11, 11, 12, false)] // touching
+    [InlineData(11, 12, 10, 11, false)] // touching, other order
+    [InlineData(10, 11, 12, 13, false)] // gap between
+    [InlineData(12, 13, 10, 11, false)] // gap between, other order
+    public void Filters_Overlaps_AnswersAsOverlaps(int aStart, int aEnd, int bStart, int bEnd, bool expected)
+    {
+        var overlaps = TimeSlot.Filters.Overlaps(Slot(bStart, bEnd)).Compile();
+
+        overlaps(Slot(aStart, aEnd)).Should().Be(expected);
+        Slot(aStart, aEnd).Overlaps(Slot(bStart, bEnd)).Should().Be(expected, "the filter is the method's rule in SQL form");
+    }
+
+    [Fact]
+    public void Filters_Contains_IncludesStart_ExcludesEnd_AndNeverAnUnsetMoment()
+    {
+        var contains = TimeSlot.Filters.Contains(Slot(10, 11)).Compile();
+
+        contains(At.Utc(2026, 9, 29, 9, 59)).Should().BeFalse();
+        contains(At.Utc(2026, 9, 29, 10)).Should().BeTrue();
+        contains(At.Utc(2026, 9, 29, 10, 59)).Should().BeTrue();
+        contains(At.Utc(2026, 9, 29, 11)).Should().BeFalse();
+        contains(null).Should().BeFalse();
+    }
+
     [Fact]
     public void HasStarted_FromStartOnward()
     {

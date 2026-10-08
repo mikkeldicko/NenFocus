@@ -14,12 +14,16 @@ public class BreakTimerTests
     private static SessionBreak Long(int startMinute, int endMinute) =>
         new(SessionPhaseKind.LongBreak, TimeSpan.FromMinutes(startMinute), TimeSpan.FromMinutes(endMinute));
 
-    [Fact]
-    public void Constructor_NonPositiveValue_Throws()
+    [Theory]
+    [InlineData(0, 5, 4, 15, "workMinutes")]
+    [InlineData(25, 0, 4, 15, "shortBreakMinutes")]
+    [InlineData(25, 5, 0, 15, "cyclesBeforeLongBreak")]
+    [InlineData(25, 5, 4, 0, "longBreakMinutes")]
+    public void Constructor_ZeroValue_Throws(int work, int shortBreak, int cycles, int longBreak, string parameter)
     {
-        var act = () => new BreakTimer(0, 5, 4, 15);
+        var act = () => new BreakTimer(work, shortBreak, cycles, longBreak);
 
-        act.Should().Throw<ArgumentException>();
+        act.Should().Throw<ArgumentException>().Which.ParamName.Should().Be(parameter);
     }
 
     [Fact]

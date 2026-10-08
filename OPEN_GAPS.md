@@ -567,34 +567,6 @@ After Gap 65, extending means appending Contract Days generated with `ContractCa
 
 \---
 
-### Gap 113 — Close the Domain's Untested Rules (raised 2026-10-08 from a Stryker.NET mutation run; findings recorded; tests only, no design)
-
-**Why it's a gap:** a mutation run over `NenFocus.Domain` (Stryker.NET 5.0.0, 2026-10-08, before commit `18df45b`) scored 84.5% — 1,116 mutants tested. Of ~200 survivors, ~75 only blank an exception message (wording, → Gap 100), ~25 are equivalent (e.g. `<` vs `<=` where both branches return the same value) and ~15 are programming-error guards nobody tests (`EnsureMine`, `Moment`'s local-time guard, `BreakTimerPreset`'s empty name). The rest are rules the code probably gets right but no test proves — a test passes whether the rule holds or not. Every line below still exists unchanged after `18df45b`.
-
-**Findings (S = Stryker; the surviving change in brackets):**
-- **S1 — long breaks.** `BreakTimer.ScheduleFor` [`cyclesCompleted++` → `--`]: no test checks every Nth break is long. Also zero short/long break minutes and zero cycles are never tested (`<= 0` → `< 0` survives; the throws have no coverage).
-- **S2 — the SQL filters.** `TimeSlot.Filters.Overlaps` and `Filters.Contains` [`&&` → `||`]: the Domain-built filters repositories run as SQL (incl. the preset lock) have no test of their own. Compile the expression and check it against slots.
-- **S3 — one redemption over several missed blocks.** `NenContract.CheckRedemptionPlacement` [`room -= covered` → `+=`; "room used up" `break` never reached]: no test covers a redemption block spreading over two deficits and running out.
-- **S4 — completing a contract.** `NenContract.CheckComplete` [`Sum` → `Max` over `DayStatuses`]: no test has completed hours on more than one day.
-- **S5 — Split offered when refused.** `BlockChangeChecker.AllowancesFor` [`isMember && …` → `||`]: a member block whose split is refused (started, or Lockdown) is never checked for `CanSplit: false` — the Planner would offer Split and the validator refuse it.
-- **S6 — break boundaries at the exact second.** `BreakSchedule.TransitionsBetween` is half-open `(from, to]` [`b.End > from` → `>=`, `b.End <= to` → `<`]: a tick landing exactly on a break's end is untested — decides whether BreakEnded fires once.
-- **S7 — redemption on the contract's first day.** `NenContract` redemption eligibility, AnywhereInContract [`proposedDate >= StartDate` → `>`].
-- **S8 — a block ending exactly at the period's end.** `TimeSlot.Contains(TimeSlot)` [`other.End <= End` → `<`], asked by `NenContract` for the planned period.
-- **S9 — under a minute of credit.** `FocusBlock.CreditedSlot` [`credit > Zero` → `true`]: a session ended within its first minute is never asked.
-- **S10 — the break display.** `TimelineReading.KeepsBlockingDuringBreak` [`&&` → `||`]: tested only when true, never when not on a break (Main page reads it).
-- **S11 — cancelled after it ended.** `PlannedBlock.EffectiveEnd` [cancelled-at cap → always `cancelledAt`]: a block cancelled after its end is untested.
-
-**Added from `18df45b` (outside Stryker's reach — it only mutated the Domain):**
-- **R1 — names compare case-insensitively.** `ExistsWithNameAsync` no longer lowercases; the column's `NOCASE` collation is the only thing making "Deep Work" and "deep work" the same name. Only `BlockPresetRepository` has a test proving it; `BreakTimerPresetRepository` and `ContractPresetRepository` need one each.
-
-**How:** one test (or a small theory) per finding, probed red by re-applying the exact surviving change, then reverted. Re-run Stryker on the Domain afterwards; the score should rise and S1–S11 drop off the survivor list.
-
-**Why before Gap 110:** S2 and R1 guard repository behaviour, which Gap 110 rewrites; tests first means that refactor is checked against them.
-
-**Guard (step 5):** the tests are the guard. Optional, decide at close-out: run Stryker on the Domain at each Architecture-box close and record the score in the history entry.
-
-\---
-
 ### Gap 107 — One Owner for What the Shell Shows Next (raised 2026-10-01 during Gap 97's interrogation; findings recorded, not interrogated)
 
 **The question:** "what does the user need to be shown next, and in what order?" (unacknowledged post-sessions, unacknowledged contract recaps, a pending Ritual). Today `ShellViewModel` answers it itself.

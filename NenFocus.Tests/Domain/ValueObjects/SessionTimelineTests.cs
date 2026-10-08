@@ -35,6 +35,7 @@ public class SessionTimelineTests
         reading.BreakTimeRemaining.Should().Be(TimeSpan.Zero);
         reading.BreaksTaken.Should().Be(0);
         reading.LiftsBlocking.Should().BeFalse();
+        reading.KeepsBlockingDuringBreak.Should().BeFalse("not on a break, so there is no break to keep blocking through (Gap 113, S10)");
         reading.HasEnded.Should().BeFalse();
     }
 

@@ -266,7 +266,9 @@ Reports go to `NenFocus.Tests/StrykerOutput/` (git-ignored); open the HTML repor
 - *NoCoverage*: no test runs the line at all — a test, or a reason.
 - **Any other survivor** — a behaviour change nothing caught: write the test, and probe it red by applying that exact mutant by hand.
 
-Baseline: 84.5% over the whole Domain on 2026-10-08, before Gap 113.
+Scores over the whole Domain: 84.5% on 2026-10-08 before Gap 113; 86.4% after it (1,123 tested, 132 survived — wording, equivalent mutants and the untested `EnsureMine` guards).
+
+**Probing by hand: mutate the syntax tree, not the text.** Stryker changes one operator *as C# parsed it*. `a && b && c` is `(a && b) && c`, so its "first `&&` → `||`" mutant is `(a || b) && c`, while a text edit gives `a || (b && c)` — a different change, which other tests may already kill. Add the parentheses when probing (Gap 113, S5).
 
 ---
 
