@@ -94,6 +94,8 @@ Once a gap (or a self-contained half of one) is fully closed, its write-up moves
 - Content: current deficit + days remaining, e.g. *"You're 1.5h behind on Study Month — 3 days left."*
 - Was designed to coexist with the Main Page spontaneous redemption prompt — that prompt has since been dropped (see Open Gap D); C3 does not depend on it and needs no change.
 
+**C4 — An untouched contract reads as "Completed" (raised 2026-10-08, not interrogated):** `NenContractStatus` is `Scheduled | Active | Completed | Broken`, and `Completed` only means "the period ended without being broken". A contract nobody worked — e.g. Monday–Tuesday with the laptop off, opened Wednesday — ends `Completed` with every day unmet; the day statuses and grade show it, but the status word reads as success. Question for this gap: should a contract that ended with days unmet get its own verdict (a word, a grade threshold, or a status)? A verdict and wording question only — no new entity: the contract exists from Seal, so its recap always has something to hang on (unlike a missed Focus block, which has no session). Gap 74 follows whatever is decided here.
+
 **Must be closed before:** Nothing — purely additive once the Nen Contract Application layer and completed-hours summation query exist. No urgency driving closure.
 
 **Parked, not interrogated:** Two related ideas came up in the same session and were deliberately shelved by the architect until there's a better view of the finished program — not designed in depth, listed here only so they aren't forgotten:
@@ -349,6 +351,8 @@ The tray stops the moment-of-weakness click on X; the service stops a Task Manag
 
 ### Gap 67 (R) — Contract Membership: Only Committed and Redemption Blocks Count Toward the Floor (interrogated 2026-09-28; plan agreed, not built)
 
+**Session half folded into Gap 114 (2026-10-08):** a spontaneous run becomes a walk-in block with Bonus membership, so "spontaneous sessions become Bonus", "may not run across a contract's start or end" (q7) and the session link shape (q3) are answered there. Kept as input.
+
 **Built by Gap 97 (2026-10-01) — the block half:** every block of a contract carries its id and a stored role (`ContractMembership`: Committed, Redemption, Bonus), `FocusBlock.CountsTowardFloor` is the one question, the migration backfilled the roles, and `MembershipRuleTests` guards it. **What is left here is the session half:** spontaneous sessions still count toward completed hours by whole local date (`GetNenContractCompletedFocusHoursQueryHandler`), and whether a spontaneous session inside a contract follows its keep-blocking rule.
 
 **Block half built in Gap 97 (closed 2026-10-02):** the stored id and role on every block, the role-based "counts toward the floor", the Bonus badge and Bonus hours by role, the drag rules, "no block crosses a contract's start or end", and the migration are done — see `DESIGN_GAP_HISTORY.md` Gap 97. **What this gap still owns is the session half:** spontaneous sessions become Bonus and stop counting toward the floor (`GetNenContractCompletedFocusHoursQueryHandler` still counts them by whole local date), plus questions 2 (for sessions), 3 and 7 below. Questions 1, 4, 5 and 6 were answered by Gap 97 (names; Break releases or keeps Bonus blocks, prompt in Gap 108; Bonus permissions are Gap 93's; tile tags).
@@ -408,6 +412,8 @@ The tray stops the moment-of-weakness click on X; the service stops a Task Manag
 \---
 
 ### Gap 79 (T) — Spontaneous Sessions as Planner Tiles (raised 2026-09-28; direction agreed, not interrogated)
+
+**Folded into Gap 114 (2026-10-08):** a spontaneous run becomes a walk-in block, so it is a tile without a read-side projection — this reverses the "Agreed direction" below; its rejection reasons are re-read in Gap 114. Kept as input.
 
 **Want:** a Spontaneous session appears in the Planner as a tile labelled "Spontaneous" from the moment it starts, stays after it ends, can be clicked for details (goal, preset, duration, breaks, blocked attempts, reflection), and shows "ended early" like a planned block.
 
@@ -564,6 +570,58 @@ After Gap 65, extending means appending Contract Days generated with `ContractCa
 **Not part of this gap (already tracked):** repositories' update/save/delete-by-id → Gap 110; the three services that fetch handlers by hand, the two heartbeats and `PlannerClockService`'s real cadence → Gap 89 area 3 (`DispatcherRuleTests` exceptions); the toast's `DateTime.Now` → `ClockRuleTests` exception; enforcement living in the GUI process → Gap 76.
 
 **Guard (to settle at interrogation):** a candidate is an architecture test that Infrastructure doesn't read `ActivePolicySlice.WebsiteFilterTypeMode` or the site lists to decide anything (I2), and that nothing in `NenFocus.Infrastructure/Services/` is free of outside-world dependencies (I4).
+
+\---
+
+### Gap 114 — Walk-in Blocks: Every Session Belongs to a Block (raised 2026-10-08 in a review of the missed sweep; direction agreed, not interrogated; before Gap 107)
+
+**Why it's a gap:** started as two questions about the missed sweep and grew into where a focus period's record lives.
+
+**Findings (read in code 2026-10-08):**
+- **S1 — a Domain rule lives in a handler.** `MarkFocusBlockMissedCommandHandler` builds the missed session itself: placeholder goal `"(missed — no goal set)"`, the block's length, `Planned`, the block's id, then `Session.Miss(block.Scheduled)`. `Session.Miss(TimeSlot)` is public and takes any slot, so a missed session can be built whose times don't match its block (≈15 test call sites do).
+- **S2 — a use case calls a use case.** `SweepMissedFocusBlocksCommandHandler` holds `ICommandHandler<MarkFocusBlockMissedCommand>` (decorated with validation and a transaction) — the only command handler that holds another. `MarkFocusBlockMissed` has no other caller.
+- **S3 — the same checks run twice.** The sweep's query already found unresolved blocks; `MarkFocusBlockMissedValidator` loads each block twice more and re-checks `IsUnresolved` (against `clock.Now`, not the sweep's `AsOf`), and the handler loads it a fourth time.
+- **S4 — `Session` holds things that never ran.** The `Missed` status needs special cases: elapsed forced to zero (`Session.cs:247`), `StartedAt`/`EndedAt` filled with the scheduled window, a placeholder goal, "Completed or Missed" checks on reflection and acknowledgement.
+- **S5 — the block copies session facts.** `FocusBlock.RitualCompletedAt` is set from the same `now` as `Session.StartedAt` (`StartSessionCommandHandler`), `FocusBlock.SessionEndedAt` copies `Session.EndedAt` (Gap 86).
+
+**Options weighed (2026-10-08):**
+- **A — keep missed sessions:** `Session.MissedFor(id, block, asOf)` factory, `Miss` private, merge the two slices. Small; leaves S4.
+- **A′ — a session covers its block's period** (laptop off still counts): legitimises today's times, but a planned session's period is then the block's, and "how did it go" and "what got in the way" share one field.
+- **B — Post-Session as its own record**, created by both endings: one home for reflection/acknowledgement, but a new aggregate, and the snapshot is held twice.
+- **C — the healthcare pattern** (FHIR Appointment/Encounter): the plan carries a stored no-show outcome and its own "why didn't it happen" note; the run carries "what happened". Rejected as the whole answer only because spontaneous sessions have no plan to hang on.
+- **Rejected:** creating `NotStarted` sessions when a block is scheduled (every create/split/delete/cancel of a future block would touch two aggregates); putting reflection only on `FocusBlock` (spontaneous sessions have no block).
+
+**Agreed direction (architect's, 2026-10-08) — C extended with walk-ins:** FHIR handles a walk-in by creating a real appointment on arrival, typed `WALKIN`, already arrived, occupying its slot. Here: Hatsu on a spontaneous run creates a **walk-in `FocusBlock`**, Ritual done at creation, starting now. Every session then has a block; the block is the record of every focus period (planned or walk-in) and `Session` is what ran inside it.
+- **Planner (Gap 79):** a walk-in is a block, so it is a tile.
+- **Contracts (Gap 67's session half):** created inside a contract it is **Bonus** by membership, so it never counts toward the floor; placement asks the full `BlockPlacementChecker.Check`, which already refuses crossing a contract's start or end (Gap 67 q7).
+- **"Only if nothing planned is in the way":** `StartSession` already asks `CheckFree`; the running-session special case in it may go, since the walk-in block reserves its own slot.
+- **Missed:** a stored outcome on the `FocusBlock`, not a `Session`; a walk-in can never be missed (Ritual done at creation). `Session` loses `Missed`, `Miss`, the placeholder goal and the zero-elapsed case.
+- **The sweep stays** (a miss must be noticed live and after the app was closed) but shrinks to stamping blocks; `MarkFocusBlockMissed` and the A-option `MissedFor` factory are never needed. S1–S3 close here.
+
+**Gap 79's earlier rejection, re-read 2026-10-08:** it rejected a spontaneous-block subtype because every block rule would need an exception — enforcement, Focus overlap, Ritual prompt, missed sweep, outcome, planned hours and floor. Since then: Ritual prompt and sweep ask `IsAwaitingRitual`/`IsUnresolved`, both false for a Ritual-done block; floor counting is by role since Gap 97, so a Bonus walk-in needs no exception; break lifting already covers a session's originating block (`PolicyEngine`). Check each at interrogation (Design Review Rule 16), especially planned-hours displays and Gap 68's drafting adopting the calendar.
+
+**To interrogate:**
+1. Naming: "walk-in" or "spontaneous" block; a marker on `FocusBlock` or a subtype; whether `SessionOrigin` is then worked out from the block instead of stored.
+2. Where reflection lives: C's split (miss note on the block, run note on the session) or every note on the block; one value object for "reflect once ended, acknowledge once", also used by `NenContract` (its `Reflection`/`PostContractAcknowledgedAt` mirror `Session`'s).
+3. Whether the miss outcome is stored (frozen — Insights snapshot rule) or worked out from stamps that can't change after the block ends.
+4. S5: one owner for "when the run began/ended" — the session or the block.
+5. Deleting an ended block that has a session or a stored outcome — refuse it, or history loses its anchor.
+6. A walk-in that ends early; a walk-in outside any contract; what Gap 68's drafting does with walk-ins inside a drafted period; keep-blocking during breaks for a Bonus walk-in (Gap 67).
+7. Migration: existing spontaneous sessions get blocks; existing missed sessions become block outcomes (the dev DB may be dropped).
+8. Order against Gap 107, which owns the overlays these records feed.
+9. Hatsu previews the placement verdict while the duration is chosen (warn, or cap the wheel) by asking `GetBlockPlacementVerdictQuery` like the Planner's drag preview — today a 2-hour run at 14:00 against a 15:00 block is only refused at Start (`StartSessionCommandHandler`, `CheckFree`). The walk-in is a plain `FocusBlock` with a marker, not a subtype (a subtype adds a type for no behaviour — Design Review Rule 5 — and brings back Gap 79's "every rule needs an exception").
+
+**Built all at once (architect's call, 2026-10-08), in phases (proposed, to confirm at interrogation)** — each phase verified before the next:
+1. **Domain:** walk-in `FocusBlock` factory and marker; the miss as the block's outcome; `Session` loses `Missed`.
+2. **Use cases:** Hatsu creates the walk-in block through `BlockPlacementChecker.Check`; the sweep stamps blocks (S1–S3 close); post-session reads miss notes from the block.
+3. **Contracts (Gap 67's session half):** a walk-in started while a contract is in effect gets that contract's id and the Bonus role (`ContractMembership`, set at creation like any block created inside a contract — the Domain decides it, never the caller); `GetNenContractCompletedFocusHoursQueryHandler` stops counting spontaneous sessions by date — must ship with phase 2, or a walk-in counts twice.
+4. **Planner (Gap 79):** the tile's "Spontaneous" label — must ship with phase 2 too, since a walk-in is a tile from its first day.
+5. **Hatsu preview (q9)** and Gap 79's read-only detail view (goal, preset, breaks, blocked attempts, reflection) — the only parts that could wait.
+6. Migration, dictionary rewrite, architecture tests, Stryker on the changed Domain files.
+
+**Absorbs:** Gap 79 and Gap 67's session half (their write-ups stay as input); `DOMAIN_DICTIONARY.md`'s "a Spontaneous session creates no Block" and Missed Session section are rewritten when this closes.
+
+**Guard (to settle at interrogation):** candidates — no command handler holds another command handler (red today on the sweep); every `Session` has an originating block; `Session` has no `Missed` status (the compiler, once removed).
 
 \---
 
