@@ -276,8 +276,8 @@ Three related but independent not-yet-built features — universal per-resource 
 |-------|----------|------|
 | Application | `IEnforcementService` | Contract for applying and removing enforcement; accepts `ActivePolicySlice` (Domain Value Object). Called only by `EnforcementSynchronizer` — no exceptions since Gap 101 (guarded by `SideEffectRuleTests`). |
 | Application | `IEnforcementSynchronizer` / `EnforcementSynchronizer` (`Interfaces/`, `Services/`) | `SyncAsync(DateTime at) -> ActivePolicySlice`: computes the slice via `IQueryDispatcher`, removes enforcement if empty else applies it, as one locked step so a stale slice can never overwrite a fresh one. Singleton. Callers: the heartbeat, the session start/end event handlers (Gap 62), `BreakTransitionResponder` (Gap 63), and the app's shutdown (Gap 101: closing leaves blocking as `PolicyEngine` says for that moment; the close waits up to 2 s for the sync, and on failure leaves blocking as it was). |
-| Domain | `IPolicyEngine` / `PolicyEngine` (`Services/`) | Computes `ActivePolicySlice` from raw domain entities; sole owner of all merge logic |
-| Application | `ComputeActivePolicySliceQueryHandler` | Orchestrates data fetching across three repositories; delegates computation to `IPolicyEngine` |
+| Domain | `PolicyEngine` (`Services/`) | Computes `ActivePolicySlice` from raw domain entities; sole owner of all merge logic |
+| Application | `ComputeActivePolicySliceQueryHandler` | Orchestrates data fetching across three repositories; delegates computation to `PolicyEngine` |
 | Infrastructure | `WindowsEnforcementService` | Consumes `ActivePolicySlice` directly; owns hosts file, process kill loop, registry writes, local HTTP API (`localhost:5005`) — `/check` (is this domain blocked) and `/report` (records a web blocked attempt when a session is active). |
 | Infrastructure | `ScheduledEnforcementService` | `BackgroundService` heartbeat (5s), no rules of its own. Each tick, one `now` for everything: sweeps missed blocks, calls `SyncAsync(now)`, passes (last tick, now] to `IBlockMarkerNotifier` (block markers passed → `INotifier`, Gap 84), then, last, `IRitualPrompt.RefreshAsync(now)` (Gap 92) |
 | Extension | `background.js` | Intercepts browser navigation; queries `/check`; calls `/report` on a real blocked navigation |
@@ -309,8 +309,8 @@ Three related but independent not-yet-built features — universal per-resource 
 | Layer | Artifact | Role |
 |-------|----------|------|
 | Domain | `ActivePolicySlice` (`ValueObjects/ActivePolicySlice.cs`) | Immutable Domain Value Object; the canonical enforcement contract. Carries `BlockedApps`, `BlockedSites`, `AllowedSites`, `WebsiteFilterTypeMode`, `ActiveSessionId`, `SliceStart`/`SliceEnd`, `IsEmpty` — blocking only, no Ritual fields (Gap 62). |
-| Domain | `IPolicyEngine` / `PolicyEngine` (`Services/`) | Stateless domain service; accepts raw `BlockPreset`, `Session`, and `PlannedBlock` collections and produces `ActivePolicySlice`. Owns all merge rules — no merge logic exists anywhere else. |
-| Application | `ComputeActivePolicySliceQueryHandler` (`Queries/ComputeActivePolicySlice/`) | Pure orchestrator: fetches entities from three repositories, loads `BlockPreset` aggregates, delegates to `IPolicyEngine.ComputeSlice()`. Returns the `ActivePolicySlice` to callers. |
+| Domain | `PolicyEngine` (`Services/`) | Stateless domain service; accepts raw `BlockPreset`, `Session`, and `PlannedBlock` collections and produces `ActivePolicySlice`. Owns all merge rules — no merge logic exists anywhere else. |
+| Application | `ComputeActivePolicySliceQueryHandler` (`Queries/ComputeActivePolicySlice/`) | Pure orchestrator: fetches entities from three repositories, loads `BlockPreset` aggregates, delegates to `PolicyEngine.ComputeSlice()`. Returns the `ActivePolicySlice` to callers. |
 | Application | `EnforcementSynchronizer` | The only consumer that turns a slice into an apply/remove call |
 | Infrastructure | `WindowsEnforcementService` | Consumes `ActivePolicySlice` directly (no DTO) to drive OS-level mechanisms |
 
@@ -322,11 +322,11 @@ Three related but independent not-yet-built features — universal per-resource 
 
 **Why it is a Domain Service (not an Application service):** Policy merge logic — the rules for unioning blocked apps, resolving allowlist/blocklist precedence, and deciding what a break lifts — is domain logic. It expresses invariants of the domain ("an allowlist preset beats a blocklist preset", "a session whose contract keeps blocking during breaks stays blocked through them") that must be consistent wherever policy is computed. Placing this logic in a Domain service makes it unit-testable without a database and reachable by any future consumer (e.g., a Planner "preview" query).
 
-**Interface contract:**
+**Contract** (a sealed class, no interface — Gap 111):
 ```csharp
-// NenFocus.Domain/Services/IPolicyEngine.cs
-ActivePolicySlice ComputeSlice(
-    DateTime at,
+// NenFocus.Domain/Services/PolicyEngine.cs
+public ActivePolicySlice ComputeSlice(
+    Moment at,
     IEnumerable<BlockPreset> presets,
     Session? running,             // at most one runs (Gap 92)
     IEnumerable<PlannedBlock> blocks);
@@ -336,10 +336,9 @@ ActivePolicySlice ComputeSlice(
 
 | Layer | Artifact | Role |
 |-------|----------|------|
-| Domain | `IPolicyEngine` (`Services/IPolicyEngine.cs`) | Interface; the contract Application code depends on |
-| Domain | `PolicyEngine` (`Services/PolicyEngine.cs`) | Sealed implementation; all merge rules live here. Filters `blocks` through `PlannedBlock.IsActive(at)` (`EffectiveEnd`-based) — the caller's fetch may be loose/buffered; `PolicyEngine` is the precise final word on "is this block active right now" (Gap 21). Derives `activePresets` from the active blocks'/sessions' own `BlockPresetId`s rather than trusting the caller's preset list (Gap 60). Resolves what a break lifts by asking each session `LiftsBlockingAt(at)` — the session already carries its contract's keep-blocking rule, so `PolicyEngine` takes no contracts (Gap 64). Only the specific session on break and its originating block lose their preset's contribution; a co-occurring Background Block is untouched. |
+| Domain | `PolicyEngine` (`Services/PolicyEngine.cs`) | Sealed class, no interface (Gap 111); all merge rules live here. Filters `blocks` through `PlannedBlock.IsActive(at)` (`EffectiveEnd`-based) — the caller's fetch may be loose/buffered; `PolicyEngine` is the precise final word on "is this block active right now" (Gap 21). Derives `activePresets` from the active blocks'/sessions' own `BlockPresetId`s rather than trusting the caller's preset list (Gap 60). Resolves what a break lifts by asking each session `LiftsBlockingAt(at)` — the session already carries its contract's keep-blocking rule, so `PolicyEngine` takes no contracts (Gap 64). Only the specific session on break and its originating block lose their preset's contribution; a co-occurring Background Block is untouched. |
 | Application | `ComputeActivePolicySliceQueryHandler` | Only caller; fetches entities, then delegates to `_policyEngine.ComputeSlice()` |
-| Application | `DependencyInjection.cs` | Registers `PolicyEngine` as `IPolicyEngine` (`AddScoped`, in `NenFocus.Application`'s `DependencyInjection.cs` — stateless, so singleton would also be safe) |
+| Application | `DependencyInjection.cs` | Registers `PolicyEngine` as itself (`AddScoped`, in `NenFocus.Application`'s `DependencyInjection.cs` — stateless, so singleton would also be safe), like every Domain service |
 
 ---
 

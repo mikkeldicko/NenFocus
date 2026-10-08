@@ -22,7 +22,7 @@ public class UpdatePlannedBlockValidatorTests
     // The real permission answer (Gap 93) — a Domain service with no I/O. Its rules are tested on
     // NenContract, PlannedBlock and BlockChangeChecker; here only that the validator asks it,
     // hands it the right things, and passes its refusal on.
-    private readonly IBlockChangeChecker _changes = new BlockChangeChecker();
+    private readonly BlockChangeChecker _changes = new BlockChangeChecker();
     // Placement (past, contract hours, free for Focus) is GetBlockPlacementVerdictQuery's answer
     // since Gap 88 phase 8 — tested in GetBlockPlacementVerdictQueryHandlerTests. Allowed by default here.
     private readonly IQueryHandler<GetBlockPlacementVerdictQuery, BlockPlacementVerdictDto> _placement =

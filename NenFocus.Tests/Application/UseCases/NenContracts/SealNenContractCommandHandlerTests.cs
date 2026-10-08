@@ -30,7 +30,7 @@ public class SealNenContractCommandHandlerTests
         _blocks.GetForRangeAsync(Arg.Any<TimeSlot>(), Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[]);
     }
 
-    // Real IContractBlockBatchPreparer — pure domain logic (construction, in-batch overlap check,
+    // Real ContractBlockBatchPreparer — pure domain logic (construction, in-batch overlap check,
     // planned hours per day), so each test's planned hours are simply its blocks.
     private SealNenContractCommandHandler CreateHandler() =>
         new(_contracts, _blocks, new ContractBlockBatchPreparer(), _sessions, new BlockPlacementChecker(), _clock);

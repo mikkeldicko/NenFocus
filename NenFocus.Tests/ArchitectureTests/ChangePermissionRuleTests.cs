@@ -5,7 +5,7 @@ namespace NenFocus.Tests.ArchitectureTests;
 /// <summary>
 /// Only the Domain decides whether a block may be changed or deleted (Gap 93). A contract's
 /// strictness means one thing — how far a block may move — and that is answered in one place,
-/// <c>ContractRules.MovementRange</c>; everything else asks <c>IBlockChangeChecker</c> or reads the
+/// <c>ContractRules.MovementRange</c>; everything else asks <c>BlockChangeChecker</c> or reads the
 /// block DTO's <c>Allowances</c>. So outside the Domain nothing *compares* a strictness value
 /// (<c>== StrictnessRule.Locked</c>, a <c>switch</c> arm, <c>is StrictnessRule.X</c>): that
 /// comparison is how the move, split and floor rules came to be written in three validators and

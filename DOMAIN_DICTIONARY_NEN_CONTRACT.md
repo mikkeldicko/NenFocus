@@ -43,7 +43,7 @@ Current-state reference for the Nen Contract aggregate: its rules, the Redemptio
 
 **Strictness Rule** — answered only by `ContractRules.MovementRange`: how far a **bound** block may move — `Locked` nowhere, `DailyFlexibility` its own day, `PeriodTimeBudget` anywhere in the contract. Immutable after Seal (tightening mid-contract parked for v2). Nothing outside the Domain compares strictness values (`ChangePermissionRuleTests`).
 
-**What may happen to a member block** — one answer, `IBlockChangeChecker` (Gap 93):
+**What may happen to a member block** — one answer, `BlockChangeChecker` (Gap 93):
 - A started block is locked; a running block can't be deleted; a finished contract's blocks are history.
 - While in effect, the contract **binds** its Committed and Redemption blocks, and its Bonus blocks only when the rules say so.
 - A bound block moves within its `MovementRange`, keeps its preset, can be split (not under `Locked`), is never deleted.
@@ -119,8 +119,8 @@ Current-state reference for the Nen Contract aggregate: its rules, the Redemptio
 | Domain | `PlannedBlock.IsFinal(asOf)` (virtual) | "Has this block's story concluded": a Background block once `HasEnded`; a Focus block once its session ended or it was missed — a running session is not final. Asked by completion readiness, `FateWhenBroken` and `OwnDeficit`. Replaced `PlannedBlockResolutionExtensions.IsResolved` (deleted, Gap 95). |
 | Domain | `FocusBlock` answers (`Entities/`) | `GracePeriodMinutes`, `IsLateAt`, `StartedLate`, `EndedEarly`, `Outcome`, `WorkSlot`, `CreditedSlot`, `IsFinal`, internal `OwnDeficit` — outcome and credit from the block's own stamps; `MarkSessionEnded` refuses an end without, or before, the Ritual. Replaced `FocusBlockOutcomeClassifier` (deleted, Gap 95). |
 | Domain | `UserTimeZone.HoursPerDay(slots)` | Hours of the given slots per local day; a slot crossing midnight splits, a DST night counts real hours. Callers choose which slots count. Shared by the wizard preview, Seal, the change checker and the day ledger (replaced `PlannedFocusHoursCalculator`, Gap 92 S4). |
-| Domain | `IContractBlockBatchPreparer` (`Services/`) → `ContractBlockBatchPreparation` (`ValueObjects/`) | Seal/Edit: builds the batch's blocks (Committed), rejects Focus overlaps within the batch, sums planned hours per day. |
-| Domain | `IBlockPlacementChecker`, `IBlockChangeChecker` (`Services/`) | See `DOMAIN_DICTIONARY.md` Quick Reference (Gaps 88, 93). |
+| Domain | `ContractBlockBatchPreparer` (`Services/`) → `ContractBlockBatchPreparation` (`ValueObjects/`) | Seal/Edit: builds the batch's blocks (Committed), rejects Focus overlaps within the batch, sums planned hours per day. |
+| Domain | `BlockPlacementChecker`, `BlockChangeChecker` (`Services/`) | See `DOMAIN_DICTIONARY.md` Quick Reference (Gaps 88, 93). |
 | Application | `SealNenContract`, `EditNenContract`, `DeleteNenContract`, `BreakNenContract`, `CompleteNenContract`, `SweepNenContractLifecycle` (`UseCases/NenContracts/`) | Seal/Edit create the contract and its blocks in one commit, each block asked `BlockPlacementChecker.Check`; Edit reseals under the same id (Scheduled only). Delete (Scheduled only) removes drafted blocks and releases Bonus ones. Sweep activates/completes due contracts. |
 | Application | `CreateContractPreset` / `UpdateContractPreset` / `DeleteContractPreset`, `GetAllContractPresetsQuery` | Name uniqueness in the handler; Delete refused while an in-effect contract uses the preset (`HasContractsInEffectForPresetAsync`). |
 | Application | `INenContractRepository` | `GetByIdAsync`, `AddAsync`, `UpdateAsync`, `SaveAsync`, `DeleteAsync`, `GetAllAsync`, `GetAllInEffectAsync`, `HasContractsInEffectForPresetAsync`, `GetUnacknowledgedPostContractsAsync`. |

@@ -14,14 +14,14 @@ public sealed class GetPlannedBlocksForDayQueryHandler
     private readonly IBlockPresetRepository _presets;
     private readonly INenContractRepository _contracts;
     private readonly ISystemClock _clock;
-    private readonly IBlockChangeChecker _changes;
+    private readonly BlockChangeChecker _changes;
 
     public GetPlannedBlocksForDayQueryHandler(
         IPlannedBlockRepository blocks,
         IBlockPresetRepository presets,
         INenContractRepository contracts,
         ISystemClock clock,
-        IBlockChangeChecker changes)
+        BlockChangeChecker changes)
     {
         _blocks = blocks;
         _presets = presets;

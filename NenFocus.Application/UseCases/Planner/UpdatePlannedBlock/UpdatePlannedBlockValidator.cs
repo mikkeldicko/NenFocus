@@ -19,7 +19,7 @@ public sealed class UpdatePlannedBlockValidator : AbstractValidator<UpdatePlanne
         IBlockPresetRepository presets,
         INenContractRepository contracts,
         ISystemClock clock,
-        IBlockChangeChecker changes,
+        BlockChangeChecker changes,
         IQueryHandler<GetBlockPlacementVerdictQuery, BlockPlacementVerdictDto> placement)
     {
         _blocks = blocks;

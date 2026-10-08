@@ -11,14 +11,14 @@ public sealed class GetBlockPlacementVerdictQueryHandler
     private readonly IPlannedBlockRepository _blocks;
     private readonly ISessionRepository _sessions;
     private readonly INenContractRepository _contracts;
-    private readonly IBlockPlacementChecker _checker;
+    private readonly BlockPlacementChecker _checker;
     private readonly ISystemClock _clock;
 
     public GetBlockPlacementVerdictQueryHandler(
         IPlannedBlockRepository blocks,
         ISessionRepository sessions,
         INenContractRepository contracts,
-        IBlockPlacementChecker checker,
+        BlockPlacementChecker checker,
         ISystemClock clock)
     {
         _blocks = blocks;

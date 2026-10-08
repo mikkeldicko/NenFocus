@@ -17,7 +17,7 @@ For historical record of closed design gaps, see `DESIGN\\\_GAP\\\_HISTORY.md`.
 
 **Principle:** Bridge the Design Gap before writing any new features.
 
-Before implementing anything, ask as many questions as necessary to reach a shared design concept and understand the full dependency tree. Do not write implementation code until the design is agreed upon. This means: interface first, implementation second.
+Before implementing anything, ask as many questions as necessary to reach a shared design concept and understand the full dependency tree. Do not write implementation code until the design is agreed upon. This means: contract first, implementation second.
 
 ### 2\. Ubiquitous Language (DDD)
 
@@ -122,9 +122,9 @@ Before writing any implementation code, Claude MUST ask at least 5–10 clarifyi
 
 This interrogation happens in conversation. Code is not typed until every answer is agreed upon.
 
-### Step 2 — Interface First
+### Step 2 — Contract First
 
-The first code artifact for any new feature is **always** the interface, placed in `NenFocus.Application/Interfaces/`. No handler, service, or ViewModel code is written until the interface is:
+The first code artifact for any new feature is **always** its contract: an interface in `NenFocus.Application/Interfaces/` for a port, or a Domain service's `sealed class` signatures (bodies not yet written) in `NenFocus.Domain/Services/` — see `MODULE_STANDARDS.md` → Contract-First Rule (Gap 111). No handler, service, or ViewModel code is written until the contract is:
 
 * Reviewed and approved by the architect
 * Consistent with the Deep Module test (understandable in under 30 seconds)
@@ -132,7 +132,7 @@ The first code artifact for any new feature is **always** the interface, placed 
 
 ### Step 3 — Thin Vertical Slice
 
-Once the interface is approved, implement the thinnest possible vertical slice:
+Once the contract is approved, implement the thinnest possible vertical slice:
 
 * Domain entity changes (if any)
 * One command or query handler
@@ -201,7 +201,7 @@ Grouped into six boxes, worked top to bottom (agreed 2026-09-28; architecture bo
 3. **Gap 76 (K) — Enforcement Has No Life Independent of the GUI Process** (Windows Service split; first step since 2026-09-29: close to tray and refuse Quit while enforcing — "always active like other blockers") — interrogated 2026-09-07; not yet built.
 4. **Gap 77 (O) — Cross-Platform Suite: iOS App, Multi-Device Sync, "Hardcore iOS Lockdown"** — raised 2026-09-27; not interrogated.
 
-Next free number: **111** (109 and 110 raised 2026-10-07; 107 and 108 raised 2026-10-01; 105 and 106 raised 2026-09-30; 84–87 used 2026-09-28 by fixes built directly; 88–89 raised as open gaps the same day; 90–93, 95, 97, 98, 99, 100, 101, 102 and 103 raised 2026-09-29; 94, 96 and 104 fixes built directly the same day; 91 dropped the same day — the one-source questions are investigated one by one as their own gaps instead; 90 and 99 folded into 88 the same day — their write-ups live under Gap 88 in `DESIGN_GAP_HISTORY.md` since it closed 2026-10-01, so older references to them still resolve).
+Next free number: **112** (111 built directly 2026-10-08; 109 and 110 raised 2026-10-07; 107 and 108 raised 2026-10-01; 105 and 106 raised 2026-09-30; 84–87 used 2026-09-28 by fixes built directly; 88–89 raised as open gaps the same day; 90–93, 95, 97, 98, 99, 100, 101, 102 and 103 raised 2026-09-29; 94, 96 and 104 fixes built directly the same day; 91 dropped the same day — the one-source questions are investigated one by one as their own gaps instead; 90 and 99 folded into 88 the same day — their write-ups live under Gap 88 in `DESIGN_GAP_HISTORY.md` since it closed 2026-10-01, so older references to them still resolve).
 
 \---
 

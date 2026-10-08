@@ -24,7 +24,7 @@ public class SplitPlannedBlockValidatorTests
     // The real permission answer (Gap 93) — a Domain service with no I/O; its rules are tested on
     // NenContract, PlannedBlock and BlockChangeChecker. Here: that the validator asks it with the
     // contract's blocks as they stand, and passes its refusal on.
-    private readonly IBlockChangeChecker _changes = new BlockChangeChecker();
+    private readonly BlockChangeChecker _changes = new BlockChangeChecker();
 
     public SplitPlannedBlockValidatorTests()
     {

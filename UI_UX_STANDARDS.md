@@ -121,7 +121,7 @@ ViewModels expose raw values and Views format them with converters — the rule 
 **Ghost overlay:** A `Border` added directly to the Canvas (`#B8922A`, 90% opacity, `IsHitTestVisible = false`). Shows a live time label (`HH:mm – HH:mm`) that snaps to 15-minute increments. The create ghost (`#B8922A`, 70% opacity) persists after drag release until the form closes or a rebuild fires.
 
 **Lock rules:**
-- `IsTileFullyLocked` — the block's `Allowances` say it can't be rescheduled (`PlannedBlockDto.Allowances.CanReschedule`, from `IBlockChangeChecker` — it has started, or its contract binds it and allows no movement; Gap 93): no move, no resize of either edge. Draft tiles are never locked. A started block runs to its end — it ends early only through End Early or by breaking its contract (Gap 88 phase 0; replaced the old "bottom-resize allowed once started, GCal behaviour").
+- `IsTileFullyLocked` — the block's `Allowances` say it can't be rescheduled (`PlannedBlockDto.Allowances.CanReschedule`, from `BlockChangeChecker` — it has started, or its contract binds it and allows no movement; Gap 93): no move, no resize of either edge. Draft tiles are never locked. A started block runs to its end — it ends early only through End Early or by breaking its contract (Gap 88 phase 0; replaced the old "bottom-resize allowed once started, GCal behaviour").
 
 **Drag error banner:** Red `DragError` banner at row 1 of the planner grid, bound to `PlannerPageViewModel.DragError`. Surfaces overlap rejections and lock violations.
 
@@ -140,7 +140,7 @@ ViewModels expose raw values and Views format them with converters — the rule 
 
 **Form locking:** the form reads the edited block's `Allowances` (`EditingAllowances`; null for a new block or a draft tile, which nothing restricts). `CanRescheduleBlock` enables the date and time fields, `CanChangePreset` the preset picker; Save shows when either is true, Split and Delete from `CanSplit` and `CanDelete`. The ViewModel works out no lock itself and never reads the in-memory session for one (Gap 93).
 
-**Deletion:** Delete shows in the form (`CanDeleteFromForm`) and in the snapshot (`CanDeleteSnapshotBlock`) when the block's `Allowances.CanDelete` says so — a block in no contract that isn't running, or a future Bonus block its contract doesn't bind. The rule is the Domain's (`IBlockChangeChecker`, Gap 93); the validator refuses from the same answer.
+**Deletion:** Delete shows in the form (`CanDeleteFromForm`) and in the snapshot (`CanDeleteSnapshotBlock`) when the block's `Allowances.CanDelete` says so — a block in no contract that isn't running, or a future Bonus block its contract doesn't bind. The rule is the Domain's (`BlockChangeChecker`, Gap 93); the validator refuses from the same answer.
 
 **Split dialog:** each piece has a start and an end time. A date field per piece shows only when `Allowances.SplitPiecesMayChangeDay` is set (a bound block under Period Study); otherwise both pieces stay on the block's own day.
 

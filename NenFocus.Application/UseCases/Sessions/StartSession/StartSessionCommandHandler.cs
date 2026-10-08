@@ -15,7 +15,7 @@ public sealed class StartSessionCommandHandler
     private readonly IBreakTimerPresetRepository _breakTimerPresets;
     private readonly INenContractRepository _contracts;
     private readonly ISystemClock _clock;
-    private readonly IBlockPlacementChecker _placement;
+    private readonly BlockPlacementChecker _placement;
 
     public StartSessionCommandHandler(
         ISessionRepository sessions,
@@ -23,7 +23,7 @@ public sealed class StartSessionCommandHandler
         IBreakTimerPresetRepository breakTimerPresets,
         INenContractRepository contracts,
         ISystemClock clock,
-        IBlockPlacementChecker placement)
+        BlockPlacementChecker placement)
     {
         _sessions = sessions;
         _plannedBlocks = plannedBlocks;

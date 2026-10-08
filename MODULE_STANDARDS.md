@@ -244,13 +244,16 @@ ViewModels must never hold or navigate a Domain entity (`Session`, `BlockPreset`
 
 ---
 
-## Interface-First Rule
+## Contract-First Rule (was Interface-First; changed 2026-10-08, Gap 111)
 
-Every new service must have its interface defined before any implementation is written — in `NenFocus.Application/Interfaces/`, or `NenFocus.Domain/Services/` for a Domain service (as `IPolicyEngine`; corrected 2026-09-29, the text had drifted from where every Domain service interface actually lives). The interface is the design artifact; the implementation is the detail.
+Every new service has its public contract written and reviewed before any implementation. The contract is the design artifact; the implementation is the detail. What the contract *is* depends on what kind of service it is:
 
-**Checklist before creating a new interface:**
-- [ ] Can the interface be understood without reading any implementation?
-- [ ] Does it have 5 or fewer public members? (If more, consider splitting.) `InterfaceSizeRuleTests` holds new interfaces to 5; an existing larger one is listed with its count and may not grow — adding a member means editing that count, a visible decision (added 2026-09-29, Gap 98). Repositories count too: an extra query method is usually a business rule moving into SQL.
+- **A port** — something the outside world supplies (a repository, enforcement, the clock, the notifier, a session state the UI observes): an **interface** in `NenFocus.Application/Interfaces/`. The interface is what lets Infrastructure plug in and a test fake it.
+- **A Domain service** — the business rule itself (`PolicyEngine`, `BlockPlacementChecker`): a **`sealed class`** in `NenFocus.Domain/Services/` whose public methods are its contract. Write the signatures first, bodies throwing `NotImplementedException`, and get them reviewed. **No interface:** nothing swaps the rule, and tests use the real one — faking a rule only tests the fake. If one ever needs something from outside, that something goes behind a port; the service stays concrete. Guarded by `DomainRuleTests.DomainDeclaresNoInterfaces`.
+
+**Checklist before creating a new contract (interface or Domain service):**
+- [ ] Can the contract be understood without reading any implementation?
+- [ ] Does it have 5 or fewer public members? (If more, consider splitting.) `InterfaceSizeRuleTests` holds new interfaces to 5; an existing larger one is listed with its count and may not grow — adding a member means editing that count, a visible decision (added 2026-09-29, Gap 98). Repositories count too: an extra query method is usually a business rule moving into SQL. Domain services are held to the same 5 public members (`DomainServicesStaySmall`, Gap 111).
 - [ ] Does it avoid leaking infrastructure types in its signature?
 - [ ] Is it named for *what it does*, not *how it does it*? (`IActiveSessionMonitor`, not `ITimerWrapper`)
 
@@ -309,7 +312,7 @@ These converters are approved. Reuse before creating new ones. **This list must 
 | DTO | `<Noun>Dto` — a read model the Application hands out; every `…Dto` lives in `Application/DTOs/`. That folder is the home for any data shape shared across the Application boundary, so it also holds a few non-DTOs named for what they are (command input `NenContractBlockSpec`). A UI-only item is not a DTO and doesn't take the suffix. **One builder per DTO** (added 2026-09-29): "what the UI sees of this entity" is a rule, so each DTO is built in one production file; a DTO needed by several use cases gets a named factory on itself (like `PostSessionDto.From(…)`) that they call — guarded by `DtoBuilderRuleTests` | `SessionDto`, `PostSessionDto` |
 | Domain event | `<Noun><PastTense>Event` | `SessionStartedEvent`, `SessionEndedEvent` |
 | Value object | Noun only | `SessionGoal`, `BreakTimer` |
-| Domain service | Agent noun — names the role it plays (`-Engine`, `-Classifier`, `-Calculator`, `-Checker`, …); never `-Service`, which is reserved for Infrastructure and the Application↔UI bridges. Interface `I<Name>` in `Domain/Services/` | `PolicyEngine`, `BlockPlacementChecker`, `BlockChangeChecker` |
+| Domain service | Agent noun — names the role it plays (`-Engine`, `-Classifier`, `-Calculator`, `-Checker`, …); never `-Service`, which is reserved for Infrastructure and the Application↔UI bridges. A `sealed class` in `Domain/Services/`, no interface (Gap 111) | `PolicyEngine`, `BlockPlacementChecker`, `BlockChangeChecker` |
 | ViewModel | `<Page>ViewModel` | `MainPageViewModel`, `HatsuPageViewModel` |
 | Converter | `<Input>To<Output>Converter` for a mapping; `<What>EqualConverter` / `<Subject>Has<X>Converter` for a yes/no test (added 2026-09-29, Gap 98 — the catalogue already listed `IntEqualConverter`). Every converter is listed in the Converter Catalogue above — a test fails otherwise | `TimeSpanToStringConverter`, `StringEqualConverter` |
 

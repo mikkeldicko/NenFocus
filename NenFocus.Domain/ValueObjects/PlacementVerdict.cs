@@ -3,7 +3,7 @@ using NenFocus.Domain.Enums;
 namespace NenFocus.Domain.ValueObjects;
 
 /// <summary>
-/// What <see cref="Services.IBlockPlacementChecker"/> answers: allowed, or the first reason not,
+/// What <see cref="Services.BlockPlacementChecker"/> answers: allowed, or the first reason not,
 /// with the time in the way when that reason is <see cref="PlacementOutcome.TimeTaken"/> (Gap 88).
 /// </summary>
 public sealed record PlacementVerdict

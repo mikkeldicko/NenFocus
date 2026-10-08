@@ -10,14 +10,14 @@ public sealed class CreatePlannedBlockCommandHandler : ICommandHandler<CreatePla
     private readonly IPlannedBlockRepository _blocks;
     private readonly IBlockPresetRepository _presets;
     private readonly INenContractRepository _contracts;
-    private readonly IBlockPlacementChecker _placement;
+    private readonly BlockPlacementChecker _placement;
     private readonly ISystemClock _clock;
 
     public CreatePlannedBlockCommandHandler(
         IPlannedBlockRepository blocks,
         IBlockPresetRepository presets,
         INenContractRepository contracts,
-        IBlockPlacementChecker placement,
+        BlockPlacementChecker placement,
         ISystemClock clock)
     {
         _blocks = blocks;

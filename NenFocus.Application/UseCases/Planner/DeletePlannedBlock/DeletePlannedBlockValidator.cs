@@ -11,7 +11,7 @@ public sealed class DeletePlannedBlockValidator : AbstractValidator<DeletePlanne
         IPlannedBlockRepository blocks,
         INenContractRepository contracts,
         ISystemClock clock,
-        IBlockChangeChecker changes)
+        BlockChangeChecker changes)
     {
         RuleFor(x => x.BlockId)
             .NotEmpty().WithMessage("Block ID is required.");

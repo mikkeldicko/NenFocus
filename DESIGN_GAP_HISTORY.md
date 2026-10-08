@@ -2521,3 +2521,17 @@ ComputePlannedFocusHoursQuery(IReadOnlyList<TimeSlot> DraftFocusBlockRanges)   /
 
 **Lessons (settled at close-out):** the review's first pass found the shape problems; reading each item's code found the bigger ones it hid (the monitor's duplicate break rules, an unguarded "one session at a time", a half-built period target that was already done). Each "is there a more DDD option?" moved a rule from a validator or reviewer's memory to the type itself.
 
+
+## Gap 111 — Domain Services Have No Interfaces; Interface First Becomes Contract First *(closed, 2026-10-08; built directly)*
+
+**Raised by** Mikkel before starting Gap 110: four interfaces lived in the Domain (`IPolicyEngine`, `IBlockPlacementChecker`, `IBlockChangeChecker`, `IContractBlockBatchPreparer`) — should they move to Application? No: each sat next to its only implementation, and moving one would have made the Domain depend on Application. The better question was whether they were needed at all. Reading the tests answered it: three were never faked (every test news up the real class), and `IPolicyEngine` was faked in one file whose checks work as well against the real, pure engine. In DDD an interface marks a **port** — something the outside world supplies — and a Domain service is the rule itself; nothing swaps it.
+
+**Changed:** the four interfaces deleted, their doc comments moved onto the sealed classes; DI registers the classes as themselves; `ComputeActivePolicySliceQueryHandlerTests` run against the real `PolicyEngine` and assert on the slice. `MODULE_STANDARDS.md` → Interface-First Rule became the Contract-First Rule: a port is an interface in `Application/Interfaces/`, a Domain service is a sealed class whose reviewed signatures are its contract. `ARCHITECT_GOVERNANCE.md` → Design Gap Protocol Step 2 and the Naming Conventions row follow it.
+
+**Rejected:** moving the interfaces to Application (inverts the dependency); keeping only `IPolicyEngine` for its one fake (a rule "interface when faked" for one test file); dropping the rule outright (its point — design the signature before the body — still holds; only the `interface` keyword stopped fitting).
+
+**Confirmed via** the full suite (1756 passing), including `CompositionRootTests`.
+
+**Guard (step 5):** yes, two tests. `DomainRuleTests.DomainDeclaresNoInterfaces` — probed red by the four interfaces themselves before they were deleted. `InterfaceSizeRuleTests.DomainServicesStaySmall` — removing the interfaces would have silently removed their 5-member cap, since the size test only counted interfaces; it now counts a Domain service's declared public members too, probed red by two extra methods on `BlockChangeChecker` ("has 6").
+
+**Principle demonstrated:** an abstraction earns its place by something that varies behind it. Ask "what would ever swap this?" — if nothing does, the class's public methods already are the contract, and the interface is a second file to keep in step with the first.

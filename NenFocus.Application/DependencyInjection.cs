@@ -17,11 +17,11 @@ public static class DependencyInjection
 
         services.AddValidatorsFromAssembly(assembly);
 
-        services.AddScoped<IPolicyEngine, PolicyEngine>();
-        services.AddScoped<IBlockPlacementChecker, BlockPlacementChecker>();
-        services.AddScoped<IBlockChangeChecker, BlockChangeChecker>();
+        services.AddScoped<PolicyEngine>();
+        services.AddScoped<BlockPlacementChecker>();
+        services.AddScoped<BlockChangeChecker>();
 
-        services.AddScoped<IContractBlockBatchPreparer, ContractBlockBatchPreparer>();
+        services.AddScoped<ContractBlockBatchPreparer>();
 
         // Singleton: its lock must be shared by every caller (the heartbeat and every event
         // handler) to stop a stale sync overwriting a fresh one. Safe as a singleton because

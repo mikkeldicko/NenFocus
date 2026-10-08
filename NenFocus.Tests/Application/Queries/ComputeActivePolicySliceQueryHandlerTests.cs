@@ -10,6 +10,11 @@ using NSubstitute;
 
 namespace NenFocus.Tests.Application.Queries;
 
+/// <summary>
+/// The handler fetches; the real PolicyEngine decides (Gap 111 — a Domain service is never faked).
+/// The merge rules themselves are PolicyEngineTests' job; these check that what the handler
+/// fetches reaches the engine.
+/// </summary>
 public class ComputeActivePolicySliceQueryHandlerTests
 {
     private static readonly DateTime At = new(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
@@ -17,7 +22,6 @@ public class ComputeActivePolicySliceQueryHandlerTests
     private readonly IPlannedBlockRepository _blocks = Substitute.For<IPlannedBlockRepository>();
     private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
     private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
-    private readonly IPolicyEngine _policyEngine = Substitute.For<IPolicyEngine>();
 
     public ComputeActivePolicySliceQueryHandlerTests()
     {
@@ -26,90 +30,86 @@ public class ComputeActivePolicySliceQueryHandlerTests
         _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns((Session?)null);
     }
 
-    private ComputeActivePolicySliceQueryHandler CreateHandler() => new(_blocks, _presets, _sessions, _policyEngine);
+    private ComputeActivePolicySliceQueryHandler CreateHandler() => new(_blocks, _presets, _sessions, new PolicyEngine());
+
+    private BlockPreset PresetBlocking(string site)
+    {
+        var preset = BlockPreset.Create(Guid.NewGuid(), site, WebsiteFilterType.Blocklist, BlockPresetType.Focus, TestAt.Utc(At));
+        preset.AddWebsite(new BlockedSite(site));
+        _presets.GetByIdAsync(preset.Id, Arg.Any<CancellationToken>()).Returns(preset);
+        return preset;
+    }
+
+    private Task<ActivePolicySlice> Compute() =>
+        CreateHandler().HandleAsync(new ComputeActivePolicySliceQuery(TestAt.Utc(At)), CancellationToken.None);
 
     [Fact]
     public async Task HandleAsync_FetchesBlocksForOneSecondWindowAroundAt()
     {
-        await CreateHandler().HandleAsync(new ComputeActivePolicySliceQuery(TestAt.Utc(At)), CancellationToken.None);
+        await Compute();
 
         await _blocks.Received(1).GetForRangeAsync(new TimeSlot(TestAt.Utc(At.AddSeconds(-1)), TestAt.Utc(At.AddSeconds(1))), Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task HandleAsync_ReturnsWhateverThePolicyEngineComputes()
+    public async Task HandleAsync_NothingActive_ReturnsAnEmptySlice()
     {
-        var expectedSlice = new ActivePolicySlice { SliceStart = TestAt.Utc(At), BlockedSites = new HashSet<string> { "youtube.com" } };
-        _policyEngine.ComputeSlice(TestAt.Utc(At), Arg.Any<IEnumerable<BlockPreset>>(), Arg.Any<Session?>(), Arg.Any<IEnumerable<PlannedBlock>>())
-            .Returns(expectedSlice);
+        var result = await Compute();
 
-        var result = await CreateHandler().HandleAsync(new ComputeActivePolicySliceQuery(TestAt.Utc(At)), CancellationToken.None);
-
-        result.Should().BeSameAs(expectedSlice);
+        result.IsEmpty.Should().BeTrue();
     }
 
     [Fact]
-    public async Task HandleAsync_ResolvesDistinctPresetsReferencedByBlocksAndSessions()
+    public async Task HandleAsync_ResolvesPresetsReferencedByBlocksAndSessions_OnceEach()
     {
-        var sharedPresetId = Guid.NewGuid();
-        var sessionOnlyPresetId = Guid.NewGuid();
-        var block = FocusBlock.Create(Guid.NewGuid(), sharedPresetId,TestAt.Slot(At, At.AddHours(1)));
+        var blockPreset = PresetBlocking("youtube.com");
+        var sessionPreset = PresetBlocking("reddit.com");
+        var block = FocusBlock.Create(Guid.NewGuid(), blockPreset.Id, TestAt.Slot(At, At.AddHours(1)));
+        var otherBlock = BackgroundBlock.Create(Guid.NewGuid(), blockPreset.Id, TestAt.Slot(At, At.AddHours(1)));
         var session = Session.Create(
             Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(30)),
-            sessionOnlyPresetId, SessionOrigin.Spontaneous);
+            sessionPreset.Id, SessionOrigin.Spontaneous);
         session.Start(TestAt.Utc(At));
 
         _blocks.GetForRangeAsync(Arg.Any<TimeSlot>(), Arg.Any<CancellationToken>())
-            .Returns((IReadOnlyList<PlannedBlock>)[block]);
+            .Returns((IReadOnlyList<PlannedBlock>)[block, otherBlock]);
         _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns(session);
 
-        var sharedPreset = BlockPreset.Create(sharedPresetId, "Shared", WebsiteFilterType.Blocklist, BlockPresetType.Focus, TestAt.Utc(At));
-        var sessionPreset = BlockPreset.Create(sessionOnlyPresetId, "SessionOnly", WebsiteFilterType.Blocklist, BlockPresetType.Focus, TestAt.Utc(At));
-        _presets.GetByIdAsync(sharedPresetId, Arg.Any<CancellationToken>()).Returns(sharedPreset);
-        _presets.GetByIdAsync(sessionOnlyPresetId, Arg.Any<CancellationToken>()).Returns(sessionPreset);
+        var result = await Compute();
 
-        await CreateHandler().HandleAsync(new ComputeActivePolicySliceQuery(TestAt.Utc(At)), CancellationToken.None);
-
-        _policyEngine.Received(1).ComputeSlice(
-            TestAt.Utc(At),
-            Arg.Is<IEnumerable<BlockPreset>>(p => p.Count() == 2 && p.Contains(sharedPreset) && p.Contains(sessionPreset)),
-            session,
-            Arg.Is<IEnumerable<PlannedBlock>>(b => b.Contains(block)));
+        result.BlockedSites.Should().BeEquivalentTo(["youtube.com", "reddit.com"]);
+        result.ActiveSessionId.Should().Be(session.Id);
+        await _presets.Received(1).GetByIdAsync(blockPreset.Id, Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task HandleAsync_CancelledBlock_PassedThroughForPolicyEngineToRuleOut()
+    public async Task HandleAsync_CancelledBlock_BlocksNothing()
     {
-        // The handler no longer filters cancelled blocks: a cancelled block's own IsActive
-        // says no (PlannedBlock.EffectiveEnd), and PolicyEngine asks it — see
-        // PolicyEngineTests.ComputeSlice_CancelledBlockHandedIn_BlocksNothing.
-        var cancelledBlock = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),TestAt.Slot(At, At.AddHours(1)));
+        // The handler doesn't filter cancelled blocks: a cancelled block's own IsActive says no
+        // (PlannedBlock.EffectiveEnd), and PolicyEngine asks it.
+        var preset = PresetBlocking("youtube.com");
+        var cancelledBlock = FocusBlock.Create(Guid.NewGuid(), preset.Id, TestAt.Slot(At, At.AddHours(1)));
         cancelledBlock.MarkCancelled(TestAt.Utc(At));
 
         _blocks.GetForRangeAsync(Arg.Any<TimeSlot>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[cancelledBlock]);
 
-        await CreateHandler().HandleAsync(new ComputeActivePolicySliceQuery(TestAt.Utc(At)), CancellationToken.None);
+        var result = await Compute();
 
-        _policyEngine.Received(1).ComputeSlice(
-            TestAt.Utc(At),
-            Arg.Any<IEnumerable<BlockPreset>>(),
-            Arg.Any<Session?>(),
-            Arg.Is<IEnumerable<PlannedBlock>>(b => b.Single() == cancelledBlock));
+        result.IsEmpty.Should().BeTrue();
     }
 
     [Fact]
     public async Task HandleAsync_UnresolvablePreset_IsOmittedNotThrown()
     {
         var presetId = Guid.NewGuid();
-        var block = FocusBlock.Create(Guid.NewGuid(), presetId,TestAt.Slot(At, At.AddHours(1)));
+        var block = FocusBlock.Create(Guid.NewGuid(), presetId, TestAt.Slot(At, At.AddHours(1)));
         _blocks.GetForRangeAsync(Arg.Any<TimeSlot>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<PlannedBlock>)[block]);
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>()).Returns((BlockPreset?)null);
 
-        await CreateHandler().HandleAsync(new ComputeActivePolicySliceQuery(TestAt.Utc(At)), CancellationToken.None);
+        var result = await Compute();
 
-        _policyEngine.Received(1).ComputeSlice(
-            TestAt.Utc(At), Arg.Is<IEnumerable<BlockPreset>>(p => !p.Any()), Arg.Any<Session?>(), Arg.Any<IEnumerable<PlannedBlock>>());
+        result.IsEmpty.Should().BeTrue();
     }
 }

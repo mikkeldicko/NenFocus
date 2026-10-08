@@ -11,13 +11,13 @@ public sealed class ComputeActivePolicySliceQueryHandler
     private readonly IPlannedBlockRepository _blocks;
     private readonly IBlockPresetRepository _presets;
     private readonly ISessionRepository _sessions;
-    private readonly IPolicyEngine _policyEngine;
+    private readonly PolicyEngine _policyEngine;
 
     public ComputeActivePolicySliceQueryHandler(
         IPlannedBlockRepository blocks,
         IBlockPresetRepository presets,
         ISessionRepository sessions,
-        IPolicyEngine policyEngine)
+        PolicyEngine policyEngine)
     {
         _blocks = blocks;
         _presets = presets;

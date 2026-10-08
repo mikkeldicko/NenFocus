@@ -51,4 +51,27 @@ public class InterfaceSizeRuleTests
 
         KnownExceptions.Check(violations, KnownLargeInterfaces);
     }
+
+    /// <summary>
+    /// A Domain service has no interface (Gap 111) — its public methods are its contract, so the
+    /// same cap applies to them. Without this, removing the interfaces would have removed the cap.
+    /// </summary>
+    [Fact]
+    public void DomainServicesStaySmall()
+    {
+        var violations = typeof(PolicyEngine).Assembly.GetTypes()
+            .Where(t => t.Namespace == typeof(PolicyEngine).Namespace && t.IsClass && t.IsPublic)
+            .Select(t => (Name: t.Name, Count: DeclaredPublicMembers(t)))
+            .Where(x => x.Count > MaxMembers)
+            .Select(x => $"{x.Name} has {x.Count}");
+
+        KnownExceptions.Check(violations, []);
+    }
+
+    // A class also inherits ToString/Equals/…; only what it declares itself is its contract.
+    private static int DeclaredPublicMembers(Type t)
+    {
+        const BindingFlags declared = BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
+        return t.GetMethods(declared).Count(m => !m.IsSpecialName) + t.GetProperties(declared).Length + t.GetEvents(declared).Length;
+    }
 }

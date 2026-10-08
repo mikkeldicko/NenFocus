@@ -21,6 +21,21 @@ public class DomainRuleTests
         KnownExceptions.Check(violations, []);
     }
 
+    /// <summary>
+    /// MODULE_STANDARDS → Contract First (Gap 111): an interface marks a port — something the outside
+    /// world supplies, declared in Application. A Domain service is the rule itself, a sealed class
+    /// whose public methods are its contract; nothing swaps it, so it gets no interface.
+    /// </summary>
+    [Fact]
+    public void DomainDeclaresNoInterfaces()
+    {
+        var violations = typeof(PolicyEngine).Assembly.GetTypes()
+            .Where(t => t.IsInterface && t.Namespace?.StartsWith("NenFocus", StringComparison.Ordinal) == true)
+            .Select(t => t.FullName!);
+
+        KnownExceptions.Check(violations, []);
+    }
+
     private static bool IsAwaitable(Type type) =>
         typeof(Task).IsAssignableFrom(type)
         || type == typeof(ValueTask)

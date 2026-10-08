@@ -11,17 +11,17 @@ public sealed class SealNenContractCommandHandler : ICommandHandler<SealNenContr
 {
     private readonly INenContractRepository _contracts;
     private readonly IPlannedBlockRepository _blocks;
-    private readonly IContractBlockBatchPreparer _batchPreparer;
+    private readonly ContractBlockBatchPreparer _batchPreparer;
     private readonly ISessionRepository _sessions;
-    private readonly IBlockPlacementChecker _placement;
+    private readonly BlockPlacementChecker _placement;
     private readonly ISystemClock _clock;
 
     public SealNenContractCommandHandler(
         INenContractRepository contracts,
         IPlannedBlockRepository blocks,
-        IContractBlockBatchPreparer batchPreparer,
+        ContractBlockBatchPreparer batchPreparer,
         ISessionRepository sessions,
-        IBlockPlacementChecker placement,
+        BlockPlacementChecker placement,
         ISystemClock clock)
     {
         _contracts = contracts;

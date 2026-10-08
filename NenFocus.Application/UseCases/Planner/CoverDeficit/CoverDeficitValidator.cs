@@ -17,7 +17,7 @@ public sealed class CoverDeficitValidator : AbstractValidator<CoverDeficitComman
         INenContractRepository contracts,
         IPlannedBlockRepository blocks,
         ISessionRepository sessions,
-        IBlockPlacementChecker placement,
+        BlockPlacementChecker placement,
         ISystemClock clock)
     {
         RuleFor(x => x)

@@ -15,8 +15,8 @@ public sealed class SplitPlannedBlockValidator : AbstractValidator<SplitPlannedB
         ISessionRepository sessions,
         INenContractRepository contracts,
         ISystemClock clock,
-        IBlockChangeChecker changes,
-        IBlockPlacementChecker placement)
+        BlockChangeChecker changes,
+        BlockPlacementChecker placement)
     {
         RuleFor(x => x.OriginalBlockId)
             .NotEmpty().WithMessage("Original block ID is required.");
