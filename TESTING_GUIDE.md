@@ -33,7 +33,8 @@ NenFocus.Tests/
 │   ├── ValueObjects/          ← WorkHoursTests.cs, DailyFloorTests.cs, BreakScheduleTests.cs, etc.
 │   └── Services/              ← ContractBlockBatchPreparerTests.cs, BlockPlacementCheckerTests.cs
 ├── Application/
-│   ├── UseCases/{BlockPresets,ContractPresets,NenContracts,Planner,Sessions}/  ← one *CommandHandlerTests.cs + *ValidatorTests.cs pair per vertical slice
+│   ├── UseCaseTestBase.cs      ← runs a command the way the app does, on real SQLite (Gap 110)
+│   ├── UseCases/{BlockPresets,ContractPresets,NenContracts,Planner,Sessions}/  ← one test file per use case, validator cases included
 │   ├── Queries/                ← one *QueryHandlerTests.cs per query
 │   └── EventHandlers/          ← SessionStartedEventHandlerTests.cs, NenContractActivatedEventHandlerTests.cs, etc.
 ├── Infrastructure/
@@ -50,8 +51,9 @@ NenFocus.Tests/
 
 **Rules:**
 - `Domain/` tests never use mocks. Domain is pure logic.
-- `Application/` tests mock all interfaces (`ISessionRepository`, `IActiveSessionState`, etc.) with NSubstitute.
-- `Infrastructure/` tests **are built** — they run against a real SQLite database (via `SqliteRepositoryTestBase`'s in-memory connection, not a fake in-memory EF provider), not mocks. This is the correct place for repository/EF Core behavior and DI composition tests.
+- **Tests fake only what lies outside the app (Gap 110).** The database is the app's own, so it is never faked: a command test runs the whole use case — validation, handler, transaction, the event handlers after the commit — on `UseCaseTestBase` (real composition root, fresh in-memory SQLite per test). Faked: the clock (`TestClock`), OS blocking (`IEnforcementService`) and toasts (`INotificationService`). Why: mocked handler tests passed while storage was wrong (Gap 97's membership, Gap 110's never-saved tags) and while a command crashed (Break's recap read unsaved changes); they also tested paths validation never lets through (a 999-minute session, moves the validator refuses). Guarded by `TestDoubleRuleTests.ApplicationTestsDoNotFakeRepositories`; its shrink-only list is the query, event-handler and two session-validator tests still on mocks (→ Gap 115, Gap 114).
+- **A use-case test starts from a state the app can produce, and checks only data it stored itself (Gap 110).** Build the starting state through the Domain (`NenContract.Seal`, `Complete`, `FocusBlock.Create`, …) and store it with `SeedAsync`: a block's membership needs its real contract — a made-up contract id passes only because aggregates aren't linked in the database, and so tests a state the app never has. Seeded rows (`SeededFocusPresetId`, …) may stand in for "some valid preset", never for what a test checks: a test that asserts a name or a rhythm stores its own (`FocusPresetAsync`, `BreakTimerPresetAsync`). Assert on what was stored (`FindAsync`, `ReadAsync` — each its own context), not on which repository method was called.
+- `Infrastructure/` tests run against a real SQLite database (via `SqliteRepositoryTestBase`'s in-memory connection, not a fake in-memory EF provider). This is the place for repository/EF Core behavior and DI composition tests. **Every persistence test reloads through a fresh context, never the one that saved** — reloading through the saving context hands back the tracked object, which hid the never-saved tags from the first commit until Gap 110. Round-trip tests may use made-up ids (a membership's contract): they test the stored value, nothing acts on it.
 - No stand-alone ViewModel logic tests — ViewModels stay thin and are tested via the Application layer they delegate to. A view and its ViewModel together can be checked end-to-end in `Headless/` (since 2026-09-29).
 
 ---
@@ -78,26 +80,29 @@ The "never outrun the headlights" principle means: **do not write implementation
 Before touching any handler or entity, write a test that describes the expected behaviour:
 
 ```csharp
-[Fact]
-public async Task HandleAsync_ActiveSession_CompletesIt()
+public class EndSessionTests : UseCaseTestBase
 {
-    // Arrange
-    var session = CreateActiveSession();
-    _sessions.GetByIdAsync(session.Id, Arg.Any<CancellationToken>()).Returns(session);
+    [Fact]
+    public async Task ARunningSession_IsStoredCompleted()
+    {
+        // Arrange — a state the app can produce, stored
+        var session = ActiveSession();
+        await SeedAsync(session);
 
-    // Act
-    var result = await CreateHandler().HandleAsync(new EndSessionCommand { SessionId = session.Id });
+        // Act — the whole use case, as the app runs it
+        var result = await RunAsync(new EndSessionCommand { SessionId = session.Id });
 
-    // Assert
-    result.Success.Should().BeTrue();
-    session.Status.Should().Be(SessionStatus.Completed);  // ← This FAILS because the handler isn't written yet
+        // Assert — what was stored
+        result.Success.Should().BeTrue(result.ErrorMessage);
+        (await FindAsync<Session>(session.Id))!.Status.Should().Be(SessionStatus.Completed);  // ← FAILS until the handler is written
+    }
 }
 ```
 
 **2. Run the test — confirm it fails for the right reason**
 
 ```bash
-dotnet test --filter "ClassName=EndSessionCommandHandlerTests"
+dotnet test --filter "ClassName=EndSessionTests"
 ```
 
 A red test is progress. A test that fails to compile is also progress.
@@ -109,7 +114,7 @@ Only write what the test requires. No extra logic, no "just in case" branches.
 **4. Run the test again — confirm it passes**
 
 ```bash
-dotnet test --filter "ClassName=EndSessionCommandHandlerTests"
+dotnet test --filter "ClassName=EndSessionTests"
 ```
 
 **5. Refactor if needed, then confirm still green**
@@ -120,25 +125,28 @@ dotnet test NenFocus.Tests/NenFocus.Tests.csproj
 
 ---
 
-## NSubstitute Patterns
-
-### Mocking a repository
+## Use-Case Test Patterns (`UseCaseTestBase`, Gap 110)
 
 ```csharp
-var sessions = Substitute.For<ISessionRepository>();
+// Arrange: store the starting state (each call its own context)
+await SeedAsync(contract, block);
+var presetId = await FocusPresetAsync("Deep Work");   // a preset whose name the test checks
 
-// Set up a return value
-sessions.GetByIdAsync(sessionId, Arg.Any<CancellationToken>()).Returns(mySession);
+// Act: one command through the real dispatcher — validation, handler, transaction, events
+var result = await RunAsync(new DeletePlannedBlockCommand { BlockId = block.Id });
 
-// Set up a null return (session not found)
-sessions.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((Session?)null);
+// Assert: the answer, and what is stored now
+result.Success.Should().BeFalse();
+result.ErrorMessage.Should().Be("This block is running and cannot be deleted until it ends."); // the first validation error
+(await FindAsync<PlannedBlock>(block.Id)).Should().NotBeNull();                                 // a refusal stores nothing
 
-// Assert a method was called
-await sessions.Received(1).SaveAsync(Arg.Any<Session>(), Arg.Any<CancellationToken>());
-
-// Assert a method was NOT called
-await sessions.DidNotReceive().SaveAsync(Arg.Any<Session>(), Arg.Any<CancellationToken>());
+// An app-wide service as the app has it, e.g. to see what the Shell is told
+Resolve<IRecapRelay>();
 ```
+
+The clock is `Clock` (UTC unless set); `Enforcement` and `Notifications` are NSubstitute fakes to check calls on.
+
+## NSubstitute Patterns (for what lies outside the app)
 
 ### Mocking a state service
 
@@ -169,16 +177,14 @@ Set a clock member directly only through `Configure()` (`clock.Configure().Now.R
 [InlineData(25)]
 [InlineData(45)]
 [InlineData(60)]
-public async Task HandleAsync_ValidDurations_AllSucceed(int durationMinutes)
+public async Task AnyDurationInRange_Starts(int durationMinutes)
 {
-    _plannedBlocks.GetForRangeAsync(...)
-        .Returns([]);
+    var result = await RunAsync(new StartSessionCommand
+    {
+        Goal = "Test", PresetId = SeededFocusPresetId, DurationMinutes = durationMinutes
+    });
 
-    var result = await CreateHandler().HandleAsync(
-        new StartSessionCommand { DurationMinutes = durationMinutes, Goal = "Test" },
-        CancellationToken.None);
-
-    result.Success.Should().BeTrue();
+    result.Success.Should().BeTrue(result.ErrorMessage);
 }
 ```
 
@@ -191,8 +197,8 @@ public async Task HandleAsync_ValidDurations_AllSucceed(int durationMinutes)
 | Target | Why |
 |--------|-----|
 | Domain entity state machines (`Session`, `BlockPreset`) | Zero dependencies; pure logic; high value |
-| Command handler happy paths | Verify the correct sequence of repository calls and state updates |
-| Command handler failure paths | Verify validation gates work (session not found, wrong status, etc.) |
+| Use cases (a command, end to end) | What is stored afterwards — never which repository method was called; the commit saves (Gap 110) |
+| Use-case refusals | The refusal reaches the caller and nothing is stored (session not found, wrong status, a rule's "no") |
 | Value object construction | Verify invalid inputs throw `ArgumentException` |
 | Policy computation logic | The `ComputeActivePolicySliceQuery` merge logic is complex enough to need tests |
 | EF Core repositories | **Built** — `Infrastructure/Persistence/Repositories/` tests each repository against a real SQLite database (via `SqliteRepositoryTestBase`'s in-memory connection), not mocks. This row was previously listed under "Do not test these"; corrected 2026-08-18 now that the suite exists. |
@@ -211,7 +217,7 @@ public async Task HandleAsync_ValidDurations_AllSucceed(int durationMinutes)
 
 ## Architecture Tests (Gap 98)
 
-`NenFocus.Tests/ArchitectureTests/` checks the structure `MODULE_STANDARDS.md` describes — layers, the ViewModel Forbidden Zone, vertical slices, naming, interface size, one clock, raw time comparisons, side effects through their one door, queries that only read, command handlers that never hold a query handler (Gap 106), ViewModels that neither format values nor do math, use cases run only through the dispatchers outside Application, one builder per DTO, command handlers leaving the session noticeboard to event handlers. Plain xUnit, no library:
+`NenFocus.Tests/ArchitectureTests/` checks the structure `MODULE_STANDARDS.md` describes — layers, the ViewModel Forbidden Zone, vertical slices, naming, interface size, one clock, raw time comparisons, side effects through their one door, queries that only read, command handlers that never hold a query handler (Gap 106), ViewModels that neither format values nor do math, use cases run only through the dispatchers outside Application, one builder per DTO, command handlers leaving the session noticeboard to event handlers, repositories as collections (only `Add`, `Remove` and reads; never EF's whole-object `Update`/`Attach` — Gap 110), Application tests that don't fake repositories. Plain xUnit, no library:
 
 **They run automatically (added 2026-10-08):** a Claude Code Stop hook (`.claude/settings.json` → `.claude/hooks/arch-tests.sh`) runs them at the end of any Claude turn in which C# code changed since the last green run, and blocks the hand-back on a failure. Disable or inspect it with `/hooks`.
 

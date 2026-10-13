@@ -24,12 +24,8 @@ public sealed class UpdateBlockPresetCommandHandler
         if (await _presets.ExistsWithNameAsync(command.Name, command.PresetType, excludeId: command.PresetId, cancellationToken: cancellationToken))
             return UpdateBlockPresetResult.Fail($"A preset named '{command.Name}' already exists.");
 
-        // preset was loaded by this same DbContext (tracked), and TransactionalCommandHandler
-        // commits unconditionally regardless of this handler's Result — so everything that
-        // can throw must be validated/constructed before any mutation of preset begins.
-        // A partial mutation left in place by a mid-sequence exception would still get
-        // persisted. Rename included here: its own guard is check-then-assign, so it cannot
-        // partially mutate either.
+        // Everything that can throw is built first, so a refusal leaves the preset untouched. (A failed
+        // command saves nothing anyway since Gap 110; this keeps the loaded preset itself consistent.)
         List<BlockedApp> newApps;
         List<BlockedSite> newSites;
         try
@@ -53,10 +49,6 @@ public sealed class UpdateBlockPresetCommandHandler
         foreach (var existing in preset.Websites.ToList()) preset.RemoveWebsite(existing);
         foreach (var site in newSites) preset.AddWebsite(site);
 
-        foreach (var existing in preset.Tags.ToList()) preset.RemoveTag(existing);
-        foreach (var tag in command.Tags) preset.AddTag(tag);
-
-        await _presets.UpdateAsync(preset, cancellationToken);
         return UpdateBlockPresetResult.Ok();
     }
 }

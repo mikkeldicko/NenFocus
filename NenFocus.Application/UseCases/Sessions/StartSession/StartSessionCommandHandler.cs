@@ -130,15 +130,11 @@ public sealed class StartSessionCommandHandler
 
         session.Start(now, originatingBlock?.Scheduled, breakSchedule, breakPresetName, keepBlockingDuringBreaks);
 
-        if (originatingBlock is not null)
-        {
-            originatingBlock.MarkRitualCompleted(now);
-            await _plannedBlocks.SaveAsync(originatingBlock, ct);
-        }
+        originatingBlock?.MarkRitualCompleted(now);
 
         // The app's view of the running session refreshes itself from the database once this
         // commits (SessionStartedEventHandler) — nothing is pushed from here (Gap 92, A3).
-        await _sessions.SaveAsync(session, ct);
+        _sessions.Add(session);
 
         return StartSessionResult.Ok(session.Id);
     }

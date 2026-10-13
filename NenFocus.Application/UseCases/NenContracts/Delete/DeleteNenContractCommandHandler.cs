@@ -18,7 +18,7 @@ public sealed class DeleteNenContractCommandHandler : ICommandHandler<DeleteNenC
     {
         var contract = await _contracts.GetByIdAsync(command.ContractId, ct);
         if (contract is null)
-            return DeleteNenContractResult.Fail("Contract not found.");
+            return DeleteNenContractResult.Ok(); // already gone is done (Gap 110)
 
         if (contract.CheckDelete() is { IsAllowed: false } verdict)
             return DeleteNenContractResult.Fail(ContractActionVerdictDto.From(verdict).Message!);
@@ -32,17 +32,12 @@ public sealed class DeleteNenContractCommandHandler : ICommandHandler<DeleteNenC
         foreach (var block in linkedBlocks)
         {
             if (block.Membership is { IsBonus: true })
-            {
                 block.Leave();
-                await _blocks.UpdateAsync(block, ct);
-            }
             else
-            {
-                await _blocks.DeleteAsync(block.Id, ct);
-            }
+                _blocks.Remove(block);
         }
 
-        await _contracts.DeleteAsync(command.ContractId, ct);
+        _contracts.Remove(contract);
 
         return DeleteNenContractResult.Ok();
     }

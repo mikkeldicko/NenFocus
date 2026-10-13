@@ -21,8 +21,6 @@ public interface ISessionRepository
         Guid? presetId = null,
         CancellationToken cancellationToken = default);
 
-    Task SaveAsync(Session session, CancellationToken cancellationToken = default);
-
     /// <summary>
     /// Returns the session (of any status) that references the given Focus block as
     /// its origin, or null if none exists yet. At most one exists (unique index, Gap 92) — "already
@@ -38,4 +36,7 @@ public interface ISessionRepository
     /// to the user in the order they actually happened.
     /// </summary>
     Task<IReadOnlyList<Session>> GetUnacknowledgedPostSessionsAsync(CancellationToken ct = default);
+
+    /// <summary>Adds a new session; it is saved when the command commits (Gap 110).</summary>
+    void Add(Session session);
 }

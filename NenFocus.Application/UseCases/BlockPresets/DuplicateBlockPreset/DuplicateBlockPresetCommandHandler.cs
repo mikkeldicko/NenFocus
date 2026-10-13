@@ -47,7 +47,7 @@ public sealed class DuplicateBlockPresetCommandHandler
             return DuplicateBlockPresetResult.Fail(ex.Message);
         }
 
-        await _presets.AddAsync(duplicate, cancellationToken);
+        _presets.Add(duplicate);
 
         return DuplicateBlockPresetResult.Ok(duplicate.Id);
     }

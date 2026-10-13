@@ -6,66 +6,64 @@ using NenFocus.Infrastructure.Persistence.Repositories;
 
 namespace NenFocus.Tests.Infrastructure.Persistence.Repositories;
 
+/// <summary>
+/// The block preset collection against real SQLite. Every read-back goes through a fresh context, so
+/// it sees the database, never the change tracker that saved (Gap 110: a same-context reload hid
+/// that tags were never stored). Changes to a loaded preset: <c>ChangeTrackingRoundTripTests</c>.
+/// </summary>
 public class BlockPresetRepositoryTests : SqliteRepositoryTestBase
 {
-    private BlockPresetRepository CreateRepository() => new(Context);
+    private static BlockPreset Preset(string name) =>
+        BlockPreset.Create(Guid.NewGuid(), name, WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(2026, 1, 1));
+
+    private BlockPresetRepository Fresh() => new(CreateFreshContext());
+
+    private async Task AddAndCommitAsync(params BlockPreset[] presets)
+    {
+        var repository = new BlockPresetRepository(Context);
+        foreach (var preset in presets) repository.Add(preset);
+        await Context.SaveChangesAsync();
+    }
 
     [Fact]
-    public async Task AddAsync_ThenSaveChanges_IsRetrievableWithAppsAndSites()
+    public async Task Add_ThenCommit_IsStoredWithItsAppsAndSites()
     {
-        var repo = CreateRepository();
-        var preset = BlockPreset.Create(Guid.NewGuid(), "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(DateTime.UtcNow));
+        var preset = Preset("Deep Work");
         preset.AddBlockedApp(new BlockedApp("chrome"));
         preset.AddWebsite(new BlockedSite("facebook.com"));
 
-        await repo.AddAsync(preset);
-        await Context.SaveChangesAsync();
+        await AddAndCommitAsync(preset);
 
-        var reloaded = await CreateRepository().GetByIdAsync(preset.Id);
-        reloaded.Should().NotBeNull();
-        reloaded!.Name.Should().Be("Deep Work");
-        reloaded.BlockedApps.Select(a => a.ProcessName).Should().Contain("chrome");
-        reloaded.Websites.Select(s => s.Url).Should().Contain("facebook.com");
+        var stored = await Fresh().GetByIdAsync(preset.Id);
+        stored!.Name.Should().Be("Deep Work");
+        stored.BlockedApps.Select(a => a.ProcessName).Should().Equal("chrome");
+        stored.Websites.Select(s => s.Url).Should().Equal("facebook.com");
     }
 
     [Fact]
     public async Task GetAllAsync_OrdersByName()
     {
-        var repo = CreateRepository();
-        await repo.AddAsync(BlockPreset.Create(Guid.NewGuid(), "Zeta", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(DateTime.UtcNow)));
-        await repo.AddAsync(BlockPreset.Create(Guid.NewGuid(), "Alpha", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(DateTime.UtcNow)));
-        await Context.SaveChangesAsync();
+        await AddAndCommitAsync(Preset("Zeta"), Preset("Alpha"));
 
-        var all = await CreateRepository().GetAllAsync();
+        var all = (await Fresh().GetAllAsync()).ToList();
 
-        var list = all.ToList();
-        list.FindIndex(p => p.Name == "Alpha").Should().BeLessThan(list.FindIndex(p => p.Name == "Zeta"));
+        all.FindIndex(p => p.Name == "Alpha").Should().BeLessThan(all.FindIndex(p => p.Name == "Zeta"));
     }
 
     [Fact]
-    public async Task DeleteAsync_ThenSaveChanges_RemovesPreset()
+    public async Task Remove_ThenCommit_IsGone()
     {
-        var repo = CreateRepository();
-        var preset = BlockPreset.Create(Guid.NewGuid(), "Temp Preset", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(DateTime.UtcNow));
-        await repo.AddAsync(preset);
-        await Context.SaveChangesAsync();
+        var preset = Preset("Temp Preset");
+        await AddAndCommitAsync(preset);
 
-        await CreateRepository().DeleteAsync(preset.Id);
-        await Context.SaveChangesAsync();
-
-        (await CreateRepository().GetByIdAsync(preset.Id)).Should().BeNull();
-    }
-
-    [Fact]
-    public async Task DeleteAsync_UnknownId_DoesNotThrow()
-    {
-        var act = async () =>
+        await using (var scope = CreateFreshContext())
         {
-            await CreateRepository().DeleteAsync(Guid.NewGuid());
-            await Context.SaveChangesAsync();
-        };
+            var repository = new BlockPresetRepository(scope);
+            repository.Remove((await repository.GetByIdAsync(preset.Id))!);
+            await scope.SaveChangesAsync();
+        }
 
-        await act.Should().NotThrowAsync();
+        (await Fresh().GetByIdAsync(preset.Id)).Should().BeNull();
     }
 
     [Theory]
@@ -74,9 +72,7 @@ public class BlockPresetRepositoryTests : SqliteRepositoryTestBase
     [InlineData("AI & Dev Tools Only")]
     public async Task ExistsWithNameAsync_IsCaseInsensitive(string candidate)
     {
-        var exists = await CreateRepository().ExistsWithNameAsync(candidate, BlockPresetType.Focus);
-
-        exists.Should().BeTrue();
+        (await Fresh().ExistsWithNameAsync(candidate, BlockPresetType.Focus)).Should().BeTrue();
     }
 
     [Fact]
@@ -84,76 +80,15 @@ public class BlockPresetRepositoryTests : SqliteRepositoryTestBase
     {
         // "AI & Dev Tools Only" is seeded as a Focus preset — a Background preset asking
         // about the same name is a different scope entirely, not a collision.
-        var exists = await CreateRepository().ExistsWithNameAsync("AI & Dev Tools Only", BlockPresetType.Background);
-
-        exists.Should().BeFalse();
+        (await Fresh().ExistsWithNameAsync("AI & Dev Tools Only", BlockPresetType.Background)).Should().BeFalse();
     }
 
     [Fact]
     public async Task ExistsWithNameAsync_ExcludingSelf_ReturnsFalseForOwnName()
     {
-        var repo = CreateRepository();
-        var preset = BlockPreset.Create(Guid.NewGuid(), "Unique Name", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(DateTime.UtcNow));
-        await repo.AddAsync(preset);
-        await Context.SaveChangesAsync();
+        var preset = Preset("Unique Name");
+        await AddAndCommitAsync(preset);
 
-        var exists = await CreateRepository().ExistsWithNameAsync("Unique Name", BlockPresetType.Focus, excludeId: preset.Id);
-
-        exists.Should().BeFalse();
-    }
-
-    [Fact]
-    public async Task UpdateAsync_MutatingTrackedEntity_PersistsOnSaveChangesEvenThoughUpdateAsyncIsANoOp()
-    {
-        // BlockPresetRepository.UpdateAsync() is intentionally a no-op — the entity is
-        // already tracked by this same context, so EF Core's change tracker picks up the
-        // mutation automatically on SaveChangesAsync. This test pins down that the no-op
-        // actually works as intended rather than silently dropping edits.
-        var repo = CreateRepository();
-        var preset = BlockPreset.Create(Guid.NewGuid(), "Original", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(DateTime.UtcNow));
-        await repo.AddAsync(preset);
-        await Context.SaveChangesAsync();
-
-        var tracked = await repo.GetByIdAsync(preset.Id);
-        tracked!.Rename("Renamed");
-        tracked.AddBlockedApp(new BlockedApp("spotify"));
-        await repo.UpdateAsync(tracked);
-        await Context.SaveChangesAsync();
-
-        var reloaded = await CreateRepository().GetByIdAsync(preset.Id);
-        reloaded!.Name.Should().Be("Renamed");
-        reloaded.BlockedApps.Select(a => a.ProcessName).Should().Contain("spotify");
-    }
-
-    [Fact]
-    public async Task Tags_SurviveAReloadFromTheDatabase()
-    {
-        // BlockPreset.Tags has no explicit EF Core conversion configured in
-        // OnModelCreating — it relies entirely on EF Core's automatic primitive-collection
-        // convention discovering the private _tags backing field. Worth pinning down with
-        // a real round-trip since it isn't obvious from reading the mapping code alone.
-        var repo = CreateRepository();
-        var preset = BlockPreset.Create(
-            Guid.NewGuid(), "Tagged Preset", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(DateTime.UtcNow), tags: ["work", "focus"]);
-        await repo.AddAsync(preset);
-        await Context.SaveChangesAsync();
-
-        var reloaded = await CreateRepository().GetByIdAsync(preset.Id);
-
-        reloaded!.Tags.Should().BeEquivalentTo(["work", "focus"]);
-    }
-
-    [Fact]
-    public async Task GetByTagsAsync_MatchesPresetsTaggedWithGivenTag()
-    {
-        var repo = CreateRepository();
-        var preset = BlockPreset.Create(
-            Guid.NewGuid(), "Tagged Preset 2", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(DateTime.UtcNow), tags: ["work"]);
-        await repo.AddAsync(preset);
-        await Context.SaveChangesAsync();
-
-        var result = await CreateRepository().GetByTagsAsync(["work"]);
-
-        result.Should().ContainSingle(p => p.Id == preset.Id);
+        (await Fresh().ExistsWithNameAsync("Unique Name", BlockPresetType.Focus, excludeId: preset.Id)).Should().BeFalse();
     }
 }

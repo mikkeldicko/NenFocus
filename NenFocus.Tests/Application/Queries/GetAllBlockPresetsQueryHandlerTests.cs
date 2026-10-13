@@ -18,7 +18,7 @@ public class GetAllBlockPresetsQueryHandlerTests
         => BlockPreset.Create(Guid.NewGuid(), name, WebsiteFilterType.Blocklist, type, At.Utc(DateTime.UtcNow));
 
     [Fact]
-    public async Task HandleAsync_NoTagFilter_ReturnsAllPresets()
+    public async Task HandleAsync_NoTypeFilter_ReturnsAllPresets()
     {
         _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns(
             (IReadOnlyList<BlockPreset>)[CreatePreset("A", BlockPresetType.Focus), CreatePreset("B", BlockPresetType.Background)]);
@@ -26,18 +26,6 @@ public class GetAllBlockPresetsQueryHandlerTests
         var result = await CreateHandler().HandleAsync(new GetAllBlockPresetsQuery());
 
         result.Select(p => p.Name).Should().BeEquivalentTo(["A", "B"]);
-    }
-
-    [Fact]
-    public async Task HandleAsync_WithTag_QueriesByTagInsteadOfAll()
-    {
-        _presets.GetByTagsAsync(Arg.Is<IEnumerable<string>>(t => t.Contains("work")), Arg.Any<CancellationToken>())
-            .Returns((IReadOnlyList<BlockPreset>)[CreatePreset("Work Preset", BlockPresetType.Focus)]);
-
-        var result = await CreateHandler().HandleAsync(new GetAllBlockPresetsQuery { Tag = "work" });
-
-        result.Should().ContainSingle(p => p.Name == "Work Preset");
-        await _presets.DidNotReceive().GetAllAsync(Arg.Any<CancellationToken>());
     }
 
     [Fact]

@@ -113,9 +113,9 @@ public sealed class SealNenContractCommandHandler : ICommandHandler<SealNenContr
         }
 
         foreach (var block in preparation.Blocks)
-            await _blocks.AddAsync(block, ct);
+            _blocks.Add(block);
 
-        await _contracts.AddAsync(contract, ct);
+        _contracts.Add(contract);
 
         return SealNenContractResult.Ok(contractId);
     }

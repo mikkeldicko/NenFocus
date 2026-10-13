@@ -32,51 +32,6 @@ public sealed class BlockPresetRepository : IBlockPresetRepository
             .FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
     }
 
-    public async Task<IReadOnlyList<BlockPreset>> GetByTagsAsync(
-        IEnumerable<string> tags,
-        CancellationToken cancellationToken = default)
-    {
-        var tagList = tags.ToList();
-
-        // Load all presets then filter by tags in memory
-        // since tags are stored as a serialized string
-        var all = await GetAllAsync(cancellationToken);
-
-        return all
-            .Where(p => p.Tags.Any(t => tagList.Contains(t,
-                StringComparer.OrdinalIgnoreCase)))
-            .ToList();
-    }
-
-    public async Task AddAsync(
-        BlockPreset preset,
-        CancellationToken cancellationToken = default)
-    {
-        await _context.BlockPresets.AddAsync(preset, cancellationToken);
-    }
-
-    public async Task UpdateAsync(
-        BlockPreset preset,
-        CancellationToken cancellationToken = default)
-    {
-        // Entity was loaded by this same context instance, so the change tracker
-        // already has a snapshot. EF Core detects scalar and OwnsMany changes
-        // automatically — calling Update() here would force all owned entities to
-        // Modified state, turning inserts for new BlockedApps into silent no-ops.
-    }
-
-    public async Task DeleteAsync(
-        Guid id,
-        CancellationToken cancellationToken = default)
-    {
-        var preset = await _context.BlockPresets
-            .FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
-
-        if (preset is null) return;
-
-        _context.BlockPresets.Remove(preset);
-    }
-
     public async Task<bool> ExistsWithNameAsync(
         string name,
         BlockPresetType presetType,
@@ -91,4 +46,8 @@ public sealed class BlockPresetRepository : IBlockPresetRepository
 
         return await query.AnyAsync(cancellationToken);
     }
+
+    public void Add(BlockPreset preset) => _context.BlockPresets.Add(preset);
+
+    public void Remove(BlockPreset preset) => _context.BlockPresets.Remove(preset);
 }

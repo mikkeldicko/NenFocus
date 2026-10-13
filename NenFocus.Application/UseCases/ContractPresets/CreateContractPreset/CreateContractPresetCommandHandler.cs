@@ -43,7 +43,7 @@ public sealed class CreateContractPresetCommandHandler
             return CreateContractPresetResult.Fail(ex.Message);
         }
 
-        await _presets.AddAsync(preset, cancellationToken);
+        _presets.Add(preset);
 
         return CreateContractPresetResult.Ok(preset.Id);
     }

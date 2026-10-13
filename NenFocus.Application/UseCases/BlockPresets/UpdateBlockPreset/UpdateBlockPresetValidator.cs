@@ -43,7 +43,6 @@ public sealed class UpdateBlockPresetValidator : AbstractValidator<UpdateBlockPr
         if (command.Name.Trim() != current.Name) return false;
         if (command.WebsiteFilterType != current.WebsiteFilterType) return false;
         if (command.PresetType != current.PresetType) return false;
-        if (!command.Tags.Select(t => t.Trim()).ToHashSet().SetEquals(current.Tags)) return false;
 
         var newApps = command.BlockedApps.Select(a => a.Trim()).ToHashSet();
         var newSites = command.Websites.Select(u => u.Trim().ToLowerInvariant()).ToHashSet();

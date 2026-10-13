@@ -1,29 +1,23 @@
 using FluentAssertions;
-using NenFocus.Application.Interfaces;
 using NenFocus.Application.UseCases.NenContracts.AcknowledgePostContract;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
+using NenFocus.Domain.Services;
 using NenFocus.Domain.ValueObjects;
-using NSubstitute;
 
 namespace NenFocus.Tests.Application.UseCases.NenContracts;
 
-public class AcknowledgePostContractCommandHandlerTests
+/// <summary>Acknowledging a contract's recap, run as the app runs it: real pipeline, real SQLite (Gap 110).</summary>
+public class AcknowledgePostContractCommandHandlerTests : UseCaseTestBase
 {
-    private static readonly Guid ContractId = Guid.NewGuid();
     private static readonly DateOnly StartDate = new(2026, 1, 1);
     private static readonly DateOnly EndDate = new(2026, 1, 7);
     private static readonly DateTime Now = new(2026, 1, 8, 12, 0, 0, DateTimeKind.Utc);
 
-    private readonly INenContractRepository _contracts = Substitute.For<INenContractRepository>();
-    private readonly ISystemClock _clock = TestClock.Create();
+    public AcknowledgePostContractCommandHandlerTests() => Clock.SetNow(Now);
 
-    public AcknowledgePostContractCommandHandlerTests() => _clock.SetNow(Now);
-
-    private AcknowledgePostContractCommandHandler CreateHandler() => new(_contracts, _clock);
-
-    private static NenContract CompletedContract() => TestContracts.Seal(
-        id: ContractId,
+    private static NenContract ActiveContract() => TestContracts.Seal(
+        id: Guid.NewGuid(),
         name: "Focused Week",
         goal: new NenContractGoal("Ship it"),
         strictnessRule: StrictnessRule.Locked,
@@ -33,38 +27,39 @@ public class AcknowledgePostContractCommandHandlerTests
         plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
         sealedAt: At.Utc(StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)), timeZone: At.UtcZone);
 
-    [Fact]
-    public async Task HandleAsync_ContractNotFound_Fails()
-    {
-        _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns((NenContract?)null);
+    private Task<AcknowledgePostContractResult> AcknowledgeAsync(Guid contractId) =>
+        RunAsync(new AcknowledgePostContractCommand { ContractId = contractId });
 
-        var result = await CreateHandler().HandleAsync(new AcknowledgePostContractCommand { ContractId = ContractId }, CancellationToken.None);
+    [Fact]
+    public async Task ContractNotFound_Fails()
+    {
+        var result = await AcknowledgeAsync(Guid.NewGuid());
 
         result.Success.Should().BeFalse();
     }
 
     [Fact]
-    public async Task HandleAsync_CompletedContract_StampsAndSaves()
+    public async Task CompletedContract_IsStampedAcknowledged()
     {
-        var contract = CompletedContract();
+        var contract = ActiveContract();
         contract.Complete(At.Utc(Now));
-        _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(contract);
+        await SeedAsync(contract);
 
-        var result = await CreateHandler().HandleAsync(new AcknowledgePostContractCommand { ContractId = ContractId }, CancellationToken.None);
+        var result = await AcknowledgeAsync(contract.Id);
 
-        result.Success.Should().BeTrue();
-        contract.PostContractAcknowledgedAt.Should().Be(At.Utc(Now));
-        await _contracts.Received(1).SaveAsync(contract, Arg.Any<CancellationToken>());
+        result.Success.Should().BeTrue(result.ErrorMessage);
+        (await FindAsync<NenContract>(contract.Id))!.PostContractAcknowledgedAt.Should().Be(At.Utc(Now));
     }
 
     [Fact]
-    public async Task HandleAsync_StillActiveContract_Fails()
+    public async Task StillActiveContract_IsRefused_AndNotStamped()
     {
-        var contract = CompletedContract();
-        _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(contract);
+        var contract = ActiveContract();
+        await SeedAsync(contract);
 
-        var result = await CreateHandler().HandleAsync(new AcknowledgePostContractCommand { ContractId = ContractId }, CancellationToken.None);
+        var result = await AcknowledgeAsync(contract.Id);
 
         result.Success.Should().BeFalse();
+        (await FindAsync<NenContract>(contract.Id))!.PostContractAcknowledgedAt.Should().BeNull();
     }
 }

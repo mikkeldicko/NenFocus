@@ -34,12 +34,6 @@ namespace NenFocus.Infrastructure.Migrations
                         .HasColumnType("TEXT")
                         .HasDefaultValue("Focus");
 
-                    b.Property<string>("TagsSerialized")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
-                        .HasDefaultValue("")
-                        .HasColumnName("Tags");
-
                     b.Property<string>("WebsiteFilterType")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -57,7 +51,6 @@ namespace NenFocus.Infrastructure.Migrations
                             Id = new Guid("a0000001-0000-0000-0000-000000000001"),
                             Name = "AI & Dev Tools Only",
                             PresetType = "Focus",
-                            TagsSerialized = "",
                             WebsiteFilterType = "Allowlist"
                         },
                         new
@@ -65,7 +58,6 @@ namespace NenFocus.Infrastructure.Migrations
                             Id = new Guid("a0000001-0000-0000-0000-000000000002"),
                             Name = "DBA block",
                             PresetType = "Focus",
-                            TagsSerialized = "",
                             WebsiteFilterType = "Blocklist"
                         },
                         new
@@ -73,7 +65,6 @@ namespace NenFocus.Infrastructure.Migrations
                             Id = new Guid("a0000001-0000-0000-0000-000000000003"),
                             Name = "Social Media Blocked",
                             PresetType = "Background",
-                            TagsSerialized = "",
                             WebsiteFilterType = "Blocklist"
                         },
                         new
@@ -81,7 +72,6 @@ namespace NenFocus.Infrastructure.Migrations
                             Id = new Guid("a0000001-0000-0000-0000-000000000004"),
                             Name = "Work & Music Only",
                             PresetType = "Background",
-                            TagsSerialized = "",
                             WebsiteFilterType = "Allowlist"
                         });
                 });

@@ -136,7 +136,6 @@ public partial class ShellViewModel : ViewModelBase
         var plannerViewModel = new PlannerPageViewModel(_queryDispatcher, _commandDispatcher, _plannerClock, _sessionState, _recaps, _clock);
         plannerViewModel.ContractWizardOpened += OnContractWizardOpened;
         plannerViewModel.ContractWizardClosed += OnContractWizardClosed;
-        plannerViewModel.PostContractReady += OnPostContractReadyLive;
         NavItems.Add(new NavItemViewModel("Planner", "◫", plannerViewModel, Select));
         NavItems.Add(new NavItemViewModel("Insights", "◈", new InsightsPageViewModel(), Select));
         NavItems.Add(new NavItemViewModel("Settings", "◎", new SettingsPageViewModel(), Select));
@@ -435,21 +434,15 @@ public partial class ShellViewModel : ViewModelBase
         TryDrainQueue();
     }
 
-    // Mirrors OnPostSessionsReady exactly — a background process (the Nen Contract
-    // heartbeat's passive completion sweep) produced one or more recaps nobody was
-    // watching for live.
+    // A contract ended — completed by the sweep or the user, or broken — and its recap is owed
+    // (NenContractEndedEventHandler, Gap 110). Queued like any overlay: shown now if nothing
+    // covers the screen, else after what does.
     private void OnPostContractsReady(IReadOnlyList<NenContractRecapDto> recaps)
     {
         foreach (var recap in recaps)
             _pendingOverlays.Enqueue(new PendingPostContract(recap));
         TryDrainQueue();
     }
-
-    // A direct synchronous UI action (Complete or Break, both dispatched from the Planner)
-    // — the Planner page can only be on screen if nothing app-wide (Ritual/PostSession/
-    // Triage/ContractWizard) is already covering it, so showing this immediately is safe
-    // by the same reasoning MainPageViewModel's direct ShowPostSession call already relies on.
-    private void OnPostContractReadyLive(NenContractRecapDto recap) => ShowPostContract(recap);
 
     private void ShowPostContract(NenContractRecapDto recap)
     {

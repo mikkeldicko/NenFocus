@@ -38,7 +38,6 @@ public sealed class UpdateBreakTimerPresetCommandHandler
             return UpdateBreakTimerPresetResult.Fail(ex.Message);
         }
 
-        await _presets.UpdateAsync(preset, cancellationToken);
         return UpdateBreakTimerPresetResult.Ok();
     }
 }

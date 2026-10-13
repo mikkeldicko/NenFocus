@@ -49,7 +49,7 @@ public class ContractLifecycleSweepPersistenceTests : SqliteRepositoryTestBase
     [Fact]
     public async Task Sweep_BeforeTheStartMoment_LeavesItScheduled()
     {
-        await new NenContractRepository(Context).AddAsync(ScheduledForTomorrowNineToSix());
+        new NenContractRepository(Context).Add(ScheduledForTomorrowNineToSix());
         await Context.SaveChangesAsync();
 
         (await SweepAtAsync(Tomorrow.ToDateTime(new TimeOnly(8, 59)))).Should().Be(NenContractStatus.Scheduled);
@@ -58,7 +58,7 @@ public class ContractLifecycleSweepPersistenceTests : SqliteRepositoryTestBase
     [Fact]
     public async Task Sweep_AtTheStartMoment_ActivatesAndPersists()
     {
-        await new NenContractRepository(Context).AddAsync(ScheduledForTomorrowNineToSix());
+        new NenContractRepository(Context).Add(ScheduledForTomorrowNineToSix());
         await Context.SaveChangesAsync();
 
         (await SweepAtAsync(Tomorrow.ToDateTime(new TimeOnly(9, 0, 30)))).Should().Be(NenContractStatus.Active);

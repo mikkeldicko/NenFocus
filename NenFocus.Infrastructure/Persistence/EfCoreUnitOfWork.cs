@@ -30,4 +30,6 @@ public sealed class EfCoreUnitOfWork : IUnitOfWork
             aggregate.ClearDomainEvents();
         }
     }
+
+    public void Discard() => _context.ChangeTracker.Clear();
 }

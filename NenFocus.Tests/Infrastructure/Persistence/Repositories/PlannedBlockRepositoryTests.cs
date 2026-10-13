@@ -12,29 +12,32 @@ public class PlannedBlockRepositoryTests : SqliteRepositoryTestBase
 
     private PlannedBlockRepository CreateRepository() => new(Context);
 
+    /// <summary>Reads through a context of its own, so they see the database, not the tracker that saved (Gap 110).</summary>
+    private PlannedBlockRepository Fresh() => new(CreateFreshContext());
+
     [Fact]
-    public async Task AddAsync_FocusBlock_ReloadsAsFocusBlockViaDiscriminator()
+    public async Task Add_FocusBlock_ReloadsAsFocusBlockViaDiscriminator()
     {
         var repo = CreateRepository();
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End));
 
-        await repo.AddAsync(block);
+        repo.Add(block);
         await Context.SaveChangesAsync();
 
-        var reloaded = await CreateRepository().GetByIdAsync(block.Id);
+        var reloaded = await Fresh().GetByIdAsync(block.Id);
         reloaded.Should().BeOfType<FocusBlock>();
     }
 
     [Fact]
-    public async Task AddAsync_BackgroundBlock_ReloadsAsBackgroundBlockViaDiscriminator()
+    public async Task Add_BackgroundBlock_ReloadsAsBackgroundBlockViaDiscriminator()
     {
         var repo = CreateRepository();
         var block = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End));
 
-        await repo.AddAsync(block);
+        repo.Add(block);
         await Context.SaveChangesAsync();
 
-        var reloaded = await CreateRepository().GetByIdAsync(block.Id);
+        var reloaded = await Fresh().GetByIdAsync(block.Id);
         reloaded.Should().BeOfType<BackgroundBlock>();
     }
 
@@ -44,11 +47,11 @@ public class PlannedBlockRepositoryTests : SqliteRepositoryTestBase
         var repo = CreateRepository();
         var later = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start.AddHours(2), End.AddHours(2)));
         var earlier = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End));
-        await repo.AddAsync(later);
-        await repo.AddAsync(earlier);
+        repo.Add(later);
+        repo.Add(earlier);
         await Context.SaveChangesAsync();
 
-        var result = await CreateRepository().GetForRangeAsync(new TimeSlot(At.Utc(Start.AddMinutes(-30)), At.Utc(End.AddHours(3))));
+        var result = await Fresh().GetForRangeAsync(new TimeSlot(At.Utc(Start.AddMinutes(-30)), At.Utc(End.AddHours(3))));
 
         result.Select(b => b.Id).Should().Equal(earlier.Id, later.Id);
     }
@@ -62,70 +65,29 @@ public class PlannedBlockRepositoryTests : SqliteRepositoryTestBase
         var repo = CreateRepository();
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End));
         block.MarkCancelled(At.Utc(Start.AddMinutes(-10)));
-        await repo.AddAsync(block);
+        repo.Add(block);
         await Context.SaveChangesAsync();
 
-        var result = await CreateRepository().GetForRangeAsync(new TimeSlot(At.Utc(Start.AddMinutes(-30)), At.Utc(End.AddHours(3))));
+        var result = await Fresh().GetForRangeAsync(new TimeSlot(At.Utc(Start.AddMinutes(-30)), At.Utc(End.AddHours(3))));
 
         result.Should().BeEmpty();
     }
 
     [Fact]
-    public async Task UpdateAsync_PersistsRescheduledWindow()
+    public async Task Remove_ThenCommit_IsGone()
     {
-        var repo = CreateRepository();
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End));
-        await repo.AddAsync(block);
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Start, End));
+        CreateRepository().Add(block);
         await Context.SaveChangesAsync();
 
-        block.Reschedule(At.Slot(Start.AddDays(1), End.AddDays(1)));
-        await repo.UpdateAsync(block);
-        await Context.SaveChangesAsync();
-
-        var reloaded = await CreateRepository().GetByIdAsync(block.Id);
-        reloaded!.Scheduled.Should().Be(At.Slot(Start.AddDays(1), End.AddDays(1)));
-    }
-
-    [Fact]
-    public async Task SaveAsync_NewBlock_Inserts()
-    {
-        var repo = CreateRepository();
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End));
-
-        await repo.SaveAsync(block);
-        await Context.SaveChangesAsync();
-
-        (await CreateRepository().GetByIdAsync(block.Id)).Should().NotBeNull();
-    }
-
-    [Fact]
-    public async Task SaveAsync_ExistingBlock_Updates()
-    {
-        var repo = CreateRepository();
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End));
-        await repo.AddAsync(block);
-        await Context.SaveChangesAsync();
-
-        block.MarkRitualCompleted(At.Utc(Start.AddMinutes(10)));
-        block.MarkSessionEnded(At.Utc(Start.AddMinutes(20)));
-        await CreateRepository().SaveAsync(block);
-        await Context.SaveChangesAsync();
-
-        // Both Domain-only stamps survive the round trip, mapped by name (Gap 95).
-        var reloaded = (FocusBlock)(await CreateRepository().GetByIdAsync(block.Id))!;
-        reloaded.WorkSlot().Should().Be(At.Slot(Start.AddMinutes(10), Start.AddMinutes(20)));
-    }
-
-    [Fact]
-    public async Task DeleteAsync_UnknownId_DoesNotThrow()
-    {
-        var act = async () =>
+        await using (var scope = CreateFreshContext())
         {
-            await CreateRepository().DeleteAsync(Guid.NewGuid());
-            await Context.SaveChangesAsync();
-        };
+            var repository = new PlannedBlockRepository(scope);
+            repository.Remove((await repository.GetByIdAsync(block.Id))!);
+            await scope.SaveChangesAsync();
+        }
 
-        await act.Should().NotThrowAsync();
+        (await Fresh().GetByIdAsync(block.Id)).Should().BeNull();
     }
 
     [Fact]
@@ -133,10 +95,10 @@ public class PlannedBlockRepositoryTests : SqliteRepositoryTestBase
     {
         var presetId = Guid.NewGuid();
         var repo = CreateRepository();
-        await repo.AddAsync(FocusBlock.Create(Guid.NewGuid(), presetId,At.Slot(Start, End)));
+        repo.Add(FocusBlock.Create(Guid.NewGuid(), presetId,At.Slot(Start, End)));
         await Context.SaveChangesAsync();
 
-        var result = await CreateRepository().HasFutureBlocksForPresetAsync(presetId, At.Utc(Start.AddMinutes(-1)));
+        var result = await Fresh().HasFutureBlocksForPresetAsync(presetId, At.Utc(Start.AddMinutes(-1)));
 
         result.Should().BeTrue();
     }
@@ -146,10 +108,10 @@ public class PlannedBlockRepositoryTests : SqliteRepositoryTestBase
     {
         var presetId = Guid.NewGuid();
         var repo = CreateRepository();
-        await repo.AddAsync(FocusBlock.Create(Guid.NewGuid(), presetId,At.Slot(Start, End)));
+        repo.Add(FocusBlock.Create(Guid.NewGuid(), presetId,At.Slot(Start, End)));
         await Context.SaveChangesAsync();
 
-        var result = await CreateRepository().HasFutureBlocksForPresetAsync(presetId, At.Utc(End.AddMinutes(1)));
+        var result = await Fresh().HasFutureBlocksForPresetAsync(presetId, At.Utc(End.AddMinutes(1)));
 
         result.Should().BeFalse();
     }
@@ -161,10 +123,10 @@ public class PlannedBlockRepositoryTests : SqliteRepositoryTestBase
         var repo = CreateRepository();
         var block = FocusBlock.Create(Guid.NewGuid(), presetId,At.Slot(Start, End));
         block.MarkCancelled(At.Utc(Start.AddMinutes(-10)));
-        await repo.AddAsync(block);
+        repo.Add(block);
         await Context.SaveChangesAsync();
 
-        var result = await CreateRepository().HasFutureBlocksForPresetAsync(presetId, At.Utc(Start.AddMinutes(-1)));
+        var result = await Fresh().HasFutureBlocksForPresetAsync(presetId, At.Utc(Start.AddMinutes(-1)));
 
         result.Should().BeFalse();
     }
@@ -173,10 +135,10 @@ public class PlannedBlockRepositoryTests : SqliteRepositoryTestBase
     public async Task GetUnresolvedFocusBlocksAsync_ClosedWindowRitualNeverCompleted_ReturnsBlock()
     {
         var repo = CreateRepository();
-        await repo.AddAsync(FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End)));
+        repo.Add(FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End)));
         await Context.SaveChangesAsync();
 
-        var result = await CreateRepository().GetUnresolvedFocusBlocksAsync(At.Utc(End.AddMinutes(1)));
+        var result = await Fresh().GetUnresolvedFocusBlocksAsync(At.Utc(End.AddMinutes(1)));
 
         result.Should().ContainSingle();
     }
@@ -187,10 +149,10 @@ public class PlannedBlockRepositoryTests : SqliteRepositoryTestBase
         var repo = CreateRepository();
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End));
         block.MarkRitualCompleted(At.Utc(Start));
-        await repo.AddAsync(block);
+        repo.Add(block);
         await Context.SaveChangesAsync();
 
-        var result = await CreateRepository().GetUnresolvedFocusBlocksAsync(At.Utc(End.AddMinutes(1)));
+        var result = await Fresh().GetUnresolvedFocusBlocksAsync(At.Utc(End.AddMinutes(1)));
 
         result.Should().BeEmpty();
     }
@@ -199,10 +161,10 @@ public class PlannedBlockRepositoryTests : SqliteRepositoryTestBase
     public async Task GetUnresolvedFocusBlocksAsync_WindowNotYetClosed_IsExcluded()
     {
         var repo = CreateRepository();
-        await repo.AddAsync(FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End)));
+        repo.Add(FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End)));
         await Context.SaveChangesAsync();
 
-        var result = await CreateRepository().GetUnresolvedFocusBlocksAsync(At.Utc(Start.AddMinutes(30)));
+        var result = await Fresh().GetUnresolvedFocusBlocksAsync(At.Utc(Start.AddMinutes(30)));
 
         result.Should().BeEmpty();
     }
@@ -221,11 +183,11 @@ public class PlannedBlockRepositoryTests : SqliteRepositoryTestBase
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End));
         if (ritualCompleted) block.MarkRitualCompleted(At.Utc(Start));
         if (cancelled) block.MarkCancelled(At.Utc(Start.AddMinutes(-10)));
-        await CreateRepository().AddAsync(block);
+        CreateRepository().Add(block);
         await Context.SaveChangesAsync();
         var asOf = End.AddMinutes(minutesAfterEnd);
 
-        var result = await CreateRepository().GetUnresolvedFocusBlocksAsync(At.Utc(asOf));
+        var result = await Fresh().GetUnresolvedFocusBlocksAsync(At.Utc(asOf));
 
         result.Any(b => b.Id == block.Id).Should().Be(block.IsUnresolved(At.Utc(asOf)));
     }
@@ -234,10 +196,10 @@ public class PlannedBlockRepositoryTests : SqliteRepositoryTestBase
     public async Task GetUnresolvedFocusBlocksAsync_BackgroundBlock_IsExcluded()
     {
         var repo = CreateRepository();
-        await repo.AddAsync(BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End)));
+        repo.Add(BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End)));
         await Context.SaveChangesAsync();
 
-        var result = await CreateRepository().GetUnresolvedFocusBlocksAsync(At.Utc(End.AddMinutes(1)));
+        var result = await Fresh().GetUnresolvedFocusBlocksAsync(At.Utc(End.AddMinutes(1)));
 
         result.Should().BeEmpty();
     }
@@ -250,54 +212,54 @@ public class PlannedBlockRepositoryTests : SqliteRepositoryTestBase
         var repo = CreateRepository();
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End));
         block.MarkCancelled(At.Utc(Start.AddMinutes(-10)));
-        await repo.AddAsync(block);
+        repo.Add(block);
         await Context.SaveChangesAsync();
 
-        var result = await CreateRepository().GetUnresolvedFocusBlocksAsync(At.Utc(End.AddMinutes(1)));
+        var result = await Fresh().GetUnresolvedFocusBlocksAsync(At.Utc(End.AddMinutes(1)));
 
         result.Should().BeEmpty();
     }
 
     [Fact]
-    public async Task AddAsync_NoRedemptionEntries_ReloadsAsEmpty()
+    public async Task Add_NoRedemptionEntries_ReloadsAsEmpty()
     {
         var repo = CreateRepository();
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End));
 
-        await repo.AddAsync(block);
+        repo.Add(block);
         await Context.SaveChangesAsync();
 
-        var reloaded = (FocusBlock)(await CreateRepository().GetByIdAsync(block.Id))!;
+        var reloaded = (FocusBlock)(await Fresh().GetByIdAsync(block.Id))!;
         reloaded.Receipt.Entries.Should().BeEmpty();
     }
 
     [Fact]
-    public async Task AddAsync_WithRedemptionEntries_RoundTripsThroughJsonColumn()
+    public async Task Add_WithRedemptionEntries_RoundTripsThroughJsonColumn()
     {
         var repo = CreateRepository();
         var missedBlockId = Guid.NewGuid();
         var block = FocusBlock.CreateWithReceipt(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End),
             title: null, membership: TestContracts.Redemption(Guid.NewGuid()), receipt: new RedemptionReceipt([new RedemptionEntry(missedBlockId, WholeMinutes.Of(30))]));
 
-        await repo.AddAsync(block);
+        repo.Add(block);
         await Context.SaveChangesAsync();
 
-        var reloaded = (FocusBlock)(await CreateRepository().GetByIdAsync(block.Id))!;
+        var reloaded = (FocusBlock)(await Fresh().GetByIdAsync(block.Id))!;
         reloaded.Receipt.Entries.Should().ContainSingle(e =>
             e.MissedBlockId == missedBlockId && e.Covered == WholeMinutes.Of(30));
     }
 
     [Fact]
-    public async Task AddAsync_WithContractId_RoundTrips()
+    public async Task Add_WithContractId_RoundTrips()
     {
         var repo = CreateRepository();
         var contractId = Guid.NewGuid();
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End), membership: TestContracts.Committed(contractId));
 
-        await repo.AddAsync(block);
+        repo.Add(block);
         await Context.SaveChangesAsync();
 
-        var reloaded = await CreateRepository().GetByIdAsync(block.Id);
+        var reloaded = await Fresh().GetByIdAsync(block.Id);
         reloaded!.Membership.Should().Be(TestContracts.Committed(contractId));
     }
 }

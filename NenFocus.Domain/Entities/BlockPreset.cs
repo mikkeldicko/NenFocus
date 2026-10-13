@@ -8,7 +8,6 @@ public class BlockPreset : AggregateRoot
 {
     private readonly List<BlockedApp> _blockedApps = [];
     private readonly List<BlockedSite> _websites = [];
-    private readonly List<string> _tags = [];
 
     public Guid Id { get; private set; }
     public string Name { get; private set; } = null!;
@@ -17,7 +16,6 @@ public class BlockPreset : AggregateRoot
 
     public IReadOnlyList<BlockedApp> BlockedApps => _blockedApps.AsReadOnly();
     public IReadOnlyList<BlockedSite> Websites => _websites.AsReadOnly();
-    public IReadOnlyList<string> Tags => _tags.AsReadOnly();
 
     private BlockPreset() { }
 
@@ -26,8 +24,7 @@ public class BlockPreset : AggregateRoot
         string name,
         WebsiteFilterType websiteFilterType,
         BlockPresetType presetType,
-        Moment createdAt,
-        IEnumerable<string>? tags = null)
+        Moment createdAt)
     {
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException(
@@ -40,10 +37,6 @@ public class BlockPreset : AggregateRoot
             WebsiteFilterType = websiteFilterType,
             PresetType = presetType
         };
-
-        if (tags is not null)
-            foreach (var tag in tags)
-                preset._tags.Add(tag.Trim());
 
         preset.Raise(new BlockPresetCreatedEvent(id, name.Trim(), createdAt));
 
@@ -93,18 +86,6 @@ public class BlockPreset : AggregateRoot
         _websites.Clear();
     }
 
-    public void AddTag(string tag)
-    {
-        if (string.IsNullOrWhiteSpace(tag)) return;
-        if (_tags.Contains(tag.Trim())) return;
-        _tags.Add(tag.Trim());
-    }
-
-    public void RemoveTag(string tag)
-    {
-        _tags.Remove(tag.Trim());
-    }
-
     /// <summary>
     /// True when the proposed apps/sites keep this preset at least as strict as it currently
     /// is — the invariant a locked preset (in use by an active session or a scheduled block)
@@ -127,7 +108,7 @@ public class BlockPreset : AggregateRoot
 
     public BlockPreset Duplicate(string newName, Guid newId, Moment duplicatedAt)
     {
-        var copy = Create(newId, newName, WebsiteFilterType, PresetType, duplicatedAt, _tags);
+        var copy = Create(newId, newName, WebsiteFilterType, PresetType, duplicatedAt);
         foreach (var app in _blockedApps)
             copy.AddBlockedApp(new BlockedApp(app.ProcessName));
         foreach (var site in _websites)

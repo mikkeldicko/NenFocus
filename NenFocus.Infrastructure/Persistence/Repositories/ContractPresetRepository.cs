@@ -27,34 +27,6 @@ public sealed class ContractPresetRepository : IContractPresetRepository
             .FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
     }
 
-    public async Task AddAsync(
-        ContractPreset preset,
-        CancellationToken cancellationToken = default)
-    {
-        await _context.ContractPresets.AddAsync(preset, cancellationToken);
-    }
-
-    public Task UpdateAsync(
-        ContractPreset preset,
-        CancellationToken cancellationToken = default)
-    {
-        // Entity was loaded by this same context instance; EF Core's change tracker
-        // already has a snapshot and detects scalar/owned-type changes automatically.
-        return Task.CompletedTask;
-    }
-
-    public async Task DeleteAsync(
-        Guid id,
-        CancellationToken cancellationToken = default)
-    {
-        var preset = await _context.ContractPresets
-            .FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
-
-        if (preset is null) return;
-
-        _context.ContractPresets.Remove(preset);
-    }
-
     public async Task<bool> ExistsWithNameAsync(
         string name,
         Guid? excludeId = null,
@@ -68,4 +40,8 @@ public sealed class ContractPresetRepository : IContractPresetRepository
 
         return await query.AnyAsync(cancellationToken);
     }
+
+    public void Add(ContractPreset preset) => _context.ContractPresets.Add(preset);
+
+    public void Remove(ContractPreset preset) => _context.ContractPresets.Remove(preset);
 }

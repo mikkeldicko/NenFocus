@@ -15,6 +15,9 @@ public class NenContractRepositoryTests : SqliteRepositoryTestBase
 
     private NenContractRepository CreateRepository() => new(Context);
 
+    /// <summary>Reads through a context of its own, so they see the database, not the tracker that saved (Gap 110).</summary>
+    private NenContractRepository Fresh() => new(CreateFreshContext());
+
     private static NenContract Seal(
         DailyFloorRule? floorRule = null,
         IReadOnlyDictionary<DateOnly, double>? plannedFocusHoursByDay = null,
@@ -50,15 +53,15 @@ public class NenContractRepositoryTests : SqliteRepositoryTestBase
     }
 
     [Fact]
-    public async Task AddAsync_ThenReload_RoundTripsScalarFields()
+    public async Task Add_ThenReload_RoundTripsScalarFields()
     {
         var repo = CreateRepository();
         var contract = Seal(strictnessRule: StrictnessRule.PeriodTimeBudget, allowCancellation: true);
 
-        await repo.AddAsync(contract);
+        repo.Add(contract);
         await Context.SaveChangesAsync();
 
-        var reloaded = await CreateRepository().GetByIdAsync(contract.Id);
+        var reloaded = await Fresh().GetByIdAsync(contract.Id);
         reloaded.Should().NotBeNull();
         reloaded!.Name.Should().Be("Focused January");
         reloaded.Goal.Value.Should().Be("Ship the feature");
@@ -70,34 +73,34 @@ public class NenContractRepositoryTests : SqliteRepositoryTestBase
     }
 
     [Fact]
-    public async Task AddAsync_WithContractPresetId_RoundTrips()
+    public async Task Add_WithContractPresetId_RoundTrips()
     {
         var repo = CreateRepository();
         var presetId = Guid.NewGuid();
         var contract = Seal(contractPresetId: presetId);
 
-        await repo.AddAsync(contract);
+        repo.Add(contract);
         await Context.SaveChangesAsync();
 
-        var reloaded = await CreateRepository().GetByIdAsync(contract.Id);
+        var reloaded = await Fresh().GetByIdAsync(contract.Id);
         reloaded!.ContractPresetId.Should().Be(presetId);
     }
 
     [Fact]
-    public async Task AddAsync_NoContractPresetId_ReloadsAsNull()
+    public async Task Add_NoContractPresetId_ReloadsAsNull()
     {
         var repo = CreateRepository();
         var contract = Seal();
 
-        await repo.AddAsync(contract);
+        repo.Add(contract);
         await Context.SaveChangesAsync();
 
-        var reloaded = await CreateRepository().GetByIdAsync(contract.Id);
+        var reloaded = await Fresh().GetByIdAsync(contract.Id);
         reloaded!.ContractPresetId.Should().BeNull();
     }
 
     [Fact]
-    public async Task AddAsync_FixedFloorWithRestDay_RoundTripsDaysAndRule()
+    public async Task Add_FixedFloorWithRestDay_RoundTripsDaysAndRule()
     {
         var repo = CreateRepository();
         var restDay = StartDate.AddDays(2);
@@ -105,26 +108,26 @@ public class NenContractRepositoryTests : SqliteRepositoryTestBase
         plan.Remove(restDay);
         var contract = Seal(floorRule: new DailyFloorRule.Fixed(new DailyFloor(4)), restDays: [restDay], plannedFocusHoursByDay: plan);
 
-        await repo.AddAsync(contract);
+        repo.Add(contract);
         await Context.SaveChangesAsync();
 
-        var reloaded = await CreateRepository().GetByIdAsync(contract.Id);
+        var reloaded = await Fresh().GetByIdAsync(contract.Id);
         reloaded!.FloorRule.Should().Be(new DailyFloorRule.Fixed(new DailyFloor(4)));
         reloaded.FloorHoursFor(StartDate).Should().Be(4);
         reloaded.FloorHoursFor(restDay).Should().BeNull();
     }
 
     [Fact]
-    public async Task AddAsync_FollowsPlanFloors_RoundTripPerDay()
+    public async Task Add_FollowsPlanFloors_RoundTripPerDay()
     {
         var repo = CreateRepository();
         var plan = new Dictionary<DateOnly, double> { [StartDate] = 2, [StartDate.AddDays(1)] = 3.5 };
         var contract = Seal(floorRule: new DailyFloorRule.FollowsPlan(), plannedFocusHoursByDay: plan);
 
-        await repo.AddAsync(contract);
+        repo.Add(contract);
         await Context.SaveChangesAsync();
 
-        var reloaded = await CreateRepository().GetByIdAsync(contract.Id);
+        var reloaded = await Fresh().GetByIdAsync(contract.Id);
         reloaded!.FloorRule.Should().Be(new DailyFloorRule.FollowsPlan());
         reloaded.FloorHoursFor(StartDate).Should().Be(2);
         reloaded.FloorHoursFor(StartDate.AddDays(1)).Should().Be(3.5);
@@ -132,21 +135,21 @@ public class NenContractRepositoryTests : SqliteRepositoryTestBase
     }
 
     [Fact]
-    public async Task AddAsync_NoWorkHours_ReloadsFullDayWindowsAndMidnightEnd()
+    public async Task Add_NoWorkHours_ReloadsFullDayWindowsAndMidnightEnd()
     {
         var repo = CreateRepository();
         var contract = Seal();
 
-        await repo.AddAsync(contract);
+        repo.Add(contract);
         await Context.SaveChangesAsync();
 
-        var reloaded = await CreateRepository().GetByIdAsync(contract.Id);
+        var reloaded = await Fresh().GetByIdAsync(contract.Id);
         reloaded!.StartsAt.Should().Be(StartDate.ToDateTime(TimeOnly.MinValue));
         reloaded.EndsAt.Should().Be(EndDate.AddDays(1).ToDateTime(TimeOnly.MinValue)); // 24:00 survives the round trip
     }
 
     [Fact]
-    public async Task AddAsync_WorkHoursWithNoWorkHoursDay_RoundTrips()
+    public async Task Add_WorkHoursWithNoWorkHoursDay_RoundTrips()
     {
         var repo = CreateRepository();
         var fullDay = StartDate.AddDays(1);
@@ -155,27 +158,26 @@ public class NenContractRepositoryTests : SqliteRepositoryTestBase
             noWorkHoursDays: [fullDay],
             sealedAt: SealedBeforeStart);
 
-        await repo.AddAsync(contract);
+        repo.Add(contract);
         await Context.SaveChangesAsync();
 
-        var reloaded = await CreateRepository().GetByIdAsync(contract.Id);
+        var reloaded = await Fresh().GetByIdAsync(contract.Id);
         reloaded!.WindowOn(StartDate).Should().Be((StartDate.ToDateTime(new TimeOnly(9, 0)), StartDate.ToDateTime(new TimeOnly(17, 0))));
         reloaded.WindowOn(fullDay).Should().Be((fullDay.ToDateTime(TimeOnly.MinValue), fullDay.AddDays(1).ToDateTime(TimeOnly.MinValue)));
     }
 
     [Fact]
-    public async Task SaveAfterBreak_PersistsTheShortenedDays()
+    public async Task CommitAfterBreak_PersistsTheShortenedDays()
     {
         var repo = CreateRepository();
         var contract = Seal(allowCancellation: true);
-        await repo.AddAsync(contract);
+        repo.Add(contract);
         await Context.SaveChangesAsync();
 
         contract.Break(At.Utc(StartDate.AddDays(2).ToDateTime(new TimeOnly(10, 0))), At.UtcZone, sessionRunning: false);
-        await repo.SaveAsync(contract);
         await Context.SaveChangesAsync();
 
-        var reloaded = await CreateRepository().GetByIdAsync(contract.Id);
+        var reloaded = await Fresh().GetByIdAsync(contract.Id);
         reloaded!.EndDate.Should().Be(StartDate.AddDays(2));
         reloaded.WindowOn(StartDate.AddDays(3)).Should().BeNull();
     }
@@ -183,7 +185,7 @@ public class NenContractRepositoryTests : SqliteRepositoryTestBase
     [Fact]
     public async Task HasContractsInEffectForPresetAsync_NoContractsForPreset_ReturnsFalse()
     {
-        var result = await CreateRepository().HasContractsInEffectForPresetAsync(Guid.NewGuid());
+        var result = await Fresh().HasContractsInEffectForPresetAsync(Guid.NewGuid());
 
         result.Should().BeFalse();
     }
@@ -194,10 +196,10 @@ public class NenContractRepositoryTests : SqliteRepositoryTestBase
         var repo = CreateRepository();
         var presetId = Guid.NewGuid();
         var contract = Seal(contractPresetId: presetId, sealedAt: SealedOnStart); // Active
-        await repo.AddAsync(contract);
+        repo.Add(contract);
         await Context.SaveChangesAsync();
 
-        var result = await CreateRepository().HasContractsInEffectForPresetAsync(presetId);
+        var result = await Fresh().HasContractsInEffectForPresetAsync(presetId);
 
         result.Should().BeTrue();
     }
@@ -208,10 +210,10 @@ public class NenContractRepositoryTests : SqliteRepositoryTestBase
         var repo = CreateRepository();
         var presetId = Guid.NewGuid();
         var contract = Seal(contractPresetId: presetId, sealedAt: SealedBeforeStart); // Scheduled
-        await repo.AddAsync(contract);
+        repo.Add(contract);
         await Context.SaveChangesAsync();
 
-        var result = await CreateRepository().HasContractsInEffectForPresetAsync(presetId);
+        var result = await Fresh().HasContractsInEffectForPresetAsync(presetId);
 
         result.Should().BeTrue();
     }
@@ -223,47 +225,18 @@ public class NenContractRepositoryTests : SqliteRepositoryTestBase
         var presetId = Guid.NewGuid();
         var contract = Seal(contractPresetId: presetId, sealedAt: SealedOnStart, allowCancellation: true);
         contract.Complete(At.Utc(SealedOnStart.AddDays(7)));
-        await repo.AddAsync(contract);
+        repo.Add(contract);
         await Context.SaveChangesAsync();
 
-        var result = await CreateRepository().HasContractsInEffectForPresetAsync(presetId);
+        var result = await Fresh().HasContractsInEffectForPresetAsync(presetId);
 
         result.Should().BeFalse();
     }
 
     [Fact]
-    public async Task SaveAsync_UntrackedContract_AddsIt()
-    {
-        var contract = Seal();
-
-        await CreateRepository().SaveAsync(contract);
-        await Context.SaveChangesAsync();
-
-        var reloaded = await CreateRepository().GetByIdAsync(contract.Id);
-        reloaded.Should().NotBeNull();
-    }
-
-    [Fact]
-    public async Task SaveAsync_AlreadyTrackedContract_PersistsMutation()
-    {
-        var repo = CreateRepository();
-        var contract = Seal(sealedAt: SealedBeforeStart, allowCancellation: true); // Scheduled
-        await repo.AddAsync(contract);
-        await Context.SaveChangesAsync();
-
-        var tracked = await repo.GetByIdAsync(contract.Id);
-        tracked!.Activate(At.Utc(SealedOnStart));
-        await repo.SaveAsync(tracked);
-        await Context.SaveChangesAsync();
-
-        var reloaded = await CreateRepository().GetByIdAsync(contract.Id);
-        reloaded!.Status.Should().Be(NenContractStatus.Active);
-    }
-
-    [Fact]
     public async Task GetAllInEffectAsync_NoContracts_ReturnsEmpty()
     {
-        var result = await CreateRepository().GetAllInEffectAsync();
+        var result = await Fresh().GetAllInEffectAsync();
 
         result.Should().BeEmpty();
     }
@@ -273,10 +246,10 @@ public class NenContractRepositoryTests : SqliteRepositoryTestBase
     {
         var repo = CreateRepository();
         var contract = Seal(sealedAt: SealedOnStart); // Active
-        await repo.AddAsync(contract);
+        repo.Add(contract);
         await Context.SaveChangesAsync();
 
-        var result = await CreateRepository().GetAllInEffectAsync();
+        var result = await Fresh().GetAllInEffectAsync();
 
         result.Should().ContainSingle(c => c.Id == contract.Id);
     }
@@ -286,10 +259,10 @@ public class NenContractRepositoryTests : SqliteRepositoryTestBase
     {
         var repo = CreateRepository();
         var contract = Seal(sealedAt: SealedBeforeStart); // Scheduled
-        await repo.AddAsync(contract);
+        repo.Add(contract);
         await Context.SaveChangesAsync();
 
-        var result = await CreateRepository().GetAllInEffectAsync();
+        var result = await Fresh().GetAllInEffectAsync();
 
         result.Should().ContainSingle(c => c.Id == contract.Id);
     }
@@ -300,10 +273,10 @@ public class NenContractRepositoryTests : SqliteRepositoryTestBase
         var repo = CreateRepository();
         var contract = Seal(sealedAt: SealedOnStart);
         contract.Complete(At.Utc(SealedOnStart.AddDays(7)));
-        await repo.AddAsync(contract);
+        repo.Add(contract);
         await Context.SaveChangesAsync();
 
-        var result = await CreateRepository().GetAllInEffectAsync();
+        var result = await Fresh().GetAllInEffectAsync();
 
         result.Should().BeEmpty();
     }
@@ -323,11 +296,11 @@ public class NenContractRepositoryTests : SqliteRepositoryTestBase
             allowCancellation: false,
             plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
             sealedAt: At.Utc(StartDate.AddDays(30).ToDateTime(TimeOnly.MinValue)), timeZone: At.UtcZone); // Active
-        await repo.AddAsync(scheduled);
-        await repo.AddAsync(active);
+        repo.Add(scheduled);
+        repo.Add(active);
         await Context.SaveChangesAsync();
 
-        var result = await CreateRepository().GetAllInEffectAsync();
+        var result = await Fresh().GetAllInEffectAsync();
 
         result.Should().HaveCount(2);
         result.Should().Contain(c => c.Id == scheduled.Id);
@@ -337,7 +310,7 @@ public class NenContractRepositoryTests : SqliteRepositoryTestBase
     [Fact]
     public async Task GetAllAsync_NoContracts_ReturnsEmpty()
     {
-        var result = await CreateRepository().GetAllAsync();
+        var result = await Fresh().GetAllAsync();
 
         result.Should().BeEmpty();
     }
@@ -347,10 +320,10 @@ public class NenContractRepositoryTests : SqliteRepositoryTestBase
     {
         var repo = CreateRepository();
         var contract = Seal(sealedAt: SealedBeforeStart); // Scheduled
-        await repo.AddAsync(contract);
+        repo.Add(contract);
         await Context.SaveChangesAsync();
 
-        var result = await CreateRepository().GetAllAsync();
+        var result = await Fresh().GetAllAsync();
 
         result.Should().ContainSingle(c => c.Id == contract.Id);
     }
@@ -361,10 +334,10 @@ public class NenContractRepositoryTests : SqliteRepositoryTestBase
         var repo = CreateRepository();
         var contract = Seal(sealedAt: SealedOnStart);
         contract.Complete(At.Utc(SealedOnStart.AddDays(7)));
-        await repo.AddAsync(contract);
+        repo.Add(contract);
         await Context.SaveChangesAsync();
 
-        var result = await CreateRepository().GetAllAsync();
+        var result = await Fresh().GetAllAsync();
 
         result.Should().ContainSingle(c => c.Id == contract.Id);
     }
@@ -375,10 +348,10 @@ public class NenContractRepositoryTests : SqliteRepositoryTestBase
         var repo = CreateRepository();
         var contract = Seal(sealedAt: SealedOnStart, allowCancellation: true);
         contract.Break(At.Utc(SealedOnStart.AddDays(2)), At.UtcZone, sessionRunning: false);
-        await repo.AddAsync(contract);
+        repo.Add(contract);
         await Context.SaveChangesAsync();
 
-        var result = await CreateRepository().GetAllAsync();
+        var result = await Fresh().GetAllAsync();
 
         result.Should().ContainSingle(c => c.Id == contract.Id);
     }
@@ -400,12 +373,12 @@ public class NenContractRepositoryTests : SqliteRepositoryTestBase
             sealedAt: At.Utc(StartDate.AddDays(30).ToDateTime(TimeOnly.MinValue)), timeZone: At.UtcZone); // Active
         var completed = Seal(sealedAt: SealedOnStart);
         completed.Complete(At.Utc(SealedOnStart.AddDays(7)));
-        await repo.AddAsync(scheduled);
-        await repo.AddAsync(active);
-        await repo.AddAsync(completed);
+        repo.Add(scheduled);
+        repo.Add(active);
+        repo.Add(completed);
         await Context.SaveChangesAsync();
 
-        var result = await CreateRepository().GetAllAsync();
+        var result = await Fresh().GetAllAsync();
 
         result.Should().HaveCount(3);
         result.Should().Contain(c => c.Id == scheduled.Id);

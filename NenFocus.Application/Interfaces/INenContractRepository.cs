@@ -6,13 +6,6 @@ public interface INenContractRepository
 {
     Task<NenContract?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
 
-    Task AddAsync(NenContract contract, CancellationToken cancellationToken = default);
-
-    Task UpdateAsync(NenContract contract, CancellationToken cancellationToken = default);
-
-    /// <summary>Saves a Nen Contract — add or update.</summary>
-    Task SaveAsync(NenContract contract, CancellationToken cancellationToken = default);
-
     /// <summary>
     /// Returns true if any contract sealed from the given Contract Preset is currently
     /// NenContract.IsInEffect (Scheduled or Active) — that method is the canonical
@@ -40,13 +33,16 @@ public interface INenContractRepository
     /// </summary>
     Task<IReadOnlyList<NenContract>> GetAllAsync(CancellationToken cancellationToken = default);
 
-    /// <summary>Removes a contract by Id. No-op if it doesn't exist.</summary>
-    Task DeleteAsync(Guid id, CancellationToken cancellationToken = default);
-
     /// <summary>
     /// Returns every Completed or Broken contract whose Post-Contract recap screen has
     /// never been dismissed (PostContractAcknowledgedAt is null) — mirrors
     /// ISessionRepository.GetUnacknowledgedPostSessionsAsync exactly, same idiom.
     /// </summary>
     Task<IReadOnlyList<NenContract>> GetUnacknowledgedPostContractsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Adds a new contract; it is saved when the command commits (Gap 110).</summary>
+    void Add(NenContract contract);
+
+    /// <summary>Removes a loaded contract; saved when the command commits. Ask first whether it may go.</summary>
+    void Remove(NenContract contract);
 }

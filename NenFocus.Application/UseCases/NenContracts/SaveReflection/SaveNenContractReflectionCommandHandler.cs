@@ -23,7 +23,6 @@ public sealed class SaveNenContractReflectionCommandHandler
 
         contract.SetReflection(command.Reflection);
 
-        await _contracts.SaveAsync(contract, ct);
         return SaveNenContractReflectionResult.Ok();
     }
 }

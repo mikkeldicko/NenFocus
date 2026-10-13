@@ -332,11 +332,6 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     // contract) rather than the globally-Active one — see RefreshCanCompleteSelectedContractAsync.
     [ObservableProperty] private bool _canCompleteSelectedContract;
 
-    /// <summary>Raised when Complete or Break (Cancel) succeeds, carrying the recap for the
-    /// Post-Contract overlay — ShellViewModel subscribes to show it immediately, mirroring
-    /// MainPageViewModel's EndSession-to-ShowPostSession precedent.</summary>
-    public event Action<NenContractRecapDto>? PostContractReady;
-
     // Every in-effect contract touching the currently viewed week, default-first (the same
     // order GetNenContractsForDateRangeQuery returns) — SelectedContract is always one of
     // these. Refreshed alongside SelectedContract in RefreshSelectedContractAsync; the
@@ -516,7 +511,6 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        PostContractReady?.Invoke(result.Recap!);
         await RefreshContractsPopoverAsync();
         await RefreshContractsPreservingSelectionAsync();
         await LoadWeekAsync();
@@ -654,7 +648,6 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         }
 
         IsNenContractPopoverVisible = false;
-        PostContractReady?.Invoke(result.Recap!);
         await RefreshContractsPopoverAsync();
         await RefreshContractsPreservingSelectionAsync();
         await LoadWeekAsync();
@@ -2263,7 +2256,6 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         }
 
         IsNenContractPopoverVisible = false;
-        PostContractReady?.Invoke(result.Recap!);
         await RefreshContractsPopoverAsync();
         await RefreshContractsPreservingSelectionAsync();
         await LoadWeekAsync();

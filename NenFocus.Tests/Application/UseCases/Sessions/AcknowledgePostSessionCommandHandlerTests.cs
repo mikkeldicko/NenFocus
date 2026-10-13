@@ -1,89 +1,82 @@
 using FluentAssertions;
-using NenFocus.Application.Interfaces;
 using NenFocus.Application.UseCases.Sessions.AcknowledgePostSession;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
 using NenFocus.Domain.ValueObjects;
-using NSubstitute;
 
 namespace NenFocus.Tests.Application.UseCases.Sessions;
 
-public class AcknowledgePostSessionCommandHandlerTests
+/// <summary>Dismissing the post-session screen, run as the app runs it: real pipeline, real SQLite (Gap 110).</summary>
+public class AcknowledgePostSessionCommandHandlerTests : UseCaseTestBase
 {
     private static readonly DateTime Now = new(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
 
-    private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
-    private readonly ISystemClock _clock = TestClock.Create();
+    public AcknowledgePostSessionCommandHandlerTests() => Clock.SetNow(Now);
 
-    public AcknowledgePostSessionCommandHandlerTests()
+    private static Session Spontaneous()
     {
-        _clock.SetNow(Now);
-    }
-
-    private AcknowledgePostSessionCommandHandler CreateHandler() => new(_sessions, _clock);
-
-    private static Session CreateCompletedSession()
-    {
-        var session = Session.Create(
-            Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(30)),
+        var session = Session.Create(Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(30)),
             Guid.NewGuid(), SessionOrigin.Spontaneous);
         session.Start(At.Utc(Now.AddMinutes(-30)));
-        session.Complete(At.Utc(Now));
         return session;
     }
 
-    [Fact]
-    public async Task HandleAsync_SessionNotFound_Fails()
+    private static Session Missed()
     {
-        _sessions.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((Session?)null);
-
-        var result = await CreateHandler().HandleAsync(
-            new AcknowledgePostSessionCommand { SessionId = Guid.NewGuid() });
-
-        result.Success.Should().BeFalse();
-    }
-
-    [Fact]
-    public async Task HandleAsync_CompletedSession_StampsAcknowledgedAtAndSaves()
-    {
-        var session = CreateCompletedSession();
-        _sessions.GetByIdAsync(session.Id, Arg.Any<CancellationToken>()).Returns(session);
-
-        var result = await CreateHandler().HandleAsync(new AcknowledgePostSessionCommand { SessionId = session.Id });
-
-        result.Success.Should().BeTrue();
-        session.PostSessionAcknowledgedAt.Should().Be(At.Utc(Now));
-        await _sessions.Received(1).SaveAsync(session, Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
-    public async Task HandleAsync_MissedSession_StampsAcknowledgedAtAndSaves()
-    {
-        var session = Session.Create(
-            Guid.NewGuid(), new SessionGoal("(missed — no goal set)"), new SessionDuration(TimeSpan.FromMinutes(30)),
+        var session = Session.Create(Guid.NewGuid(), new SessionGoal("(missed — no goal set)"), new SessionDuration(TimeSpan.FromMinutes(30)),
             Guid.NewGuid(), SessionOrigin.Planned, originatingBlockId: Guid.NewGuid());
-        var scheduledStart = Now.AddHours(-2);
-        session.Miss(new TimeSlot(At.Utc(scheduledStart), At.Utc(scheduledStart.AddMinutes(30))));
-        _sessions.GetByIdAsync(session.Id, Arg.Any<CancellationToken>()).Returns(session);
+        session.Miss(new TimeSlot(At.Utc(Now.AddHours(-2)), At.Utc(Now.AddHours(-2).AddMinutes(30))));
+        return session;
+    }
 
-        var result = await CreateHandler().HandleAsync(new AcknowledgePostSessionCommand { SessionId = session.Id });
+    private Task<AcknowledgePostSessionResult> AcknowledgeAsync(Guid sessionId) =>
+        RunAsync(new AcknowledgePostSessionCommand { SessionId = sessionId });
 
-        result.Success.Should().BeTrue();
-        session.PostSessionAcknowledgedAt.Should().Be(At.Utc(Now));
+    private async Task<Moment?> StoredAcknowledgementAsync(Session session) =>
+        (await FindAsync<Session>(session.Id))!.PostSessionAcknowledgedAt;
+
+    [Fact]
+    public async Task SessionNotFound_Fails()
+    {
+        var result = await AcknowledgeAsync(Guid.NewGuid());
+
+        result.Success.Should().BeFalse();
     }
 
     [Fact]
-    public async Task HandleAsync_SessionNotCompletedOrMissed_FailsGracefully()
+    public async Task ACompletedSession_IsStampedAcknowledged()
     {
-        var session = Session.Create(
-            Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(30)),
-            Guid.NewGuid(), SessionOrigin.Spontaneous);
-        session.Start(At.Utc(Now.AddMinutes(-5)));
-        _sessions.GetByIdAsync(session.Id, Arg.Any<CancellationToken>()).Returns(session);
+        var session = Spontaneous();
+        session.Complete(At.Utc(Now));
+        await SeedAsync(session);
 
-        var result = await CreateHandler().HandleAsync(new AcknowledgePostSessionCommand { SessionId = session.Id });
+        var result = await AcknowledgeAsync(session.Id);
+
+        result.Success.Should().BeTrue(result.ErrorMessage);
+        (await StoredAcknowledgementAsync(session)).Should().Be(At.Utc(Now));
+    }
+
+    [Fact]
+    public async Task AMissedSession_IsStampedAcknowledged()
+    {
+        var session = Missed();
+        await SeedAsync(session);
+
+        var result = await AcknowledgeAsync(session.Id);
+
+        result.Success.Should().BeTrue(result.ErrorMessage);
+        (await StoredAcknowledgementAsync(session)).Should().Be(At.Utc(Now));
+    }
+
+    [Fact]
+    public async Task ASessionStillRunning_IsRefused_AndNotStamped()
+    {
+        var session = Spontaneous();
+        await SeedAsync(session);
+
+        var result = await AcknowledgeAsync(session.Id);
 
         result.Success.Should().BeFalse();
-        await _sessions.DidNotReceive().SaveAsync(Arg.Any<Session>(), Arg.Any<CancellationToken>());
+        (await StoredAcknowledgementAsync(session)).Should().BeNull();
     }
 }

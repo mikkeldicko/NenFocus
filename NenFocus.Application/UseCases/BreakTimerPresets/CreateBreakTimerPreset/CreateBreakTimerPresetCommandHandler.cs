@@ -36,7 +36,7 @@ public sealed class CreateBreakTimerPresetCommandHandler
             return CreateBreakTimerPresetResult.Fail(ex.Message);
         }
 
-        await _presets.AddAsync(preset, cancellationToken);
+        _presets.Add(preset);
 
         return CreateBreakTimerPresetResult.Ok(preset.Id);
     }

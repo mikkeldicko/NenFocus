@@ -96,8 +96,6 @@ public class ContractMembershipPersistenceTests : SqliteRepositoryTestBase
             var joining = (await repository.GetByIdAsync(joiner.Id))!;
             leaving.Leave();
             joining.Join(TestContracts.Bonus(contractId));
-            await repository.UpdateAsync(leaving);
-            await repository.UpdateAsync(joining);
             await context.SaveChangesAsync();
         }
 

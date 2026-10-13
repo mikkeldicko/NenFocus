@@ -41,7 +41,7 @@ public sealed class MarkFocusBlockMissedCommandHandler
 
         session.Miss(block.Scheduled);
 
-        await _sessions.SaveAsync(session, ct);
+        _sessions.Add(session);
 
         var presetName = string.Empty;
         if (block.BlockPresetId != Guid.Empty)

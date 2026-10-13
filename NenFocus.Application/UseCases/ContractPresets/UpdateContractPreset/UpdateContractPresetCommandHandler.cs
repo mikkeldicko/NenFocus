@@ -44,7 +44,6 @@ public sealed class UpdateContractPresetCommandHandler
             return UpdateContractPresetResult.Fail(ex.Message);
         }
 
-        await _presets.UpdateAsync(preset, cancellationToken);
         return UpdateContractPresetResult.Ok();
     }
 }

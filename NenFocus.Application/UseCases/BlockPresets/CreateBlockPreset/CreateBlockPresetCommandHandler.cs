@@ -28,7 +28,7 @@ public sealed class CreateBlockPresetCommandHandler
         BlockPreset preset;
         try
         {
-            preset = BlockPreset.Create(Guid.NewGuid(), command.Name, command.WebsiteFilterType, command.PresetType, _clock.Now, command.Tags.ToList());
+            preset = BlockPreset.Create(Guid.NewGuid(), command.Name, command.WebsiteFilterType, command.PresetType, _clock.Now);
 
             foreach (var appName in command.BlockedApps)
                 preset.AddBlockedApp(new BlockedApp(appName));
@@ -41,7 +41,7 @@ public sealed class CreateBlockPresetCommandHandler
             return CreateBlockPresetResult.Fail(ex.Message);
         }
 
-        await _presets.AddAsync(preset, cancellationToken);
+        _presets.Add(preset);
 
         return CreateBlockPresetResult.Ok(preset.Id);
     }

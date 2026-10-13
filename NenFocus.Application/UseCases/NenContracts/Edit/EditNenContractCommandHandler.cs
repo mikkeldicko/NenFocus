@@ -136,14 +136,14 @@ public sealed class EditNenContractCommandHandler : ICommandHandler<EditNenContr
         // (Gap 97, decision 17); the drafting seed carries them all, so none is lost unseen.
         var oldLinkedBlocks = await _blocks.GetForContractAsync(command.ContractId, ct);
         foreach (var block in oldLinkedBlocks)
-            await _blocks.DeleteAsync(block.Id, ct);
+            _blocks.Remove(block);
 
-        await _contracts.DeleteAsync(contractId, ct);
+        _contracts.Remove(oldContract);
 
         foreach (var block in preparation.Blocks)
-            await _blocks.AddAsync(block, ct);
+            _blocks.Add(block);
 
-        await _contracts.AddAsync(newContract, ct);
+        _contracts.Add(newContract);
 
         return EditNenContractResult.Ok(contractId);
     }

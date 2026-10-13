@@ -40,24 +40,28 @@ public class CqrsRuleTests
                             || u.IsGenericType && u.GetGenericTypeDefinition() == typeof(IQueryHandler<,>))
                 .Select(u => $"{t.Name} → {(u.IsGenericType ? u.GetGenericArguments()[0].Name : u.Name)}"));
 
-        KnownExceptions.Check(violations, CommandHandlersHoldingQueryHandlers);
+        KnownExceptions.Check(violations, []);
     }
 
-    private static readonly string[] CommandHandlersHoldingQueryHandlers =
-    [
-        // The recap is handed back to the screen that shows it, never saved.
-        "BreakNenContractCommandHandler → GetNenContractRecapQuery",
-        "CompleteNenContractCommandHandler → GetNenContractRecapQuery",
-    ];
+    // EF's own save, on anything.
+    private static readonly Regex SaveCall = new(@"\.\s*(SaveChangesAsync|CommitAsync)\s*\(");
+    // A field declared with a repository type in the same file — the repositories' writes are Add
+    // and Remove (Gap 110), names a List shares, so only these receivers count. Fields only: a
+    // constructor parameter is just copied into one, and its name may be reused by a local list.
+    private static readonly Regex RepositoryVariable = new(@"\bI\w*Repository\s+(_\w+)");
 
-    // The repositories' write methods, and EF's own save.
-    private static readonly Regex WriteCall = new(@"\.\s*(AddAsync|UpdateAsync|DeleteAsync|SaveAsync|SaveChangesAsync|CommitAsync)\s*\(");
+    private static bool CallsAWriteMethod(string code) =>
+        SaveCall.IsMatch(code)
+        || RepositoryVariable.Matches(code)
+            .Select(m => m.Groups[1].Value)
+            .Distinct()
+            .Any(name => Regex.IsMatch(code, $@"(?<![\w.])(this\s*\.\s*)?{Regex.Escape(name)}\s*\.\s*(Add|Remove)\s*\("));
 
     [Fact]
     public void QueriesNeverCallAWriteMethod()
     {
         var violations = SourceCode.Files("NenFocus.Application/Queries")
-            .Where(f => WriteCall.IsMatch(f.Code))
+            .Where(f => CallsAWriteMethod(f.Code))
             .Select(f => f.Path);
 
         KnownExceptions.Check(violations, []);

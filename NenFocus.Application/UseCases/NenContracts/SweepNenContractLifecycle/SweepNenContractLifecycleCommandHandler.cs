@@ -29,7 +29,6 @@ public sealed class SweepNenContractLifecycleCommandHandler
         foreach (var contract in inEffect.Where(c => c.IsDueForActivation(localNow)))
         {
             contract.Activate(now);
-            await _contracts.SaveAsync(contract, ct);
             activatedIds.Add(contract.Id);
         }
 
@@ -39,7 +38,6 @@ public sealed class SweepNenContractLifecycleCommandHandler
         foreach (var contract in inEffect.Where(c => c.IsDueForCompletion(localNow)))
         {
             contract.Complete(now);
-            await _contracts.SaveAsync(contract, ct);
             completedIds.Add(contract.Id);
         }
 

@@ -1,6 +1,5 @@
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
-using NenFocus.Application.Queries.GetNenContractRecap;
 
 namespace NenFocus.Application.UseCases.NenContracts.CompleteNenContract;
 
@@ -11,20 +10,17 @@ public sealed class CompleteNenContractCommandHandler
     private readonly IPlannedBlockRepository _blocks;
     private readonly ISessionRepository _sessions;
     private readonly ISystemClock _clock;
-    private readonly IQueryHandler<GetNenContractRecapQuery, NenContractRecapDto?> _recap;
 
     public CompleteNenContractCommandHandler(
         INenContractRepository contracts,
         IPlannedBlockRepository blocks,
         ISessionRepository sessions,
-        ISystemClock clock,
-        IQueryHandler<GetNenContractRecapQuery, NenContractRecapDto?> recap)
+        ISystemClock clock)
     {
         _contracts = contracts;
         _blocks = blocks;
         _sessions = sessions;
         _clock = clock;
-        _recap = recap;
     }
 
     public async Task<CompleteNenContractResult> HandleAsync(CompleteNenContractCommand command, CancellationToken ct = default)
@@ -52,12 +48,8 @@ public sealed class CompleteNenContractCommandHandler
         // calendar for a new contract immediately regardless of the old EndDate.
         contract.CompleteEarly(now, members, sessions, sessionRunning, _clock.TimeZone);
 
-        await _contracts.SaveAsync(contract, ct);
 
-        // Flows straight into the Post-Contract overlay immediately, mirroring
-        // EndSessionCommandHandler's own PostSessionDto precedent — same query the
-        // heartbeat's passive-completion path also uses, so the two agree by construction.
-        var recap = await _recap.HandleAsync(new GetNenContractRecapQuery(contract.Id), ct);
-        return CompleteNenContractResult.Ok(recap!);
+        // The recap is owed once this is saved: NenContractEndedEventHandler shows it (Gap 110).
+        return CompleteNenContractResult.Ok();
     }
 }

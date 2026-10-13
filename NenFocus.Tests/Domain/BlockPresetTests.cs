@@ -10,9 +10,8 @@ public class BlockPresetTests
 {
     private static BlockPreset CreatePreset(
         WebsiteFilterType policy = WebsiteFilterType.Blocklist,
-        BlockPresetType type = BlockPresetType.Focus,
-        IEnumerable<string>? tags = null)
-        => BlockPreset.Create(Guid.NewGuid(), "Deep Work", policy, type, At.Utc(DateTime.UtcNow), tags);
+        BlockPresetType type = BlockPresetType.Focus)
+        => BlockPreset.Create(Guid.NewGuid(), "Deep Work", policy, type, At.Utc(DateTime.UtcNow));
 
     [Fact]
     public void Create_Valid_RaisesEventAndTrimsName()
@@ -35,14 +34,6 @@ public class BlockPresetTests
             Guid.NewGuid(), blank!, WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(DateTime.UtcNow));
 
         act.Should().Throw<ArgumentException>();
-    }
-
-    [Fact]
-    public void Create_WithTags_TrimsEachTag()
-    {
-        var preset = CreatePreset(tags: ["  work  ", "focus"]);
-
-        preset.Tags.Should().BeEquivalentTo(["work", "focus"]);
     }
 
     [Fact]
@@ -146,41 +137,9 @@ public class BlockPresetTests
     }
 
     [Fact]
-    public void AddTag_Duplicate_IsIgnored()
+    public void Duplicate_CopiesPolicyTypeAppsAndSites_UnderNewIdentity()
     {
-        var preset = CreatePreset();
-
-        preset.AddTag("work");
-        preset.AddTag("work");
-
-        preset.Tags.Should().ContainSingle();
-    }
-
-    [Fact]
-    public void AddTag_Blank_IsIgnored()
-    {
-        var preset = CreatePreset();
-
-        preset.AddTag("   ");
-
-        preset.Tags.Should().BeEmpty();
-    }
-
-    [Fact]
-    public void RemoveTag_RemovesExactMatch()
-    {
-        var preset = CreatePreset();
-        preset.AddTag("work");
-
-        preset.RemoveTag("work");
-
-        preset.Tags.Should().BeEmpty();
-    }
-
-    [Fact]
-    public void Duplicate_CopiesPolicyTypeTagsAppsAndSites_UnderNewIdentity()
-    {
-        var original = CreatePreset(WebsiteFilterType.Blocklist, BlockPresetType.Focus, ["work"]);
+        var original = CreatePreset(WebsiteFilterType.Blocklist, BlockPresetType.Focus);
         original.AddBlockedApp(new BlockedApp("chrome"));
         original.AddWebsite(new BlockedSite("facebook.com"));
         var newId = Guid.NewGuid();
@@ -192,7 +151,6 @@ public class BlockPresetTests
         copy.Name.Should().Be("Deep Work Copy");
         copy.WebsiteFilterType.Should().Be(original.WebsiteFilterType);
         copy.PresetType.Should().Be(original.PresetType);
-        copy.Tags.Should().BeEquivalentTo(original.Tags);
         copy.BlockedApps.Select(a => a.ProcessName).Should().BeEquivalentTo(
             original.BlockedApps.Select(a => a.ProcessName));
         copy.Websites.Select(s => s.Url).Should().BeEquivalentTo(

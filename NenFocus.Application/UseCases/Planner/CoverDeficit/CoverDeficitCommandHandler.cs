@@ -31,7 +31,7 @@ public sealed class CoverDeficitCommandHandler : ICommandHandler<CoverDeficitCom
         var verdict = contract.CheckRedemptionPlacement(command.PresetId, command.Slot, contractBlocks, now, _clock.TimeZone);
         var block = contract.PlaceRedemptionBlock(Guid.NewGuid(), command.PresetId, command.Slot, contractBlocks, now, _clock.TimeZone);
 
-        await _blocks.AddAsync(block, cancellationToken);
+        _blocks.Add(block);
         return CoverDeficitResult.Ok(block.Id, verdict.WasCapped);
     }
 }

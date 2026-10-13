@@ -24,8 +24,6 @@ public sealed class AcknowledgePostSessionCommandHandler
             return AcknowledgePostSessionResult.Fail("Post-session can only be acknowledged for a completed or missed session.");
 
         session.MarkPostSessionAcknowledged(_clock.Now);
-
-        await _sessions.SaveAsync(session, ct);
         return AcknowledgePostSessionResult.Ok();
     }
 }

@@ -1,51 +1,61 @@
 using FluentAssertions;
-using NenFocus.Application.Interfaces;
 using NenFocus.Application.UseCases.ContractPresets.DeleteContractPreset;
-using NSubstitute;
+using NenFocus.Domain.Entities;
+using NenFocus.Domain.Enums;
+using NenFocus.Domain.Services;
+using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Tests.Application.UseCases.ContractPresets;
 
-public class DeleteContractPresetTests
+/// <summary>Deleting a contract preset, run as the app runs it: real pipeline, real SQLite (Gap 110).</summary>
+public class DeleteContractPresetTests : UseCaseTestBase
 {
-    private readonly IContractPresetRepository _presets = Substitute.For<IContractPresetRepository>();
-    private readonly INenContractRepository _contracts = Substitute.For<INenContractRepository>();
+    private static readonly DateOnly Today = new(2026, 1, 5);
 
-    public DeleteContractPresetTests()
-    {
-        _contracts.HasContractsInEffectForPresetAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
-            .Returns(false);
-    }
+    public DeleteContractPresetTests() => Clock.SetNow(Today.ToDateTime(new TimeOnly(12, 0), DateTimeKind.Utc));
 
-    private DeleteContractPresetCommandHandler CreateHandler() => new(_presets);
-    private DeleteContractPresetValidator CreateValidator() => new(_contracts);
+    private static ContractPreset Preset() => ContractPreset.Create(Guid.NewGuid(), "Study Month", TestRules.Of(), workHours: null);
+
+    private Task<DeleteContractPresetResult> DeleteAsync(Guid presetId) =>
+        RunAsync(new DeleteContractPresetCommand { PresetId = presetId });
 
     [Fact]
-    public async Task Validate_NoContractsInEffect_IsValid()
+    public async Task NoContractInEffectFromIt_IsRemoved()
     {
-        var result = await CreateValidator().ValidateAsync(new DeleteContractPresetCommand { PresetId = Guid.NewGuid() });
+        var preset = Preset();
+        await SeedAsync(preset);
 
-        result.IsValid.Should().BeTrue();
-    }
+        var result = await DeleteAsync(preset.Id);
 
-    [Fact]
-    public async Task Validate_ContractInEffectForPreset_IsInvalid()
-    {
-        var presetId = Guid.NewGuid();
-        _contracts.HasContractsInEffectForPresetAsync(presetId, Arg.Any<CancellationToken>()).Returns(true);
-
-        var result = await CreateValidator().ValidateAsync(new DeleteContractPresetCommand { PresetId = presetId });
-
-        result.IsValid.Should().BeFalse();
+        result.Success.Should().BeTrue(result.ErrorMessage);
+        (await FindAsync<ContractPreset>(preset.Id)).Should().BeNull();
     }
 
     [Fact]
-    public async Task HandleAsync_DeletesPreset()
+    public async Task AlreadyGone_Succeeds()
     {
-        var presetId = Guid.NewGuid();
+        var result = await DeleteAsync(Guid.NewGuid());
 
-        var result = await CreateHandler().HandleAsync(new DeleteContractPresetCommand { PresetId = presetId }, CancellationToken.None);
+        result.Success.Should().BeTrue(result.ErrorMessage);
+    }
 
-        result.Success.Should().BeTrue();
-        await _presets.Received(1).DeleteAsync(presetId, Arg.Any<CancellationToken>());
+    [Fact]
+    public async Task AContractInEffectWasMadeFromIt_IsRefused_AndKept()
+    {
+        var preset = Preset();
+        var contract = TestContracts.Seal(
+            id: Guid.NewGuid(), name: "Contract", goal: new NenContractGoal("Goal"),
+            strictnessRule: StrictnessRule.Locked,
+            calendar: TestCalendars.For(Today, Today.AddDays(6), new DailyFloorRule.None()),
+            floorRule: new DailyFloorRule.None(), allowCancellation: false,
+            plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
+            sealedAt: At.Utc(Today.AddDays(-1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)), timeZone: At.UtcZone,
+            contractPresetId: preset.Id);
+        await SeedAsync(preset, contract);
+
+        var result = await DeleteAsync(preset.Id);
+
+        result.Success.Should().BeFalse();
+        (await FindAsync<ContractPreset>(preset.Id)).Should().NotBeNull();
     }
 }

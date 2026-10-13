@@ -28,8 +28,6 @@ public sealed class UpdatePlannedBlockCommandHandler : ICommandHandler<UpdatePla
         // redemption block keeps its receipt (decision 3). The day badges follow wherever it sits.
         existing.Reschedule(command.Slot);
         existing.AssignPreset(command.PresetId);
-
-        await _blocks.UpdateAsync(existing, cancellationToken);
         return UpdatePlannedBlockResult.Ok();
     }
 }

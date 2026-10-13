@@ -46,17 +46,6 @@ public sealed class SessionRepository : ISessionRepository
             .ToListAsync(cancellationToken);
     }
 
-    public async Task SaveAsync(Session session, CancellationToken cancellationToken = default)
-    {
-        var exists = await _context.Sessions
-            .AnyAsync(s => s.Id == session.Id, cancellationToken);
-
-        if (exists)
-            _context.Sessions.Update(session);
-        else
-            await _context.Sessions.AddAsync(session, cancellationToken);
-    }
-
     public async Task<Session?> GetByOriginatingBlockIdAsync(Guid focusBlockId, CancellationToken ct = default)
     {
         return await _context.Sessions
@@ -72,4 +61,6 @@ public sealed class SessionRepository : ISessionRepository
             .OrderBy(s => s.EndedAt)
             .ToListAsync(ct);
     }
+
+    public void Add(Session session) => _context.Sessions.Add(session);
 }

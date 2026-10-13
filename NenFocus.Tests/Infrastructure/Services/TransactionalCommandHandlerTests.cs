@@ -2,6 +2,7 @@ using FluentAssertions;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using NenFocus.Application.Interfaces;
+using NenFocus.Application.UseCases.NenContracts.SweepNenContractLifecycle;
 using NenFocus.Application.UseCases.Planner.DeletePlannedBlock;
 using NenFocus.Infrastructure.Services;
 using NSubstitute;
@@ -44,14 +45,32 @@ public class TransactionalCommandHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_InnerHandlerFails_StillCommitsUnitOfWork()
+    public async Task HandleAsync_InnerHandlerFails_DiscardsItsChangesInsteadOfCommitting()
     {
+        // Gap 110: a failed command saves nothing — the rule lives here once, not in every
+        // handler's habit of checking everything before changing anything.
         _inner.HandleAsync(Arg.Any<DeletePlannedBlockCommand>(), Arg.Any<CancellationToken>())
             .Returns(DeletePlannedBlockResult.Fail("Something went wrong."));
 
         await CreateHandler().HandleAsync(new DeletePlannedBlockCommand { BlockId = Guid.NewGuid() });
 
+        _uow.Received(1).Discard();
+        await _uow.DidNotReceive().CommitAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task HandleAsync_ResultThatCannotFail_AlwaysCommits()
+    {
+        // The sweeps' results carry no Success flag — they never fail, so they always commit.
+        var inner = Substitute.For<ICommandHandler<SweepNenContractLifecycleCommand, SweepNenContractLifecycleResult>>();
+        inner.HandleAsync(Arg.Any<SweepNenContractLifecycleCommand>(), Arg.Any<CancellationToken>())
+            .Returns(new SweepNenContractLifecycleResult());
+
+        await new TransactionalCommandHandler<SweepNenContractLifecycleCommand, SweepNenContractLifecycleResult>(inner, _uow)
+            .HandleAsync(new SweepNenContractLifecycleCommand());
+
         await _uow.Received(1).CommitAsync(Arg.Any<CancellationToken>());
+        _uow.DidNotReceive().Discard();
     }
 
     [Fact]

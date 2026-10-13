@@ -260,22 +260,6 @@
 										</StackPanel>
 										<TextBlock Text="{Binding CountText}"
                                                    FontSize="12" Foreground="#AAAABC"/>
-										<ItemsControl ItemsSource="{Binding Tags}">
-											<ItemsControl.ItemsPanel>
-												<ItemsPanelTemplate>
-													<WrapPanel Orientation="Horizontal"/>
-												</ItemsPanelTemplate>
-											</ItemsControl.ItemsPanel>
-											<ItemsControl.ItemTemplate>
-												<DataTemplate>
-													<Border Background="#F0F0F8" CornerRadius="4"
-                                                            Padding="8,3" Margin="0,0,6,4">
-														<TextBlock Text="{Binding}"
-                                                                   FontSize="11" Foreground="#888899"/>
-													</Border>
-												</DataTemplate>
-											</ItemsControl.ItemTemplate>
-										</ItemsControl>
 									</StackPanel>
 									<StackPanel Grid.Column="1" Classes="card-actions"
                                                 Orientation="Horizontal" Spacing="2"

@@ -27,7 +27,6 @@ public partial class BlockPresetCardViewModel : ViewModelBase
     public WebsiteFilterType WebsiteFilterType { get; }
     public BlockPresetType PresetType { get; }
 
-    public IReadOnlyList<string> Tags { get; }
     public IReadOnlyList<string> BlockedApps { get; }
     public IReadOnlyList<string> Websites { get; }
 
@@ -43,7 +42,6 @@ public partial class BlockPresetCardViewModel : ViewModelBase
         Name = dto.Name;
         PresetType = dto.PresetType;
         WebsiteFilterType = dto.WebsiteFilterType;
-        Tags = dto.Tags;
         BlockedApps = dto.BlockedApps;
         Websites = dto.Websites;
     }
@@ -119,8 +117,6 @@ public partial class BlockPresetPageViewModel : ViewModelBase
     [ObservableProperty] private string? _formError;
 
     [ObservableProperty] private string _formName = string.Empty;
-    [ObservableProperty] private string _newTagText = string.Empty;
-    public ObservableCollection<string> FormTags { get; } = new();
 
     [ObservableProperty] private int _activeTab;
     public bool IsWebsiteTab => ActiveTab == 0;
@@ -192,10 +188,8 @@ public partial class BlockPresetPageViewModel : ViewModelBase
         FormPresetType = BlockPresetType.Focus;
         IsAllowlist = false;
         ActiveTab = 0;
-        FormTags.Clear();
         FormSites.Clear();
         FormApps.Clear();
-        NewTagText = string.Empty;
         NewSiteText = string.Empty;
         SelectedSite = null;
         SelectedApp = null;
@@ -231,7 +225,6 @@ public partial class BlockPresetPageViewModel : ViewModelBase
         FormName = card.Name;
         FormPresetType = card.PresetType;
         IsAllowlist = card.WebsiteFilterType == WebsiteFilterType.Allowlist;
-        foreach (var t in card.Tags) FormTags.Add(t);
         foreach (var s in card.Websites) FormSites.Add(s);
         foreach (var a in card.BlockedApps) FormApps.Add(a);
         IsFormVisible = true;
@@ -287,18 +280,6 @@ public partial class BlockPresetPageViewModel : ViewModelBase
 
     [RelayCommand] private void SetBlocklist() => IsAllowlist = false;
     [RelayCommand] private void SetAllowlist() => IsAllowlist = true;
-
-    [RelayCommand]
-    private void AddTag()
-    {
-        var t = NewTagText.Trim();
-        if (!string.IsNullOrEmpty(t) && !FormTags.Contains(t, StringComparer.OrdinalIgnoreCase))
-            FormTags.Add(t);
-        NewTagText = string.Empty;
-    }
-
-    [RelayCommand]
-    private void RemoveTag(string tag) => FormTags.Remove(tag);
 
     [RelayCommand]
     private void AddSite()
@@ -385,7 +366,6 @@ public partial class BlockPresetPageViewModel : ViewModelBase
             {
                 PresetId = _editingPresetId.Value,
                 Name = name,
-                Tags = FormTags.ToList(),
                 WebsiteFilterType = policy,
                 PresetType = FormPresetType,
                 BlockedApps = FormApps.ToList(),
@@ -398,7 +378,6 @@ public partial class BlockPresetPageViewModel : ViewModelBase
             var result = await _commandDispatcher.DispatchAsync(new CreateBlockPresetCommand
             {
                 Name = name,
-                Tags = FormTags.ToList(),
                 WebsiteFilterType = policy,
                 PresetType = FormPresetType,
                 BlockedApps = FormApps.ToList(),

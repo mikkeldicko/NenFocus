@@ -1,27 +1,24 @@
 using FluentAssertions;
-using NenFocus.Application.Interfaces;
 using NenFocus.Application.UseCases.NenContracts.SaveReflection;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
+using NenFocus.Domain.Services;
 using NenFocus.Domain.ValueObjects;
-using NSubstitute;
 
 namespace NenFocus.Tests.Application.UseCases.NenContracts;
 
-public class SaveNenContractReflectionCommandHandlerTests
+/// <summary>Saving a contract's reflection, run as the app runs it: real pipeline, real SQLite (Gap 110).</summary>
+public class SaveNenContractReflectionCommandHandlerTests : UseCaseTestBase
 {
-    private static readonly Guid ContractId = Guid.NewGuid();
     private static readonly DateOnly StartDate = new(2026, 1, 1);
     private static readonly DateOnly EndDate = new(2026, 1, 7);
 
-    private readonly INenContractRepository _contracts = Substitute.For<INenContractRepository>();
-
-    private SaveNenContractReflectionCommandHandler CreateHandler() => new(_contracts);
+    public SaveNenContractReflectionCommandHandlerTests() => Clock.SetNow(EndDate.AddDays(1).ToDateTime(new TimeOnly(12, 0), DateTimeKind.Utc));
 
     private static NenContract CompletedContract()
     {
         var contract = TestContracts.Seal(
-            id: ContractId,
+            id: Guid.NewGuid(),
             name: "Focused Week",
             goal: new NenContractGoal("Ship it"),
             strictnessRule: StrictnessRule.Locked,
@@ -35,27 +32,22 @@ public class SaveNenContractReflectionCommandHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_ContractNotFound_Fails()
+    public async Task ContractNotFound_Fails()
     {
-        _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns((NenContract?)null);
-
-        var result = await CreateHandler().HandleAsync(
-            new SaveNenContractReflectionCommand { ContractId = ContractId, Reflection = "Went well" }, CancellationToken.None);
+        var result = await RunAsync(new SaveNenContractReflectionCommand { ContractId = Guid.NewGuid(), Reflection = "Went well" });
 
         result.Success.Should().BeFalse();
     }
 
     [Fact]
-    public async Task HandleAsync_CompletedContract_SavesReflection()
+    public async Task CompletedContract_StoresTheTrimmedReflection()
     {
         var contract = CompletedContract();
-        _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(contract);
+        await SeedAsync(contract);
 
-        var result = await CreateHandler().HandleAsync(
-            new SaveNenContractReflectionCommand { ContractId = ContractId, Reflection = "  Went well  " }, CancellationToken.None);
+        var result = await RunAsync(new SaveNenContractReflectionCommand { ContractId = contract.Id, Reflection = "  Went well  " });
 
-        result.Success.Should().BeTrue();
-        contract.Reflection.Should().Be("Went well");
-        await _contracts.Received(1).SaveAsync(contract, Arg.Any<CancellationToken>());
+        result.Success.Should().BeTrue(result.ErrorMessage);
+        (await FindAsync<NenContract>(contract.Id))!.Reflection.Should().Be("Went well");
     }
 }

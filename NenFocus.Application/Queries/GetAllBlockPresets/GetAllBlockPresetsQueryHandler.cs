@@ -15,9 +15,7 @@ public sealed class GetAllBlockPresetsQueryHandler
         GetAllBlockPresetsQuery query,
         CancellationToken cancellationToken = default)
     {
-        var presets = string.IsNullOrWhiteSpace(query.Tag)
-            ? await _presets.GetAllAsync(cancellationToken)
-            : await _presets.GetByTagsAsync([query.Tag], cancellationToken);
+        var presets = await _presets.GetAllAsync(cancellationToken);
 
         IEnumerable<Domain.Entities.BlockPreset> filtered = presets;
         if (query.PresetType.HasValue)

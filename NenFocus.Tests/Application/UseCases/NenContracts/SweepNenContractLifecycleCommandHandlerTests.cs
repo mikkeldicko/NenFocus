@@ -1,122 +1,108 @@
 using FluentAssertions;
+using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.UseCases.NenContracts.SweepNenContractLifecycle;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
+using NenFocus.Domain.Services;
 using NenFocus.Domain.ValueObjects;
-using NSubstitute;
 
 namespace NenFocus.Tests.Application.UseCases.NenContracts;
 
-public class SweepNenContractLifecycleCommandHandlerTests
+/// <summary>The contract lifecycle sweep, run as the heartbeat runs it: real pipeline, real SQLite (Gap 110).</summary>
+public class SweepNenContractLifecycleCommandHandlerTests : UseCaseTestBase
 {
     private static readonly DateTime Now = new(2026, 1, 5, 0, 0, 0, DateTimeKind.Utc);
+    private static readonly DateOnly Today = DateOnly.FromDateTime(Now);
 
-    private readonly INenContractRepository _contracts = Substitute.For<INenContractRepository>();
-    private readonly ISystemClock _clock = TestClock.Create();
+    public SweepNenContractLifecycleCommandHandlerTests() => Clock.SetNow(Now);
 
-    public SweepNenContractLifecycleCommandHandlerTests()
-    {
-        _clock.SetNow(Now);
-        _clock.SetTimeZoneOffset(TimeSpan.Zero);
-        _clock.SetTimeZoneOffset(TimeSpan.Zero);
-        SetInEffect();
-    }
-
-    private SweepNenContractLifecycleCommandHandler CreateHandler() => new(_contracts, _clock);
-
-    private static NenContract ScheduledContract(DateOnly startDate) => TestContracts.Seal(
+    private static NenContract Contract(DateOnly startDate, DateOnly endDate, DateOnly sealedOn) => TestContracts.Seal(
         id: Guid.NewGuid(),
         name: "Focused Week",
         goal: new NenContractGoal("Ship it"),
         strictnessRule: StrictnessRule.Locked,
-        calendar: TestCalendars.For(startDate, startDate.AddDays(6), new DailyFloorRule.None()),
+        calendar: TestCalendars.For(startDate, endDate, new DailyFloorRule.None()),
         floorRule: new DailyFloorRule.None(),
         allowCancellation: false,
         plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-        sealedAt: At.Utc(startDate.AddDays(-1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)), timeZone: At.UtcZone); // seals as Scheduled
+        sealedAt: At.Utc(sealedOn.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)), timeZone: At.UtcZone);
 
-    private static NenContract ActiveContract(DateOnly startDate, DateOnly endDate)
-    {
-        var contract = TestContracts.Seal(
-            id: Guid.NewGuid(),
-            name: "Focused Week",
-            goal: new NenContractGoal("Ship it"),
-            strictnessRule: StrictnessRule.Locked,
-            calendar: TestCalendars.For(startDate, endDate, new DailyFloorRule.None()),
-            floorRule: new DailyFloorRule.None(),
-            allowCancellation: false,
-            plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-            sealedAt: At.Utc(startDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)), timeZone: At.UtcZone); // seals as Active
-        return contract;
-    }
+    /// <summary>Sealed the day before it starts, so it is Scheduled.</summary>
+    private static NenContract ScheduledContract(DateOnly startDate) => Contract(startDate, startDate.AddDays(6), sealedOn: startDate.AddDays(-1));
 
-    private void SetInEffect(params NenContract[] contracts) =>
-        _contracts.GetAllInEffectAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<NenContract>)contracts);
+    /// <summary>Sealed on its first day, so it is Active.</summary>
+    private static NenContract ActiveContract(DateOnly startDate, DateOnly endDate) => Contract(startDate, endDate, sealedOn: startDate);
+
+    private Task<SweepNenContractLifecycleResult> SweepAsync() => RunAsync(new SweepNenContractLifecycleCommand());
+
+    private async Task<NenContractStatus> StoredStatusAsync(NenContract contract) =>
+        (await FindAsync<NenContract>(contract.Id))!.Status;
 
     [Fact]
-    public async Task HandleAsync_NothingDue_ReturnsEmptyResultAndSavesNothing()
+    public async Task NothingDue_ChangesNothing()
     {
-        SetInEffect(ScheduledContract(DateOnly.FromDateTime(Now).AddDays(3)));
+        var contract = ScheduledContract(Today.AddDays(3));
+        await SeedAsync(contract);
 
-        var result = await CreateHandler().HandleAsync(new SweepNenContractLifecycleCommand(), CancellationToken.None);
+        var result = await SweepAsync();
 
         result.ActivatedContractIds.Should().BeEmpty();
         result.CompletedContractIds.Should().BeEmpty();
-        await _contracts.DidNotReceive().SaveAsync(Arg.Any<NenContract>(), Arg.Any<CancellationToken>());
+        (await StoredStatusAsync(contract)).Should().Be(NenContractStatus.Scheduled);
     }
 
     [Fact]
-    public async Task HandleAsync_ContractDueForActivation_ActivatesSavesAndReportsIt()
+    public async Task AContractDueToStart_IsStoredActive_AndReported()
     {
-        var contract = ScheduledContract(DateOnly.FromDateTime(Now));
-        contract.Status.Should().Be(NenContractStatus.Scheduled);
-        SetInEffect(contract);
+        var contract = ScheduledContract(Today);
+        await SeedAsync(contract);
 
-        var result = await CreateHandler().HandleAsync(new SweepNenContractLifecycleCommand(), CancellationToken.None);
+        var result = await SweepAsync();
 
-        contract.Status.Should().Be(NenContractStatus.Active);
-        result.ActivatedContractIds.Should().ContainSingle().Which.Should().Be(contract.Id);
-        await _contracts.Received(1).SaveAsync(contract, Arg.Any<CancellationToken>());
+        (await StoredStatusAsync(contract)).Should().Be(NenContractStatus.Active);
+        result.ActivatedContractIds.Should().Equal(contract.Id);
     }
 
     [Fact]
-    public async Task HandleAsync_ContractDueForCompletion_CompletesSavesAndReportsIt()
+    public async Task AContractDueToEnd_IsStoredCompleted_AndItsRecapIsShown()
     {
-        var contract = ActiveContract(DateOnly.FromDateTime(Now).AddDays(-10), DateOnly.FromDateTime(Now).AddDays(-1));
-        contract.Status.Should().Be(NenContractStatus.Active);
-        SetInEffect(contract);
+        // Gap 110: the recap follows the saved NenContractCompletedEvent — the heartbeat no longer builds it.
+        var contract = ActiveContract(Today.AddDays(-10), Today.AddDays(-1));
+        await SeedAsync(contract);
+        var shown = new List<NenContractRecapDto>();
+        Resolve<IRecapRelay>().PostContractsReady += (_, recaps) => shown.AddRange(recaps);
 
-        var result = await CreateHandler().HandleAsync(new SweepNenContractLifecycleCommand(), CancellationToken.None);
+        var result = await SweepAsync();
 
-        contract.Status.Should().Be(NenContractStatus.Completed);
-        result.CompletedContractIds.Should().ContainSingle().Which.Should().Be(contract.Id);
-        await _contracts.Received(1).SaveAsync(contract, Arg.Any<CancellationToken>());
+        (await StoredStatusAsync(contract)).Should().Be(NenContractStatus.Completed);
+        result.CompletedContractIds.Should().Equal(contract.Id);
+        shown.Should().ContainSingle().Which.ContractId.Should().Be(contract.Id);
     }
 
     [Fact]
-    public async Task HandleAsync_BothActivationsAndCompletionsDue_HandlesBothInOneSweep()
+    public async Task StartsAndEndsDue_AreBothHandledInOneSweep()
     {
-        var toActivate = ScheduledContract(DateOnly.FromDateTime(Now));
-        var toComplete = ActiveContract(DateOnly.FromDateTime(Now).AddDays(-10), DateOnly.FromDateTime(Now).AddDays(-1));
-        SetInEffect(toActivate, toComplete);
+        var toActivate = ScheduledContract(Today);
+        var toComplete = ActiveContract(Today.AddDays(-10), Today.AddDays(-1));
+        await SeedAsync(toActivate, toComplete);
 
-        var result = await CreateHandler().HandleAsync(new SweepNenContractLifecycleCommand(), CancellationToken.None);
+        var result = await SweepAsync();
 
-        result.ActivatedContractIds.Should().ContainSingle().Which.Should().Be(toActivate.Id);
-        result.CompletedContractIds.Should().ContainSingle().Which.Should().Be(toComplete.Id);
+        result.ActivatedContractIds.Should().Equal(toActivate.Id);
+        result.CompletedContractIds.Should().Equal(toComplete.Id);
     }
 
     [Fact]
-    public async Task HandleAsync_WholePeriodAlreadyOver_ActivatesAndCompletesInOneSweep()
+    public async Task AWholePeriodAlreadyOver_IsActivatedAndCompletedInOneSweep()
     {
         // The app was closed for the contract's whole period.
-        var contract = ScheduledContract(DateOnly.FromDateTime(Now).AddDays(-10));
-        SetInEffect(contract);
+        var contract = ScheduledContract(Today.AddDays(-10));
+        await SeedAsync(contract);
 
-        var result = await CreateHandler().HandleAsync(new SweepNenContractLifecycleCommand(), CancellationToken.None);
+        var result = await SweepAsync();
 
-        contract.Status.Should().Be(NenContractStatus.Completed);
+        (await StoredStatusAsync(contract)).Should().Be(NenContractStatus.Completed);
         result.ActivatedContractIds.Should().ContainSingle();
         result.CompletedContractIds.Should().ContainSingle();
     }
@@ -126,32 +112,30 @@ public class SweepNenContractLifecycleCommandHandlerTests
     // while its block ran) and completed ~2 hours late.
 
     [Fact]
-    public async Task HandleAsync_JustAfterLocalMidnightAtUtcPlus2_ActivatesAContractStartingThatDay()
+    public async Task JustAfterLocalMidnightAtUtcPlus2_AContractStartingThatDay_IsActivated()
     {
         var localStartDay = new DateOnly(2026, 1, 5);
-        _clock.SetNow(new DateTime(2026, 1, 4, 22, 28, 0, DateTimeKind.Utc)); // 00:28 local on Jan 5
-        _clock.SetTimeZoneOffset(TimeSpan.FromHours(2));
-        _clock.SetTimeZoneOffset(TimeSpan.FromHours(2));
+        Clock.SetNow(new DateTime(2026, 1, 4, 22, 28, 0, DateTimeKind.Utc)); // 00:28 local on Jan 5
+        Clock.SetTimeZoneOffset(TimeSpan.FromHours(2));
         var contract = ScheduledContract(localStartDay);
-        SetInEffect(contract);
+        await SeedAsync(contract);
 
-        await CreateHandler().HandleAsync(new SweepNenContractLifecycleCommand(), CancellationToken.None);
+        await SweepAsync();
 
-        contract.Status.Should().Be(NenContractStatus.Active);
+        (await StoredStatusAsync(contract)).Should().Be(NenContractStatus.Active);
     }
 
     [Fact]
-    public async Task HandleAsync_JustAfterLocalMidnightAtUtcPlus2_CompletesAContractThatEndedYesterday()
+    public async Task JustAfterLocalMidnightAtUtcPlus2_AContractThatEndedYesterday_IsCompleted()
     {
         var localToday = new DateOnly(2026, 1, 5);
-        _clock.SetNow(new DateTime(2026, 1, 4, 22, 28, 0, DateTimeKind.Utc)); // 00:28 local on Jan 5
-        _clock.SetTimeZoneOffset(TimeSpan.FromHours(2));
-        _clock.SetTimeZoneOffset(TimeSpan.FromHours(2));
+        Clock.SetNow(new DateTime(2026, 1, 4, 22, 28, 0, DateTimeKind.Utc)); // 00:28 local on Jan 5
+        Clock.SetTimeZoneOffset(TimeSpan.FromHours(2));
         var contract = ActiveContract(localToday.AddDays(-7), localToday.AddDays(-1));
-        SetInEffect(contract);
+        await SeedAsync(contract);
 
-        await CreateHandler().HandleAsync(new SweepNenContractLifecycleCommand(), CancellationToken.None);
+        await SweepAsync();
 
-        contract.Status.Should().Be(NenContractStatus.Completed);
+        (await StoredStatusAsync(contract)).Should().Be(NenContractStatus.Completed);
     }
 }

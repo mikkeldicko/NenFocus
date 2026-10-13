@@ -7,7 +7,6 @@ public sealed record BlockPresetDto
 {
     public Guid Id { get; init; }
     public string Name { get; init; } = string.Empty;
-    public IReadOnlyList<string> Tags { get; init; } = [];
 
     public BlockPresetType PresetType { get; init; }
     public WebsiteFilterType WebsiteFilterType { get; init; }
@@ -21,7 +20,6 @@ public sealed record BlockPresetDto
     {
         Id = preset.Id,
         Name = preset.Name,
-        Tags = preset.Tags.ToList(),
         PresetType = preset.PresetType,
         WebsiteFilterType = preset.WebsiteFilterType,
         BlockedApps = preset.BlockedApps.Select(a => a.ProcessName).ToList(),

@@ -242,10 +242,6 @@ public class NenFocusDbContext : DbContext
             // each other, so sharing a name isn't a real collision.
             entity.HasIndex(p => new { p.Name, p.PresetType }).IsUnique();
 
-            entity.Property<string>("TagsSerialized")
-                .HasColumnName("Tags")
-                .HasDefaultValue("");
-
             entity.OwnsMany(p => p.BlockedApps, a =>
             {
                 a.ToTable("BlockedApps");
@@ -262,10 +258,10 @@ public class NenFocusDbContext : DbContext
             var bgAllowlistId     = new Guid("a0000001-0000-0000-0000-000000000004");
 
             entity.HasData(
-                new { Id = focusAllowlistId, Name = "AI & Dev Tools Only",    WebsiteFilterType = WebsiteFilterType.Allowlist, PresetType = BlockPresetType.Focus,      TagsSerialized = "" },
-                new { Id = focusBlocklistId, Name = "DBA block",              WebsiteFilterType = WebsiteFilterType.Blocklist, PresetType = BlockPresetType.Focus,      TagsSerialized = "" },
-                new { Id = bgBlocklistId,    Name = "Social Media Blocked",   WebsiteFilterType = WebsiteFilterType.Blocklist, PresetType = BlockPresetType.Background, TagsSerialized = "" },
-                new { Id = bgAllowlistId,    Name = "Work & Music Only",      WebsiteFilterType = WebsiteFilterType.Allowlist, PresetType = BlockPresetType.Background, TagsSerialized = "" }
+                new { Id = focusAllowlistId, Name = "AI & Dev Tools Only",    WebsiteFilterType = WebsiteFilterType.Allowlist, PresetType = BlockPresetType.Focus },
+                new { Id = focusBlocklistId, Name = "DBA block",              WebsiteFilterType = WebsiteFilterType.Blocklist, PresetType = BlockPresetType.Focus },
+                new { Id = bgBlocklistId,    Name = "Social Media Blocked",   WebsiteFilterType = WebsiteFilterType.Blocklist, PresetType = BlockPresetType.Background },
+                new { Id = bgAllowlistId,    Name = "Work & Music Only",      WebsiteFilterType = WebsiteFilterType.Allowlist, PresetType = BlockPresetType.Background }
             );
 
             entity.OwnsMany(p => p.Websites, s =>

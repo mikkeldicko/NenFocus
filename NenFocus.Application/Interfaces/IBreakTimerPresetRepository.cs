@@ -15,12 +15,6 @@ public interface IBreakTimerPresetRepository
 
     Task<BreakTimerPreset?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
 
-    Task AddAsync(BreakTimerPreset preset, CancellationToken cancellationToken = default);
-
-    Task UpdateAsync(BreakTimerPreset preset, CancellationToken cancellationToken = default);
-
-    Task DeleteAsync(Guid id, CancellationToken cancellationToken = default);
-
     /// <summary>
     /// Returns true if a preset with the given name already exists. Used by validators
     /// to enforce unique preset names; excludeId omits the preset being updated from
@@ -31,4 +25,10 @@ public interface IBreakTimerPresetRepository
         string name,
         Guid? excludeId = null,
         CancellationToken cancellationToken = default);
+
+    /// <summary>Adds a new break timer preset; it is saved when the command commits (Gap 110).</summary>
+    void Add(BreakTimerPreset preset);
+
+    /// <summary>Removes a loaded break timer preset; saved when the command commits. Ask first whether it may go.</summary>
+    void Remove(BreakTimerPreset preset);
 }

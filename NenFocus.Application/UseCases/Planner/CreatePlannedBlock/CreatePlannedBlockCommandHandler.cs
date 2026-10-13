@@ -43,7 +43,7 @@ public sealed class CreatePlannedBlockCommandHandler : ICommandHandler<CreatePla
             ? FocusBlock.Create(Guid.NewGuid(), command.PresetId, command.Slot, membership: membership)
             : BackgroundBlock.Create(Guid.NewGuid(), command.PresetId, command.Slot, membership: membership);
 
-        await _blocks.AddAsync(block, cancellationToken);
+        _blocks.Add(block);
         return CreatePlannedBlockResult.Ok(block.Id);
     }
 }

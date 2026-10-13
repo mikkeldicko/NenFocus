@@ -23,9 +23,9 @@ public sealed class SplitPlannedBlockCommandHandler : ICommandHandler<SplitPlann
         // time order — never recalculated, no piece shortened (Gap 106).
         var (first, second) = original.SplitInto(Guid.NewGuid(), command.First, Guid.NewGuid(), command.Second);
 
-        await _blocks.DeleteAsync(original.Id, cancellationToken);
-        await _blocks.AddAsync(first, cancellationToken);
-        await _blocks.AddAsync(second, cancellationToken);
+        _blocks.Remove(original);
+        _blocks.Add(first);
+        _blocks.Add(second);
 
         return SplitPlannedBlockResult.Ok(first.Id, second.Id);
     }

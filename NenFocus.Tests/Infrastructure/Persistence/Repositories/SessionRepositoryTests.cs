@@ -10,6 +10,9 @@ public class SessionRepositoryTests : SqliteRepositoryTestBase
 {
     private SessionRepository CreateRepository() => new(Context);
 
+    /// <summary>Reads through a context of its own, so they see the database, not the tracker that saved (Gap 110).</summary>
+    private SessionRepository Fresh() => new(CreateFreshContext());
+
     private static Session CreateSession(Guid? presetId = null, DateTime? startedAt = null)
     {
         var session = Session.Create(
@@ -28,42 +31,41 @@ public class SessionRepositoryTests : SqliteRepositoryTestBase
     }
 
     [Fact]
-    public async Task SaveAsync_NewSession_ThenGetById_Retrieves()
+    public async Task Add_NewSession_ThenGetById_Retrieves()
     {
         var repo = CreateRepository();
         var session = CreateSession();
 
-        await repo.SaveAsync(session);
+        repo.Add(session);
         await Context.SaveChangesAsync();
 
-        (await CreateRepository().GetByIdAsync(session.Id)).Should().NotBeNull();
+        (await Fresh().GetByIdAsync(session.Id)).Should().NotBeNull();
     }
 
     [Fact]
-    public async Task SaveAsync_ExistingSession_UpdatesStatus()
+    public async Task CommitAfterComplete_StoresTheNewStatus()
     {
         var repo = CreateRepository();
         var session = CreateSession();
-        await repo.SaveAsync(session);
+        repo.Add(session);
         await Context.SaveChangesAsync();
 
         session.Complete(At.Utc(DateTime.UtcNow));
-        await CreateRepository().SaveAsync(session);
         await Context.SaveChangesAsync();
 
-        var reloaded = await CreateRepository().GetByIdAsync(session.Id);
+        var reloaded = await Fresh().GetByIdAsync(session.Id);
         reloaded!.Status.Should().Be(SessionStatus.Completed);
     }
 
     [Fact]
-    public async Task SaveAsync_BreakScheduleAndLabel_RoundTripThroughTheDatabase()
+    public async Task Add_BreakScheduleAndLabel_RoundTripThroughTheDatabase()
     {
         var session = Session.Create(
             Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(120)),
             Guid.NewGuid(), SessionOrigin.Spontaneous);
         var schedule = new BreakTimer(25, 5, 4, 15).ScheduleFor(TimeSpan.FromMinutes(120));
         session.Start(At.Utc(new DateTime(2026, 1, 1, 17, 0, 0, DateTimeKind.Utc)), breakSchedule: schedule, breakPresetName: "Classic");
-        await CreateRepository().SaveAsync(session);
+        CreateRepository().Add(session);
         await Context.SaveChangesAsync();
 
         await using var fresh = CreateFreshContext();
@@ -74,18 +76,17 @@ public class SessionRepositoryTests : SqliteRepositoryTestBase
     }
 
     [Fact]
-    public async Task SaveAsync_CompleteTrimsSchedule_StoredBreaksAreReplacedNotAppended()
+    public async Task CommitAfterComplete_TrimsSchedule_StoredBreaksAreReplacedNotAppended()
     {
         var startedAt = new DateTime(2026, 1, 1, 17, 0, 0, DateTimeKind.Utc);
         var session = Session.Create(
             Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(120)),
             Guid.NewGuid(), SessionOrigin.Spontaneous);
         session.Start(At.Utc(startedAt), breakSchedule: new BreakTimer(25, 5, 4, 15).ScheduleFor(TimeSpan.FromMinutes(120)));
-        await CreateRepository().SaveAsync(session);
+        CreateRepository().Add(session);
         await Context.SaveChangesAsync();
 
         session.Complete(At.Utc(startedAt.AddMinutes(57))); // mid second break
-        await CreateRepository().SaveAsync(session);
         await Context.SaveChangesAsync();
 
         await using var fresh = CreateFreshContext();
@@ -98,7 +99,7 @@ public class SessionRepositoryTests : SqliteRepositoryTestBase
     [Fact]
     public async Task GetActiveAsync_NoActiveSession_ReturnsNull()
     {
-        var result = await CreateRepository().GetActiveAsync();
+        var result = await Fresh().GetActiveAsync();
 
         result.Should().BeNull();
     }
@@ -108,10 +109,10 @@ public class SessionRepositoryTests : SqliteRepositoryTestBase
     {
         var repo = CreateRepository();
         var session = CreateSession();
-        await repo.SaveAsync(session);
+        repo.Add(session);
         await Context.SaveChangesAsync();
 
-        var result = await CreateRepository().GetActiveAsync();
+        var result = await Fresh().GetActiveAsync();
 
         result!.Id.Should().Be(session.Id);
     }
@@ -122,10 +123,10 @@ public class SessionRepositoryTests : SqliteRepositoryTestBase
         var repo = CreateRepository();
         var session = CreateSession();
         session.Complete(At.Utc(DateTime.UtcNow));
-        await repo.SaveAsync(session);
+        repo.Add(session);
         await Context.SaveChangesAsync();
 
-        var result = await CreateRepository().GetActiveAsync();
+        var result = await Fresh().GetActiveAsync();
 
         result.Should().BeNull();
     }
@@ -136,11 +137,11 @@ public class SessionRepositoryTests : SqliteRepositoryTestBase
         var repo = CreateRepository();
         var inRange = PastSession(startedAt: new DateTime(2026, 1, 15, 10, 0, 0, DateTimeKind.Utc));
         var outOfRange = PastSession(startedAt: new DateTime(2026, 3, 1, 10, 0, 0, DateTimeKind.Utc));
-        await repo.SaveAsync(inRange);
-        await repo.SaveAsync(outOfRange);
+        repo.Add(inRange);
+        repo.Add(outOfRange);
         await Context.SaveChangesAsync();
 
-        var result = await CreateRepository().GetHistoryAsync(
+        var result = await Fresh().GetHistoryAsync(
             At.UtcZone.SlotCovering(new DateOnly(2026, 1, 1), new DateOnly(2026, 1, 31)));
 
         result.Should().ContainSingle(s => s.Id == inRange.Id);
@@ -155,11 +156,11 @@ public class SessionRepositoryTests : SqliteRepositoryTestBase
         var repo = CreateRepository();
         var justAfterLocalMidnight = PastSession(startedAt: new DateTime(2026, 1, 14, 23, 30, 0, DateTimeKind.Utc)); // 15 Jan 00:30 local
         var lateOnTheUtcDay = PastSession(startedAt: new DateTime(2026, 1, 15, 23, 30, 0, DateTimeKind.Utc));       // 16 Jan 00:30 local
-        await repo.SaveAsync(justAfterLocalMidnight);
-        await repo.SaveAsync(lateOnTheUtcDay);
+        repo.Add(justAfterLocalMidnight);
+        repo.Add(lateOnTheUtcDay);
         await Context.SaveChangesAsync();
 
-        var result = await CreateRepository().GetHistoryAsync(copenhagen.SlotCovering(new DateOnly(2026, 1, 15)));
+        var result = await Fresh().GetHistoryAsync(copenhagen.SlotCovering(new DateOnly(2026, 1, 15)));
 
         result.Should().ContainSingle(s => s.Id == justAfterLocalMidnight.Id);
     }
@@ -173,12 +174,12 @@ public class SessionRepositoryTests : SqliteRepositoryTestBase
         var atEnd = PastSession(startedAt: new DateTime(2026, 1, 16, 0, 0, 0, DateTimeKind.Utc));
         var neverStarted = Session.Create(
             Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(30)), Guid.NewGuid(), SessionOrigin.Spontaneous);
-        await repo.SaveAsync(atStart);
-        await repo.SaveAsync(atEnd);
-        await repo.SaveAsync(neverStarted);
+        repo.Add(atStart);
+        repo.Add(atEnd);
+        repo.Add(neverStarted);
         await Context.SaveChangesAsync();
 
-        var result = await CreateRepository().GetHistoryAsync(slot);
+        var result = await Fresh().GetHistoryAsync(slot);
 
         result.Should().ContainSingle(s => s.Id == atStart.Id);
     }
@@ -190,11 +191,11 @@ public class SessionRepositoryTests : SqliteRepositoryTestBase
         var repo = CreateRepository();
         var matching = PastSession(presetId, new DateTime(2026, 1, 15, 10, 0, 0, DateTimeKind.Utc));
         var other = PastSession(Guid.NewGuid(), new DateTime(2026, 1, 16, 10, 0, 0, DateTimeKind.Utc));
-        await repo.SaveAsync(matching);
-        await repo.SaveAsync(other);
+        repo.Add(matching);
+        repo.Add(other);
         await Context.SaveChangesAsync();
 
-        var result = await CreateRepository().GetHistoryAsync(
+        var result = await Fresh().GetHistoryAsync(
             At.UtcZone.SlotCovering(new DateOnly(2026, 1, 1), new DateOnly(2026, 1, 31)), presetId);
 
         result.Should().ContainSingle(s => s.Id == matching.Id);
@@ -206,11 +207,11 @@ public class SessionRepositoryTests : SqliteRepositoryTestBase
         var repo = CreateRepository();
         var earlier = PastSession(startedAt: new DateTime(2026, 1, 10, 10, 0, 0, DateTimeKind.Utc));
         var later = PastSession(startedAt: new DateTime(2026, 1, 20, 10, 0, 0, DateTimeKind.Utc));
-        await repo.SaveAsync(earlier);
-        await repo.SaveAsync(later);
+        repo.Add(earlier);
+        repo.Add(later);
         await Context.SaveChangesAsync();
 
-        var result = await CreateRepository().GetHistoryAsync(At.UtcZone.SlotCovering(new DateOnly(2026, 1, 1), new DateOnly(2026, 1, 31)));
+        var result = await Fresh().GetHistoryAsync(At.UtcZone.SlotCovering(new DateOnly(2026, 1, 1), new DateOnly(2026, 1, 31)));
 
         result.Select(s => s.Id).Should().Equal(later.Id, earlier.Id);
     }
@@ -218,7 +219,7 @@ public class SessionRepositoryTests : SqliteRepositoryTestBase
     [Fact]
     public async Task GetByOriginatingBlockIdAsync_NoSessionReferencesBlock_ReturnsNull()
     {
-        var result = await CreateRepository().GetByOriginatingBlockIdAsync(Guid.NewGuid());
+        var result = await Fresh().GetByOriginatingBlockIdAsync(Guid.NewGuid());
 
         result.Should().BeNull();
     }
@@ -233,10 +234,10 @@ public class SessionRepositoryTests : SqliteRepositoryTestBase
             Guid.NewGuid(), SessionOrigin.Planned, originatingBlockId: blockId);
         var scheduledStart = DateTime.UtcNow.AddHours(-1);
         session.Miss(new TimeSlot(At.Utc(scheduledStart), At.Utc(scheduledStart.AddMinutes(30))));
-        await repo.SaveAsync(session);
+        repo.Add(session);
         await Context.SaveChangesAsync();
 
-        var result = await CreateRepository().GetByOriginatingBlockIdAsync(blockId);
+        var result = await Fresh().GetByOriginatingBlockIdAsync(blockId);
 
         result!.Id.Should().Be(session.Id);
     }
@@ -247,8 +248,8 @@ public class SessionRepositoryTests : SqliteRepositoryTestBase
     public async Task TwoRunningSessions_CantBeStored()
     {
         var repo = CreateRepository();
-        await repo.SaveAsync(CreateSession());
-        await repo.SaveAsync(CreateSession());
+        repo.Add(CreateSession());
+        repo.Add(CreateSession());
 
         var act = () => Context.SaveChangesAsync();
 
@@ -268,8 +269,8 @@ public class SessionRepositoryTests : SqliteRepositoryTestBase
         }
 
         var repo = CreateRepository();
-        await repo.SaveAsync(ForTheBlock());
-        await repo.SaveAsync(ForTheBlock());
+        repo.Add(ForTheBlock());
+        repo.Add(ForTheBlock());
 
         var act = () => Context.SaveChangesAsync();
 

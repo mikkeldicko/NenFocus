@@ -21,34 +21,6 @@ public interface IPlannedBlockRepository
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Persists a new planned block.
-    /// </summary>
-    Task AddAsync(
-        PlannedBlock block,
-        CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Persists changes to an existing planned block.
-    /// </summary>
-    Task UpdateAsync(
-        PlannedBlock block,
-        CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Saves a planned block — add or update.
-    /// </summary>
-    Task SaveAsync(
-        PlannedBlock block,
-        CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Removes a planned block by Id.
-    /// </summary>
-    Task DeleteAsync(
-        Guid id,
-        CancellationToken cancellationToken = default);
-
-    /// <summary>
     /// Returns true if any planned block after <paramref name="after"/> references the given preset.
     /// Used to guard delete/update operations.
     /// </summary>
@@ -72,4 +44,10 @@ public interface IPlannedBlockRepository
     Task<IReadOnlyList<PlannedBlock>> GetForContractAsync(
         Guid contractId,
         CancellationToken cancellationToken = default);
+
+    /// <summary>Adds a new planned block; it is saved when the command commits (Gap 110).</summary>
+    void Add(PlannedBlock block);
+
+    /// <summary>Removes a loaded planned block; saved when the command commits. Ask first whether it may go.</summary>
+    void Remove(PlannedBlock block);
 }

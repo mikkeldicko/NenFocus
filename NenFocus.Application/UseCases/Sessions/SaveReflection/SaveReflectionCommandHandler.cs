@@ -21,8 +21,6 @@ public sealed class SaveReflectionCommandHandler : ICommandHandler<SaveReflectio
             return SaveReflectionResult.Fail("Reflection can only be set on a completed or missed session.");
 
         session.SetReflection(command.Reflection);
-
-        await _sessions.SaveAsync(session, ct);
         return SaveReflectionResult.Ok();
     }
 }

@@ -24,6 +24,15 @@ public sealed class TransactionalCommandHandler<TCommand, TResult>
     {
         var result = await _inner.HandleAsync(command, cancellationToken);
 
+        // A failed command saves nothing (Gap 110): whatever it changed before failing is thrown
+        // away, so it can't be committed now or ride along on the next command in this scope.
+        // Results without a Success flag (the sweeps) never fail.
+        if (result is ICommandResult { Success: false })
+        {
+            _uow.Discard();
+            return result;
+        }
+
         try
         {
             await _uow.CommitAsync(cancellationToken);

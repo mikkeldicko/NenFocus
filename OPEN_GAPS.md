@@ -537,20 +537,6 @@ After Gap 65, extending means appending Contract Days generated with `ContractCa
 
 \---
 
-### Gap 110 — Repositories as Collections: the Unit of Work Saves Changes (raised 2026-10-07 during Gap 92, A8; direction agreed, not built)
-
-**Why it's a gap:** the six repositories each write differently. Blocks and contracts have `AddAsync`, `UpdateAsync` and an add-or-update `SaveAsync` — the contract `UpdateAsync` is empty and has no callers, and all nine `SaveAsync` calls are on objects that already exist. Sessions have only `SaveAsync` (adding new sessions through it); the three preset repositories have `AddAsync` + `UpdateAsync`. Every delete takes an id, so a handler can delete what it never loaded or asked.
-
-**Direction (decided 2026-10-07, option C — the classic DDD repository):** a repository behaves like a collection of aggregates — `Add`, reads, `Remove(aggregate)`; no update or save method. Changes to a loaded aggregate are written by the unit of work that already wraps every command (`TransactionalCommandHandler` → `EfCoreUnitOfWork.CommitAsync` → one `SaveChangesAsync`), through EF's change tracking. `Remove` takes the aggregate, so a handler must load it — and ask it (Gap 92's `CheckDelete`) — first. Applies to all six repositories. `BlockedAttemptTracker` keeps its own save: it runs outside any command, so there is no unit of work around it.
-
-**Order (Design Review Rule 9 — the assumption is unproven):** (1) a round-trip test per aggregate — load, change, commit with no update call, reload — including every converter/JSON field (`Receipt`, calendar days, `Membership`, `BreakSchedule`, `BlockPreset`'s owned lists); (2) fix any value comparer a test exposes; (3) only then delete `UpdateAsync`/`SaveAsync` and turn `DeleteAsync(id)` into `RemoveAsync(aggregate)`. If an aggregate can't be trusted to track, it keeps an explicit update and the gap says why.
-
-**Size:** 118 references in 24 test files; handler tests that check "save was called" change to checking the aggregate's new state (the round-trip tests prove the saving).
-
-**Guard:** the round-trip tests; `InterfaceSizeRuleTests` counts drop for all six repositories.
-
-\---
-
 ### Gap 112 — Infrastructure Holds No Rules (raised 2026-10-08 during a review of the Infrastructure layer; findings recorded, not interrogated; after Gap 110)
 
 **Why it's a gap:** a read of every Infrastructure file (2026-10-08) found three business rules living in Infrastructure, and three services there that touch nothing outside the app. Infrastructure's job is the outside world (`MODULE_STANDARDS.md` → Layer Responsibilities: "Forbidden: business rules that belong in Domain or Application").
@@ -605,7 +591,8 @@ After Gap 65, extending means appending Contract Days generated with `ContractCa
 2. Where reflection lives: C's split (miss note on the block, run note on the session) or every note on the block; one value object for "reflect once ended, acknowledge once", also used by `NenContract` (its `Reflection`/`PostContractAcknowledgedAt` mirror `Session`'s).
 3. Whether the miss outcome is stored (frozen — Insights snapshot rule) or worked out from stamps that can't change after the block ends.
 4. S5: one owner for "when the run began/ended" — the session or the block.
-5. Deleting an ended block that has a session or a stored outcome — refuse it, or history loses its anchor.
+5. Deleting an ended block that has a session or a stored outcome — refuse it, or history loses its anchor. A future "delete a session started by mistake" (wanted, 2026-10-08) is decided here: it means removing its walk-in block with the session; for a planned block, whether undoing the attempt makes the block missed. Leading candidate (Gap 110 interrogation): FHIR's "entered in error" — a status that hides the record, not a delete; NenFocus deletes only what has no history (Scheduled contracts, future blocks, presets) and history changes state (Break, End Early, Cancel). `ISessionRepository` has no `Remove` until then (Gap 110).
+5b. **History loses its preset name (found 2026-10-08, Gap 110):** a session stores only `BlockPresetId` and Post-Session looks the name up when shown; a block preset may be deleted once only past blocks use it, so past sessions (and blocks) lose it — against the frozen-snapshot rule. DDD fix: snapshot the name at Start, as `BreakPresetName` already is.
 6. A walk-in that ends early; a walk-in outside any contract; what Gap 68's drafting does with walk-ins inside a drafted period; keep-blocking during breaks for a Bonus walk-in (Gap 67).
 7. Migration: existing spontaneous sessions get blocks; existing missed sessions become block outcomes (the dev DB may be dropped).
 8. Order against Gap 107, which owns the overlays these records feed.
@@ -622,6 +609,18 @@ After Gap 65, extending means appending Contract Days generated with `ContractCa
 **Absorbs:** Gap 79 and Gap 67's session half (their write-ups stay as input); `DOMAIN_DICTIONARY.md`'s "a Spontaneous session creates no Block" and Missed Session section are rewritten when this closes.
 
 **Guard (to settle at interrogation):** candidates — no command handler holds another command handler (red today on the sweep); every `Session` has an originating block; `Session` has no `Missed` status (the compiler, once removed).
+
+\---
+
+### Gap 115 — Query Handler Tests on Real SQLite (raised 2026-10-08 during Gap 110's interrogation; direction agreed, not built; after Gap 114)
+
+**Why it's a gap:** Gap 110 moves command handler tests onto real SQLite through the real pipeline (validation + transaction), mocking only what lies outside the app (enforcement, notifier, clock) — the managed database is no longer faked, after Gap 97 showed mocked handler tests can't see storage. Query handler tests were left out to keep Gap 110 to one rule: all 21 files in `NenFocus.Tests/Application/Queries/` mock repositories (4 of the 25 queries have no test).
+
+**Scope widened 2026-10-08 (Gap 110, phase 3):** the rule `TestDoubleRuleTests.ApplicationTestsDoNotFakeRepositories` listed 65 files. Gap 110 converts the command handler tests and folds 12 validator tests into them; left here: the 21 query tests, the two session validator tests (`StartSession`, `MarkFocusBlockMissed` — after Gap 114 rewrites those commands), the 4 event handler tests and `BlockMarkerNotifierTests`. Fold each remaining validator test into its command's use-case test.
+
+**Direction:** convert them the same way. Gap 110 adds a shrink-only list of the query test files that still mock a repository, so "later" is counted; any file touched before this gap may leave the list early. Placed after Gap 114 because 114 rewrites several session/miss queries (`GetUnacknowledgedPostSessions`, `GetSessionSnapshotForBlock`, history) — converting those first would be done twice.
+
+**Guard:** the list reaches zero and is deleted; the rule "no Application test mocks a repository" takes its place.
 
 \---
 

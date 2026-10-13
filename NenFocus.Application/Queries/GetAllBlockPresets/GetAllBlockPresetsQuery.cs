@@ -6,6 +6,5 @@ namespace NenFocus.Application.Queries.GetAllBlockPresets;
 
 public sealed record GetAllBlockPresetsQuery : IQuery<IReadOnlyList<BlockPresetDto>>
 {
-    public string? Tag { get; init; }
     public BlockPresetType? PresetType { get; init; }
 }

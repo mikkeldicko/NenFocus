@@ -25,7 +25,6 @@ public sealed class AcknowledgePostContractCommandHandler
 
         contract.MarkPostContractAcknowledged(_clock.Now);
 
-        await _contracts.SaveAsync(contract, ct);
         return AcknowledgePostContractResult.Ok();
     }
 }

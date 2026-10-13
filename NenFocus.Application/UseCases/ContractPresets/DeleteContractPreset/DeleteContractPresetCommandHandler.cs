@@ -16,7 +16,9 @@ public sealed class DeleteContractPresetCommandHandler
         DeleteContractPresetCommand command,
         CancellationToken cancellationToken = default)
     {
-        await _presets.DeleteAsync(command.PresetId, cancellationToken);
+        // Already gone is done: removing is idempotent (Gap 110).
+        if (await _presets.GetByIdAsync(command.PresetId, cancellationToken) is { } preset)
+            _presets.Remove(preset);
         return DeleteContractPresetResult.Ok();
     }
 }

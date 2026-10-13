@@ -11,7 +11,9 @@ public sealed class DeletePlannedBlockCommandHandler : ICommandHandler<DeletePla
 
     public async Task<DeletePlannedBlockResult> HandleAsync(DeletePlannedBlockCommand command, CancellationToken cancellationToken = default)
     {
-        await _blocks.DeleteAsync(command.BlockId, cancellationToken);
+        // Already gone is done: removing is idempotent (Gap 110).
+        if (await _blocks.GetByIdAsync(command.BlockId, cancellationToken) is { } block)
+            _blocks.Remove(block);
         return DeletePlannedBlockResult.Ok();
     }
 }

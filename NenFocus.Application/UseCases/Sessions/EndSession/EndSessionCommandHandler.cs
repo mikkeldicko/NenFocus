@@ -47,7 +47,6 @@ public sealed class EndSessionCommandHandler
         // recorded end, never "now", so an end noticed late can't leak past the plan.
         var endedAt = session.EndedAt!.Value;
 
-        await _sessions.SaveAsync(session, ct);
 
         FocusBlock? originatingFocusBlock = null;
         if (session.OriginatingBlockId.HasValue)
@@ -60,7 +59,6 @@ public sealed class EndSessionCommandHandler
                 // Session.EndedAt, never a filtered one (Gap 86). Every reader compares it to
                 // End itself, so an on-time end changes no answer.
                 focusBlock.MarkSessionEnded(endedAt);
-                await _plannedBlocks.SaveAsync(focusBlock, ct);
             }
         }
 

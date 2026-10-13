@@ -1,229 +1,205 @@
 using FluentAssertions;
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
-using NenFocus.Application.Queries.GetNenContractRecap;
 using NenFocus.Application.UseCases.NenContracts.Break;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
 using NenFocus.Domain.Services;
 using NenFocus.Domain.ValueObjects;
-using NSubstitute;
 
 namespace NenFocus.Tests.Application.UseCases.NenContracts;
 
-public class BreakNenContractCommandHandlerTests
+/// <summary>Breaking a contract, run as the app runs it: real pipeline, real SQLite (Gap 110).</summary>
+public class BreakNenContractCommandHandlerTests : UseCaseTestBase
 {
     private static readonly DateTime Now = new(2026, 1, 5, 12, 0, 0, DateTimeKind.Utc);
     private static readonly DateOnly StartDate = new(2026, 1, 1);
     private static readonly DateOnly EndDate = new(2026, 1, 7);
 
-    private readonly INenContractRepository _contracts = Substitute.For<INenContractRepository>();
-    private readonly IPlannedBlockRepository _blocks = Substitute.For<IPlannedBlockRepository>();
-    private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
-    private readonly ISystemClock _clock = TestClock.Create();
-    private readonly IQueryHandler<GetNenContractRecapQuery, NenContractRecapDto?> _recap =
-        Substitute.For<IQueryHandler<GetNenContractRecapQuery, NenContractRecapDto?>>();
+    public BreakNenContractCommandHandlerTests() => Clock.SetNow(Now);
 
-    public BreakNenContractCommandHandlerTests()
-    {
-        _clock.SetNow(Now);
-        _clock.SetTimeZoneOffset(TimeSpan.Zero);
-        _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns((Session?)null);
-        _recap.HandleAsync(Arg.Any<GetNenContractRecapQuery>(), Arg.Any<CancellationToken>())
-            .Returns(new NenContractRecapDto());
-    }
-
-    private BreakNenContractCommandHandler CreateHandler() =>
-        new(_contracts, _blocks, _sessions, _clock, _recap);
-
-    private static Session CreatePlannedSession(Guid originatingBlockId)
-    {
-        var session = Session.Create(
-            Guid.NewGuid(),
-            new SessionGoal("Focus"),
-            new SessionDuration(TimeSpan.FromMinutes(30)),
-            Guid.NewGuid(),
-            SessionOrigin.Planned,
-            originatingBlockId: originatingBlockId);
-        session.Start(At.Utc(Now.AddMinutes(-10)));
-        return session;
-    }
-
-    private static NenContract ActiveCancellableContract() => TestContracts.Seal(
+    /// <summary>Active from its first day unless sealed earlier (then Scheduled until it starts).</summary>
+    private static NenContract CancellableContract(bool allowCancellation = true, DateOnly? sealedOn = null) => TestContracts.Seal(
         id: Guid.NewGuid(),
         name: "Focused Week",
         goal: new NenContractGoal("Ship it"),
         strictnessRule: StrictnessRule.DailyFlexibility,
         calendar: TestCalendars.For(StartDate, EndDate, new DailyFloorRule.None()),
         floorRule: new DailyFloorRule.None(),
-        allowCancellation: true,
+        allowCancellation: allowCancellation,
         plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
-        sealedAt: At.Utc(StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)), timeZone: At.UtcZone);
+        sealedAt: At.Utc((sealedOn ?? StartDate).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)), timeZone: At.UtcZone);
+
+    private static FocusBlock Member(NenContract contract, DateTime start, DateTime end, ContractMembership? membership = null) =>
+        FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(start, end), membership: membership ?? TestContracts.Committed(contract.Id));
+
+    private Task<BreakNenContractResult> BreakAsync(Guid contractId) =>
+        RunAsync(new BreakNenContractCommand { ContractId = contractId });
 
     [Fact]
-    public async Task HandleAsync_ContractNotFound_FailsWithoutMutating()
+    public async Task ContractNotFound_Fails()
     {
-        _contracts.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((NenContract?)null);
-
-        var result = await CreateHandler().HandleAsync(
-            new BreakNenContractCommand { ContractId = Guid.NewGuid() }, CancellationToken.None);
+        var result = await BreakAsync(Guid.NewGuid());
 
         result.Success.Should().BeFalse();
-        await _contracts.DidNotReceive().SaveAsync(Arg.Any<NenContract>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task HandleAsync_ValidContract_BreaksItAndSaves()
+    public async Task EmptyContractId_IsRefused()
     {
-        var contract = ActiveCancellableContract();
-        _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
-        _blocks.GetForContractAsync(contract.Id, Arg.Any<CancellationToken>())
-            .Returns((IReadOnlyList<PlannedBlock>)[]);
+        var result = await BreakAsync(Guid.Empty);
 
-        var result = await CreateHandler().HandleAsync(
-            new BreakNenContractCommand { ContractId = contract.Id }, CancellationToken.None);
-
-        result.Success.Should().BeTrue();
-        contract.Status.Should().Be(NenContractStatus.Broken);
-        await _contracts.Received(1).SaveAsync(contract, Arg.Any<CancellationToken>());
+        result.Success.Should().BeFalse();
     }
 
     [Fact]
-    public async Task HandleAsync_CancelsOnlyBlocksThatHaveNotEnded()
+    public async Task AScheduledContract_CanBeBrokenBeforeItsFirstDay()
     {
-        var contract = ActiveCancellableContract();
-        _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
+        Clock.SetNow(StartDate.AddDays(-2).ToDateTime(new TimeOnly(12, 0), DateTimeKind.Utc));
+        var contract = CancellableContract(sealedOn: StartDate.AddDays(-5));
+        await SeedAsync(contract);
 
-        var pastBlock = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now.AddHours(-3), Now.AddHours(-1)), membership: TestContracts.Committed(contract.Id)); // already ended
-        var currentBlock = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now.AddHours(-1), Now.AddHours(1)), membership: TestContracts.Committed(contract.Id)); // active right now
-        var futureBlock = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now.AddDays(1), Now.AddDays(1).AddHours(1)), membership: TestContracts.Committed(contract.Id)); // upcoming
+        var result = await BreakAsync(contract.Id);
 
-        // pastBlock: never ritual-completed and its scheduled End has already passed — Missed.
-
-        _blocks.GetForContractAsync(contract.Id, Arg.Any<CancellationToken>())
-            .Returns((IReadOnlyList<PlannedBlock>)[pastBlock, currentBlock, futureBlock]);
-
-        await CreateHandler().HandleAsync(new BreakNenContractCommand { ContractId = contract.Id }, CancellationToken.None);
-
-        pastBlock.CancelledAt.Should().BeNull();
-        currentBlock.CancelledAt.Should().Be(At.Utc(Now));
-        futureBlock.CancelledAt.Should().Be(At.Utc(Now));
-        await _blocks.DidNotReceive().SaveAsync(pastBlock, Arg.Any<CancellationToken>());
-        await _blocks.Received(1).SaveAsync(currentBlock, Arg.Any<CancellationToken>());
-        await _blocks.Received(1).SaveAsync(futureBlock, Arg.Any<CancellationToken>());
-        await _blocks.DidNotReceive().DeleteAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        result.Success.Should().BeTrue(result.ErrorMessage);
+        (await FindAsync<NenContract>(contract.Id))!.Status.Should().Be(NenContractStatus.Broken);
     }
 
     [Fact]
-    public async Task HandleAsync_LinkedBlockEndedSessionEarly_LeftUncancelled()
+    public async Task ACompletedContract_IsRefused()
     {
-        // A FocusBlock whose session already ended early (raw End still in the future) must
-        // not be retroactively relabeled Cancelled just because breaking the contract ran
-        // before its original scheduled End arrived — it already has a resolved outcome.
-        var contract = ActiveCancellableContract();
-        _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
+        var contract = CancellableContract();
+        contract.Complete(At.Utc(Now));
+        await SeedAsync(contract);
 
-        var endedEarly = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Now.AddMinutes(-30), Now.AddHours(1)), membership: TestContracts.Committed(contract.Id));
+        var result = await BreakAsync(contract.Id);
+
+        result.Success.Should().BeFalse();
+        (await FindAsync<NenContract>(contract.Id))!.Status.Should().Be(NenContractStatus.Completed);
+    }
+
+    [Fact]
+    public async Task SealedWithoutCancellation_IsRefused_SayingSo()
+    {
+        // The contract's own setting is the gate (decided 2026-10-06, ending the 2026-08-18 interim).
+        var contract = CancellableContract(allowCancellation: false);
+        await SeedAsync(contract);
+
+        var result = await BreakAsync(contract.Id);
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("sealed without cancellation");
+    }
+
+    [Fact]
+    public async Task ValidContract_IsStoredBroken_EndingOnTheBreakDay()
+    {
+        var contract = CancellableContract();
+        await SeedAsync(contract);
+
+        var result = await BreakAsync(contract.Id);
+
+        result.Success.Should().BeTrue(result.ErrorMessage);
+        var stored = await FindAsync<NenContract>(contract.Id);
+        stored!.Status.Should().Be(NenContractStatus.Broken);
+        stored.EndDate.Should().Be(DateOnly.FromDateTime(Now));
+    }
+
+    [Fact]
+    public async Task CancelsOnlyBlocksThatHaveNotEnded()
+    {
+        var contract = CancellableContract();
+        var pastBlock = Member(contract, Now.AddHours(-3), Now.AddHours(-1));     // already ended (missed)
+        var currentBlock = Member(contract, Now.AddHours(-1), Now.AddHours(1));   // active right now
+        var futureBlock = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(),
+            At.Slot(Now.AddDays(1), Now.AddDays(1).AddHours(1)), membership: TestContracts.Committed(contract.Id));
+        await SeedAsync(contract, pastBlock, currentBlock, futureBlock);
+
+        await BreakAsync(contract.Id);
+
+        (await FindAsync<PlannedBlock>(pastBlock.Id))!.CancelledAt.Should().BeNull();
+        (await FindAsync<PlannedBlock>(currentBlock.Id))!.CancelledAt.Should().Be(At.Utc(Now));
+        (await FindAsync<PlannedBlock>(futureBlock.Id))!.CancelledAt.Should().Be(At.Utc(Now));
+    }
+
+    [Fact]
+    public async Task ABlockWhoseSessionEndedEarly_IsLeftUncancelled()
+    {
+        // Its raw End is still ahead, but it already has a resolved outcome.
+        var contract = CancellableContract();
+        var endedEarly = Member(contract, Now.AddMinutes(-30), Now.AddHours(1));
         endedEarly.MarkRitualCompleted(At.Utc(Now.AddMinutes(-30)));
         endedEarly.MarkSessionEnded(At.Utc(Now.AddMinutes(-5)));
+        await SeedAsync(contract, endedEarly);
 
-        _blocks.GetForContractAsync(contract.Id, Arg.Any<CancellationToken>())
-            .Returns((IReadOnlyList<PlannedBlock>)[endedEarly]);
+        await BreakAsync(contract.Id);
 
-        await CreateHandler().HandleAsync(new BreakNenContractCommand { ContractId = contract.Id }, CancellationToken.None);
-
-        endedEarly.CancelledAt.Should().BeNull();
-        await _blocks.DidNotReceive().SaveAsync(endedEarly, Arg.Any<CancellationToken>());
+        (await FindAsync<PlannedBlock>(endedEarly.Id))!.CancelledAt.Should().BeNull();
     }
 
     [Fact]
-    public async Task HandleAsync_BonusBlocks_NotStartedIsReleased_StartedIsLeftWithItsMembership()
+    public async Task BonusBlocks_NotStartedIsReleased_StartedKeepsItsMembership()
     {
         // Gap 97: the handler passes "keep" until Gap 108 adds the prompt — today's behaviour.
-        var contract = ActiveCancellableContract();
-        _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
-        var upcomingBonus = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Now.AddHours(2), Now.AddHours(3)), membership: TestContracts.Bonus(contract.Id));
-        var runningBonus = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Now.AddHours(-1), Now.AddHours(1)), membership: TestContracts.Bonus(contract.Id));
-        _blocks.GetForContractAsync(contract.Id, Arg.Any<CancellationToken>())
-            .Returns((IReadOnlyList<PlannedBlock>)[upcomingBonus, runningBonus]);
+        var contract = CancellableContract();
+        var upcomingBonus = Member(contract, Now.AddHours(2), Now.AddHours(3), TestContracts.Bonus(contract.Id));
+        var runningBonus = Member(contract, Now.AddHours(-1), Now.AddHours(1), TestContracts.Bonus(contract.Id));
+        await SeedAsync(contract, upcomingBonus, runningBonus);
 
-        await CreateHandler().HandleAsync(new BreakNenContractCommand { ContractId = contract.Id }, CancellationToken.None);
+        await BreakAsync(contract.Id);
 
-        upcomingBonus.Membership.Should().BeNull();
-        upcomingBonus.CancelledAt.Should().BeNull();
-        await _blocks.Received(1).SaveAsync(upcomingBonus, Arg.Any<CancellationToken>());
-
-        runningBonus.Membership.Should().Be(TestContracts.Bonus(contract.Id));
-        runningBonus.CancelledAt.Should().BeNull();
-        await _blocks.DidNotReceive().SaveAsync(runningBonus, Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
-    public async Task HandleAsync_NoLinkedBlocks_CancelsNothing()
-    {
-        var contract = ActiveCancellableContract();
-        _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
-        _blocks.GetForContractAsync(contract.Id, Arg.Any<CancellationToken>())
-            .Returns((IReadOnlyList<PlannedBlock>)[]);
-
-        await CreateHandler().HandleAsync(new BreakNenContractCommand { ContractId = contract.Id }, CancellationToken.None);
-
-        await _blocks.DidNotReceive().SaveAsync(Arg.Any<PlannedBlock>(), Arg.Any<CancellationToken>());
+        var upcoming = await FindAsync<PlannedBlock>(upcomingBonus.Id);
+        upcoming!.Membership.Should().BeNull();
+        upcoming.CancelledAt.Should().BeNull();
+        var running = await FindAsync<PlannedBlock>(runningBonus.Id);
+        running!.Membership.Should().Be(TestContracts.Bonus(contract.Id));
+        running.CancelledAt.Should().BeNull();
     }
 
     [Theory]
     [InlineData(true)]  // the session of the contract's own running block
     [InlineData(false)] // any other session
-    public async Task HandleAsync_WhileASessionRuns_IsRefused_AndNothingChanges(bool sessionOfTheContractsBlock)
+    public async Task WhileASessionRuns_IsRefused_AndNothingChanges(bool sessionOfTheContractsBlock)
     {
-        // Gap 95: no contract ends while Focus time is being worked — the handler refuses on its
-        // own, even if a caller skipped the validator.
-        var contract = ActiveCancellableContract();
-        _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
-        var currentBlock = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Now.AddHours(-1), Now.AddHours(1)), membership: TestContracts.Committed(contract.Id));
-        _blocks.GetForContractAsync(contract.Id, Arg.Any<CancellationToken>())
-            .Returns((IReadOnlyList<PlannedBlock>)[currentBlock]);
-        var session = CreatePlannedSession(sessionOfTheContractsBlock ? currentBlock.Id : Guid.NewGuid());
-        _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns(session);
+        // Gap 95: no contract ends while Focus time is being worked.
+        var contract = CancellableContract();
+        var currentBlock = Member(contract, Now.AddHours(-1), Now.AddHours(1));
+        var session = Session.Create(Guid.NewGuid(), new SessionGoal("Focus"), new SessionDuration(TimeSpan.FromMinutes(30)),
+            Guid.NewGuid(), sessionOfTheContractsBlock ? SessionOrigin.Planned : SessionOrigin.Spontaneous,
+            originatingBlockId: sessionOfTheContractsBlock ? currentBlock.Id : null);
+        session.Start(At.Utc(Now.AddMinutes(-10)));
+        var statusBefore = contract.Status;
+        await SeedAsync(contract, currentBlock, session);
+        var shown = RecapsShown();
 
-        var result = await CreateHandler().HandleAsync(new BreakNenContractCommand { ContractId = contract.Id }, CancellationToken.None);
+        var result = await BreakAsync(contract.Id);
 
         result.Success.Should().BeFalse();
-        contract.Status.Should().Be(NenContractStatus.Active);
-        currentBlock.CancelledAt.Should().BeNull();
-        session.Status.Should().Be(SessionStatus.Active);
-        await _contracts.DidNotReceive().SaveAsync(Arg.Any<NenContract>(), Arg.Any<CancellationToken>());
-        await _blocks.DidNotReceive().SaveAsync(Arg.Any<PlannedBlock>(), Arg.Any<CancellationToken>());
+        result.ErrorMessage.Should().Contain("session is running");
+        (await FindAsync<NenContract>(contract.Id))!.Status.Should().Be(statusBefore);
+        (await FindAsync<PlannedBlock>(currentBlock.Id))!.CancelledAt.Should().BeNull();
+        (await FindAsync<Session>(session.Id))!.Status.Should().Be(SessionStatus.Active);
+        shown.Should().BeEmpty("a refused break owes no recap");
     }
 
     [Fact]
-    public async Task HandleAsync_ValidContract_ReturnsRecapForImmediatePostContractOverlay()
+    public async Task ItsRecapIsShown_OnceTheBreakIsSaved()
     {
-        var contract = ActiveCancellableContract();
-        _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
-        _blocks.GetForContractAsync(contract.Id, Arg.Any<CancellationToken>())
-            .Returns((IReadOnlyList<PlannedBlock>)[]);
-        var recap = new NenContractRecapDto { ContractId = contract.Id };
-        _recap.HandleAsync(Arg.Any<GetNenContractRecapQuery>(), Arg.Any<CancellationToken>()).Returns(recap);
+        // Gap 110: the recap follows the saved NenContractBrokenEvent, not the command.
+        var contract = CancellableContract();
+        var upcomingBonus = Member(contract, Now.AddHours(2), Now.AddHours(3), TestContracts.Bonus(contract.Id));
+        await SeedAsync(contract, upcomingBonus);
+        var shown = RecapsShown();
 
-        var result = await CreateHandler().HandleAsync(
-            new BreakNenContractCommand { ContractId = contract.Id }, CancellationToken.None);
+        await BreakAsync(contract.Id);
 
-        result.Recap.Should().Be(recap);
+        shown.Should().ContainSingle().Which.ContractId.Should().Be(contract.Id);
     }
 
-    [Fact]
-    public async Task HandleAsync_NoActiveSession_CompletesWithoutError()
+    private List<NenContractRecapDto> RecapsShown()
     {
-        var contract = ActiveCancellableContract();
-        _contracts.GetByIdAsync(contract.Id, Arg.Any<CancellationToken>()).Returns(contract);
-        _blocks.GetForContractAsync(contract.Id, Arg.Any<CancellationToken>())
-            .Returns((IReadOnlyList<PlannedBlock>)[]);
-        _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns((Session?)null);
-
-        var result = await CreateHandler().HandleAsync(
-            new BreakNenContractCommand { ContractId = contract.Id }, CancellationToken.None);
-
-        result.Success.Should().BeTrue();
+        var shown = new List<NenContractRecapDto>();
+        Resolve<IRecapRelay>().PostContractsReady += (_, recaps) => shown.AddRange(recaps);
+        return shown;
     }
 }

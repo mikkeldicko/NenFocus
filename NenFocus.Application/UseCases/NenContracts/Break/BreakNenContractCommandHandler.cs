@@ -1,6 +1,5 @@
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
-using NenFocus.Application.Queries.GetNenContractRecap;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
 using NenFocus.Domain.ValueObjects;
@@ -13,20 +12,17 @@ public sealed class BreakNenContractCommandHandler : ICommandHandler<BreakNenCon
     private readonly IPlannedBlockRepository _blocks;
     private readonly ISessionRepository _sessions;
     private readonly ISystemClock _clock;
-    private readonly IQueryHandler<GetNenContractRecapQuery, NenContractRecapDto?> _recap;
 
     public BreakNenContractCommandHandler(
         INenContractRepository contracts,
         IPlannedBlockRepository blocks,
         ISessionRepository sessions,
-        ISystemClock clock,
-        IQueryHandler<GetNenContractRecapQuery, NenContractRecapDto?> recap)
+        ISystemClock clock)
     {
         _contracts = contracts;
         _blocks = blocks;
         _sessions = sessions;
         _clock = clock;
-        _recap = recap;
     }
 
     public async Task<BreakNenContractResult> HandleAsync(BreakNenContractCommand command, CancellationToken ct = default)
@@ -44,7 +40,6 @@ public sealed class BreakNenContractCommandHandler : ICommandHandler<BreakNenCon
 
         var now = _clock.Now;
         contract.Break(now, _clock.TimeZone, sessionRunning);
-        await _contracts.SaveAsync(contract, ct);
 
         var linkedBlocks = await _blocks.GetForContractAsync(command.ContractId, ct);
 
@@ -56,25 +51,12 @@ public sealed class BreakNenContractCommandHandler : ICommandHandler<BreakNenCon
             var fate = contract.FateWhenBroken(block, now, keepBonusBlocks: true);
 
             if (fate == BlockFateOnBreak.Cancel)
-            {
                 block.MarkCancelled(now);
-            }
             else if (fate == BlockFateOnBreak.Release)
-            {
                 block.Leave();
-            }
-            else
-            {
-                continue;
-            }
-
-            await _blocks.SaveAsync(block, ct);
         }
 
-        // Flows straight into the Post-Contract overlay immediately, same as
-        // CompleteNenContractCommandHandler's own precedent — Break is a direct synchronous
-        // UI action, so its recap never needs the heartbeat's live-event path.
-        var recap = await _recap.HandleAsync(new GetNenContractRecapQuery(contract.Id), ct);
-        return BreakNenContractResult.Ok(recap!);
+        // The recap is owed once this is saved: NenContractEndedEventHandler shows it (Gap 110).
+        return BreakNenContractResult.Ok();
     }
 }

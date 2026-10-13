@@ -18,8 +18,5 @@ public sealed class CreateBlockPresetValidator : AbstractValidator<CreateBlockPr
         RuleForEach(x => x.BlockedApps)
             .Must(app => !SystemSafetyConstants.UnkillableProcesses.Contains(ProcessUtils.NormalizeProcessName(app)))
             .WithMessage(app => $"'{app}' is a critical system process and cannot be blocked.");
-
-        RuleForEach(x => x.Tags)
-            .MaximumLength(30).WithMessage("Tags cannot exceed 30 characters.");
     }
 }

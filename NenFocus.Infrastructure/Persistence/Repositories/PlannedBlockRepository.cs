@@ -45,46 +45,6 @@ public sealed class PlannedBlockRepository : IPlannedBlockRepository
             .FirstOrDefaultAsync(b => b.Id == id, cancellationToken);
     }
 
-    public async Task AddAsync(
-        PlannedBlock block,
-        CancellationToken cancellationToken = default)
-    {
-        await _context.PlannedBlocks.AddAsync(block, cancellationToken);
-    }
-
-    public Task UpdateAsync(
-        PlannedBlock block,
-        CancellationToken cancellationToken = default)
-    {
-        _context.PlannedBlocks.Update(block);
-        return Task.CompletedTask;
-    }
-
-    public async Task SaveAsync(
-        PlannedBlock block,
-        CancellationToken cancellationToken = default)
-    {
-        var exists = await _context.PlannedBlocks
-            .AnyAsync(b => b.Id == block.Id, cancellationToken);
-
-        if (!exists)
-            await _context.PlannedBlocks.AddAsync(block, cancellationToken);
-        else
-            _context.PlannedBlocks.Update(block);
-    }
-
-    public async Task DeleteAsync(
-        Guid id,
-        CancellationToken cancellationToken = default)
-    {
-        var block = await _context.PlannedBlocks
-            .FirstOrDefaultAsync(b => b.Id == id, cancellationToken);
-
-        if (block is null) return;
-
-        _context.PlannedBlocks.Remove(block);
-    }
-
     public Task<bool> HasFutureBlocksForPresetAsync(
         Guid presetId,
         Moment after,
@@ -121,4 +81,8 @@ public sealed class PlannedBlockRepository : IPlannedBlockRepository
             .OrderBy(ByStart)
             .ToListAsync(cancellationToken);
     }
+
+    public void Add(PlannedBlock block) => _context.PlannedBlocks.Add(block);
+
+    public void Remove(PlannedBlock block) => _context.PlannedBlocks.Remove(block);
 }

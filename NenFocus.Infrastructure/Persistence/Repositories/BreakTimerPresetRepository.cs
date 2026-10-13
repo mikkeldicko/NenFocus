@@ -27,34 +27,6 @@ public sealed class BreakTimerPresetRepository : IBreakTimerPresetRepository
             .FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
     }
 
-    public async Task AddAsync(
-        BreakTimerPreset preset,
-        CancellationToken cancellationToken = default)
-    {
-        await _context.BreakTimerPresets.AddAsync(preset, cancellationToken);
-    }
-
-    public Task UpdateAsync(
-        BreakTimerPreset preset,
-        CancellationToken cancellationToken = default)
-    {
-        // Entity was loaded by this same context instance; EF Core's change tracker
-        // already has a snapshot and detects scalar/owned-type changes automatically.
-        return Task.CompletedTask;
-    }
-
-    public async Task DeleteAsync(
-        Guid id,
-        CancellationToken cancellationToken = default)
-    {
-        var preset = await _context.BreakTimerPresets
-            .FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
-
-        if (preset is null) return;
-
-        _context.BreakTimerPresets.Remove(preset);
-    }
-
     public async Task<bool> ExistsWithNameAsync(
         string name,
         Guid? excludeId = null,
@@ -68,4 +40,8 @@ public sealed class BreakTimerPresetRepository : IBreakTimerPresetRepository
 
         return await query.AnyAsync(cancellationToken);
     }
+
+    public void Add(BreakTimerPreset preset) => _context.BreakTimerPresets.Add(preset);
+
+    public void Remove(BreakTimerPreset preset) => _context.BreakTimerPresets.Remove(preset);
 }
