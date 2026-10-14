@@ -59,8 +59,6 @@ public class PolicyEngineTests
     {
         var slice = _engine.ComputeSlice(TestAt.Utc(At), [], null, []);
 
-        slice.SliceStart.Should().Be(TestAt.Utc(At));
-        slice.SliceEnd.Should().Be(TestAt.Utc(At.AddMinutes(1)));
         slice.BlockedApps.Should().BeEmpty();
         slice.BlockedSites.Should().BeEmpty();
         slice.ActiveSessionId.Should().BeNull();
@@ -68,17 +66,15 @@ public class PolicyEngineTests
     }
 
     [Fact]
-    public void ComputeSlice_BlockPresentWithNoResolvablePresetOrSession_SliceStillCoversTheBlockWindow()
+    public void ComputeSlice_BlockWithNoResolvablePreset_BlocksNothing()
     {
         // An orphaned block (its preset could not be resolved, e.g. deleted out from under
-        // it) must not silently drop its enforcement window, even though there's no preset
-        // data left to populate BlockedApps/Sites. (Its Ritual trigger no longer depends on
-        // the slice at all — see GetFocusBlockAwaitingRitualQuery, Gap 62.)
+        // it) has no preset data to contribute — and must not throw. (Its Ritual trigger
+        // doesn't depend on the slice at all — see GetFocusBlockAwaitingRitualQuery, Gap 62.)
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),TestAt.Slot(At, At.AddHours(1)));
 
         var slice = _engine.ComputeSlice(TestAt.Utc(At), [], null, [block]);
 
-        slice.SliceEnd.Should().Be(TestAt.End(block.Scheduled));
         slice.BlockedApps.Should().BeEmpty();
         slice.BlockedSites.Should().BeEmpty();
     }
@@ -244,41 +240,6 @@ public class PolicyEngineTests
     }
 
     [Fact]
-    public void ComputeSlice_NoBlocks_SliceEndIsOneMinuteAfterAt()
-    {
-        var preset = CreatePreset(WebsiteFilterType.Blocklist);
-
-        var slice = _engine.ComputeSlice(TestAt.Utc(At), [preset], null, []);
-
-        slice.SliceEnd.Should().Be(TestAt.Utc(At.AddMinutes(1)));
-    }
-
-    [Fact]
-    public void ComputeSlice_WithBlocks_SliceEndIsLatestBlockEnd()
-    {
-        var preset = CreatePreset(WebsiteFilterType.Blocklist);
-        var earlierBlock = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(),TestAt.Slot(At, At.AddMinutes(30)));
-        var laterBlock = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(),TestAt.Slot(At, At.AddHours(2)));
-
-        var slice = _engine.ComputeSlice(TestAt.Utc(At), [preset], null, [earlierBlock, laterBlock]);
-
-        slice.SliceEnd.Should().Be(TestAt.Utc(At.AddHours(2)));
-    }
-
-    [Fact]
-    public void ComputeSlice_CancelledBlock_ExcludedFromSliceEnd()
-    {
-        var preset = CreatePreset(WebsiteFilterType.Blocklist);
-        var cancelledBlock = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(),TestAt.Slot(At, At.AddHours(3)));
-        cancelledBlock.MarkCancelled(TestAt.Utc(At));
-        var liveBlock = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(),TestAt.Slot(At, At.AddHours(1)));
-
-        var slice = _engine.ComputeSlice(TestAt.Utc(At), [preset], null, [cancelledBlock, liveBlock]);
-
-        slice.SliceEnd.Should().Be(TestAt.Utc(At.AddHours(1)));
-    }
-
-    [Fact]
     public void ComputeSlice_CancelledBlockHandedIn_BlocksNothing()
     {
         // Regression guard: no caller has to filter cancelled blocks first — the block's own
@@ -292,17 +253,6 @@ public class PolicyEngineTests
         slice.IsEmpty.Should().BeTrue();
     }
 
-    [Fact]
-    public void ComputeSlice_OnlyBlockIsCancelled_SliceEndFallsBackToOneMinute()
-    {
-        var preset = CreatePreset(WebsiteFilterType.Blocklist);
-        var cancelledBlock = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(),TestAt.Slot(At, At.AddHours(3)));
-        cancelledBlock.MarkCancelled(TestAt.Utc(At));
-
-        var slice = _engine.ComputeSlice(TestAt.Utc(At), [preset], null, [cancelledBlock]);
-
-        slice.SliceEnd.Should().Be(TestAt.Utc(At.AddMinutes(1)));
-    }
 
     [Fact]
     public void ComputeSlice_FocusBlockAlreadyEnded_ItsPresetIsNotEnforced()

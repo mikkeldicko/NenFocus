@@ -63,7 +63,7 @@ public sealed class PolicyEngine
         var activePresets = allPresets.Where(p => activePresetIds.Contains(p.Id)).ToList();
 
         if (activePresets.Count == 0 && activeSessions.Count == 0 && activeBlocks.Count == 0)
-            return new ActivePolicySlice { SliceStart = at, SliceEnd = at + TimeSpan.FromMinutes(1) };
+            return new ActivePolicySlice();
 
         var enforcingSessions = activeSessions.Where(s => !pausedSessionIds.Contains(s.Id)).ToList();
 
@@ -90,8 +90,6 @@ public sealed class PolicyEngine
         return new ActivePolicySlice
         {
             ActiveSessionId = activeSessions.FirstOrDefault()?.Id,
-            SliceStart = at,
-            SliceEnd = activeBlocks.Any() ? activeBlocks.Max(b => b.Scheduled.End) : at + TimeSpan.FromMinutes(1),
             AllowLists = allowLists,
             BlockedSites = blockedSites,
             BlockedApps = blockedApps

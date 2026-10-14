@@ -5,8 +5,6 @@ namespace NenFocus.Domain.ValueObjects;
 public sealed record ActivePolicySlice
 {
     public Guid? ActiveSessionId { get; init; }
-    public Moment SliceStart { get; init; }
-    public Moment SliceEnd { get; init; }
 
     /// <summary>Every blocklist entry in effect (presets' and the session's own) — also what the hosts file writes.</summary>
     public IReadOnlySet<Website> BlockedSites { get; init; } = new HashSet<Website>();
