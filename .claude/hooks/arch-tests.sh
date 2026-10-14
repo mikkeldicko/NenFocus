@@ -9,6 +9,12 @@ cd "${CLAUDE_PROJECT_DIR:-.}" || exit 0
 
 state_file=".claude/hooks/.arch-tests-green"
 
+# Stryker swaps mutated assemblies into NenFocus.Tests/bin; a test run now would build into it and
+# report failures that aren't there (Gap 112). Skip without marking green — the next stop runs them.
+if tasklist //NH //FI "IMAGENAME eq dotnet-stryker.exe" 2>/dev/null | grep -qi "dotnet-stryker"; then
+  exit 0
+fi
+
 # Fingerprint every tracked and untracked .cs file; unchanged since the last green run → nothing to do.
 fingerprint=$(git ls-files -co --exclude-standard -- '*.cs' | git hash-object --stdin-paths | git hash-object --stdin)
 if [ -f "$state_file" ] && [ "$(cat "$state_file")" = "$fingerprint" ]; then
