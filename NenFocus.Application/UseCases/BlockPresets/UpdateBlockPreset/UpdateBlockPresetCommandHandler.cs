@@ -27,11 +27,11 @@ public sealed class UpdateBlockPresetCommandHandler
         // Everything that can throw is built first, so a refusal leaves the preset untouched. (A failed
         // command saves nothing anyway since Gap 110; this keeps the loaded preset itself consistent.)
         List<BlockedApp> newApps;
-        List<BlockedSite> newSites;
+        List<Website> newSites;
         try
         {
             newApps = command.BlockedApps.Select(a => new BlockedApp(a)).ToList();
-            newSites = command.Websites.Select(u => new BlockedSite(u)).ToList();
+            newSites = command.Websites.Select(u => new Website(u)).ToList();
             preset.Rename(command.Name);
         }
         catch (ArgumentException ex)

@@ -38,7 +38,8 @@ This file is the canonical reference for every domain concept in NenFocus. It ex
 | **BlockChangeChecker** | Domain service: the one answer to "may this block be changed or deleted?" — `CheckReschedule`, `CheckSplit`, `CheckDelete` return a `ChangeVerdict` (allowed, or the first reason not), `AllowancesFor` the ready-made flags (`BlockChangeAllowances`) the block DTO carries. It asks the block's own lock, then its contract, and holds no rule itself; a plain block moved where any contract in effect governs is `WouldJoinContract` (Gap 106). Asked by the Update, Split and Delete validators before placement; worded once in `BlockChangeVerdictDto.From` (Gap 93) |
 | **Bound block** | A block its contract holds to what was sealed: Committed and Redemption always; Bonus only when the contract's rules say Bonus blocks follow the strictness (off by default). A bound block moves as far as the strictness allows, keeps its preset, can be split (not under Lockdown) and is never deleted. `NenContract.Binds` (Gap 93) |
 | **Started-block lock** | A block that has started (`PlannedBlock.HasStarted`) can't be moved, resized, split or edited, and can't be deleted until it has ended; it ends early only through End Early or by breaking its contract (Gap 88 phase 0) |
-| **Blocked Attempt** | An append-only fact recording a user's attempt to access a blocked app or site during a Session |
+| **Blocked Attempt** | An append-only fact recording a user's attempt to access a blocked app or site during a Session; a repeat of the same thing within 2 s is the same attempt (`BlockedAttempt.IsRepeatOf`, Gap 112) |
+| **Website** | A site as a bare domain (`youtube.com`) — the one definition the presets, the slice, the hosts file and the extension share; covers its subdomains. Allowed or blocked is which list it's in. Its app twin is `BlockedApp` (a process name; never a critical Windows process) (Gap 112) |
 | **Nen Contract** | A sealed, time-bound commitment over a contiguous date range that governs allowed changes to the Focus/Background blocks within it; own aggregate root, does not own `PlannedBlock`s |
 | **Seal** | The act of finalising a Nen Contract; the only way a `NenContract` comes into existence — there is no persisted draft state in the domain |
 | **Strictness Rule** | Enum (`Locked` \| `DailyFlexibility` \| `PeriodTimeBudget`) — how far a block its contract binds may move: nowhere, within its own day, anywhere in the contract. Asked in one place, `ContractRules.MovementRange` (Gap 93) |
@@ -66,7 +67,7 @@ This file is the canonical reference for every domain concept in NenFocus. It ex
 | **UsageResourceType** | Enum (`App` \| `Website`) tagging a `DailyUsage` or `UsageCeiling` entry |
 | **UsageCeiling** | An ambient, perpetual cap on daily or weekly access time for a specific site or app; created on the Presets page; deliberately independent of `BlockPreset` and `NenContract` |
 | **CeilingPeriod** | Enum (`Daily` \| `Weekly`) — the aggregation window a `UsageCeiling`'s cap is measured against |
-| **IUsageTracker** | Application-layer interface through which infrastructure records usage events; analogous in pattern to `IBlockedAttemptTracker` |
+| **IUsageTracker** | Application-layer interface through which infrastructure records usage events; expected to follow `RecordBlockedAttemptCommand`'s shape — Infrastructure dispatches what it saw, the handler decides (Gap 112) |
 | **RecurrenceRule** | Value object describing a repeat schedule: interval, unit (Day/Week/Month), weekday mask, end condition — the single shape behind "Every day," "Specific weekdays," and "Custom" recurrence pickers |
 | **RecurringSeries** | Entity owning a `RecurrenceRule` + block template (preset, time-of-day); generates and keeps topped-up the materialized `PlannedBlock` rows that belong to it |
 | **SkippedOccurrence** | Append-only fact recording a recurring instance that couldn't be generated due to a conflict with another block; exists only while unresolved |
@@ -174,7 +175,7 @@ NenFocus has five pages accessible via the sidebar:
 
 **Website filter type:** Each preset carries a `WebsiteFilterType` of either `Blocklist` (block specific sites, allow everything else) or `Allowlist` (allow specific sites, block everything else). Both Ritual and Background presets can use either mode. Both can also specify blocked apps.
 
-**Time-agnosticism:** A Block Preset is time-agnostic — it carries no schedule, no window, and no knowledge of when it is active. This allows the same preset to be reused across multiple planned blocks at different times. `BlockedSite` and `BlockedApp` are always plain hard blocks — access-time limiting is handled by the separate `UsageCeiling` feature (see `ARCHITECT_GOVERNANCE.md` → Open Gap A), which is deliberately decoupled from `BlockPreset` entirely, not a field on it.
+**Time-agnosticism:** A Block Preset is time-agnostic — it carries no schedule, no window, and no knowledge of when it is active. This allows the same preset to be reused across multiple planned blocks at different times. `Website` and `BlockedApp` are always plain hard blocks — access-time limiting is handled by the separate `UsageCeiling` feature (see `ARCHITECT_GOVERNANCE.md` → Open Gap A), which is deliberately decoupled from `BlockPreset` entirely, not a field on it.
 
 **Ubiquitous language rules:**
 - A preset is *attached* to a session or block, not *assigned* or *applied*.
@@ -188,8 +189,8 @@ NenFocus has five pages accessible via the sidebar:
 
 | Layer | Artifact | Role |
 |-------|----------|------|
-| Domain | `BlockPreset` aggregate (`Entities/BlockPreset.cs`) | Owns the list of `BlockedApp` and `BlockedSite` value objects, the `WebsiteFilterType`, and the preset type (`BlockPresetType.Focus` or `BlockPresetType.Background`). `IsAtLeastAsStrict(IReadOnlySet<string> proposedApps, IReadOnlySet<string> proposedSites) -> bool` answers "does this change keep me at least as strict" — apps add-only, sites add-only under `Blocklist`/remove-only under `Allowlist` (Gap 30). |
-| Domain | `BlockedApp`, `BlockedSite` value objects | Immutable; validated at construction. Always plain hard blocks — no budget/ceiling concept lives on either; see `UsageCeiling` for ambient access limits |
+| Domain | `BlockPreset` aggregate (`Entities/BlockPreset.cs`) | Owns the list of `BlockedApp` and `Website` value objects, the `WebsiteFilterType`, and the preset type (`BlockPresetType.Focus` or `BlockPresetType.Background`). `IsAtLeastAsStrict(IReadOnlySet<BlockedApp> proposedApps, IReadOnlySet<Website> proposedSites) -> bool` answers "does this change keep me at least as strict" — apps add-only, sites add-only under `Blocklist`/remove-only under `Allowlist` (Gap 30). |
+| Domain | `BlockedApp`, `Website` value objects | The one definition of an app and a site (Gap 112): `BlockedApp` is a lowercased process name (a picked path is cut down to it; a critical Windows process is refused — `Check` gives the typed `BlockedAppRefusal`, `NameOf` the name, `Matches` a running process); `Website` is a bare domain (`https://www.YouTube.com/x` → `youtube.com`; `TryCreate` the non-throwing ask) that `Covers` itself and its subdomains. Equal entries are equal values. A preset's, a session's extras and the slice all hold them. Always plain hard blocks — no budget/ceiling concept lives on either; see `UsageCeiling` for ambient access limits |
 | Domain | `WebsiteFilterType` enum | `Blocklist` or `Allowlist` |
 | Application | `IBlockPresetRepository` | A collection (Gap 110): `Add`, `Remove(preset)` and reads; the command's commit saves changes |
 | Application | `CreateBlockPresetCommandHandler`, `UpdateBlockPresetCommandHandler`, etc. | One handler per mutation |
@@ -218,8 +219,8 @@ Three related but independent not-yet-built features — universal per-resource 
 5. **Browser extension** — intercepts navigations via `chrome.webNavigation.onBeforeNavigate`, queries the local HTTP API at `localhost:5005/check`, redirects blocked sites to `blocked.html`
 
 **Known gaps:**
-- The `/report` endpoint is implemented: when the extension reports a blocked navigation, `WindowsEnforcementService` calls `IBlockedAttemptTracker.RecordWebBlockedAsync` if an active session exists. Background Block attempts (no `ActiveSessionId`) are still not tracked.
-- Allowlist mode is handled by the `/check` endpoint: in Allowlist mode the endpoint returns `blocked: true` for any domain NOT in `AllowedSites`. Note that the hosts-file path cannot enforce allowlist mode (you cannot enumerate all domains); the browser extension is the sole allowlist enforcement mechanism.
+- The `/report` endpoint is implemented: when the extension reports a blocked navigation, `WindowsEnforcementService` reports it with the enforcing policy (`RecordBlockedAttemptCommand`); the use case records it if that policy names a session. Background Block attempts are still not tracked (Gap 117).
+- `/check` asks the slice, `ActivePolicySlice.Blocks(website)` (Gap 112) — in Allowlist mode everything is blocked that some active allowlist doesn't cover. Note that the hosts-file path cannot enforce allowlist mode (you cannot enumerate all domains); the browser extension is the sole allowlist enforcement mechanism.
 - Blocked attempts (app and website) are only tracked while a Session is active; Background Block attempts are future work — see Blocked Attempt below.
 - Usage Ceiling enforcement is not yet implemented. `PolicyEngine` does not yet read `DailyUsage`. The `/report-time` endpoint does not yet exist. See `ARCHITECT_GOVERNANCE.md` → Open Gap A.
 
@@ -261,7 +262,7 @@ Three related but independent not-yet-built features — universal per-resource 
 
 | Layer | Artifact | Role |
 |-------|----------|------|
-| Domain | `ActivePolicySlice` (`ValueObjects/ActivePolicySlice.cs`) | Immutable Domain Value Object; the canonical enforcement contract. Carries `BlockedApps`, `BlockedSites`, `AllowedSites`, `WebsiteFilterTypeMode`, `ActiveSessionId`, `SliceStart`/`SliceEnd`, `IsEmpty` — blocking only, no Ritual fields (Gap 62). |
+| Domain | `ActivePolicySlice` (`ValueObjects/ActivePolicySlice.cs`) | Immutable Domain Value Object; the canonical enforcement contract. Carries `BlockedApps` (`BlockedApp`s), `BlockedSites` (`Website`s, also what the hosts file writes), `AllowLists` (one set per active allowlist preset, kept apart — coverage can't be precomputed as one set, Gap 112), `WebsiteFilterTypeMode` (worked out from `AllowLists`), `ActiveSessionId`, `SliceStart`/`SliceEnd`, `IsEmpty` — blocking only, no Ritual fields (Gap 62). Answers `Blocks(Website)` (a block beats an allow; with an allowlist, blocked unless every allowlist covers it) and `BlockedAppFor(processName)`; Infrastructure asks these and never reads the parts (`InfrastructureRuleTests`). |
 | Domain | `PolicyEngine` (`Services/`) | Stateless domain service; accepts raw `BlockPreset`, `Session`, and `PlannedBlock` collections and produces `ActivePolicySlice`. Owns all merge rules — no merge logic exists anywhere else. |
 | Application | `ComputeActivePolicySliceQueryHandler` (`Queries/ComputeActivePolicySlice/`) | Pure orchestrator: fetches entities from three repositories, loads `BlockPreset` aggregates, delegates to `PolicyEngine.ComputeSlice()`. Returns the `ActivePolicySlice` to callers. |
 | Application | `EnforcementSynchronizer` | The only consumer that turns a slice into an apply/remove call |
@@ -466,7 +467,7 @@ public ActivePolicySlice ComputeSlice(
 
 **Definition:** An append-only fact recording each time the user attempted to access a blocked app or website during a Session. Each record is keyed by `SessionId` and stored as its own row — not serialized as JSON on the Session entity.
 
-**Current state:** Both app and website blocked attempts are tracked during Ritual sessions, and both deliberately distinguish an active attempt from a resource merely being caught by ambient enforcement when a block first activates (Gap 46) — an app/site that was already running/open when the block activated is not "attempted," only a later attempt made while the block is active is. Apps: `WindowsEnforcementService.KillBlockedProcessesImmediate(reportAttempts)` — the one-time sweep `ApplyPolicyAsync` runs when a block first activates passes `false`; the ongoing 2-second process-kill timer, which only ever catches a relaunch attempted during an active block, passes `true`. Websites: `IBlockedAttemptTracker.RecordWebBlockedAsync()` is called via the extension's `/report` endpoint, but only from `background.js`'s `onBeforeNavigate` handler (a real navigation check) — never from `poll.js`'s ambient already-open-tab poll, which only ever redirects. Background Block attempts are not yet tracked.
+**Current state:** Both app and website blocked attempts are tracked during Ritual sessions, and both deliberately distinguish an active attempt from a resource merely being caught by ambient enforcement when a block first activates (Gap 46) — an app/site that was already running/open when the block activated is not "attempted," only a later attempt made while the block is active is. Apps: `WindowsEnforcementService.KillBlockedProcessesImmediate(reportAttempts)` — the one-time sweep `ApplyPolicyAsync` runs when a block first activates passes `false`; the ongoing 2-second process-kill timer, which only ever catches a relaunch attempted during an active block, passes `true`. Websites: reported via the extension's `/report` endpoint, but only from `background.js`'s `onBeforeNavigate` handler (a real navigation check) — never from `poll.js`'s ambient already-open-tab poll, which only ever redirects. Background Block attempts are not yet tracked.
 
 **Displayed in:** Post-Session screen (e.g. "you tried to access YouTube 5 times during this session") and Insights page (most-attempted sites, per-session history).
 
@@ -476,9 +477,10 @@ public ActivePolicySlice ComputeSlice(
 |-------|----------|------|
 | Domain | `BlockedAttempt` entity (`Entities/BlockedAttempt.cs`) | Append-only fact table; keyed by `SessionId` |
 | Domain | `BlockedAttemptType` enum | `App` or `Website` |
-| Application | `IBlockedAttemptTracker` | Contract for recording attempts; called by infrastructure |
-| Infrastructure | `BlockedAttemptTracker` | Implementation; persists rows |
-| Infrastructure | `WindowsEnforcementService` | Calls `RecordAppBlockedAsync` when killing a blocked process |
+| Domain | `BlockedAttempt.ForApp` / `ForWebsite`, `IsRepeatOf` | Built from the `BlockedApp`/`Website` that was reached; the same thing in the same session within `RepeatWindow` (2 s) is a repeat, not a new attempt (Gap 112). Its own aggregate — append-only, no `Remove` |
+| Application | `RecordBlockedAttemptCommand` / `Handler` (`UseCases/Sessions/RecordBlockedAttempt/`) | Enforcement's report: resource, kind, time and the enforcing policy. The handler takes the session from that policy (attempts are queued, so never "whatever runs now"), drops a repeat, adds the attempt. No session → nothing added, not a failure (Gap 112) |
+| Application | `IBlockedAttemptRepository` | `Add`, `GetLatestAsync`, `GetForSessionAsync` — read by End Session and the two Post-Session queries |
+| Infrastructure | `WindowsEnforcementService` | Reports each killed app once per sweep and each `/report` site, through one private serial queue to the command dispatcher |
 
 ---
 

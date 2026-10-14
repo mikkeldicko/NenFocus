@@ -7,7 +7,7 @@ namespace NenFocus.Domain.Entities;
 public class BlockPreset : AggregateRoot
 {
     private readonly List<BlockedApp> _blockedApps = [];
-    private readonly List<BlockedSite> _websites = [];
+    private readonly List<Website> _websites = [];
 
     public Guid Id { get; private set; }
     public string Name { get; private set; } = null!;
@@ -15,7 +15,7 @@ public class BlockPreset : AggregateRoot
     public BlockPresetType PresetType { get; private set; }
 
     public IReadOnlyList<BlockedApp> BlockedApps => _blockedApps.AsReadOnly();
-    public IReadOnlyList<BlockedSite> Websites => _websites.AsReadOnly();
+    public IReadOnlyList<Website> Websites => _websites.AsReadOnly();
 
     private BlockPreset() { }
 
@@ -67,7 +67,7 @@ public class BlockPreset : AggregateRoot
         _blockedApps.RemoveAll(a => a.ProcessName == app.ProcessName);
     }
 
-    public void AddWebsite(BlockedSite site)
+    public void AddWebsite(Website site)
     {
         if (_websites.Any(s => s.Url == site.Url))
             return;
@@ -75,7 +75,7 @@ public class BlockPreset : AggregateRoot
         _websites.Add(site);
     }
 
-    public void RemoveWebsite(BlockedSite site)
+    public void RemoveWebsite(Website site)
     {
         _websites.RemoveAll(s => s.Url == site.Url);
     }
@@ -94,13 +94,14 @@ public class BlockPreset : AggregateRoot
     /// Blocklist, the same add-only rule applies (removing a blocked site weakens it); under
     /// Allowlist it's the reverse (adding a site widens what's let through, weakening it;
     /// removing one narrows it, strengthening it), so sites there must only be removed.
+    /// Compared by entry, not by coverage (Gap 112): swapping google.com for mail.google.com on an
+    /// allowlist is in fact stricter but is refused — conservative, never lets a weakening through.
     /// </summary>
-    public bool IsAtLeastAsStrict(IReadOnlySet<string> proposedApps, IReadOnlySet<string> proposedSites)
+    public bool IsAtLeastAsStrict(IReadOnlySet<BlockedApp> proposedApps, IReadOnlySet<Website> proposedSites)
     {
-        var currentApps = _blockedApps.Select(a => a.ProcessName).ToHashSet();
-        if (!currentApps.IsSubsetOf(proposedApps)) return false;
+        if (!_blockedApps.ToHashSet().IsSubsetOf(proposedApps)) return false;
 
-        var currentSites = _websites.Select(s => s.Url).ToHashSet();
+        var currentSites = _websites.ToHashSet();
         return WebsiteFilterType == WebsiteFilterType.Allowlist
             ? proposedSites.IsSubsetOf(currentSites)
             : currentSites.IsSubsetOf(proposedSites);
@@ -112,7 +113,7 @@ public class BlockPreset : AggregateRoot
         foreach (var app in _blockedApps)
             copy.AddBlockedApp(new BlockedApp(app.ProcessName));
         foreach (var site in _websites)
-            copy.AddWebsite(new BlockedSite(site.Url));
+            copy.AddWebsite(new Website(site.Url));
         return copy;
     }
 

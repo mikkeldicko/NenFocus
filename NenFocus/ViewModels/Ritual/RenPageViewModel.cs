@@ -8,6 +8,7 @@ using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.GetAllBlockPresets;
 using NenFocus.Domain.Enums;
+using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.ViewModels.Ritual;
 
@@ -208,9 +209,9 @@ public partial class RenPageViewModel : ViewModelBase
     // Called from the view's code-behind after the file picker resolves an .exe path.
     public void AddAppFromPath(string exePath)
     {
-        if (string.IsNullOrWhiteSpace(exePath)) return;
-        var name = System.IO.Path.GetFileNameWithoutExtension(exePath);
-        if (string.IsNullOrWhiteSpace(name)) return;
+        // BlockedApp owns what an app's name is (Gap 112); whether it may be blocked is Start's answer.
+        var name = BlockedApp.NameOf(exePath);
+        if (name.Length == 0) return;
 
         foreach (var a in AdditionalBlockedApps)
         {

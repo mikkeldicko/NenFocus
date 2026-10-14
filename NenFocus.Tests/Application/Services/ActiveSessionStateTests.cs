@@ -3,10 +3,10 @@ using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.GetActiveSession;
 using NenFocus.Domain.Enums;
-using NenFocus.Infrastructure.Services;
+using NenFocus.Application.Services;
 using NSubstitute;
 
-namespace NenFocus.Tests.Infrastructure.Services;
+namespace NenFocus.Tests.Application.Services;
 
 public class ActiveSessionStateTests
 {

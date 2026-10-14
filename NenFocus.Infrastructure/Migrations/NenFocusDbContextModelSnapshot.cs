@@ -385,7 +385,7 @@ namespace NenFocus.Infrastructure.Migrations
                                 .HasForeignKey("BlockPresetId");
                         });
 
-                    b.OwnsMany("NenFocus.Domain.ValueObjects.BlockedSite", "Websites", b1 =>
+                    b.OwnsMany("NenFocus.Domain.ValueObjects.Website", "Websites", b1 =>
                         {
                             b1.Property<Guid>("BlockPresetId")
                                 .HasColumnType("TEXT");

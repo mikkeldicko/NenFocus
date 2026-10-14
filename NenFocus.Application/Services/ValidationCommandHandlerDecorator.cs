@@ -2,9 +2,9 @@ using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
 using NenFocus.Application.Interfaces;
 
-namespace NenFocus.Infrastructure.Services;
+namespace NenFocus.Application.Services;
 
-public sealed class ValidatingCommandHandler<TCommand, TResult>
+public sealed class ValidationCommandHandlerDecorator<TCommand, TResult>
     : ICommandHandler<TCommand, TResult>
     where TCommand : ICommand<TResult>
     where TResult : ICommandResult<TResult>
@@ -12,7 +12,7 @@ public sealed class ValidatingCommandHandler<TCommand, TResult>
     private readonly ICommandHandler<TCommand, TResult> _inner;
     private readonly IServiceProvider _serviceProvider;
 
-    public ValidatingCommandHandler(
+    public ValidationCommandHandlerDecorator(
         ICommandHandler<TCommand, TResult> inner,
         IServiceProvider serviceProvider)
     {

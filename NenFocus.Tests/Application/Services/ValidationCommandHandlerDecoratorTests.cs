@@ -3,18 +3,18 @@ using FluentValidation;
 using FluentValidation.Results;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.UseCases.Planner.DeletePlannedBlock;
-using NenFocus.Infrastructure.Services;
+using NenFocus.Application.Services;
 using NSubstitute;
 
-namespace NenFocus.Tests.Infrastructure.Services;
+namespace NenFocus.Tests.Application.Services;
 
-public class ValidatingCommandHandlerTests
+public class ValidationCommandHandlerDecoratorTests
 {
     private readonly ICommandHandler<DeletePlannedBlockCommand, DeletePlannedBlockResult> _inner =
         Substitute.For<ICommandHandler<DeletePlannedBlockCommand, DeletePlannedBlockResult>>();
     private readonly IServiceProvider _serviceProvider = Substitute.For<IServiceProvider>();
 
-    private ValidatingCommandHandler<DeletePlannedBlockCommand, DeletePlannedBlockResult> CreateHandler()
+    private ValidationCommandHandlerDecorator<DeletePlannedBlockCommand, DeletePlannedBlockResult> CreateHandler()
         => new(_inner, _serviceProvider);
 
     [Fact]

@@ -1,7 +1,8 @@
 using FluentValidation;
+using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
-using NenFocus.Domain.Constants;
 using NenFocus.Domain.Entities;
+using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Application.UseCases.BlockPresets.UpdateBlockPreset;
 
@@ -27,9 +28,14 @@ public sealed class UpdateBlockPresetValidator : AbstractValidator<UpdateBlockPr
             })
             .WithMessage("This preset is in use by an active session or a scheduled block (planned directly or under a Nen Contract) — while locked, you may only add apps or websites. Removing entries, renaming, or changing its type or filter is not allowed until it's free.");
 
+        // BlockedApp and Website say what can go on the list (Gap 112); worded in BlockListEntryRefusalDto.
         RuleForEach(x => x.BlockedApps)
-            .Must(app => !SystemSafetyConstants.UnkillableProcesses.Contains(ProcessUtils.NormalizeProcessName(app)))
-            .WithMessage((cmd, app) => $"'{app}' is a critical system process and cannot be blocked.");
+            .Must(app => BlockedApp.Check(app) is null)
+            .WithMessage((_, app) => BlockListEntryRefusalDto.ForApp(app, BlockedApp.Check(app)!.Value).Message);
+
+        RuleForEach(x => x.Websites)
+            .Must(site => Website.TryCreate(site, out _))
+            .WithMessage((_, site) => BlockListEntryRefusalDto.ForWebsite(site).Message);
     }
 
     /// <summary>
@@ -44,8 +50,12 @@ public sealed class UpdateBlockPresetValidator : AbstractValidator<UpdateBlockPr
         if (command.WebsiteFilterType != current.WebsiteFilterType) return false;
         if (command.PresetType != current.PresetType) return false;
 
-        var newApps = command.BlockedApps.Select(a => a.Trim()).ToHashSet();
-        var newSites = command.Websites.Select(u => u.Trim().ToLowerInvariant()).ToHashSet();
+        // Entries that aren't an app or a site are refused by the per-entry rules anyway, so leaving
+        // them out here never decides the outcome.
+        var newApps = command.BlockedApps.Where(a => BlockedApp.Check(a) is null).Select(a => new BlockedApp(a)).ToHashSet();
+        var newSites = new HashSet<Website>();
+        foreach (var url in command.Websites)
+            if (Website.TryCreate(url, out var site)) newSites.Add(site);
         return current.IsAtLeastAsStrict(newApps, newSites);
     }
 }

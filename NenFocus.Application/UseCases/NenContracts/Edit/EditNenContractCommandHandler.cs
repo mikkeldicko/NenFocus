@@ -9,12 +9,12 @@ namespace NenFocus.Application.UseCases.NenContracts.Edit;
 
 /// <summary>
 /// Deliberately not composed through ICommandHandler&lt;SealNenContractCommand,...&gt; — every
-/// command handler is wrapped by TransactionalCommandHandler, which commits once after it
+/// command handler is wrapped by TransactionCommandHandlerDecorator, which commits once after it
 /// returns; nesting a second command call here would trigger a second, separate commit,
 /// reopening the non-atomic risk this slice exists to avoid. Instead this handler reuses the
 /// same domain/query pieces SealNenContractCommandHandler itself uses (own orchestration
 /// shell, matching MODULE_STANDARDS.md's "no shared command scaffolding, copy the pattern"
-/// rule) so both stay in the single commit the outer TransactionalCommandHandler performs.
+/// rule) so both stay in the single commit the outer TransactionCommandHandlerDecorator performs.
 /// Empirically confirmed (against a real SQLite-backed DbContext) that removing a tracked
 /// entity and adding a different instance under the same key resolves correctly in one
 /// SaveChangesAsync — no separate transaction juggling needed.

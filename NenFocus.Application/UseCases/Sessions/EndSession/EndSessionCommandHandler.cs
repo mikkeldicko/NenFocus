@@ -1,4 +1,4 @@
-﻿using NenFocus.Application.DTOs;
+using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
@@ -12,20 +12,20 @@ public sealed class EndSessionCommandHandler
     private readonly ISessionRepository _sessions;
     private readonly IBlockPresetRepository _presets;
     private readonly IPlannedBlockRepository _plannedBlocks;
-    private readonly IBlockedAttemptTracker _attemptTracker;
+    private readonly IBlockedAttemptRepository _attempts;
     private readonly ISystemClock _clock;
 
     public EndSessionCommandHandler(
         ISessionRepository sessions,
         IBlockPresetRepository presets,
         IPlannedBlockRepository plannedBlocks,
-        IBlockedAttemptTracker attemptTracker,
+        IBlockedAttemptRepository attempts,
         ISystemClock clock)
     {
         _sessions = sessions;
         _presets = presets;
         _plannedBlocks = plannedBlocks;
-        _attemptTracker = attemptTracker;
+        _attempts = attempts;
         _clock = clock;
     }
 
@@ -40,7 +40,7 @@ public sealed class EndSessionCommandHandler
         if (session.Status != SessionStatus.Active)
             return EndSessionResult.Fail("Session is not currently active.");
 
-        var attempts = await _attemptTracker.GetAttemptsForSessionAsync(session.Id);
+        var attempts = await _attempts.GetForSessionAsync(session.Id, ct);
 
         session.Complete(_clock.Now);
         // Capped at the planned end by Complete itself (Gap 63). Everything below reads the

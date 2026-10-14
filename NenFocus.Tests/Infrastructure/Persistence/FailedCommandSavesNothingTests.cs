@@ -5,7 +5,7 @@ using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
 using NenFocus.Infrastructure.Persistence;
 using NenFocus.Infrastructure.Persistence.Repositories;
-using NenFocus.Infrastructure.Services;
+using NenFocus.Application.Services;
 using NSubstitute;
 
 namespace NenFocus.Tests.Infrastructure.Persistence;
@@ -30,7 +30,7 @@ public class FailedCommandSavesNothingTests : SqliteRepositoryTestBase
 
     private static ICommandHandler<UpdateBlockPresetCommand, UpdateBlockPresetResult> Wrapped(
         NenFocusDbContext scope, bool fail) =>
-        new TransactionalCommandHandler<UpdateBlockPresetCommand, UpdateBlockPresetResult>(
+        new TransactionCommandHandlerDecorator<UpdateBlockPresetCommand, UpdateBlockPresetResult>(
             new RenamingHandler(new BlockPresetRepository(scope), fail),
             new EfCoreUnitOfWork(scope, Substitute.For<IDomainEventPublisher>()));
 

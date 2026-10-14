@@ -2,7 +2,7 @@ using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.GetFocusBlockAwaitingRitual;
 using NenFocus.Domain.ValueObjects;
 
-namespace NenFocus.Infrastructure.Services;
+namespace NenFocus.Application.Services;
 
 /// <summary>
 /// Singleton: remembers the last answer so Changed fires only when it changes. Written on the

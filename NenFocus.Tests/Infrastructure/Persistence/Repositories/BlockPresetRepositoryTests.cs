@@ -30,7 +30,7 @@ public class BlockPresetRepositoryTests : SqliteRepositoryTestBase
     {
         var preset = Preset("Deep Work");
         preset.AddBlockedApp(new BlockedApp("chrome"));
-        preset.AddWebsite(new BlockedSite("facebook.com"));
+        preset.AddWebsite(new Website("facebook.com"));
 
         await AddAndCommitAsync(preset);
 

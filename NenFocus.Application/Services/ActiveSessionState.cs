@@ -2,7 +2,7 @@ using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.GetActiveSession;
 
-namespace NenFocus.Infrastructure.Services;
+namespace NenFocus.Application.Services;
 
 /// <summary>
 /// Singleton: holds the running session for the app's lifetime and raises SessionChanged.

@@ -1,7 +1,7 @@
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 
-namespace NenFocus.Infrastructure.Services;
+namespace NenFocus.Application.Services;
 
 /// <summary>Interim home of the post-session and post-contract relays — see IRecapRelay (Gap 107).</summary>
 public sealed class RecapRelay : IRecapRelay

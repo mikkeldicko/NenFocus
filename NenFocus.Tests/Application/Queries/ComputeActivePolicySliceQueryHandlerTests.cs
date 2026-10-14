@@ -35,7 +35,7 @@ public class ComputeActivePolicySliceQueryHandlerTests
     private BlockPreset PresetBlocking(string site)
     {
         var preset = BlockPreset.Create(Guid.NewGuid(), site, WebsiteFilterType.Blocklist, BlockPresetType.Focus, TestAt.Utc(At));
-        preset.AddWebsite(new BlockedSite(site));
+        preset.AddWebsite(new Website(site));
         _presets.GetByIdAsync(preset.Id, Arg.Any<CancellationToken>()).Returns(preset);
         return preset;
     }
@@ -77,7 +77,7 @@ public class ComputeActivePolicySliceQueryHandlerTests
 
         var result = await Compute();
 
-        result.BlockedSites.Should().BeEquivalentTo(["youtube.com", "reddit.com"]);
+        result.BlockedSites.Select(s => s.Url).Should().BeEquivalentTo(["youtube.com", "reddit.com"]);
         result.ActiveSessionId.Should().Be(session.Id);
         await _presets.Received(1).GetByIdAsync(blockPreset.Id, Arg.Any<CancellationToken>());
     }

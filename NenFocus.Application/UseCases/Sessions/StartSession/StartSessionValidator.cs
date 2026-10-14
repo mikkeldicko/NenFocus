@@ -1,6 +1,8 @@
 using FluentValidation;
+using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Domain.Enums;
+using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Application.UseCases.Sessions.StartSession;
 
@@ -34,6 +36,16 @@ public sealed class StartSessionValidator : AbstractValidator<StartSessionComman
                 })
                 .WithMessage("Only focus presets can be used to start a session.");
         });
+
+        // A session's own extras are an app or a site like a preset's (Gap 112) — this used to let a
+        // critical process through, stopped only by the enforcement service's own skip.
+        RuleForEach(x => x.AdditionalBlockedApps)
+            .Must(app => BlockedApp.Check(app) is null)
+            .WithMessage((_, app) => BlockListEntryRefusalDto.ForApp(app, BlockedApp.Check(app)!.Value).Message);
+
+        RuleForEach(x => x.AdditionalBlockedSites)
+            .Must(site => Website.TryCreate(site, out _))
+            .WithMessage((_, site) => BlockListEntryRefusalDto.ForWebsite(site).Message);
 
         // Same defense-in-depth reasoning as PresetId above — Hatsu only ever offers a
         // preset that both exists and fits the chosen duration, but that's a UI

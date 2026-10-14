@@ -15,7 +15,7 @@ public class EnforcementSynchronizerTests
     private EnforcementSynchronizer CreateSynchronizer() => new(_queries, _enforcement);
 
     private static ActivePolicySlice NonEmptySlice() =>
-        new() { BlockedSites = new HashSet<string> { "youtube.com" } };
+        new() { BlockedSites = new HashSet<Website> { new("youtube.com") } };
 
     private void SliceIs(ActivePolicySlice slice) =>
         _queries.QueryAsync(Arg.Any<ComputeActivePolicySliceQuery>(), Arg.Any<CancellationToken>())

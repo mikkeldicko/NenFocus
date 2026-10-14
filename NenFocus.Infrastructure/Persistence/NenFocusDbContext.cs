@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using NenFocus.Domain.Entities;
@@ -76,6 +77,25 @@ public class NenFocusDbContext : DbContext
     private static RedemptionReceipt DeserializeRedemptionEntries(string json) => new(
         JsonSerializer.Deserialize<List<RedemptionEntryJson>>(json, (JsonSerializerOptions?)null)!
             .Select(e => new RedemptionEntry(e.MissedBlockId, WholeMinutes.Of(e.MinutesCovered))));
+
+    private static List<string> ReadNames(string json) =>
+        JsonSerializer.Deserialize<List<string>>(json, (JsonSerializerOptions?)null) ?? [];
+
+    private static List<BlockedApp> ReadBlockedApps(string json) =>
+        ReadNames(json).Where(n => BlockedApp.Check(n) is null).Select(n => new BlockedApp(n)).ToList();
+
+    private static List<Website> ReadWebsites(string json)
+    {
+        var sites = new List<Website>();
+        foreach (var name in ReadNames(json))
+            if (Website.TryCreate(name, out var site)) sites.Add(site);
+        return sites;
+    }
+
+    private static ValueComparer<IReadOnlyList<T>> ListComparer<T>() => new(
+        (a, b) => (a ?? Array.Empty<T>()).SequenceEqual(b ?? Array.Empty<T>()),
+        list => list.Aggregate(0, (hash, item) => HashCode.Combine(hash, item)),
+        list => list.ToList());
 
     /// <summary>
     /// A ContractRules is stored flat on its owner's row, under the column names the settings
@@ -199,17 +219,23 @@ public class NenFocusDbContext : DbContext
                 .IsRequired()
                 .HasDefaultValue(false);
 
+            // Stored as JSON lists of names, read back through the value objects (Gap 112, C4). An
+            // entry that is no longer one (a critical process StartSession used to let through) is
+            // skipped, not thrown — it could never have been enforced. The comparers make a changed
+            // list a change (Gap 110: without one, EF would not see it).
             entity.Property(s => s.TemporaryBlockedApps)
                 .HasConversion(
-                    list => JsonSerializer.Serialize(list, (JsonSerializerOptions?)null),
-                    json => JsonSerializer.Deserialize<List<string>>(json, (JsonSerializerOptions?)null) ?? new List<string>())
+                    list => JsonSerializer.Serialize(list.Select(a => a.ProcessName), (JsonSerializerOptions?)null),
+                    json => ReadBlockedApps(json),
+                    ListComparer<BlockedApp>())
                 .HasColumnName("TemporaryBlockedApps")
                 .HasDefaultValueSql("'[]'");
 
             entity.Property(s => s.TemporaryBlockedSites)
                 .HasConversion(
-                    list => JsonSerializer.Serialize(list, (JsonSerializerOptions?)null),
-                    json => JsonSerializer.Deserialize<List<string>>(json, (JsonSerializerOptions?)null) ?? new List<string>())
+                    list => JsonSerializer.Serialize(list.Select(s => s.Url), (JsonSerializerOptions?)null),
+                    json => ReadWebsites(json),
+                    ListComparer<Website>())
                 .HasColumnName("TemporaryBlockedSites")
                 .HasDefaultValueSql("'[]'");
 

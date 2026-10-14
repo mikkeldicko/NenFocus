@@ -45,8 +45,8 @@ public class Session : AggregateRoot
     public bool KeepBlockingDuringBreaks { get; private set; }
     public string? Reflection { get; private set; }
     public Moment? PostSessionAcknowledgedAt { get; private set; }
-    public IReadOnlyList<string> TemporaryBlockedApps { get; private set; } = [];
-    public IReadOnlyList<string> TemporaryBlockedSites { get; private set; } = [];
+    public IReadOnlyList<BlockedApp> TemporaryBlockedApps { get; private set; } = [];
+    public IReadOnlyList<Website> TemporaryBlockedSites { get; private set; } = [];
 
     private Session() { } // EF Core
 
@@ -57,8 +57,8 @@ public class Session : AggregateRoot
         Guid blockPresetId,
         SessionOrigin origin,
         Guid? originatingBlockId = null,
-        IReadOnlyList<string>? temporaryBlockedApps = null,
-        IReadOnlyList<string>? temporaryBlockedSites = null)
+        IReadOnlyList<BlockedApp>? temporaryBlockedApps = null,
+        IReadOnlyList<Website>? temporaryBlockedSites = null)
     {
         if (origin == SessionOrigin.Planned && originatingBlockId is null)
             throw new ArgumentException(

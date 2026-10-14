@@ -4,18 +4,18 @@ using Microsoft.EntityFrameworkCore;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.UseCases.NenContracts.SweepNenContractLifecycle;
 using NenFocus.Application.UseCases.Planner.DeletePlannedBlock;
-using NenFocus.Infrastructure.Services;
+using NenFocus.Application.Services;
 using NSubstitute;
 
-namespace NenFocus.Tests.Infrastructure.Services;
+namespace NenFocus.Tests.Application.Services;
 
-public class TransactionalCommandHandlerTests
+public class TransactionCommandHandlerDecoratorTests
 {
     private readonly ICommandHandler<DeletePlannedBlockCommand, DeletePlannedBlockResult> _inner =
         Substitute.For<ICommandHandler<DeletePlannedBlockCommand, DeletePlannedBlockResult>>();
     private readonly IUnitOfWork _uow = Substitute.For<IUnitOfWork>();
 
-    private TransactionalCommandHandler<DeletePlannedBlockCommand, DeletePlannedBlockResult> CreateHandler()
+    private TransactionCommandHandlerDecorator<DeletePlannedBlockCommand, DeletePlannedBlockResult> CreateHandler()
         => new(_inner, _uow);
 
     [Fact]
@@ -66,7 +66,7 @@ public class TransactionalCommandHandlerTests
         inner.HandleAsync(Arg.Any<SweepNenContractLifecycleCommand>(), Arg.Any<CancellationToken>())
             .Returns(new SweepNenContractLifecycleResult());
 
-        await new TransactionalCommandHandler<SweepNenContractLifecycleCommand, SweepNenContractLifecycleResult>(inner, _uow)
+        await new TransactionCommandHandlerDecorator<SweepNenContractLifecycleCommand, SweepNenContractLifecycleResult>(inner, _uow)
             .HandleAsync(new SweepNenContractLifecycleCommand());
 
         await _uow.Received(1).CommitAsync(Arg.Any<CancellationToken>());
@@ -74,29 +74,17 @@ public class TransactionalCommandHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_CommitThrowsUniqueConstraintViolation_ReturnsFailResultInstead()
+    public async Task HandleAsync_CommitThrowsUniqueConstraintViolation_Propagates()
     {
-        // A genuine race — two commands both passed the inner handler's own
-        // ExistsWithNameAsync-style check before either committed. Translated here,
-        // generically, rather than in every command that touches a unique column.
+        // Gap 112 (I1): unique indexes are backstops — validators own "the name is taken", the
+        // Domain owns "one running session". A backstop that fires is a bug, so it stays loud
+        // instead of being reworded (it used to become "That name is already in use." for every
+        // index, the session ones included).
         _inner.HandleAsync(Arg.Any<DeletePlannedBlockCommand>(), Arg.Any<CancellationToken>())
             .Returns(DeletePlannedBlockResult.Ok());
         var sqliteEx = new SqliteException("UNIQUE constraint failed", 19, 2067);
         _uow.CommitAsync(Arg.Any<CancellationToken>())
             .Returns(Task.FromException(new DbUpdateException("save failed", sqliteEx)));
-
-        var result = await CreateHandler().HandleAsync(new DeletePlannedBlockCommand { BlockId = Guid.NewGuid() });
-
-        result.Success.Should().BeFalse();
-    }
-
-    [Fact]
-    public async Task HandleAsync_CommitThrowsUnrelatedDbUpdateException_Rethrows()
-    {
-        _inner.HandleAsync(Arg.Any<DeletePlannedBlockCommand>(), Arg.Any<CancellationToken>())
-            .Returns(DeletePlannedBlockResult.Ok());
-        _uow.CommitAsync(Arg.Any<CancellationToken>())
-            .Returns(Task.FromException(new DbUpdateException("some other failure")));
 
         var act = async () => await CreateHandler().HandleAsync(new DeletePlannedBlockCommand { BlockId = Guid.NewGuid() });
 

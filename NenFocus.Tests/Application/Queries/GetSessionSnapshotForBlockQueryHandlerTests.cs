@@ -14,7 +14,7 @@ public class GetSessionSnapshotForBlockQueryHandlerTests
     private static readonly DateTime End = new(2026, 1, 2, 11, 0, 0, DateTimeKind.Utc);
 
     private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
-    private readonly IBlockedAttemptTracker _attempts = Substitute.For<IBlockedAttemptTracker>();
+    private readonly IBlockedAttemptRepository _attempts = Substitute.For<IBlockedAttemptRepository>();
     private readonly IPlannedBlockRepository _blocks = Substitute.For<IPlannedBlockRepository>();
     private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
     private readonly ISystemClock _clock = TestClock.Create();
@@ -59,9 +59,9 @@ public class GetSessionSnapshotForBlockQueryHandlerTests
         var blockId = Guid.NewGuid();
         var session = CreateCompletedSession(blockId, "Finish report", "Went well.");
         _sessions.GetByOriginatingBlockIdAsync(blockId, Arg.Any<CancellationToken>()).Returns(session);
-        _attempts.GetAttemptsForSessionAsync(session.Id).Returns(
+        _attempts.GetForSessionAsync(session.Id, Arg.Any<CancellationToken>()).Returns(
         [
-            BlockedAttempt.Record(Guid.NewGuid(), session.Id, "chrome", BlockedAttemptType.App, At.Utc(Start.AddMinutes(5)))
+            BlockedAttempt.ForApp(Guid.NewGuid(), session.Id, new BlockedApp("chrome"), At.Utc(Start.AddMinutes(5)))
         ]);
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns((PlannedBlock?)null);
 
@@ -89,7 +89,7 @@ public class GetSessionSnapshotForBlockQueryHandlerTests
 
         var session = CreateCompletedSession(coveringBlockId);
         _sessions.GetByOriginatingBlockIdAsync(coveringBlockId, Arg.Any<CancellationToken>()).Returns(session);
-        _attempts.GetAttemptsForSessionAsync(session.Id).Returns([]);
+        _attempts.GetForSessionAsync(session.Id, Arg.Any<CancellationToken>()).Returns([]);
         _blocks.GetByIdAsync(coveringBlockId, Arg.Any<CancellationToken>()).Returns(coveringBlock);
         _blocks.GetByIdAsync(missedBlockId, Arg.Any<CancellationToken>()).Returns(missedBlock);
         _presets.GetByIdAsync(missedPresetId, Arg.Any<CancellationToken>())
@@ -119,7 +119,7 @@ public class GetSessionSnapshotForBlockQueryHandlerTests
 
         var session = CreateCompletedSession(coveringBlockId);
         _sessions.GetByOriginatingBlockIdAsync(coveringBlockId, Arg.Any<CancellationToken>()).Returns(session);
-        _attempts.GetAttemptsForSessionAsync(session.Id).Returns([]);
+        _attempts.GetForSessionAsync(session.Id, Arg.Any<CancellationToken>()).Returns([]);
         _blocks.GetByIdAsync(coveringBlockId, Arg.Any<CancellationToken>()).Returns(coveringBlock);
         _blocks.GetByIdAsync(missedBlockId, Arg.Any<CancellationToken>()).Returns(missedBlock);
         _presets.GetByIdAsync(missedPresetId, Arg.Any<CancellationToken>())

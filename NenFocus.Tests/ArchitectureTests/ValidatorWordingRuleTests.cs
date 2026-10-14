@@ -25,9 +25,9 @@ public class ValidatorWordingRuleTests
         "NenFocus.Application/UseCases/Planner/UpdatePlannedBlock/UpdatePlannedBlockValidator.cs has 4",
 
         // → Gap 100 step R1: every remaining sentence into Refusals.resx.
-        "NenFocus.Application/UseCases/BlockPresets/CreateBlockPreset/CreateBlockPresetValidator.cs has 3",
+        "NenFocus.Application/UseCases/BlockPresets/CreateBlockPreset/CreateBlockPresetValidator.cs has 2",
         "NenFocus.Application/UseCases/BlockPresets/DeleteBlockPreset/DeleteBlockPresetValidator.cs has 2",
-        "NenFocus.Application/UseCases/BlockPresets/UpdateBlockPreset/UpdateBlockPresetValidator.cs has 2",
+        "NenFocus.Application/UseCases/BlockPresets/UpdateBlockPreset/UpdateBlockPresetValidator.cs has 1",
         "NenFocus.Application/UseCases/ContractPresets/CreateContractPreset/CreateContractPresetValidator.cs has 1",
         "NenFocus.Application/UseCases/ContractPresets/DeleteContractPreset/DeleteContractPresetValidator.cs has 1",
         "NenFocus.Application/UseCases/ContractPresets/UpdateContractPreset/UpdateContractPresetValidator.cs has 2",

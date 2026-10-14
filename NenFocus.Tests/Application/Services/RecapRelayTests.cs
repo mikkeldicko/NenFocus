@@ -1,9 +1,9 @@
 using FluentAssertions;
 using NenFocus.Application.DTOs;
 using NenFocus.Domain.Enums;
-using NenFocus.Infrastructure.Services;
+using NenFocus.Application.Services;
 
-namespace NenFocus.Tests.Infrastructure.Services;
+namespace NenFocus.Tests.Application.Services;
 
 public class RecapRelayTests
 {

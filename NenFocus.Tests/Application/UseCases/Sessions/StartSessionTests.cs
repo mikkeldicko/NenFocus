@@ -65,6 +65,38 @@ public class StartSessionTests : UseCaseTestBase
         session.StartedAt.Should().Be(At.Utc(Now));
     }
 
+    // ── A session's own extra apps and sites (Gap 112) ────────────────────────
+
+    [Fact]
+    public async Task ExtraAppsAndSites_AreStoredAsTheAppAndSiteTheyAre()
+    {
+        var session = await StartedAsync(SpontaneousCommand() with
+        {
+            AdditionalBlockedApps = [@"C:\Games\Steam.exe", "steam"],
+            AdditionalBlockedSites = ["https://www.Reddit.com/r/all"]
+        });
+
+        session.TemporaryBlockedApps.Should().Equal(new BlockedApp("steam"));
+        session.TemporaryBlockedSites.Should().Equal(new Website("reddit.com"));
+    }
+
+    [Fact]
+    public async Task ACriticalProcessAsAnExtraApp_IsRefused_SayingWhy()
+    {
+        // StartSession used to let this through; only the enforcement service's own skip stopped it.
+        var result = await ShouldBeRefused(SpontaneousCommand() with { AdditionalBlockedApps = [@"C:\Windows\explorer.exe"] });
+
+        result.ErrorMessage.Should().Contain("critical system process");
+    }
+
+    [Fact]
+    public async Task AnExtraSiteThatIsNoWebsite_IsRefused()
+    {
+        var result = await ShouldBeRefused(SpontaneousCommand() with { AdditionalBlockedSites = ["https://"] });
+
+        result.ErrorMessage.Should().Contain("is not a website");
+    }
+
     [Fact]
     public async Task AFocusBlockStartingWithinTheDuration_IsRefused_SayingWhen()
     {

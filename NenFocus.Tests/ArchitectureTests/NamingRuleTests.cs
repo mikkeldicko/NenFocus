@@ -1,4 +1,5 @@
 using Avalonia.Data.Converters;
+using FluentAssertions;
 using CommunityToolkit.Mvvm.ComponentModel;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.Services;
@@ -21,13 +22,37 @@ public class NamingRuleTests
     public void HandlersAreNamedAfterWhatTheyHandle()
     {
         var violations = ApplicationTypes
-            .Where(t => !t.IsInterface && !t.IsAbstract)
+            .Where(t => !t.IsInterface && !t.IsAbstract && !t.IsGenericTypeDefinition)
             .SelectMany(t => t.GetInterfaces()
                 .Where(i => i.IsGenericType
                             && (i.GetGenericTypeDefinition() == typeof(ICommandHandler<,>) || i.GetGenericTypeDefinition() == typeof(IQueryHandler<,>)))
                 .Select(i => i.GetGenericArguments()[0])
                 .Where(request => t.Name != request.Name + "Handler")
                 .Select(request => $"{t.FullName} handles {request.Name}, should be {request.Name}Handler"));
+
+        KnownExceptions.Check(violations, []);
+    }
+
+    /// <summary>
+    /// A generic class that is itself a handler wraps every handler of its kind — a decorator, not a
+    /// handler (Gap 112): TransactionCommandHandlerDecorator, ValidationCommandHandlerDecorator.
+    /// </summary>
+    [Fact]
+    public void DecoratorsAreNamedAfterTheConcernAndWhatTheyWrap()
+    {
+        var decorators = ApplicationTypes
+            .Where(t => t.IsGenericTypeDefinition && !t.IsInterface && !t.IsAbstract)
+            .SelectMany(t => t.GetInterfaces()
+                .Where(i => i.IsGenericType
+                            && (i.GetGenericTypeDefinition() == typeof(ICommandHandler<,>) || i.GetGenericTypeDefinition() == typeof(IQueryHandler<,>)))
+                .Select(i => (Type: t, Suffix: i.GetGenericTypeDefinition() == typeof(ICommandHandler<,>)
+                    ? "CommandHandlerDecorator" : "QueryHandlerDecorator")))
+            .ToList();
+
+        decorators.Should().NotBeEmpty("the transaction and validation decorators live in Application");
+        var violations = decorators
+            .Where(d => !d.Type.Name[..d.Type.Name.IndexOf('`')].EndsWith(d.Suffix, StringComparison.Ordinal))
+            .Select(d => $"{d.Type.FullName} should be named <Concern>{d.Suffix}");
 
         KnownExceptions.Check(violations, []);
     }

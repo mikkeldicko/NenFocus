@@ -1,4 +1,3 @@
-using NenFocus.Domain.Constants;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
 using NenFocus.Domain.ValueObjects;
@@ -66,60 +65,34 @@ public sealed class PolicyEngine
         if (activePresets.Count == 0 && activeSessions.Count == 0 && activeBlocks.Count == 0)
             return new ActivePolicySlice { SliceStart = at, SliceEnd = at + TimeSpan.FromMinutes(1) };
 
-        var tempApps = activeSessions
-            .Where(s => !pausedSessionIds.Contains(s.Id))
-            .SelectMany(s => s.TemporaryBlockedApps.Select(ProcessUtils.NormalizeProcessName));
+        var enforcingSessions = activeSessions.Where(s => !pausedSessionIds.Contains(s.Id)).ToList();
 
+        // Website and BlockedApp are the one definition of a site and an app (Gap 112), so equal
+        // entries are equal values — the sets dedupe without any normalizing here.
         var blockedApps = activePresets
-            .SelectMany(p => p.BlockedApps.Select(a => ProcessUtils.NormalizeProcessName(a.ProcessName)))
-            .Concat(tempApps)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            .SelectMany(p => p.BlockedApps)
+            .Concat(enforcingSessions.SelectMany(s => s.TemporaryBlockedApps))
+            .ToHashSet();
 
-        var effectivePolicy = activePresets.Any(p => p.WebsiteFilterType == WebsiteFilterType.Allowlist)
-            ? WebsiteFilterType.Allowlist
-            : WebsiteFilterType.Blocklist;
+        // A session's own extra sites are always blocked, whatever its preset's mode.
+        var blockedSites = activePresets
+            .Where(p => p.WebsiteFilterType == WebsiteFilterType.Blocklist)
+            .SelectMany(p => p.Websites)
+            .Concat(enforcingSessions.SelectMany(s => s.TemporaryBlockedSites))
+            .ToHashSet();
 
-        HashSet<string> allowedSites = new();
-        HashSet<string> blockedSites = new();
-
-        var tempSites = activeSessions
-            .Where(s => !pausedSessionIds.Contains(s.Id))
-            .SelectMany(s => s.TemporaryBlockedSites)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-        if (effectivePolicy == WebsiteFilterType.Allowlist)
-        {
-            var allowlistPresets = activePresets.Where(p => p.WebsiteFilterType == WebsiteFilterType.Allowlist).ToList();
-
-            var intersectList = allowlistPresets[0].Websites.Select(s => s.Url).ToHashSet(StringComparer.OrdinalIgnoreCase);
-            foreach (var preset in allowlistPresets.Skip(1))
-                intersectList.IntersectWith(preset.Websites.Select(s => s.Url));
-
-            var unionOfBlocklists = activePresets
-                .Where(p => p.WebsiteFilterType == WebsiteFilterType.Blocklist)
-                .SelectMany(p => p.Websites.Select(s => s.Url))
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-            // Temporary sites are always blocked — remove them from the allowed set.
-            intersectList.ExceptWith(unionOfBlocklists);
-            intersectList.ExceptWith(tempSites);
-            allowedSites = intersectList;
-            blockedSites = unionOfBlocklists;
-            blockedSites.UnionWith(tempSites);
-        }
-        else
-        {
-            blockedSites = activePresets.SelectMany(p => p.Websites.Select(s => s.Url)).ToHashSet(StringComparer.OrdinalIgnoreCase);
-            blockedSites.UnionWith(tempSites);
-        }
+        // Kept per preset, not intersected: the slice compares by coverage (Gap 112, C1).
+        var allowLists = activePresets
+            .Where(p => p.WebsiteFilterType == WebsiteFilterType.Allowlist)
+            .Select(p => (IReadOnlySet<Website>)p.Websites.ToHashSet())
+            .ToList();
 
         return new ActivePolicySlice
         {
             ActiveSessionId = activeSessions.FirstOrDefault()?.Id,
             SliceStart = at,
             SliceEnd = activeBlocks.Any() ? activeBlocks.Max(b => b.Scheduled.End) : at + TimeSpan.FromMinutes(1),
-            WebsiteFilterTypeMode = effectivePolicy,
-            AllowedSites = allowedSites,
+            AllowLists = allowLists,
             BlockedSites = blockedSites,
             BlockedApps = blockedApps
         };

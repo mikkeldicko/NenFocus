@@ -102,8 +102,9 @@ public sealed class StartSessionCommandHandler
             blockPresetId: command.PresetId ?? Guid.Empty,
             origin: origin,
             originatingBlockId: command.OriginatingBlockId,
-            temporaryBlockedApps: command.AdditionalBlockedApps.Count > 0 ? command.AdditionalBlockedApps : null,
-            temporaryBlockedSites: command.AdditionalBlockedSites.Count > 0 ? command.AdditionalBlockedSites : null);
+            // The validator has asked BlockedApp/Website about each entry (Gap 112).
+            temporaryBlockedApps: command.AdditionalBlockedApps.Select(a => new BlockedApp(a)).Distinct().ToList(),
+            temporaryBlockedSites: command.AdditionalBlockedSites.Select(s => new Website(s)).Distinct().ToList());
 
         // The preset is only a quick way to produce the schedule — the session stores the
         // resulting breaks, never the preset or its rhythm (Gap 63). Laid over the run the

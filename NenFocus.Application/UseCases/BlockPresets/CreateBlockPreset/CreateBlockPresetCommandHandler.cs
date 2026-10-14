@@ -34,7 +34,7 @@ public sealed class CreateBlockPresetCommandHandler
                 preset.AddBlockedApp(new BlockedApp(appName));
 
             foreach (var url in command.Websites)
-                preset.AddWebsite(new BlockedSite(url));
+                preset.AddWebsite(new Website(url));
         }
         catch (ArgumentException ex)
         {

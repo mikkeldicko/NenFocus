@@ -16,15 +16,15 @@ public class GetUnacknowledgedPostSessionsQueryHandlerTests
     private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
     private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
     private readonly IPlannedBlockRepository _plannedBlocks = Substitute.For<IPlannedBlockRepository>();
-    private readonly IBlockedAttemptTracker _attemptTracker = Substitute.For<IBlockedAttemptTracker>();
+    private readonly IBlockedAttemptRepository _attempts = Substitute.For<IBlockedAttemptRepository>();
 
     public GetUnacknowledgedPostSessionsQueryHandlerTests()
     {
-        _attemptTracker.GetAttemptsForSessionAsync(Arg.Any<Guid>()).Returns([]);
+        _attempts.GetForSessionAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns([]);
     }
 
     private GetUnacknowledgedPostSessionsQueryHandler CreateHandler()
-        => new(_sessions, _presets, _plannedBlocks, _attemptTracker);
+        => new(_sessions, _presets, _plannedBlocks, _attempts);
 
     private static Session CreateCompletedSpontaneousSession(DateTime endedAt, TimeSpan elapsed)
     {
@@ -132,11 +132,11 @@ public class GetUnacknowledgedPostSessionsQueryHandlerTests
         var session = CreateCompletedSpontaneousSession(Now, TimeSpan.FromMinutes(10));
         _sessions.GetUnacknowledgedPostSessionsAsync(Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<Session>)[session]);
-        _attemptTracker.GetAttemptsForSessionAsync(session.Id).Returns(
+        _attempts.GetForSessionAsync(session.Id, Arg.Any<CancellationToken>()).Returns(
         [
-            BlockedAttempt.Record(Guid.NewGuid(), session.Id, "chrome", BlockedAttemptType.App, At.Utc(Now)),
-            BlockedAttempt.Record(Guid.NewGuid(), session.Id, "chrome", BlockedAttemptType.App, At.Utc(Now)),
-            BlockedAttempt.Record(Guid.NewGuid(), session.Id, "facebook.com", BlockedAttemptType.Website, At.Utc(Now))
+            BlockedAttempt.ForApp(Guid.NewGuid(), session.Id, new BlockedApp("chrome"), At.Utc(Now)),
+            BlockedAttempt.ForApp(Guid.NewGuid(), session.Id, new BlockedApp("chrome"), At.Utc(Now)),
+            BlockedAttempt.ForWebsite(Guid.NewGuid(), session.Id, new Website("facebook.com"), At.Utc(Now))
         ]);
 
         var result = await CreateHandler().HandleAsync(new GetUnacknowledgedPostSessionsQuery());

@@ -237,6 +237,14 @@ public class SessionTests
     }
 
     [Fact]
+    public void BreakTransitionsBetween_NotStarted_IsEmpty()
+    {
+        var session = CreateSpontaneousSession();
+
+        session.BreakTransitionsBetween(At.Utc(T0), At.Utc(T0.AddHours(1))).Should().BeEmpty();
+    }
+
+    [Fact]
     public void BreaksTakenBy_CountsBreaksBegunSoFar()
     {
         var session = StartedTwoHourSession(OneShortBreak());

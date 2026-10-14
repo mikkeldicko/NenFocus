@@ -81,14 +81,17 @@ public class BlockPresetTests
     }
 
     [Fact]
-    public void AddBlockedApp_DifferentCasing_IsTreatedAsDistinct()
+    public void AddBlockedApp_DifferentCasingOrAPath_IsTheSameApp()
     {
+        // Gap 112 (I5): BlockedApp is the one definition of an app — Windows matches process
+        // names case-insensitively, so "Chrome" and a picked path to chrome.exe are one app.
         var preset = CreatePreset();
 
         preset.AddBlockedApp(new BlockedApp("chrome"));
         preset.AddBlockedApp(new BlockedApp("Chrome"));
+        preset.AddBlockedApp(new BlockedApp(@"C:\Program Files\Google\Chrome\Application\chrome.exe"));
 
-        preset.BlockedApps.Should().HaveCount(2);
+        preset.BlockedApps.Should().ContainSingle();
     }
 
     [Fact]
@@ -107,8 +110,8 @@ public class BlockPresetTests
     {
         var preset = CreatePreset();
 
-        preset.AddWebsite(new BlockedSite("Facebook.com"));
-        preset.AddWebsite(new BlockedSite("facebook.com"));
+        preset.AddWebsite(new Website("Facebook.com"));
+        preset.AddWebsite(new Website("facebook.com"));
 
         preset.Websites.Should().ContainSingle();
     }
@@ -117,9 +120,9 @@ public class BlockPresetTests
     public void RemoveWebsite_RemovesMatchingUrl()
     {
         var preset = CreatePreset();
-        preset.AddWebsite(new BlockedSite("facebook.com"));
+        preset.AddWebsite(new Website("facebook.com"));
 
-        preset.RemoveWebsite(new BlockedSite("facebook.com"));
+        preset.RemoveWebsite(new Website("facebook.com"));
 
         preset.Websites.Should().BeEmpty();
     }
@@ -128,7 +131,7 @@ public class BlockPresetTests
     public void ChangeWebsiteFilterType_ClearsExistingWebsites()
     {
         var preset = CreatePreset(WebsiteFilterType.Blocklist);
-        preset.AddWebsite(new BlockedSite("facebook.com"));
+        preset.AddWebsite(new Website("facebook.com"));
 
         preset.ChangeWebsiteFilterType(WebsiteFilterType.Allowlist);
 
@@ -141,7 +144,7 @@ public class BlockPresetTests
     {
         var original = CreatePreset(WebsiteFilterType.Blocklist, BlockPresetType.Focus);
         original.AddBlockedApp(new BlockedApp("chrome"));
-        original.AddWebsite(new BlockedSite("facebook.com"));
+        original.AddWebsite(new Website("facebook.com"));
         var newId = Guid.NewGuid();
 
         var copy = original.Duplicate("Deep Work Copy", newId, At.Utc(DateTime.UtcNow));
@@ -170,13 +173,16 @@ public class BlockPresetTests
         copy.BlockedApps.Should().HaveCount(2);
     }
 
+    private static HashSet<BlockedApp> Apps(params string[] names) => names.Select(n => new BlockedApp(n)).ToHashSet();
+    private static HashSet<Website> Sites(params string[] urls) => urls.Select(u => new Website(u)).ToHashSet();
+
     [Fact]
     public void IsAtLeastAsStrict_BlocklistAddingApp_True()
     {
         var preset = CreatePreset();
         preset.AddBlockedApp(new BlockedApp("chrome"));
 
-        preset.IsAtLeastAsStrict(new HashSet<string> { "chrome", "firefox" }, new HashSet<string>()).Should().BeTrue();
+        preset.IsAtLeastAsStrict(Apps("chrome", "firefox"), Sites()).Should().BeTrue();
     }
 
     [Fact]
@@ -186,26 +192,26 @@ public class BlockPresetTests
         preset.AddBlockedApp(new BlockedApp("chrome"));
         preset.AddBlockedApp(new BlockedApp("firefox"));
 
-        preset.IsAtLeastAsStrict(new HashSet<string> { "chrome" }, new HashSet<string>()).Should().BeFalse();
+        preset.IsAtLeastAsStrict(Apps("chrome"), Sites()).Should().BeFalse();
     }
 
     [Fact]
     public void IsAtLeastAsStrict_BlocklistAddingSite_True()
     {
         var preset = CreatePreset(policy: WebsiteFilterType.Blocklist);
-        preset.AddWebsite(new BlockedSite("reddit.com"));
+        preset.AddWebsite(new Website("reddit.com"));
 
-        preset.IsAtLeastAsStrict(new HashSet<string>(), new HashSet<string> { "reddit.com", "youtube.com" }).Should().BeTrue();
+        preset.IsAtLeastAsStrict(Apps(), Sites("reddit.com", "youtube.com")).Should().BeTrue();
     }
 
     [Fact]
     public void IsAtLeastAsStrict_BlocklistRemovingSite_False()
     {
         var preset = CreatePreset(policy: WebsiteFilterType.Blocklist);
-        preset.AddWebsite(new BlockedSite("reddit.com"));
-        preset.AddWebsite(new BlockedSite("youtube.com"));
+        preset.AddWebsite(new Website("reddit.com"));
+        preset.AddWebsite(new Website("youtube.com"));
 
-        preset.IsAtLeastAsStrict(new HashSet<string>(), new HashSet<string> { "reddit.com" }).Should().BeFalse();
+        preset.IsAtLeastAsStrict(Apps(), Sites("reddit.com")).Should().BeFalse();
     }
 
     [Fact]
@@ -214,10 +220,10 @@ public class BlockPresetTests
         // Removing an allowed site narrows what's let through — the "stricter" direction,
         // the inverse of Blocklist.
         var preset = CreatePreset(policy: WebsiteFilterType.Allowlist);
-        preset.AddWebsite(new BlockedSite("allowed-a.com"));
-        preset.AddWebsite(new BlockedSite("allowed-b.com"));
+        preset.AddWebsite(new Website("allowed-a.com"));
+        preset.AddWebsite(new Website("allowed-b.com"));
 
-        preset.IsAtLeastAsStrict(new HashSet<string>(), new HashSet<string> { "allowed-a.com" }).Should().BeTrue();
+        preset.IsAtLeastAsStrict(Apps(), Sites("allowed-a.com")).Should().BeTrue();
     }
 
     [Fact]
@@ -226,8 +232,8 @@ public class BlockPresetTests
         // Adding an allowed site widens what's let through — the "weaker" direction, even
         // though it's technically an addition.
         var preset = CreatePreset(policy: WebsiteFilterType.Allowlist);
-        preset.AddWebsite(new BlockedSite("allowed-a.com"));
+        preset.AddWebsite(new Website("allowed-a.com"));
 
-        preset.IsAtLeastAsStrict(new HashSet<string>(), new HashSet<string> { "allowed-a.com", "allowed-b.com" }).Should().BeFalse();
+        preset.IsAtLeastAsStrict(Apps(), Sites("allowed-a.com", "allowed-b.com")).Should().BeFalse();
     }
 }

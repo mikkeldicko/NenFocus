@@ -1,11 +1,13 @@
+using Microsoft.Extensions.Logging;
 using Microsoft.Win32;
 using NenFocus.Application.Interfaces;
-using NenFocus.Domain.Constants;
+using NenFocus.Application.UseCases.Sessions.RecordBlockedAttempt;
 using NenFocus.Domain.Enums;
-using NenFocus.Domain.ValueObjects; 
+using NenFocus.Domain.ValueObjects;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net;
+using System.Threading.Channels;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
@@ -27,10 +29,17 @@ public sealed class WindowsEnforcementService : IEnforcementService, IDisposable
     private const int ProcessPollIntervalMs = 2000;
     private readonly SemaphoreSlim _lock = new(1, 1);
     private readonly System.Timers.Timer _processKillTimer;
-    private readonly IBlockedAttemptTracker _attemptTracker;
+    private readonly ICommandDispatcher _commands;
+    private readonly ISystemClock _clock;
+    private readonly ILogger<WindowsEnforcementService> _logger;
+
+    // Attempts are recorded one at a time, in the order seen (Gap 112, I3): the repeat check reads the
+    // latest attempt before adding, so two reports of the same thing must never run side by side.
+    private readonly Channel<RecordBlockedAttemptCommand> _attempts =
+        Channel.CreateUnbounded<RecordBlockedAttemptCommand>(new UnboundedChannelOptions { SingleReader = true });
+    private readonly Task _attemptRecorder;
 
     private ActivePolicySlice? _currentPolicy;
-    private HashSet<string> _blockedProcessNames = new(StringComparer.OrdinalIgnoreCase);
     private bool _isEnforcing;
 
     private HttpListener? _httpListener;
@@ -39,9 +48,13 @@ public sealed class WindowsEnforcementService : IEnforcementService, IDisposable
     private readonly ConcurrentDictionary<string, bool> _trustedSignatureCache = new();
     private readonly int _currentPid = Environment.ProcessId;
 
-    public WindowsEnforcementService(IBlockedAttemptTracker attemptTracker)
+    public WindowsEnforcementService(
+        ICommandDispatcher commands, ISystemClock clock, ILogger<WindowsEnforcementService> logger)
     {
-        _attemptTracker = attemptTracker;
+        _commands = commands;
+        _clock = clock;
+        _logger = logger;
+        _attemptRecorder = Task.Run(RecordAttemptsAsync);
         _processKillTimer = new System.Timers.Timer(ProcessPollIntervalMs);
         _processKillTimer.Elapsed += OnProcessKillTimerElapsed;
         _processKillTimer.AutoReset = true;
@@ -60,11 +73,7 @@ public sealed class WindowsEnforcementService : IEnforcementService, IDisposable
 
             await ApplyHostsRulesAsync(policy, ct);
 
-            _blockedProcessNames = new HashSet<string>(
-                policy.BlockedApps.Select(ProcessUtils.NormalizeProcessName),
-                StringComparer.OrdinalIgnoreCase);
-
-            if (_blockedProcessNames.Count > 0)
+            if (policy.BlockedApps.Count > 0)
             {
                 // This first sweep catches apps that were already running before/when the
                 // block activated - the app equivalent of an already-open browser tab. That's
@@ -88,7 +97,6 @@ public sealed class WindowsEnforcementService : IEnforcementService, IDisposable
         try
         {
             _processKillTimer.Stop();
-            _blockedProcessNames = new HashSet<string>();
             _currentPolicy = null;
             _isEnforcing = false;
             await RemoveHostsRulesAsync(ct);
@@ -98,28 +106,50 @@ public sealed class WindowsEnforcementService : IEnforcementService, IDisposable
 
     private void KillBlockedProcessesImmediate(bool reportAttempts)
     {
-        var processes = Process.GetProcesses();
-        foreach (var p in processes)
+        if (_currentPolicy is not { } policy) return;
+
+        // One app is many processes (Chrome runs dozens named "chrome") — one launch is one report.
+        var killed = new HashSet<BlockedApp>();
+        foreach (var p in Process.GetProcesses())
         {
             try
             {
                 if (p.Id == _currentPid) continue;
-                string pName = p.ProcessName;
-                if (SystemSafetyConstants.UnkillableProcesses.Contains(pName)) continue;
-                if (!_blockedProcessNames.Contains(pName)) continue;
+                // The slice answers which listed app this process is (Gap 112, C2); a critical
+                // process can't be a BlockedApp, so it never matches.
+                if (policy.BlockedAppFor(p.ProcessName) is not { } app) continue;
 
                 string? filePath = GetProcessPath(p);
                 if (string.IsNullOrEmpty(filePath) || IsSystemProtected(filePath)) continue;
 
-                if (reportAttempts && _currentPolicy?.ActiveSessionId != null)
-                {
-                    _ = _attemptTracker.RecordAppBlockedAsync(_currentPolicy.ActiveSessionId.Value, pName);
-                }
-
                 p.Kill(entireProcessTree: true);
+                killed.Add(app);
             }
             catch { }
             finally { p.Dispose(); }
+        }
+
+        if (reportAttempts)
+            foreach (var app in killed)
+                Report(app.ProcessName, BlockedAttemptType.App, policy);
+    }
+
+    // Enforcement reports what it saw and under which policy; the use case decides what it belongs to.
+    private void Report(string resource, BlockedAttemptType kind, ActivePolicySlice policy) =>
+        _attempts.Writer.TryWrite(new RecordBlockedAttemptCommand
+        {
+            Resource = resource,
+            Kind = kind,
+            OccurredAt = _clock.Now,
+            Policy = policy,
+        });
+
+    private async Task RecordAttemptsAsync()
+    {
+        await foreach (var attempt in _attempts.Reader.ReadAllAsync())
+        {
+            try { await _commands.DispatchAsync(attempt); }
+            catch (Exception ex) { _logger.LogError(ex, "Could not record a blocked attempt at {Resource}", attempt.Resource); }
         }
     }
 
@@ -162,12 +192,11 @@ public sealed class WindowsEnforcementService : IEnforcementService, IDisposable
         sb.AppendLine().AppendLine(BlockMarkerStart);
         foreach (var site in policy.BlockedSites)
         {
-            var domain = NormalizeDomain(site);
-            if (string.IsNullOrWhiteSpace(domain)) continue;
+            // The hosts file can't wildcard subdomains — the extension covers those (Gap 112).
             foreach (var addr in BlockAddresses)
             {
-                sb.AppendLine($"{addr} {domain}");
-                sb.AppendLine($"{addr} www.{domain}");
+                sb.AppendLine($"{addr} {site.Url}");
+                sb.AppendLine($"{addr} www.{site.Url}");
             }
         }
         sb.AppendLine(BlockMarkerEnd);
@@ -198,16 +227,6 @@ public sealed class WindowsEnforcementService : IEnforcementService, IDisposable
             }
             catch { }
         }
-    }
-
-    private static string NormalizeDomain(string site)
-    {
-        if (string.IsNullOrWhiteSpace(site)) return string.Empty;
-        var s = site.Trim().ToLowerInvariant();
-        if (s.Contains("://")) s = s.Split("://")[1];
-        s = s.Split('/')[0].Split('?')[0].Split(':')[0];
-        if (s.StartsWith("www.")) s = s[4..];
-        return s;
     }
 
     private static string StripNenFocusBlock(string hostsContent)
@@ -263,24 +282,11 @@ public sealed class WindowsEnforcementService : IEnforcementService, IDisposable
         var url = context.Request.Url;
         if (url?.AbsolutePath == "/check")
         {
-            var domain = context.Request.QueryString["domain"];
-            bool isBlocked;
-
-            if (_currentPolicy == null || !_isEnforcing || string.IsNullOrEmpty(domain))
-            {
-                isBlocked = false;
-            }
-            else if (_currentPolicy.WebsiteFilterTypeMode == WebsiteFilterType.Allowlist)
-            {
-                // Default-deny: block everything NOT in the allowed list
-                isBlocked = !_currentPolicy.AllowedSites.Any(s =>
-                    NormalizeDomain(s).Equals(domain, StringComparison.OrdinalIgnoreCase));
-            }
-            else
-            {
-                isBlocked = _currentPolicy.BlockedSites.Any(s =>
-                    NormalizeDomain(s).Equals(domain, StringComparison.OrdinalIgnoreCase));
-            }
+            // The slice decides (Gap 112, I2); a domain that isn't one is never blocked.
+            var policy = _currentPolicy;
+            var isBlocked = policy is not null && _isEnforcing
+                && Website.TryCreate(context.Request.QueryString["domain"], out var site)
+                && policy.Blocks(site);
 
             var json = JsonSerializer.Serialize(new { blocked = isBlocked });
             var buffer = Encoding.UTF8.GetBytes(json);
@@ -292,10 +298,9 @@ public sealed class WindowsEnforcementService : IEnforcementService, IDisposable
 
         if (url?.AbsolutePath == "/report")
         {
-            var domain = context.Request.QueryString["domain"];
-            var sessionId = _currentPolicy?.ActiveSessionId;
-            if (!string.IsNullOrEmpty(domain) && sessionId.HasValue)
-                _ = _attemptTracker.RecordWebBlockedAsync(sessionId.Value, domain);
+            var policy = _currentPolicy;
+            if (policy is not null && Website.TryCreate(context.Request.QueryString["domain"], out var site))
+                Report(site.Url, BlockedAttemptType.Website, policy);
 
             context.Response.StatusCode = (int)HttpStatusCode.OK;
         }
@@ -304,6 +309,7 @@ public sealed class WindowsEnforcementService : IEnforcementService, IDisposable
     }
     public void Dispose()
     {
+        _attempts.Writer.TryComplete();
         _serverCts?.Cancel();
         _httpListener?.Stop();
         _processKillTimer.Stop();

@@ -21,7 +21,7 @@ public class UpdateBlockPresetTests : UseCaseTestBase
     {
         var preset = BlockPreset.Create(Guid.NewGuid(), "Deep Work", filterType, BlockPresetType.Focus, At.Utc(Now));
         foreach (var app in apps ?? []) preset.AddBlockedApp(new BlockedApp(app));
-        foreach (var site in sites ?? []) preset.AddWebsite(new BlockedSite(site));
+        foreach (var site in sites ?? []) preset.AddWebsite(new Website(site));
         return preset;
     }
 

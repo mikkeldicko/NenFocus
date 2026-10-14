@@ -51,8 +51,8 @@ public class ChangeTrackingRoundTripTests : SqliteRepositoryTestBase
         var preset = BlockPreset.Create(Guid.NewGuid(), "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Now);
         preset.AddBlockedApp(new BlockedApp("chrome"));
         preset.AddBlockedApp(new BlockedApp("steam"));
-        preset.AddWebsite(new BlockedSite("youtube.com"));
-        preset.AddWebsite(new BlockedSite("reddit.com"));
+        preset.AddWebsite(new Website("youtube.com"));
+        preset.AddWebsite(new Website("reddit.com"));
         return preset;
     }
 
@@ -71,8 +71,8 @@ public class ChangeTrackingRoundTripTests : SqliteRepositoryTestBase
             p.ChangePresetType(BlockPresetType.Background);
             p.AddBlockedApp(new BlockedApp("spotify"));
             p.RemoveBlockedApp(new BlockedApp("steam"));
-            p.AddWebsite(new BlockedSite("x.com"));
-            p.RemoveWebsite(new BlockedSite("reddit.com"));
+            p.AddWebsite(new Website("x.com"));
+            p.RemoveWebsite(new Website("reddit.com"));
         });
 
         var reloaded = await ReloadAsync(BlockPresetById(preset.Id));
@@ -91,7 +91,7 @@ public class ChangeTrackingRoundTripTests : SqliteRepositoryTestBase
         await ChangeAndCommitAsync(BlockPresetById(preset.Id), p =>
         {
             p.ChangeWebsiteFilterType(WebsiteFilterType.Allowlist);
-            p.AddWebsite(new BlockedSite("github.com"));
+            p.AddWebsite(new Website("github.com"));
         });
 
         var reloaded = await ReloadAsync(BlockPresetById(preset.Id));

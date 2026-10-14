@@ -40,6 +40,12 @@ public static class DependencyInjection
         // per-tick scope rather than holding one DbContext for the app's lifetime (Gap 40).
         services.AddScoped<IBlockMarkerNotifier, BlockMarkerNotifier>();
 
+        // Singletons: app-wide state the UI observes. They reach the database only through
+        // IQueryDispatcher, a fresh scope per query (Gap 40). Moved from Infrastructure (Gap 112).
+        services.AddSingleton<IActiveSessionState, ActiveSessionState>();
+        services.AddSingleton<IRitualPrompt, RitualPrompt>();
+        services.AddSingleton<IRecapRelay, RecapRelay>();
+
         return services;
     }
 
@@ -55,7 +61,7 @@ public static class DependencyInjection
             {
                 var def = @interface.GetGenericTypeDefinition();
                 // Query handlers registered here; command handlers are wrapped by
-                // TransactionalCommandHandler in Infrastructure DI.
+                // TransactionCommandHandlerDecorator in Infrastructure DI.
                 if (def == typeof(IQueryHandler<,>))
                     services.AddTransient(@interface, type);
 

@@ -17,6 +17,7 @@ using NenFocus.Application.UseCases.BlockPresets.DeleteBlockPreset;
 using NenFocus.Application.UseCases.BlockPresets.DuplicateBlockPreset;
 using NenFocus.Application.UseCases.BlockPresets.UpdateBlockPreset;
 using NenFocus.Domain.Enums;
+using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.ViewModels.Pages;
 
@@ -300,10 +301,12 @@ public partial class BlockPresetPageViewModel : ViewModelBase
         }
     }
 
-    public void AddAppFromExePath(string processName)
+    // The picked path, shown as the app it is — BlockedApp owns what an app's name is (Gap 112);
+    // whether it may be blocked is the Save validator's answer.
+    public void AddAppFromExePath(string exePath)
     {
-        if (!string.IsNullOrEmpty(processName) &&
-            !FormApps.Contains(processName, StringComparer.OrdinalIgnoreCase))
+        var processName = BlockedApp.NameOf(exePath);
+        if (processName.Length > 0 && !FormApps.Contains(processName))
             FormApps.Add(processName);
     }
 
@@ -330,10 +333,7 @@ public partial class BlockPresetPageViewModel : ViewModelBase
         });
 
         if (files.Count > 0)
-        {
-            var processName = Path.GetFileNameWithoutExtension(files[0].Path.LocalPath).ToLower();
-            AddAppFromExePath(processName);
-        }
+            AddAppFromExePath(files[0].Path.LocalPath);
     }
 
     [RelayCommand]

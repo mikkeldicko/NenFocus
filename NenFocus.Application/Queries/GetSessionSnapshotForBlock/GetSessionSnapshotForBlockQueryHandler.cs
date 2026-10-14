@@ -8,14 +8,14 @@ public sealed class GetSessionSnapshotForBlockQueryHandler
     : IQueryHandler<GetSessionSnapshotForBlockQuery, SessionSnapshotDto?>
 {
     private readonly ISessionRepository _sessions;
-    private readonly IBlockedAttemptTracker _attempts;
+    private readonly IBlockedAttemptRepository _attempts;
     private readonly IPlannedBlockRepository _blocks;
     private readonly IBlockPresetRepository _presets;
     private readonly ISystemClock _clock;
 
     public GetSessionSnapshotForBlockQueryHandler(
         ISessionRepository sessions,
-        IBlockedAttemptTracker attempts,
+        IBlockedAttemptRepository attempts,
         IPlannedBlockRepository blocks,
         IBlockPresetRepository presets,
         ISystemClock clock)
@@ -34,7 +34,7 @@ public sealed class GetSessionSnapshotForBlockQueryHandler
         var session = await _sessions.GetByOriginatingBlockIdAsync(query.PlannedBlockId, cancellationToken);
         if (session is null) return null;
 
-        var attempts = await _attempts.GetAttemptsForSessionAsync(session.Id);
+        var attempts = await _attempts.GetForSessionAsync(session.Id, cancellationToken);
 
         var block = await _blocks.GetByIdAsync(query.PlannedBlockId, cancellationToken) as FocusBlock;
         var redemptionCoverage = new List<RedemptionCoverageDto>();

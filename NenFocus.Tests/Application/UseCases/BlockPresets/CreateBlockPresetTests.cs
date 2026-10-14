@@ -70,6 +70,33 @@ public class CreateBlockPresetTests : UseCaseTestBase
         var result = await RunAsync(ValidCommand() with { BlockedApps = ["explorer.exe"] });
 
         result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Be("'explorer.exe' is a critical system process and cannot be blocked.");
+        (await CountNamedAsync("Deep Work")).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task AppsAndSitesAsTyped_AreStoredAsTheAppAndSiteTheyAre()
+    {
+        // Gap 112: Website and BlockedApp are the one definition of a site and an app.
+        var result = await RunAsync(ValidCommand() with
+        {
+            BlockedApps = [@"C:\Program Files\Steam\Steam.exe"],
+            Websites = ["https://www.YouTube.com/watch?v=1"]
+        });
+
+        result.Success.Should().BeTrue(result.ErrorMessage);
+        var stored = await FindAsync<BlockPreset>(result.PresetId!.Value);
+        stored!.BlockedApps.Select(a => a.ProcessName).Should().Equal("steam");
+        stored.Websites.Select(s => s.Url).Should().Equal("youtube.com");
+    }
+
+    [Fact]
+    public async Task ASiteThatIsNoWebsite_IsRefused_SayingWhy()
+    {
+        var result = await RunAsync(ValidCommand() with { Websites = ["you tube.com"] });
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Be("'you tube.com' is not a website — enter a domain like youtube.com.");
         (await CountNamedAsync("Deep Work")).Should().Be(0);
     }
 

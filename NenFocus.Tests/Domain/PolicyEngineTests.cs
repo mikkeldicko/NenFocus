@@ -22,7 +22,7 @@ public class PolicyEngineTests
         foreach (var app in apps ?? [])
             preset.AddBlockedApp(new BlockedApp(app));
         foreach (var site in sites ?? [])
-            preset.AddWebsite(new BlockedSite(site));
+            preset.AddWebsite(new Website(site));
         return preset;
     }
 
@@ -37,13 +37,17 @@ public class PolicyEngineTests
             new SessionDuration(TimeSpan.FromMinutes(30)),
             blockPresetId ?? Guid.NewGuid(),
             SessionOrigin.Spontaneous,
-            temporaryBlockedApps: temporaryBlockedApps,
-            temporaryBlockedSites: temporaryBlockedSites);
+            temporaryBlockedApps: temporaryBlockedApps?.Select(a => new BlockedApp(a)).ToList(),
+            temporaryBlockedSites: temporaryBlockedSites?.Select(s => new Website(s)).ToList());
         session.Start(TestAt.Utc(At));
         return session;
     }
 
-    // A preset only contributes to BlockedApps/BlockedSites/AllowedSites when a currently
+    private static IEnumerable<string> Names(ActivePolicySlice slice) => slice.BlockedApps.Select(a => a.ProcessName);
+    private static IEnumerable<string> Urls(ActivePolicySlice slice) => slice.BlockedSites.Select(s => s.Url);
+    private static bool Blocks(ActivePolicySlice slice, string site) => slice.Blocks(new Website(site));
+
+    // A preset only contributes to BlockedApps/BlockedSites/AllowLists when a currently
     // active block or session actually references it (see PolicyEngine.ComputeSlice) — so
     // any test asserting on those needs a block/session wired to the preset's Id, not just
     // the preset passed in on its own.
@@ -90,7 +94,7 @@ public class PolicyEngineTests
 
         var slice = _engine.ComputeSlice(TestAt.Utc(At), [presetA, presetB], session, [blockA, blockB]);
 
-        slice.BlockedApps.Should().BeEquivalentTo(["chrome", "spotify", "notepad"]);
+        Names(slice).Should().BeEquivalentTo(["chrome", "spotify", "notepad"]);
     }
 
     [Fact]
@@ -103,7 +107,7 @@ public class PolicyEngineTests
 
         var slice = _engine.ComputeSlice(TestAt.Utc(At), [presetA, presetB], null, [blockA, blockB]);
 
-        slice.BlockedApps.Should().ContainSingle().Which.Should().Be("chrome");
+        Names(slice).Should().ContainSingle().Which.Should().Be("chrome");
     }
 
     [Fact]
@@ -117,8 +121,8 @@ public class PolicyEngineTests
         var slice = _engine.ComputeSlice(TestAt.Utc(At), [presetA, presetB], null, [blockA, blockB]);
 
         slice.WebsiteFilterTypeMode.Should().Be(WebsiteFilterType.Blocklist);
-        slice.BlockedSites.Should().BeEquivalentTo(["facebook.com", "youtube.com"]);
-        slice.AllowedSites.Should().BeEmpty();
+        Urls(slice).Should().BeEquivalentTo(["facebook.com", "youtube.com"]);
+        slice.AllowLists.Should().BeEmpty();
     }
 
     [Fact]
@@ -130,7 +134,7 @@ public class PolicyEngineTests
 
         var slice = _engine.ComputeSlice(TestAt.Utc(At), [preset], session, [block]);
 
-        slice.BlockedSites.Should().BeEquivalentTo(["facebook.com", "reddit.com"]);
+        Urls(slice).Should().BeEquivalentTo(["facebook.com", "reddit.com"]);
     }
 
     [Fact]
@@ -142,11 +146,12 @@ public class PolicyEngineTests
         var slice = _engine.ComputeSlice(TestAt.Utc(At), [preset], null, [block]);
 
         slice.WebsiteFilterTypeMode.Should().Be(WebsiteFilterType.Allowlist);
-        slice.AllowedSites.Should().BeEquivalentTo(["work.com"]);
+        Blocks(slice, "work.com").Should().BeFalse();
+        Blocks(slice, "anything-else.com").Should().BeTrue();
     }
 
     [Fact]
-    public void ComputeSlice_AllowlistMode_MultipleAllowlistPresets_IntersectsAllowedSites()
+    public void ComputeSlice_AllowlistMode_MultipleAllowlistPresets_OnlyWhatEveryOneAllowsGetsThrough()
     {
         var presetA = CreatePreset(WebsiteFilterType.Allowlist, sites: ["a.com", "b.com"]);
         var presetB = CreatePreset(WebsiteFilterType.Allowlist, sites: ["b.com", "c.com"]);
@@ -155,11 +160,13 @@ public class PolicyEngineTests
 
         var slice = _engine.ComputeSlice(TestAt.Utc(At), [presetA, presetB], null, [blockA, blockB]);
 
-        slice.AllowedSites.Should().BeEquivalentTo(["b.com"]);
+        Blocks(slice, "b.com").Should().BeFalse();
+        Blocks(slice, "a.com").Should().BeTrue();
+        Blocks(slice, "c.com").Should().BeTrue();
     }
 
     [Fact]
-    public void ComputeSlice_AllowlistMode_BlocklistPresetSitesAreRemovedFromAllowedAndAdded()
+    public void ComputeSlice_AllowlistMode_ABlocklistPresetBlocksWhatAnAllowlistAllows()
     {
         var allowPreset = CreatePreset(WebsiteFilterType.Allowlist, sites: ["a.com", "b.com"]);
         var blockPreset = CreatePreset(WebsiteFilterType.Blocklist, sites: ["b.com"]);
@@ -168,8 +175,9 @@ public class PolicyEngineTests
 
         var slice = _engine.ComputeSlice(TestAt.Utc(At), [allowPreset, blockPreset], null, [allowBlock, blockBlock]);
 
-        slice.AllowedSites.Should().BeEquivalentTo(["a.com"]);
-        slice.BlockedSites.Should().BeEquivalentTo(["b.com"]);
+        Blocks(slice, "a.com").Should().BeFalse();
+        Blocks(slice, "b.com").Should().BeTrue();
+        Urls(slice).Should().BeEquivalentTo(["b.com"]); // the hosts file writes these
     }
 
     [Fact]
@@ -180,8 +188,59 @@ public class PolicyEngineTests
 
         var slice = _engine.ComputeSlice(TestAt.Utc(At), [allowPreset], session, []);
 
-        slice.AllowedSites.Should().BeEquivalentTo(["a.com"]);
-        slice.BlockedSites.Should().BeEquivalentTo(["temp.com"]);
+        Blocks(slice, "a.com").Should().BeFalse();
+        Blocks(slice, "temp.com").Should().BeTrue();
+        Urls(slice).Should().BeEquivalentTo(["temp.com"]);
+    }
+
+    // Gap 112 (C1): a site covers its subdomains, so allowlists are kept apart and compared by
+    // coverage — the old precomputed intersection compared exact strings.
+    [Fact]
+    public void ComputeSlice_BlocklistMode_ASiteBlocksItsSubdomains()
+    {
+        var preset = CreatePreset(WebsiteFilterType.Blocklist, sites: ["youtube.com"]);
+
+        var slice = _engine.ComputeSlice(TestAt.Utc(At), [preset], null, [CreateActiveBlock(preset.Id)]);
+
+        Blocks(slice, "m.youtube.com").Should().BeTrue();
+        Blocks(slice, "notyoutube.com").Should().BeFalse();
+    }
+
+    [Fact]
+    public void ComputeSlice_TwoAllowlists_ASubdomainBothCoverGetsThrough()
+    {
+        var allowGoogle = CreatePreset(WebsiteFilterType.Allowlist, sites: ["google.com"]);
+        var allowGmail = CreatePreset(WebsiteFilterType.Allowlist, sites: ["mail.google.com"]);
+
+        var slice = _engine.ComputeSlice(TestAt.Utc(At), [allowGoogle, allowGmail], null,
+            [CreateActiveBlock(allowGoogle.Id), CreateActiveBlock(allowGmail.Id)]);
+
+        Blocks(slice, "mail.google.com").Should().BeFalse();
+        Blocks(slice, "docs.google.com").Should().BeTrue();
+    }
+
+    [Fact]
+    public void ComputeSlice_AllowedDomainWithABlockedSubdomain_TheSubdomainStaysBlocked()
+    {
+        var allowGoogle = CreatePreset(WebsiteFilterType.Allowlist, sites: ["google.com"]);
+        var blockGmail = CreatePreset(WebsiteFilterType.Blocklist, sites: ["mail.google.com"]);
+
+        var slice = _engine.ComputeSlice(TestAt.Utc(At), [allowGoogle, blockGmail], null,
+            [CreateActiveBlock(allowGoogle.Id), CreateActiveBlock(blockGmail.Id)]);
+
+        Blocks(slice, "mail.google.com").Should().BeTrue();
+        Blocks(slice, "docs.google.com").Should().BeFalse();
+    }
+
+    [Fact]
+    public void BlockedAppFor_FindsTheListedAppARunningProcessIs()
+    {
+        var preset = CreatePreset(WebsiteFilterType.Blocklist, apps: [@"C:\Games\Steam.exe"]);
+
+        var slice = _engine.ComputeSlice(TestAt.Utc(At), [preset], null, [CreateActiveBlock(preset.Id)]);
+
+        slice.BlockedAppFor("Steam").Should().Be(new BlockedApp("steam"));
+        slice.BlockedAppFor("explorer").Should().BeNull();
     }
 
     [Fact]
@@ -296,7 +355,7 @@ public class PolicyEngineTests
 
         var slice = _engine.ComputeSlice(TestAt.Utc(At), [focusPreset, backgroundPreset], null, [endedEarlyBlock, backgroundBlock]);
 
-        slice.BlockedSites.Should().BeEquivalentTo(["reddit.com"]);
+        Urls(slice).Should().BeEquivalentTo(["reddit.com"]);
     }
 
     [Fact]
@@ -368,7 +427,7 @@ public class PolicyEngineTests
 
         var slice = _engine.ComputeSlice(TestAt.Utc(At.AddMinutes(5)), [preset], session, [block]);
 
-        slice.BlockedApps.Should().BeEquivalentTo(["chrome"]);
+        Names(slice).Should().BeEquivalentTo(["chrome"]);
     }
 
     [Fact]
@@ -381,7 +440,7 @@ public class PolicyEngineTests
 
         var slice = _engine.ComputeSlice(TestAt.Utc(At), [preset], session, [block]);
 
-        slice.BlockedApps.Should().BeEquivalentTo(["chrome"]);
+        Names(slice).Should().BeEquivalentTo(["chrome"]);
     }
 
     [Fact]
@@ -398,6 +457,6 @@ public class PolicyEngineTests
 
         var slice = _engine.ComputeSlice(TestAt.Utc(At), [focusPreset, backgroundPreset], session, [focusBlock, backgroundBlock]);
 
-        slice.BlockedApps.Should().BeEquivalentTo(["spotify"]);
+        Names(slice).Should().BeEquivalentTo(["spotify"]);
     }
 }

@@ -36,13 +36,14 @@ NenFocus.Tests/
 │   ├── UseCaseTestBase.cs      ← runs a command the way the app does, on real SQLite (Gap 110)
 │   ├── UseCases/{BlockPresets,ContractPresets,NenContracts,Planner,Sessions}/  ← one test file per use case, validator cases included
 │   ├── Queries/                ← one *QueryHandlerTests.cs per query
-│   └── EventHandlers/          ← SessionStartedEventHandlerTests.cs, NenContractActivatedEventHandlerTests.cs, etc.
+│   ├── EventHandlers/          ← SessionStartedEventHandlerTests.cs, NenContractActivatedEventHandlerTests.cs, etc.
+│   └── Services/               ← EnforcementSynchronizerTests.cs, NotifierTests.cs, ActiveSessionStateTests.cs, RitualPromptTests.cs, TransactionCommandHandlerDecoratorTests.cs, etc.
 ├── Infrastructure/
 │   ├── Persistence/
 │   │   ├── SqliteRepositoryTestBase.cs   ← shared base: real SQLite via an in-memory connection, not a fake/InMemory provider
 │   │   ├── Repositories/                 ← BlockPresetRepositoryTests.cs, SessionRepositoryTests.cs, NenContractRepositoryTests.cs, PlannedBlockRepositoryTests.cs
 │   │   └── EfCoreUnitOfWorkTests.cs
-│   ├── Services/               ← BlockedAttemptTrackerTests.cs, ActiveSessionStateTests.cs, RitualPromptTests.cs, TransactionalCommandHandlerTests.cs, InProcessDomainEventPublisherTests.cs
+│   ├── Services/               ← InProcessDomainEventPublisherTests.cs, etc.
 │   └── CompositionRootTests.cs ← confirms every handler/service resolves from DI with no missing registrations
 ├── ArchitectureTests/          ← MODULE_STANDARDS rules that fail on drift (Gap 98) — see "Architecture Tests" below
 ├── Headless/                   ← real views rendered with no screen (Avalonia.Headless) — see "Headless UI Tests" below
@@ -257,13 +258,17 @@ Coverage says a test *ran* a line; mutation testing says a test would *notice* i
 
 ```bash
 cd NenFocus.Tests
-# Gap close: only Domain files changed since the commit before the gap
-dotnet stryker --project NenFocus.Domain.csproj --since:<commit-before-the-gap>
+# Gap close: name the gap's changed Domain files, one --mutate each
+git diff --name-only <commit-before-the-gap> -- ../NenFocus.Domain   # the list
+dotnet stryker --project NenFocus.Domain.csproj --log-to-file \
+  --mutate "**/Website.cs" --mutate "**/BlockedApp.cs"            # …one per changed file
 # End of a box: the whole Domain (~16 min on 2026-10-08)
-dotnet stryker --project NenFocus.Domain.csproj
+dotnet stryker --project NenFocus.Domain.csproj --log-to-file
 ```
 
-Reports go to `NenFocus.Tests/StrykerOutput/` (git-ignored); open the HTML report to see each survivor inline. **Don't build or run tests in parallel** — Stryker swaps mutated assemblies into the test project's `bin`.
+**Not `--since:<commit>` at a gap close (changed 2026-10-13, Gap 112).** `--since` also re-tests every mutant in *unchanged* code whose covering tests changed — in Gap 112 that was 420 extra mutants on top of the 201 that mattered, and a value object under hundreds of real-SQLite use-case tests (`Website`, `BlockedApp`, `Session`) costs 5–10 s a mutant: the run took over 40 minutes. Step 5 asks for the files the gap changed, so name them. Before starting, say how many mutants and roughly how long (`--log-to-file` writes progress under `StrykerOutput/<run>/logs/`); a file under many use-case tests is the slow kind. `--since` is for a broad re-check, run when nothing else needs the machine.
+
+Reports go to `NenFocus.Tests/StrykerOutput/` (git-ignored); open the HTML report to see each survivor inline. **Don't build or run tests in parallel** — Stryker swaps mutated assemblies into the test project's `bin`. That includes the stop hook's architecture-test run: in Gap 112 it ran mid-mutation and reported failures that weren't there (all 61 passed from a separate output folder).
 
 **Reading the result** — only one kind needs action:
 - *String mutation* survivors (an exception message blanked): ignore; wording isn't a rule (→ Gap 100).
@@ -274,7 +279,7 @@ Reports go to `NenFocus.Tests/StrykerOutput/` (git-ignored); open the HTML repor
 
 Scores over the whole Domain: 84.5% on 2026-10-08 before Gap 113; 86.4% after it (1,123 tested, 132 survived — wording, equivalent mutants and the untested `EnsureMine` guards).
 
-**Probing by hand: mutate the syntax tree, not the text.** Stryker changes one operator *as C# parsed it*. `a && b && c` is `(a && b) && c`, so its "first `&&` → `||`" mutant is `(a || b) && c`, while a text edit gives `a || (b && c)` — a different change, which other tests may already kill. Add the parentheses when probing (Gap 113, S5).
+**Probing by hand: mutate the syntax tree, not the text.** Stryker changes one operator *as C# parsed it*. `a && b && c` is `(a && b) && c`, so its "first `&&` → `||`" mutant is `(a || b) && c`, while a text edit gives `a || (b && c)` — a different change, which other tests may already kill. Add the parentheses when probing (Gap 113, S5). Restoring the file from a copy gives it an older timestamp than the mutated build, so the next `dotnet test` keeps running the mutant — rebuild with `--no-incremental` (or `touch` the file) before trusting a green or red after a probe (2026-10-14).
 
 ---
 

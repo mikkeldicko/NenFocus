@@ -2,10 +2,10 @@ using FluentAssertions;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.GetFocusBlockAwaitingRitual;
 using NenFocus.Domain.ValueObjects;
-using NenFocus.Infrastructure.Services;
+using NenFocus.Application.Services;
 using NSubstitute;
 
-namespace NenFocus.Tests.Infrastructure.Services;
+namespace NenFocus.Tests.Application.Services;
 
 public class RitualPromptTests
 {

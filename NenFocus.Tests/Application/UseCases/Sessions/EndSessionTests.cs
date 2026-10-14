@@ -130,9 +130,9 @@ public class EndSessionTests : UseCaseTestBase
     {
         var session = ActiveSession();
         await SeedAsync(session,
-            BlockedAttempt.Record(Guid.NewGuid(), session.Id, "chrome", BlockedAttemptType.App, At.Utc(Now.AddMinutes(-9))),
-            BlockedAttempt.Record(Guid.NewGuid(), session.Id, "chrome", BlockedAttemptType.App, At.Utc(Now.AddMinutes(-5))),
-            BlockedAttempt.Record(Guid.NewGuid(), session.Id, "facebook.com", BlockedAttemptType.Website, At.Utc(Now.AddMinutes(-3))));
+            BlockedAttempt.ForApp(Guid.NewGuid(), session.Id, new BlockedApp("chrome"), At.Utc(Now.AddMinutes(-9))),
+            BlockedAttempt.ForApp(Guid.NewGuid(), session.Id, new BlockedApp("chrome"), At.Utc(Now.AddMinutes(-5))),
+            BlockedAttempt.ForWebsite(Guid.NewGuid(), session.Id, new Website("facebook.com"), At.Utc(Now.AddMinutes(-3))));
 
         var result = await EndedAsync(session);
 

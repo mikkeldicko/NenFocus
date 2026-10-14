@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using NenFocus.Application;
 using NenFocus.Application.Interfaces;
+using NenFocus.Application.Services;
 using NenFocus.Infrastructure.Persistence;
 using NenFocus.Infrastructure.Persistence.Repositories;
 using NenFocus.Infrastructure.Services;
@@ -26,6 +27,7 @@ public static class DependencyInjection
         // factory-options plumbing ends up needing the root provider regardless of which
         // scope actually asked for it. The documented fix: register the factory once, then
         // derive the Scoped registration from it instead of registering both independently.
+
         services.AddDbContextFactory<NenFocusDbContext>(options =>
             options.UseSqlite($"Data Source={dbPath}"));
 
@@ -38,18 +40,15 @@ public static class DependencyInjection
         services.AddScoped<INenContractRepository, NenContractRepository>();
         services.AddScoped<IContractPresetRepository, ContractPresetRepository>();
         services.AddScoped<IBreakTimerPresetRepository, BreakTimerPresetRepository>();
+        services.AddScoped<IBlockedAttemptRepository, BlockedAttemptRepository>();
 
         services.AddSingleton<INotificationService, WindowsNotificationService>();
 
-        services.AddSingleton<IBlockedAttemptTracker, BlockedAttemptTracker>();
         services.AddSingleton<IEnforcementService, WindowsEnforcementService>();
 
         services.AddSingleton<SystemClock>();
         services.AddSingleton<ISystemClock>(sp => sp.GetRequiredService<SystemClock>());
         services.AddSingleton<IDebugClockController>(sp => sp.GetRequiredService<SystemClock>());
-        services.AddSingleton<IActiveSessionState, ActiveSessionState>();
-        services.AddSingleton<IRitualPrompt, RitualPrompt>();
-        services.AddSingleton<IRecapRelay, RecapRelay>();
         services.AddSingleton<IActiveSessionMonitor, ActiveSessionMonitor>();
         services.AddSingleton<IPlannerClockService, PlannerClockService>();
         services.AddSingleton<IDomainEventPublisher, InProcessDomainEventPublisher>();
@@ -72,12 +71,13 @@ public static class DependencyInjection
     {
         var appAssembly = Assembly.GetAssembly(typeof(NenFocus.Application.DependencyInjection))!;
         var commandHandlerInterface = typeof(ICommandHandler<,>);
-        var transactionalDecorator = typeof(TransactionalCommandHandler<,>);
-        var validatingDecorator = typeof(ValidatingCommandHandler<,>);
+        var transactionalDecorator = typeof(TransactionCommandHandlerDecorator<,>);
+        var validatingDecorator = typeof(ValidationCommandHandlerDecorator<,>);
         var commandResultInterface = typeof(ICommandResult<>);
 
+        // Open generics are the decorators themselves (they live in Application too), not handlers.
         var handlers = appAssembly.GetTypes()
-            .Where(t => t is { IsClass: true, IsAbstract: false })
+            .Where(t => t is { IsClass: true, IsAbstract: false, IsGenericTypeDefinition: false })
             .SelectMany(t => t.GetInterfaces()
                 .Where(i => i.IsGenericType &&
                             i.GetGenericTypeDefinition() == commandHandlerInterface)
@@ -93,7 +93,7 @@ public static class DependencyInjection
 
             var closedTransactional = transactionalDecorator.MakeGenericType(typeArgs);
 
-            // Only wrap with ValidatingCommandHandler when the result type
+            // Only wrap with ValidationCommandHandlerDecorator when the result type
             // implements ICommandResult<TSelf> (i.e. can express validation failure).
             bool supportsValidation = resultType.GetInterfaces().Any(i =>
                 i.IsGenericType &&

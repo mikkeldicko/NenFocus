@@ -18,7 +18,7 @@ public class DuplicateBlockPresetTests : UseCaseTestBase
     {
         var preset = BlockPreset.Create(Guid.NewGuid(), name, WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now));
         preset.AddBlockedApp(new BlockedApp("chrome"));
-        preset.AddWebsite(new BlockedSite("youtube.com"));
+        preset.AddWebsite(new Website("youtube.com"));
         return preset;
     }
 

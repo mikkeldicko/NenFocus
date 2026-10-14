@@ -22,7 +22,9 @@ public class PostSessionDtoTests
         session.Start(At.Utc(Start));
         session.Complete(At.Utc(Start.AddMinutes(40)));
         BlockedAttempt Attempt(string name, BlockedAttemptType type) =>
-            BlockedAttempt.Record(Guid.NewGuid(), session.Id, name, type, At.Utc(Start.AddMinutes(5)));
+            type == BlockedAttemptType.App
+                ? BlockedAttempt.ForApp(Guid.NewGuid(), session.Id, new BlockedApp(name), At.Utc(Start.AddMinutes(5)))
+                : BlockedAttempt.ForWebsite(Guid.NewGuid(), session.Id, new Website(name), At.Utc(Start.AddMinutes(5)));
         var attempts = new[]
         {
             Attempt("youtube.com", BlockedAttemptType.Website),
@@ -41,7 +43,7 @@ public class PostSessionDtoTests
         dto.PlannedDurationMinutes.Should().Be(60);
         dto.ActualDurationMinutes.Should().Be(40);
         dto.BlockedWebsiteAttempts.Should().BeEquivalentTo(new Dictionary<string, int> { ["youtube.com"] = 2 });
-        dto.BlockedAppAttempts.Should().BeEquivalentTo(new Dictionary<string, int> { ["steam.exe"] = 1 });
+        dto.BlockedAppAttempts.Should().BeEquivalentTo(new Dictionary<string, int> { ["steam"] = 1 });
         dto.TotalBlockedAttempts.Should().Be(3);
     }
 
