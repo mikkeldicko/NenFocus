@@ -5,6 +5,12 @@ wiring, a migration on the real database, timing against the real clock). Tick t
 go. When a gap closes, its passed checks are removed from this file; the gap's entry in
 `DESIGN_GAP_HISTORY.md` records what was checked.
 
+## Gap 89 Slice A — one heartbeat
+
+- [ ] **The app still opens normally.** Startup now waits for the heartbeat's first tick before the window appears. Open it against your real database: the window appears as quickly as before, and a session whose time ran out while it was closed shows its Post-Session screen.
+- [ ] **Today's badge counts up during a session.** In a contract day with a Committed block, run its session for a few minutes: today's floor badge goes up within about a minute (it used to refresh every 3 s; now once a minute — up to a minute's lag is expected).
+- [ ] **The debug clock's second-hand still ticks.** Open the debug overlay: the time counts up each second, and a jump (+1h) moves the Planner's now-line at once.
+
 ## Gap 112 — Infrastructure holds no rules (run as administrator)
 
 - [ ] **Hosts file still written.** During a "Social Media Blocked" session, `C:\Windows\System32\drivers\etc\hosts` has the `# NEN_FOCUS_START` section with `0.0.0.0 youtube.com` and `0.0.0.0 www.youtube.com`; after the session it's gone.

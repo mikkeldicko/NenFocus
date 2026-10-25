@@ -55,7 +55,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
     private readonly IQueryDispatcher _queryDispatcher;
     private readonly ICommandDispatcher _commandDispatcher;
-    private readonly IPlannerClockService _clockService;
+    private readonly IDisplayClock _displayClock;
     private readonly ISystemClock _clock;
 
     /// <summary>What the user's clock shows now — through the user's time zone (Gap 88).</summary>
@@ -409,15 +409,6 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
           (c.DeficitHours > 0 ? $" — {MinutesToStringConverter.FormatMinutes(c.DeficitHours * 60)} deficit" : string.Empty) +
           (c.TotalBonusHours > 0 ? $" — {MinutesToStringConverter.FormatMinutes(c.TotalBonusHours * 60)} bonus" : string.Empty);
 
-    // 3-second live poll for the day-header floor badges while a selected contract is in
-    // view — so today's badge reflects an in-progress session's elapsed hours without
-    // waiting for the next week-nav/seal/session-end refresh. No page-visibility gating:
-    // this ViewModel already lives for the app's whole lifetime (not recreated on
-    // navigation, and there's no such hook anywhere in this codebase), and the cost is
-    // comparable to ScheduledEnforcementService's own always-on 5s heartbeat. Started/
-    // stopped by OnSelectedContractChanged, not by a page-visible/hidden signal.
-    private readonly System.Timers.Timer _floorStatusPollTimer = new(3000) { AutoReset = true };
-
     partial void OnSelectedContractChanged(NenContractRangeViewDto? value)
     {
         OnPropertyChanged(nameof(HasSelectedContract));
@@ -427,9 +418,6 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(IsSelectedContractUpcoming));
         OnPropertyChanged(nameof(HasOtherContractThisWeek));
         OnPropertyChanged(nameof(SwitchContractButtonText));
-
-        if (value is not null) _floorStatusPollTimer.Start();
-        else _floorStatusPollTimer.Stop();
     }
 
     // Scoped to the currently viewed week — badges and the banner only reflect contracts
@@ -746,14 +734,14 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     public PlannerPageViewModel(
         IQueryDispatcher queryDispatcher,
         ICommandDispatcher commandDispatcher,
-        IPlannerClockService clockService,
+        IDisplayClock displayClock,
         IActiveSessionState sessionState,
         IRecapRelay recaps,
         ISystemClock clock)
     {
         _queryDispatcher = queryDispatcher;
         _commandDispatcher = commandDispatcher;
-        _clockService = clockService;
+        _displayClock = displayClock;
         _clock = clock;
         _sessionState = sessionState;
         _recaps = recaps;
@@ -768,22 +756,22 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         WeekStart = StartOfWeek(LocalNow.Date);
         BuildDayHeaders();
 
-        _clockService.Tick += OnClockTick;
+        _displayClock.MinuteTicked += OnMinuteTicked;
         UpdateCurrentTimePosition();
-
-        _floorStatusPollTimer.Elapsed += OnFloorStatusPollTick;
 
         _ = InitAsync();
     }
 
-    private void OnClockTick(object? sender, EventArgs e)
+    // Each minute: move the now-line, and re-read the week's contracts so today's badge counts up
+    // while a session runs — a running block's credit grows in whole minutes, so a minute is as
+    // often as it can change (Gap 89 Slice A; it used to poll every 3 s with a timer of its own).
+    private void OnMinuteTicked(object? sender, EventArgs e)
     {
-        Dispatcher.UIThread.Post(UpdateCurrentTimePosition);
-    }
-
-    private void OnFloorStatusPollTick(object? sender, System.Timers.ElapsedEventArgs e)
-    {
-        Dispatcher.UIThread.Post(() => _ = RefreshContractsPreservingSelectionAsync());
+        Dispatcher.UIThread.Post(() =>
+        {
+            UpdateCurrentTimePosition();
+            _ = RefreshContractsPreservingSelectionAsync();
+        });
     }
 
     private void OnSessionChanged(object? sender, SessionDto? session)
@@ -2293,10 +2281,8 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
     public void Dispose()
     {
-        _clockService.Tick -= OnClockTick;
+        _displayClock.MinuteTicked -= OnMinuteTicked;
         _sessionState.SessionChanged -= OnSessionChanged;
         _recaps.PostSessionAcknowledged -= OnPostSessionAcknowledged;
-        _floorStatusPollTimer.Elapsed -= OnFloorStatusPollTick;
-        _floorStatusPollTimer.Dispose();
     }
 }

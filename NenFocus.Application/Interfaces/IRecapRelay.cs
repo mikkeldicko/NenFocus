@@ -20,9 +20,9 @@ public interface IRecapRelay
     event EventHandler? PostSessionAcknowledged;
 
     /// <summary>
-    /// Raised when NenContractHeartbeatService's sweep passively completes Nen Contracts nobody was
-    /// watching for live. A contract broken or completed from the Planner's own buttons never raises
-    /// this — its recap comes back in the command's result. Never raised with an empty list.
+    /// Raised when a Nen Contract ends — completed by the heartbeat's sweep or by the user, or broken —
+    /// by NenContractEndedEventHandler after the save, the one path to the recap (Gap 110). Never
+    /// raised with an empty list.
     /// </summary>
     event EventHandler<IReadOnlyList<NenContractRecapDto>>? PostContractsReady;
 

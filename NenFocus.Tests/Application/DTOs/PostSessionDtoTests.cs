@@ -20,7 +20,7 @@ public class PostSessionDtoTests
         var session = Session.Create(Guid.NewGuid(), new SessionGoal("Write tests"),
             new SessionDuration(TimeSpan.FromMinutes(60)), Guid.NewGuid(), SessionOrigin.Spontaneous);
         session.Start(At.Utc(Start));
-        session.Complete(At.Utc(Start.AddMinutes(40)));
+        session.Complete(At.Utc(Start.AddMinutes(40)), null);
         BlockedAttempt Attempt(string name, BlockedAttemptType type) =>
             type == BlockedAttemptType.App
                 ? BlockedAttempt.ForApp(Guid.NewGuid(), session.Id, new BlockedApp(name), At.Utc(Start.AddMinutes(5)))
@@ -56,8 +56,7 @@ public class PostSessionDtoTests
             new SessionDuration(TimeSpan.FromHours(2)), block.BlockPresetId, SessionOrigin.Planned, originatingBlockId: block.Id);
         session.Start(At.Utc(Start.AddMinutes(3)), block.Scheduled);
         block.MarkRitualCompleted(At.Utc(Start.AddMinutes(3)));
-        session.Complete(At.Utc(Start.AddHours(2)));
-        block.MarkSessionEnded(session.EndedAt!.Value);
+        session.Complete(At.Utc(Start.AddHours(2)), block);
 
         PostSessionDto.From(session, block, "Deep Work", []).ActualDurationMinutes.Should().Be(120);
     }

@@ -32,7 +32,7 @@ public class GetUnacknowledgedPostSessionsQueryHandlerTests
             Guid.NewGuid(), new SessionGoal("Deep work"), new SessionDuration(elapsed),
             Guid.NewGuid(), SessionOrigin.Spontaneous);
         session.Start(At.Utc(endedAt - elapsed));
-        session.Complete(At.Utc(endedAt));
+        session.Complete(At.Utc(endedAt), null);
         return session;
     }
 
@@ -99,7 +99,7 @@ public class GetUnacknowledgedPostSessionsQueryHandlerTests
             Guid.NewGuid(), new SessionGoal("Deep work"), new SessionDuration(blockEnd - blockStart),
             Guid.NewGuid(), SessionOrigin.Planned, originatingBlockId: blockId);
         session.Start(At.Utc(ritualCompletedAt), At.PlannedWindowEnding(blockEnd));
-        session.Complete(At.Utc(blockEnd));
+        session.Complete(At.Utc(blockEnd), null);
         _sessions.GetUnacknowledgedPostSessionsAsync(Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<Session>)[session]);
 
@@ -116,7 +116,7 @@ public class GetUnacknowledgedPostSessionsQueryHandlerTests
             Guid.NewGuid(), new SessionGoal("Deep work"), new SessionDuration(TimeSpan.FromMinutes(30)),
             Guid.NewGuid(), SessionOrigin.Planned, originatingBlockId: blockId);
         session.Start(At.Utc(Now.AddMinutes(-10)));
-        session.Complete(At.Utc(Now));
+        session.Complete(At.Utc(Now), null);
         _plannedBlocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns((PlannedBlock?)null);
         _sessions.GetUnacknowledgedPostSessionsAsync(Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<Session>)[session]);

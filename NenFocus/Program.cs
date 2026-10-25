@@ -2,7 +2,6 @@ using Avalonia;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using NenFocus.Application.Interfaces;
-using NenFocus.Application.UseCases.Sessions.SweepMissedFocusBlocks;
 using NenFocus.Infrastructure;
 using NenFocus.Infrastructure.Services;
 using NenFocus.ViewModels;
@@ -29,20 +28,17 @@ internal sealed class Program
         AppHost = CreateHostBuilder(args).Build();
         AppHost.EnsureDatabase();
 
-        // Must complete before AppHost.StartAsync() (which starts
-        // ScheduledEnforcementService's heartbeat) and before the Avalonia app builds
+        // Must complete before AppHost.StartAsync() (which runs the heartbeat's first tick)
+        // and before the Avalonia app builds
         // below (which constructs ShellViewModel/MainPageViewModel) — otherwise both can
         // observe IActiveSessionState.ActiveSession as null even when a session is
         // genuinely active in the DB, momentarily triggering the Ritual overlay on
         // startup before rehydration catches up a few hundred milliseconds later.
         await AppHost.Services.GetRequiredService<IActiveSessionState>().RefreshAsync();
 
-        // Resolves every Focus block whose window closed while the app was off. Nothing is
-        // announced: the Shell finds each resulting missed session at its own startup
-        // (GetUnacknowledgedPostSessionsQuery), oldest first.
-        await AppHost.Services.GetRequiredService<ICommandDispatcher>()
-            .DispatchAsync(new SweepMissedFocusBlocksCommand());
-
+        // Awaits the heartbeat's first tick (HeartbeatService.StartAsync, Gap 89 Slice A): whatever
+        // happened while the app was closed — a session whose time ran out, missed blocks, a contract
+        // that ended — is saved before the window opens, so the Shell's startup queue finds it.
         await AppHost.StartAsync();
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
     }

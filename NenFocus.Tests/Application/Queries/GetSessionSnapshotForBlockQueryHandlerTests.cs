@@ -37,7 +37,7 @@ public class GetSessionSnapshotForBlockQueryHandlerTests
             SessionOrigin.Planned,
             originatingBlockId);
         session.Start(At.Utc(Start));
-        session.Complete(At.Utc(End));
+        session.Complete(At.Utc(End), null);
         if (reflection is not null) session.SetReflection(reflection);
         return session;
     }

@@ -133,7 +133,7 @@ Once a rule has its home, something must stop code from going around it. Use the
 
 **A failed command saves nothing (added 2026-10-13, Gap 110).** When a command's result says `Success == false`, the unit of work discards every change instead of committing — one place, not each handler's "check everything first, then change" habit, so a refusal halfway through a handler can't leave half a change behind or let it ride on the next command in the same scope. A handler may therefore change an aggregate and still refuse afterwards. Mechanism: `TECHNICAL_SPEC_INFRA.md` → Unit of work.
 
-**A command reads first, then changes — it never queries after changing (added 2026-10-13, Gap 110).** A query reads the database, not a command's unsaved changes, so a query run after a change inside the same command sees a mix of old rows and new objects. *(Break released a Bonus block, then built the recap: SQL still listed the block under the contract, EF handed back the released copy, and `NenContract.DayStatuses` threw.)* What should happen *because* a command did something — a recap, a toast, a refresh — goes in an event handler: domain events are published after the commit, so it reads what was saved (`NenContractEndedEventHandler` is the one path to the Post-Contract screen). An event handler only reads; a reaction that changes state dispatches a command, which saves in its own transaction — nothing saves an event handler's scope, so the publisher refuses a handler that leaves unsaved changes (`EventHandlersSaveNothingTests`). Command handlers hold no query handler at all (`CqrsRuleTests.CommandHandlersDoNotHoldQueryHandlers`, strict since Gap 110).
+**A command reads first, then changes — it never queries after changing (added 2026-10-13, Gap 110).** A query reads the database, not a command's unsaved changes, so a query run after a change inside the same command sees a mix of old rows and new objects. *(Break released a Bonus block, then built the recap: SQL still listed the block under the contract, EF handed back the released copy, and `NenContract.DayStatuses` threw.)* What should happen *because* a command did something — a recap, a toast, a refresh — goes in an event handler: domain events are published after the commit, so it reads what was saved (`NenContractEndedEventHandler` is the one path to the Post-Contract screen, `SessionEndedEventHandler` to the Post-Session screen — Gap 89). **Screens are relayed only by event handlers** (`IRecapRelay.Notify…`): a command's result never carries one, so every way into a change shows the same screen (`SideEffectRuleTests.OnlyEventHandlersRelayScreens`; its two exceptions — the missed sweep's batch, the Shell's "acknowledged" — wait for Gap 107). An event handler only reads; a reaction that changes state dispatches a command, which saves in its own transaction — nothing saves an event handler's scope, so the publisher refuses a handler that leaves unsaved changes (`EventHandlersSaveNothingTests`). Command handlers hold no query handler at all (`CqrsRuleTests.CommandHandlersDoNotHoldQueryHandlers`, strict since Gap 110).
 
 **Forbidden (added 2026-08-21 — The Application Handler Forbidden Zone):**
 
@@ -174,7 +174,7 @@ A handler must not convert a fractional `double` (minutes, hours, or any unit de
 **Allowed:**
 - EF Core `DbContext`, repositories, migrations
 - Windows API calls (hosts file, registry, process management)
-- Background services (`IHostedService`)
+- **One** background service: the heartbeat (added 2026-10-25, Gap 89). `HeartbeatService` takes one `now` per tick and dispatches every clock-driven use case in a fixed order, each step failing on its own; a new clock-driven job is a step in it, never a second loop — two loops each read their own "now" and raced (F4). It decides nothing: it asks the Domain's answers (a session's `HasEnded` reading wakes it early). The screen's paces are `IDisplayClock`'s, not the heartbeat's — background work and display refresh run at different paces for different reasons. Guarded by `InfrastructureRuleTests.ThereIsOneHeartbeat`
 - Timer ownership (e.g., `ActiveSessionMonitor` owns `System.Timers.Timer`)
 - Notification services
 
@@ -211,7 +211,7 @@ ViewModels must not compute progress percentages, time deltas, durations, or any
 >
 > **Banned patterns:** `Math.Clamp(...)`, `1.0 - (x / y)`, `remaining.TotalSeconds / total`, manual `TimeSpan` arithmetic.
 >
-> **Canonical example:** `IActiveSessionMonitor.SessionProgress` is a `double` already clamped to `[0, 1]`. The ViewModel binds it directly.
+> **Canonical example:** `TimelineReading.Progress`, carried by `IActiveSessionMonitor.Tick`, is a `double` already clamped to `[0, 1]` by the Domain (`TimeSlot.ProgressAt`). `MainPageViewModel` copies it into `SessionProgress` and the View binds that directly.
 
 #### No String Formatting
 ViewModels must not call `.ToString(format)` on `TimeSpan`, `DateTime`, numeric values, or any other domain type for display purposes.

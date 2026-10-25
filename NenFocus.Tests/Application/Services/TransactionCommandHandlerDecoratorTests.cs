@@ -67,7 +67,7 @@ public class TransactionCommandHandlerDecoratorTests
             .Returns(new SweepNenContractLifecycleResult());
 
         await new TransactionCommandHandlerDecorator<SweepNenContractLifecycleCommand, SweepNenContractLifecycleResult>(inner, _uow)
-            .HandleAsync(new SweepNenContractLifecycleCommand());
+            .HandleAsync(new SweepNenContractLifecycleCommand { AsOf = At.Utc(2026, 1, 5) });
 
         await _uow.Received(1).CommitAsync(Arg.Any<CancellationToken>());
         _uow.DidNotReceive().Discard();

@@ -34,7 +34,22 @@ public class SweepNenContractLifecycleCommandHandlerTests : UseCaseTestBase
     /// <summary>Sealed on its first day, so it is Active.</summary>
     private static NenContract ActiveContract(DateOnly startDate, DateOnly endDate) => Contract(startDate, endDate, sealedOn: startDate);
 
-    private Task<SweepNenContractLifecycleResult> SweepAsync() => RunAsync(new SweepNenContractLifecycleCommand());
+    private Task<SweepNenContractLifecycleResult> SweepAsync() =>
+        RunAsync(new SweepNenContractLifecycleCommand { AsOf = At.Utc(Now) });
+
+    [Fact]
+    public async Task SweepsAtTheMomentItIsGiven_NotItsOwnClock()
+    {
+        // Gap 89 Slice A (F4): the heartbeat's one "now" per tick. The clock may already read
+        // later than the tick's moment; the sweep must answer for the tick's moment.
+        var contract = ScheduledContract(Today.AddDays(3));
+        await SeedAsync(contract);
+
+        var result = await RunAsync(new SweepNenContractLifecycleCommand { AsOf = At.Utc(Now.AddDays(3)) });
+
+        result.ActivatedContractIds.Should().Equal(contract.Id);
+        (await StoredStatusAsync(contract)).Should().Be(NenContractStatus.Active);
+    }
 
     private async Task<NenContractStatus> StoredStatusAsync(NenContract contract) =>
         (await FindAsync<NenContract>(contract.Id))!.Status;

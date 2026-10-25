@@ -47,7 +47,7 @@ public class ShellRitualPromptTests
     {
         var shell = new ShellViewModel(
             _queries, Substitute.For<ICommandDispatcher>(), _sessionState, _prompt, _recaps,
-            _monitor, Substitute.For<IPlannerClockService>(), _clock,
+            _monitor, Substitute.For<IDisplayClock>(), _clock,
             Substitute.For<IDebugClockController>());
         Settle();
         return shell;

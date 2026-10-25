@@ -1,7 +1,5 @@
 using NenFocus.Application.Interfaces;
 using NenFocus.Domain.ValueObjects;
-using System.Timers;
-using Timer = System.Timers.Timer;
 
 namespace NenFocus.Infrastructure.Services;
 
@@ -12,9 +10,8 @@ namespace NenFocus.Infrastructure.Services;
 /// consumer of <see cref="ISystemClock"/> — heartbeats, session timers, block windows —
 /// observes the jump on its next read with no code changes of its own.
 /// </summary>
-public sealed class SystemClock : ISystemClock, IDebugClockController, IDisposable
+public sealed class SystemClock : ISystemClock, IDebugClockController
 {
-    private readonly Timer _tickTimer;
     private TimeSpan _offset = TimeSpan.Zero;
 
     public Moment Now => Moment.FromStorage(DateTime.UtcNow + _offset);
@@ -24,33 +21,25 @@ public sealed class SystemClock : ISystemClock, IDebugClockController, IDisposab
     public UserTimeZone TimeZone => new(TimeZoneInfo.Local);
     public bool IsOverridden => _offset != TimeSpan.Zero;
 
-    public event EventHandler? Changed;
+    public event EventHandler? Jumped;
 
-    public SystemClock()
-    {
-        // Drives the debug overlay's live display only — no other consumer subscribes.
-        _tickTimer = new Timer(1000) { AutoReset = true };
-        _tickTimer.Elapsed += (_, _) => Changed?.Invoke(this, EventArgs.Empty);
-        _tickTimer.Start();
-    }
 
     public void SetTo(DateTime utc)
     {
         _offset = utc - DateTime.UtcNow;
-        Changed?.Invoke(this, EventArgs.Empty);
+        Jumped?.Invoke(this, EventArgs.Empty);
     }
 
     public void AdvanceBy(TimeSpan amount)
     {
         _offset += amount;
-        Changed?.Invoke(this, EventArgs.Empty);
+        Jumped?.Invoke(this, EventArgs.Empty);
     }
 
     public void Reset()
     {
         _offset = TimeSpan.Zero;
-        Changed?.Invoke(this, EventArgs.Empty);
+        Jumped?.Invoke(this, EventArgs.Empty);
     }
 
-    public void Dispose() => _tickTimer.Dispose();
 }

@@ -160,7 +160,7 @@ public class NenContractDayStatusTests
             var session = Session.Create(Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromHours(1)),
                 preset, SessionOrigin.Spontaneous);
             session.Start(At.Utc(day.ToDateTime(new TimeOnly(15, 0))));
-            session.Complete(At.Utc(day.ToDateTime(new TimeOnly(15, 30))));
+            session.Complete(At.Utc(day.ToDateTime(new TimeOnly(15, 30))), null);
             return session;
         }
 

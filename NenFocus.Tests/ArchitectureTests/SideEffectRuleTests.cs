@@ -52,4 +52,29 @@ public class SideEffectRuleTests
 
         KnownExceptions.Check(holders.Where(h => h != typeof(EnforcementSynchronizer).FullName), []);
     }
+
+    // A call to one of the relay's announcements, through any field or local.
+    private static readonly System.Text.RegularExpressions.Regex RelaysAScreen =
+        new(@"\.\s*Notify(PostSessionsReady|PostSessionAcknowledged|PostContractsReady)\s*\(");
+
+    private static readonly string[] RelayExceptions =
+    [
+        // The missed-blocks sweep's batch: live triage needs every missed screen at once. → Gap 107.
+        "NenFocus.Infrastructure/Services/HeartbeatService.cs",
+        // "Acknowledged" when the screen closes, not after the save. → Gap 107.
+        "NenFocus/ViewModels/ShellViewModel.cs",
+    ];
+
+    /// <summary>A screen or recap is relayed only by an event handler, after the commit, so it shows what
+    /// was saved — whoever caused it (Gap 110; Gap 89 Slice A made the Post-Session screen one path).</summary>
+    [Fact]
+    public void OnlyEventHandlersRelayScreens()
+    {
+        var violations = SourceCode.Files("NenFocus.Application", "NenFocus.Infrastructure", "NenFocus")
+            .Where(f => !f.Path.StartsWith("NenFocus.Application/EventHandlers/", StringComparison.Ordinal)
+                        && RelaysAScreen.IsMatch(f.Code))
+            .Select(f => f.Path);
+
+        KnownExceptions.Check(violations, RelayExceptions);
+    }
 }

@@ -50,14 +50,7 @@ public class DispatcherRuleTests
         "NenFocus/Program.cs",
     ];
 
-    private static readonly string[] FetchExceptions =
-    [
-        // → Gap 89 area 3: rebuilt into one heartbeat that dispatches (one scope per call, reads fresh after a save).
-        "NenFocus.Infrastructure/Services/ScheduledEnforcementService.cs",
-        "NenFocus.Infrastructure/Services/NenContractHeartbeatService.cs",
-        "NenFocus.Infrastructure/Services/ActiveSessionMonitor.cs",
-    ];
-
+    // No exceptions since Gap 89 Slice A: the one heartbeat dispatches every use case, and the monitor runs none.
     [Fact]
     public void OutsideApplicationNothingFetchesAHandler()
     {
@@ -65,6 +58,6 @@ public class DispatcherRuleTests
             .Where(f => !Homes.Contains(f.Path) && FetchesAHandler.IsMatch(f.Code))
             .Select(f => f.Path);
 
-        KnownExceptions.Check(violations, FetchExceptions);
+        KnownExceptions.Check(violations, []);
     }
 }

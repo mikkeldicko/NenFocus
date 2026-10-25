@@ -47,7 +47,7 @@ public class AcknowledgePostSessionCommandHandlerTests : UseCaseTestBase
     public async Task ACompletedSession_IsStampedAcknowledged()
     {
         var session = Spontaneous();
-        session.Complete(At.Utc(Now));
+        session.Complete(At.Utc(Now), null);
         await SeedAsync(session);
 
         var result = await AcknowledgeAsync(session.Id);

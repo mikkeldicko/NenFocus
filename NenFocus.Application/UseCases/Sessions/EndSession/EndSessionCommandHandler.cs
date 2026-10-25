@@ -1,8 +1,6 @@
-using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
-using NenFocus.Domain.Services;
 
 namespace NenFocus.Application.UseCases.Sessions.EndSession;
 
@@ -10,22 +8,16 @@ public sealed class EndSessionCommandHandler
     : ICommandHandler<EndSessionCommand, EndSessionResult>
 {
     private readonly ISessionRepository _sessions;
-    private readonly IBlockPresetRepository _presets;
     private readonly IPlannedBlockRepository _plannedBlocks;
-    private readonly IBlockedAttemptRepository _attempts;
     private readonly ISystemClock _clock;
 
     public EndSessionCommandHandler(
         ISessionRepository sessions,
-        IBlockPresetRepository presets,
         IPlannedBlockRepository plannedBlocks,
-        IBlockedAttemptRepository attempts,
         ISystemClock clock)
     {
         _sessions = sessions;
-        _presets = presets;
         _plannedBlocks = plannedBlocks;
-        _attempts = attempts;
         _clock = clock;
     }
 
@@ -40,35 +32,15 @@ public sealed class EndSessionCommandHandler
         if (session.Status != SessionStatus.Active)
             return EndSessionResult.Fail("Session is not currently active.");
 
-        var attempts = await _attempts.GetForSessionAsync(session.Id, ct);
+        var originatingFocusBlock = session.OriginatingBlockId is { } blockId
+            ? await _plannedBlocks.GetByIdAsync(blockId, ct) as FocusBlock
+            : null;
 
-        session.Complete(_clock.Now);
-        // Capped at the planned end by Complete itself (Gap 63). Everything below reads the
-        // recorded end, never "now", so an end noticed late can't leak past the plan.
-        var endedAt = session.EndedAt!.Value;
+        // The one ending (Gap 89 Slice A): capped at the planned end, and the block stamped with
+        // that same end (Gaps 63, 86). Its Post-Session screen follows from SessionEndedEventHandler,
+        // after the commit.
+        session.Complete(_clock.Now, originatingFocusBlock);
 
-
-        FocusBlock? originatingFocusBlock = null;
-        if (session.OriginatingBlockId.HasValue)
-        {
-            var block = await _plannedBlocks.GetByIdAsync(session.OriginatingBlockId.Value, ct);
-            if (block is FocusBlock focusBlock)
-            {
-                originatingFocusBlock = focusBlock;
-                // Always, early or on time: the block's SessionEndedAt is a faithful copy of
-                // Session.EndedAt, never a filtered one (Gap 86). Every reader compares it to
-                // End itself, so an on-time end changes no answer.
-                focusBlock.MarkSessionEnded(endedAt);
-            }
-        }
-
-        var presetName = string.Empty;
-        if (session.BlockPresetId != Guid.Empty)
-        {
-            var preset = await _presets.GetByIdAsync(session.BlockPresetId, ct);
-            presetName = preset?.Name ?? string.Empty;
-        }
-
-        return EndSessionResult.Ok(PostSessionDto.From(session, originatingFocusBlock, presetName, attempts));
+        return EndSessionResult.Ok();
     }
 }

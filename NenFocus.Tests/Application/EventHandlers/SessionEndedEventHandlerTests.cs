@@ -19,18 +19,23 @@ public class SessionEndedEventHandlerTests
     private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
     private readonly IPlannedBlockRepository _blocks = Substitute.For<IPlannedBlockRepository>();
     private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
+    private readonly IBlockedAttemptRepository _attempts = Substitute.For<IBlockedAttemptRepository>();
+    private readonly IRecapRelay _recaps = Substitute.For<IRecapRelay>();
     private readonly ISystemClock _clock = TestClock.Create();
 
     public SessionEndedEventHandlerTests() => _clock.SetNow(Now);
 
     private SessionEndedEventHandler CreateHandler() =>
-        new(_synchronizer, _notifier, _sessionState, _sessions, _blocks, _presets, _clock);
+        new(_synchronizer, _notifier, _sessionState, _sessions, _blocks, _presets, _attempts, _recaps, _clock);
 
     private Session GivenSession(FocusBlock? block = null)
     {
         var session = Session.Create(
             Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromHours(1)), Guid.NewGuid(),
             block is null ? SessionOrigin.Spontaneous : SessionOrigin.Planned, block?.Id);
+        // The event follows an end, so the session has a start and an end, as stored.
+        session.Start(At.Utc(Now.AddHours(-1)));
+        session.Complete(At.Utc(Now), null);
         _sessions.GetByIdAsync(session.Id, Arg.Any<CancellationToken>()).Returns(session);
         if (block is not null)
         {
@@ -78,7 +83,7 @@ public class SessionEndedEventHandlerTests
     public async Task HandleAsync_RefreshesSessionStateBeforeSyncingEnforcement()
     {
         // Ordering matters: the session state refreshes before enforcement is synced
-        // so ScheduledEnforcementService never observes a null ActiveSession while the
+        // so the heartbeat never observes a null ActiveSession while the
         // DB still shows the session as Active (see the handler's own comment).
         await CreateHandler().HandleAsync(new SessionEndedEvent(GivenSession().Id, At.Utc(Now)));
 

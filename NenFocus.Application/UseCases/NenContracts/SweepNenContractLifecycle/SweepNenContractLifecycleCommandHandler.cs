@@ -18,7 +18,7 @@ public sealed class SweepNenContractLifecycleCommandHandler
         SweepNenContractLifecycleCommand command,
         CancellationToken ct = default)
     {
-        var now = _clock.Now;
+        var now = command.AsOf;
         var localNow = _clock.TimeZone.ToCalendarTime(now);
 
         // Only a handful of contracts are ever in effect — the entity decides which are due,

@@ -1,8 +1,6 @@
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
-using NenFocus.Application.UseCases.Sessions.EndSession;
 using NenFocus.Domain.ValueObjects;
 using System.Timers;
 
@@ -14,11 +12,11 @@ namespace NenFocus.Infrastructure.Services;
 /// where it is (Gap 92, A4), so nothing can get stuck or drift — a missed tick, sleep or a
 /// clock jump is simply re-read on the next one. Its only memory is a cursor ("when did
 /// I last look") so it can ask which break boundaries were crossed since, and hand
-/// those to IBreakTransitionResponder.
+/// those to IBreakTransitionResponder. It ends nothing: when a reading says the session's time
+/// is up, the heartbeat hears it and auto-ends the session (Gap 89 Slice A).
 /// </summary>
 public sealed class ActiveSessionMonitor : IActiveSessionMonitor, IDisposable
 {
-    private readonly IServiceScopeFactory _scopeFactory;
     private readonly ISystemClock _clock;
     private readonly IBreakTransitionResponder _breakTransitions;
     private readonly ILogger<ActiveSessionMonitor> _logger;
@@ -28,18 +26,15 @@ public sealed class ActiveSessionMonitor : IActiveSessionMonitor, IDisposable
     private Guid? _sessionId;
     private SessionTimeline? _timeline;
     private Moment _lastCheckedAt;
-    private bool _autoEndPending;
 
     public TimelineReading Current { get; private set; } = TimelineReading.None;
 
     public event EventHandler<TimelineReading>? Tick;
-    public event EventHandler<PostSessionDto>? SessionAutoEnded;
 
     public ActiveSessionMonitor(
-        IActiveSessionState sessionState, IServiceScopeFactory scopeFactory, ISystemClock clock,
+        IActiveSessionState sessionState, ISystemClock clock,
         IBreakTransitionResponder breakTransitions, ILogger<ActiveSessionMonitor> logger)
     {
-        _scopeFactory = scopeFactory;
         _clock = clock;
         _breakTransitions = breakTransitions;
         _logger = logger;
@@ -62,8 +57,6 @@ public sealed class ActiveSessionMonitor : IActiveSessionMonitor, IDisposable
 
         lock (_gate)
         {
-            _autoEndPending = false;
-
             if (session?.Timeline is null)
             {
                 _sessionId = null;
@@ -126,14 +119,11 @@ public sealed class ActiveSessionMonitor : IActiveSessionMonitor, IDisposable
         var now = _clock.Now;
 
         Current = timeline.ReadingAt(now);
+        // Its time is up: stop counting. This tick's reading says so, and the heartbeat, hearing it,
+        // ends the session at once (Gap 89 Slice A); a failed end is retried at its next beat.
         if (Current.HasEnded)
         {
-            if (!_autoEndPending)
-            {
-                _autoEndPending = true;
-                StopTimer();
-                _ = AutoEndAsync();
-            }
+            StopTimer();
             return;
         }
 
@@ -156,35 +146,6 @@ public sealed class ActiveSessionMonitor : IActiveSessionMonitor, IDisposable
         catch (Exception ex)
         {
             _logger.LogError(ex, "Handling break transitions failed for session {SessionId}", _sessionId);
-        }
-    }
-
-    // Fire-and-forget (`_ = AutoEndAsync()`) — an unhandled exception here becomes an
-    // unobserved task exception: silently discarded, with the countdown already stopped
-    // and _autoEndPending already latched true beforehand, so nothing would ever retry
-    // and the session would appear to hang at 00:00:00 forever with no error surfaced
-    // anywhere. Mirrors ScheduledEnforcementService's heartbeat catch-log-continue
-    // precedent, plus re-arming so the next tick retries automatically instead of the
-    // failure being permanent.
-    private async Task AutoEndAsync()
-    {
-        var sessionId = _sessionId;
-        if (sessionId is null) return;
-
-        try
-        {
-            using var scope = _scopeFactory.CreateScope();
-            var handler = scope.ServiceProvider
-                .GetRequiredService<ICommandHandler<EndSessionCommand, EndSessionResult>>();
-            var result = await handler.HandleAsync(new EndSessionCommand { SessionId = sessionId.Value });
-            if (result.Success && result.PostSession is not null)
-                SessionAutoEnded?.Invoke(this, result.PostSession);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Auto-end failed for session {SessionId}; retrying next tick", sessionId);
-            _autoEndPending = false;
-            StartTimer();
         }
     }
 

@@ -16,14 +16,8 @@ public class SweepMissedFocusBlocksCommandHandlerTests
     private readonly IPlannedBlockRepository _blocks = Substitute.For<IPlannedBlockRepository>();
     private readonly ICommandHandler<MarkFocusBlockMissedCommand, MarkFocusBlockMissedResult> _markMissed =
         Substitute.For<ICommandHandler<MarkFocusBlockMissedCommand, MarkFocusBlockMissedResult>>();
-    private readonly ISystemClock _clock = TestClock.Create();
 
-    public SweepMissedFocusBlocksCommandHandlerTests()
-    {
-        _clock.SetNow(Now);
-    }
-
-    private SweepMissedFocusBlocksCommandHandler CreateHandler() => new(_blocks, _markMissed, _clock);
+    private SweepMissedFocusBlocksCommandHandler CreateHandler() => new(_blocks, _markMissed);
 
     [Fact]
     public async Task HandleAsync_NoUnresolvedBlocks_ReturnsEmptyResult()
@@ -31,7 +25,7 @@ public class SweepMissedFocusBlocksCommandHandlerTests
         _blocks.GetUnresolvedFocusBlocksAsync(At.Utc(Now), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<FocusBlock>)[]);
 
-        var result = await CreateHandler().HandleAsync(new SweepMissedFocusBlocksCommand());
+        var result = await CreateHandler().HandleAsync(new SweepMissedFocusBlocksCommand { AsOf = At.Utc(Now) });
 
         result.MissedSessions.Should().BeEmpty();
         await _markMissed.DidNotReceive().HandleAsync(Arg.Any<MarkFocusBlockMissedCommand>(), Arg.Any<CancellationToken>());
@@ -56,19 +50,16 @@ public class SweepMissedFocusBlocksCommandHandlerTests
                 Arg.Any<CancellationToken>())
             .Returns(MarkFocusBlockMissedResult.Ok(Guid.NewGuid(), laterPostSession));
 
-        var result = await CreateHandler().HandleAsync(new SweepMissedFocusBlocksCommand());
+        var result = await CreateHandler().HandleAsync(new SweepMissedFocusBlocksCommand { AsOf = At.Utc(Now) });
 
         result.MissedSessions.Should().Equal(earlierPostSession, laterPostSession);
     }
 
     [Fact]
-    public async Task HandleAsync_AsOfProvided_UsesItInsteadOfClock()
+    public async Task HandleAsync_SweepsAtTheMomentItIsGiven()
     {
-        // ScheduledEnforcementService passes its own already-captured "now" so the sweep
-        // and the same tick's policy computation can never disagree about what "now" means
-        // — closes a TOCTOU race where a stale ComputeActivePolicySliceQuery "now" could
-        // still see a block as active after this handler's own independent clock read had
-        // already moved past its End, triggering the Ritual for a block already marked Missed.
+        // The heartbeat passes its tick's one "now" (required since Gap 89 Slice A), so the sweep
+        // and the same tick's other steps can never disagree about what "now" means (Gap 21).
         var asOf = Now.AddHours(1);
         _blocks.GetUnresolvedFocusBlocksAsync(At.Utc(asOf), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<FocusBlock>)[]);
@@ -76,7 +67,6 @@ public class SweepMissedFocusBlocksCommandHandlerTests
         await CreateHandler().HandleAsync(new SweepMissedFocusBlocksCommand { AsOf = At.Utc(asOf) });
 
         await _blocks.Received(1).GetUnresolvedFocusBlocksAsync(At.Utc(asOf), Arg.Any<CancellationToken>());
-        await _blocks.DidNotReceive().GetUnresolvedFocusBlocksAsync(At.Utc(Now), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -97,7 +87,7 @@ public class SweepMissedFocusBlocksCommandHandlerTests
                 Arg.Any<CancellationToken>())
             .Returns(MarkFocusBlockMissedResult.Ok(Guid.NewGuid(), postSession));
 
-        var result = await CreateHandler().HandleAsync(new SweepMissedFocusBlocksCommand());
+        var result = await CreateHandler().HandleAsync(new SweepMissedFocusBlocksCommand { AsOf = At.Utc(Now) });
 
         result.MissedSessions.Should().ContainSingle().Which.Should().Be(postSession);
     }

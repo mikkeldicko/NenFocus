@@ -39,7 +39,7 @@ public class ContractLifecycleSweepPersistenceTests : SqliteRepositoryTestBase
 
         await using var sweepContext = CreateFreshContext();
         var handler = new SweepNenContractLifecycleCommandHandler(new NenContractRepository(sweepContext), clock);
-        await handler.HandleAsync(new SweepNenContractLifecycleCommand(), CancellationToken.None);
+        await handler.HandleAsync(new SweepNenContractLifecycleCommand { AsOf = At.Utc(localNow) }, CancellationToken.None);
         await sweepContext.SaveChangesAsync();
 
         await using var readContext = CreateFreshContext();

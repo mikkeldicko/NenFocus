@@ -1,4 +1,6 @@
 using FluentAssertions;
+using NenFocus.Application.DTOs;
+using NenFocus.Application.Interfaces;
 using NenFocus.Application.UseCases.Sessions.EndSession;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
@@ -33,11 +35,17 @@ public class EndSessionTests : UseCaseTestBase
         return session;
     }
 
-    private async Task<EndSessionResult> EndedAsync(Session session)
+    /// <summary>Ends it and returns the Post-Session screen relayed for it — only after the commit, by
+    /// SessionEndedEventHandler, the one path to that screen (Gap 89 Slice A).</summary>
+    private async Task<PostSessionDto> EndedAsync(Session session)
     {
+        var shown = new List<PostSessionDto>();
+        Resolve<IRecapRelay>().PostSessionsReady += (_, screens) => shown.AddRange(screens);
+
         var result = await EndAsync(session.Id);
+
         result.Success.Should().BeTrue(result.ErrorMessage);
-        return result;
+        return shown.Should().ContainSingle().Subject;
     }
 
     // ── Refusals ─────────────────────────────────────────────────────────────
@@ -67,13 +75,17 @@ public class EndSessionTests : UseCaseTestBase
     public async Task AnAlreadyCompletedSession_IsRefused()
     {
         var session = ActiveSession();
-        session.Complete(At.Utc(Now.AddMinutes(-5)));
+        session.Complete(At.Utc(Now.AddMinutes(-5)), null);
         await SeedAsync(session);
+
+        var shown = new List<PostSessionDto>();
+        Resolve<IRecapRelay>().PostSessionsReady += (_, screens) => shown.AddRange(screens);
 
         var result = await EndAsync(session.Id);
 
         result.Success.Should().BeFalse();
         (await FindAsync<Session>(session.Id))!.EndedAt.Should().Be(At.Utc(Now.AddMinutes(-5)));
+        shown.Should().BeEmpty("a refused end saves nothing, so no screen follows");
     }
 
     // ── What gets stored ─────────────────────────────────────────────────────
@@ -84,10 +96,10 @@ public class EndSessionTests : UseCaseTestBase
         var session = ActiveSession(presetId: await FocusPresetAsync("Deep Work"));
         await SeedAsync(session);
 
-        var result = await EndedAsync(session);
+        var shown = await EndedAsync(session);
 
-        result.PostSession!.PresetName.Should().Be("Deep Work");
-        result.PostSession.Goal.Should().Be("Deep work");
+        shown.PresetName.Should().Be("Deep Work");
+        shown.Goal.Should().Be("Deep work");
         var stored = (await FindAsync<Session>(session.Id))!;
         stored.Status.Should().Be(SessionStatus.Completed);
         stored.EndedAt.Should().Be(At.Utc(Now));
@@ -103,9 +115,9 @@ public class EndSessionTests : UseCaseTestBase
             breakPresetName: "Classic");
         await SeedAsync(session);
 
-        var result = await EndedAsync(session);
+        var shown = await EndedAsync(session);
 
-        result.PostSession!.BreaksTaken.Should().Be(1);
+        shown.BreaksTaken.Should().Be(1);
         (await FindAsync<Session>(session.Id))!.BreakSchedule.Breaks.Single().End.Should().Be(TimeSpan.FromMinutes(27));
     }
 
@@ -119,10 +131,10 @@ public class EndSessionTests : UseCaseTestBase
         session.Start(At.Utc(Now.AddMinutes(-40)));
         await SeedAsync(session);
 
-        var result = await EndedAsync(session);
+        var shown = await EndedAsync(session);
 
         (await FindAsync<Session>(session.Id))!.EndedAt.Should().Be(At.Utc(Now.AddMinutes(-10)));
-        result.PostSession!.ActualDurationMinutes.Should().Be(30);
+        shown.ActualDurationMinutes.Should().Be(30);
     }
 
     [Fact]
@@ -134,11 +146,11 @@ public class EndSessionTests : UseCaseTestBase
             BlockedAttempt.ForApp(Guid.NewGuid(), session.Id, new BlockedApp("chrome"), At.Utc(Now.AddMinutes(-5))),
             BlockedAttempt.ForWebsite(Guid.NewGuid(), session.Id, new Website("facebook.com"), At.Utc(Now.AddMinutes(-3))));
 
-        var result = await EndedAsync(session);
+        var shown = await EndedAsync(session);
 
-        result.PostSession!.BlockedAppAttempts.Should().ContainKey("chrome").WhoseValue.Should().Be(2);
-        result.PostSession.BlockedWebsiteAttempts.Should().ContainKey("facebook.com").WhoseValue.Should().Be(1);
-        result.PostSession.TotalBlockedAttempts.Should().Be(3);
+        shown.BlockedAppAttempts.Should().ContainKey("chrome").WhoseValue.Should().Be(2);
+        shown.BlockedWebsiteAttempts.Should().ContainKey("facebook.com").WhoseValue.Should().Be(1);
+        shown.TotalBlockedAttempts.Should().Be(3);
     }
 
     [Fact]
@@ -147,9 +159,9 @@ public class EndSessionTests : UseCaseTestBase
         var session = ActiveSession(presetId: Guid.NewGuid());
         await SeedAsync(session);
 
-        var result = await EndedAsync(session);
+        var shown = await EndedAsync(session);
 
-        result.PostSession!.PresetName.Should().BeEmpty();
+        shown.PresetName.Should().BeEmpty();
     }
 
     // ── The originating block records when its session ended (Gap 86) ───────
@@ -216,9 +228,9 @@ public class EndSessionTests : UseCaseTestBase
     {
         var session = await PlannedSessionEndingNowAsync(TimeSpan.FromMinutes(minutesLate));
 
-        var result = await EndedAsync(session);
+        var shown = await EndedAsync(session);
 
-        result.PostSession!.ActualDurationMinutes.Should().Be(60); // the whole block, not blockEnd - ritual
+        shown.ActualDurationMinutes.Should().Be(60); // the whole block, not blockEnd - ritual
     }
 
     [Fact]
@@ -226,9 +238,9 @@ public class EndSessionTests : UseCaseTestBase
     {
         var session = await PlannedSessionEndingNowAsync(TimeSpan.FromMinutes(6));
 
-        var result = await EndedAsync(session);
+        var shown = await EndedAsync(session);
 
-        result.PostSession!.ActualDurationMinutes.Should().Be(54);
+        shown.ActualDurationMinutes.Should().Be(54);
     }
 
     [Fact]
@@ -238,9 +250,9 @@ public class EndSessionTests : UseCaseTestBase
         var session = ActiveSession(); // started 10 minutes ago
         await SeedAsync(session);
 
-        var result = await EndedAsync(session);
+        var shown = await EndedAsync(session);
 
-        result.PostSession!.ActualDurationMinutes.Should().Be(10);
+        shown.ActualDurationMinutes.Should().Be(10);
     }
 
     [Fact]
@@ -253,10 +265,10 @@ public class EndSessionTests : UseCaseTestBase
         var session = await PlannedSessionAsync(blockStart, blockEnd, ritualCompletedAt: Now, duration: blockEnd - blockStart);
         Clock.SetNow(blockEnd); // runs to its natural end
 
-        var result = await EndedAsync(session);
+        var shown = await EndedAsync(session);
 
-        result.PostSession!.ActualDurationMinutes.Should().Be(2);
-        result.PostSession.ActualDurationMinutes.Should().BeLessThanOrEqualTo(result.PostSession.PlannedDurationMinutes);
+        shown.ActualDurationMinutes.Should().Be(2);
+        shown.ActualDurationMinutes.Should().BeLessThanOrEqualTo(shown.PlannedDurationMinutes);
     }
 
     [Fact]
@@ -268,8 +280,8 @@ public class EndSessionTests : UseCaseTestBase
         session.Start(At.Utc(Now.AddSeconds(-45)));
         await SeedAsync(session);
 
-        var result = await EndedAsync(session);
+        var shown = await EndedAsync(session);
 
-        result.PostSession!.ActualDuration.Should().Be(TimeSpan.Zero);
+        shown.ActualDuration.Should().Be(TimeSpan.Zero);
     }
 }

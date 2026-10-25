@@ -63,12 +63,6 @@ public class ViewModelRuleTests
     private static readonly System.Text.RegularExpressions.Regex TimerUse =
         new(@"\b(Timers\s*\.\s*Timer|Threading\s*\.\s*Timer|DispatcherTimer|PeriodicTimer)\b|\bnew\s+Timer\s*\(|\.\s*Delay\s*\(");
 
-    private static readonly string[] TimerExceptions =
-    [
-        // 3 s poll so today's badge counts up during a session. → Gap 89 area 3 (the heartbeat announces what changed).
-        "NenFocus/ViewModels/Pages/PlannerPageViewModel.cs",
-    ];
-
     /// <summary>No UI code owns a timer; it subscribes to a Tick from a service that does
     /// (MODULE_STANDARDS → No Timers; canonical: IActiveSessionMonitor.Tick → MainPageViewModel).</summary>
     [Fact]
@@ -78,7 +72,8 @@ public class ViewModelRuleTests
             .Where(f => !CompositionRootFiles.Contains(f.Path) && TimerUse.IsMatch(f.Code))
             .Select(f => f.Path);
 
-        KnownExceptions.Check(violations, TimerExceptions);
+        // No exceptions since Gap 89 Slice A: the Planner refreshes on IDisplayClock's minute tick.
+        KnownExceptions.Check(violations, []);
     }
 
     // Formatting a value: a format specifier in an interpolation ({x:HH:mm}), ToString("…"),

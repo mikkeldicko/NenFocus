@@ -55,7 +55,7 @@ public partial class ShellViewModel : ViewModelBase
     private readonly IRitualPrompt _ritualPrompt;
     private readonly IRecapRelay _recaps;
     private readonly IActiveSessionMonitor _monitor;
-    private readonly IPlannerClockService _plannerClock;
+    private readonly IDisplayClock _displayClock;
     private readonly ISystemClock _clock;
 
     private readonly Queue<PendingOverlay> _pendingOverlays = new();
@@ -100,7 +100,7 @@ public partial class ShellViewModel : ViewModelBase
        IRitualPrompt ritualPrompt,
        IRecapRelay recaps,
        IActiveSessionMonitor monitor,
-       IPlannerClockService plannerClock,
+       IDisplayClock displayClock,
        ISystemClock clock,
        IDebugClockController debugClockController)
     {
@@ -110,9 +110,9 @@ public partial class ShellViewModel : ViewModelBase
         _ritualPrompt = ritualPrompt;
         _recaps = recaps;
         _monitor = monitor;
-        _plannerClock = plannerClock;
+        _displayClock = displayClock;
         _clock = clock;
-        DebugClockViewModel = new DebugClockViewModel(clock, debugClockController);
+        DebugClockViewModel = new DebugClockViewModel(clock, debugClockController, displayClock);
 
         _ritualPrompt.Changed += (s, awaitingBlockId) =>
             Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => OnRitualPromptChanged(awaitingBlockId));
@@ -128,12 +128,12 @@ public partial class ShellViewModel : ViewModelBase
             CurrentPage = selected.PageViewModel;
         }
 
-        NavItems.Add(new NavItemViewModel("Main", "⊹", new MainPageViewModel(() => StartRitual(), ShowPostSession, _sessionState, _monitor, _commandDispatcher, _clock), Select));
+        NavItems.Add(new NavItemViewModel("Main", "⊹", new MainPageViewModel(() => StartRitual(), _sessionState, _monitor, _commandDispatcher, _clock), Select));
         var presetsPageViewModel = new PresetsPageViewModel(
             new BlockPresetPageViewModel(_queryDispatcher, _commandDispatcher),
             new ContractPresetPageViewModel(_queryDispatcher, _commandDispatcher));
         NavItems.Add(new NavItemViewModel("Presets", "◻", presetsPageViewModel, Select));
-        var plannerViewModel = new PlannerPageViewModel(_queryDispatcher, _commandDispatcher, _plannerClock, _sessionState, _recaps, _clock);
+        var plannerViewModel = new PlannerPageViewModel(_queryDispatcher, _commandDispatcher, _displayClock, _sessionState, _recaps, _clock);
         plannerViewModel.ContractWizardOpened += OnContractWizardOpened;
         plannerViewModel.ContractWizardClosed += OnContractWizardClosed;
         NavItems.Add(new NavItemViewModel("Planner", "◫", plannerViewModel, Select));
@@ -155,7 +155,7 @@ public partial class ShellViewModel : ViewModelBase
     //    these always go first, oldest first, so the user resolves what already
     //    happened before being dropped into what's happening now.
     // 2. A Focus Block's Ritual requirement. This is also a startup race:
-    //    ScheduledEnforcementService's heartbeat starts (via AppHost.StartAsync() in
+    //    the heartbeat's first tick runs (inside AppHost.StartAsync() in
     //    Program.Main) before this constructor runs and subscribes to the Ritual
     //    prompt's Changed above. If a Focus Block is already active at launch, the very
     //    first heartbeat tick can name it with no subscriber listening — and since the

@@ -130,7 +130,7 @@ public class PlannerBlockLockViewTests
     {
         var queries = new FakeQueryDispatcher().Answer<GetPlannedBlocksForDayQuery, IReadOnlyList<PlannedBlockDto>>(q =>
             q.Date == Today ? [block] : []);
-        var clock = Substitute.For<IPlannerClockService>();
+        var clock = Substitute.For<IDisplayClock>();
         var systemClock = TestClock.Create();
         systemClock.SetTimeZoneOffset(TimeSpan.Zero);
         systemClock.SetNow(new DateTime(2026, 9, 29, 7, 0, 0, DateTimeKind.Utc));

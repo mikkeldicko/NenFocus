@@ -26,7 +26,7 @@ public class SessionRepositoryTests : SqliteRepositoryTestBase
     private static Session PastSession(Guid? presetId = null, DateTime? startedAt = null)
     {
         var session = CreateSession(presetId, startedAt);
-        session.Complete(At.Utc((startedAt ?? DateTime.UtcNow).AddMinutes(30)));
+        session.Complete(At.Utc((startedAt ?? DateTime.UtcNow).AddMinutes(30)), null);
         return session;
     }
 
@@ -50,7 +50,7 @@ public class SessionRepositoryTests : SqliteRepositoryTestBase
         repo.Add(session);
         await Context.SaveChangesAsync();
 
-        session.Complete(At.Utc(DateTime.UtcNow));
+        session.Complete(At.Utc(DateTime.UtcNow), null);
         await Context.SaveChangesAsync();
 
         var reloaded = await Fresh().GetByIdAsync(session.Id);
@@ -86,7 +86,7 @@ public class SessionRepositoryTests : SqliteRepositoryTestBase
         CreateRepository().Add(session);
         await Context.SaveChangesAsync();
 
-        session.Complete(At.Utc(startedAt.AddMinutes(57))); // mid second break
+        session.Complete(At.Utc(startedAt.AddMinutes(57)), null); // mid second break
         await Context.SaveChangesAsync();
 
         await using var fresh = CreateFreshContext();
@@ -122,7 +122,7 @@ public class SessionRepositoryTests : SqliteRepositoryTestBase
     {
         var repo = CreateRepository();
         var session = CreateSession();
-        session.Complete(At.Utc(DateTime.UtcNow));
+        session.Complete(At.Utc(DateTime.UtcNow), null);
         repo.Add(session);
         await Context.SaveChangesAsync();
 

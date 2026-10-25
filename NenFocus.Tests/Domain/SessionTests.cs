@@ -211,7 +211,7 @@ public class SessionTests
     public void IsOnBreakAt_OnceCompleted_False()
     {
         var session = StartedTwoHourSession(OneShortBreak());
-        session.Complete(At.Utc(T0.AddMinutes(27)));
+        session.Complete(At.Utc(T0.AddMinutes(27)), null);
 
         session.IsOnBreakAt(At.Utc(T0.AddMinutes(27))).Should().BeFalse();
     }
@@ -281,7 +281,7 @@ public class SessionTests
     public void LiftsBlockingAt_OnceCompleted_False()
     {
         var session = StartedTwoHourSession(OneShortBreak());
-        session.Complete(At.Utc(T0.AddMinutes(27)));
+        session.Complete(At.Utc(T0.AddMinutes(27)), null);
 
         session.LiftsBlockingAt(At.Utc(T0.AddMinutes(27))).Should().BeFalse();
     }
@@ -292,7 +292,7 @@ public class SessionTests
         // Regression: a session whose end was noticed late recorded 2h31m for a 2h plan.
         var session = StartedTwoHourSession(BreakSchedule.None);
 
-        session.Complete(At.Utc(T0.AddHours(2).AddMinutes(1)));
+        session.Complete(At.Utc(T0.AddHours(2).AddMinutes(1)), null);
 
         session.EndedAt.Should().Be(At.Utc(T0.AddHours(2)));
         session.DomainEvents.OfType<SessionEndedEvent>().Single().EndedAt.Should().Be(At.Utc(T0.AddHours(2)));
@@ -305,7 +305,7 @@ public class SessionTests
             new SessionBreak(SessionPhaseKind.ShortBreak, TimeSpan.FromMinutes(25), TimeSpan.FromMinutes(30)),
             new SessionBreak(SessionPhaseKind.ShortBreak, TimeSpan.FromMinutes(55), TimeSpan.FromMinutes(60))]));
 
-        session.Complete(At.Utc(T0.AddMinutes(27)));
+        session.Complete(At.Utc(T0.AddMinutes(27)), null);
 
         session.BreakSchedule.Should().Be(OneShortBreak(25, 27));
         session.BreaksTaken.Should().Be(1);
@@ -318,7 +318,7 @@ public class SessionTests
         session.Start(At.Utc(T0));
         var endedAt = T0.AddMinutes(20);
 
-        session.Complete(At.Utc(endedAt));
+        session.Complete(At.Utc(endedAt), null);
 
         session.Status.Should().Be(SessionStatus.Completed);
         session.EndedAt.Should().Be(At.Utc(endedAt));
@@ -330,9 +330,9 @@ public class SessionTests
     {
         var session = CreateSpontaneousSession();
         session.Start(At.Utc(DateTime.UtcNow));
-        session.Complete(At.Utc(DateTime.UtcNow));
+        session.Complete(At.Utc(DateTime.UtcNow), null);
 
-        var act = () => session.Complete(At.Utc(DateTime.UtcNow));
+        var act = () => session.Complete(At.Utc(DateTime.UtcNow), null);
 
         act.Should().Throw<InvalidOperationException>();
     }
@@ -342,7 +342,7 @@ public class SessionTests
     {
         var session = CreateSpontaneousSession();
         session.Start(At.Utc(DateTime.UtcNow));
-        session.Complete(At.Utc(DateTime.UtcNow));
+        session.Complete(At.Utc(DateTime.UtcNow), null);
 
         session.SetReflection("  Went well  ");
 
@@ -357,7 +357,7 @@ public class SessionTests
     {
         var session = CreateSpontaneousSession();
         session.Start(At.Utc(DateTime.UtcNow));
-        session.Complete(At.Utc(DateTime.UtcNow));
+        session.Complete(At.Utc(DateTime.UtcNow), null);
 
         session.SetReflection(blank);
 
@@ -393,7 +393,7 @@ public class SessionTests
     {
         var session = CreateSpontaneousSession();
         session.Start(At.Utc(DateTime.UtcNow));
-        session.Complete(At.Utc(DateTime.UtcNow));
+        session.Complete(At.Utc(DateTime.UtcNow), null);
         var acknowledgedAt = DateTime.UtcNow;
 
         session.MarkPostSessionAcknowledged(At.Utc(acknowledgedAt));
@@ -496,7 +496,7 @@ public class SessionTests
         var startedAt = new DateTime(2026, 1, 1, 10, 0, 0, DateTimeKind.Utc);
         var session = CreateSpontaneousSession();
         session.Start(At.Utc(startedAt));
-        session.Complete(At.Utc(startedAt.AddMinutes(15)));
+        session.Complete(At.Utc(startedAt.AddMinutes(15)), null);
 
         var elapsed = session.GetElapsedTime(At.Utc(startedAt.AddHours(5)));
 
@@ -529,7 +529,7 @@ public class SessionTests
         var startedAt = new DateTime(2026, 1, 1, 10, 0, 0, DateTimeKind.Utc);
         var session = CreateSpontaneousSession();
         session.Start(At.Utc(startedAt));
-        session.Complete(At.Utc(startedAt.AddMinutes(15)));
+        session.Complete(At.Utc(startedAt.AddMinutes(15)), null);
 
         var elapsed = session.GetElapsedTime(At.Utc(startedAt.AddHours(5)));
 
@@ -619,10 +619,56 @@ public class SessionTests
         var startedAt = new DateTime(2026, 9, 29, 10, 0, 0, DateTimeKind.Utc);
         session.Start(At.Utc(startedAt));
 
-        session.Complete(At.Utc(startedAt.AddMinutes(10)));
+        session.Complete(At.Utc(startedAt.AddMinutes(10)), null);
 
         session.ReservedSlot.Should().BeNull("a finished session occupies nothing any more");
     }
+
+    // ── IsDueForAutoEnd: its time is up, and nothing has ended it yet (Gap 89 Slice A) ──
+
+    private static readonly DateTime RunStart = new(2026, 1, 5, 9, 0, 0, DateTimeKind.Utc);
+
+    [Fact]
+    public void IsDueForAutoEnd_BeforeItsEnd_IsFalse()
+    {
+        var session = CreateSpontaneousSession(); // 30 minutes
+        session.Start(At.Utc(RunStart));
+
+        session.IsDueForAutoEnd(At.Utc(RunStart.AddMinutes(29).AddSeconds(59))).Should().BeFalse();
+    }
+
+    [Fact]
+    public void IsDueForAutoEnd_AtItsEnd_IsTrue()
+    {
+        // Half-open, like every TimeSlot: ended at its end.
+        var session = CreateSpontaneousSession();
+        session.Start(At.Utc(RunStart));
+
+        session.IsDueForAutoEnd(At.Utc(RunStart.AddMinutes(30))).Should().BeTrue();
+    }
+
+    [Fact]
+    public void IsDueForAutoEnd_LongAfterItsEnd_IsTrue()
+    {
+        var session = CreateSpontaneousSession();
+        session.Start(At.Utc(RunStart));
+
+        session.IsDueForAutoEnd(At.Utc(RunStart.AddDays(1))).Should().BeTrue("the app was closed through its end");
+    }
+
+    [Fact]
+    public void IsDueForAutoEnd_OnceCompleted_IsFalse()
+    {
+        var session = CreateSpontaneousSession();
+        session.Start(At.Utc(RunStart));
+        session.Complete(At.Utc(RunStart.AddMinutes(10)), null);
+
+        session.IsDueForAutoEnd(At.Utc(RunStart.AddHours(1))).Should().BeFalse("something already ended it");
+    }
+
+    [Fact]
+    public void IsDueForAutoEnd_NotStarted_IsFalse()
+        => CreateSpontaneousSession().IsDueForAutoEnd(At.Utc(RunStart.AddDays(1))).Should().BeFalse();
 
     // ── CountedTime: how long an ended session counted for (Gap 95, decision 13) ──
 
@@ -639,9 +685,70 @@ public class SessionTests
         var startedAt = At.Utc(BlockStart.AddMinutes(startMinutes));
         session.Start(startedAt, block.Scheduled);
         block.MarkRitualCompleted(startedAt);
-        session.Complete(At.Utc(BlockStart.AddMinutes(endMinutes)));
-        block.MarkSessionEnded(session.EndedAt!.Value);
+        session.Complete(At.Utc(BlockStart.AddMinutes(endMinutes)), block);
         return session;
+    }
+
+    // ── Complete with its block: one ending for "you ended it" and "its time ran out" (Gap 89 Slice A) ──
+
+    [Fact]
+    public void Complete_Planned_StampsItsBlockWithTheRecordedEnd_NotTheMomentNoticed()
+    {
+        // Noticed a day late (app closed): the session is capped at its planned end, and the
+        // block's stamp is the same capped moment — a faithful copy (Gap 86).
+        var block = BlockOf2Hours();
+        var session = CreatePlannedSession(block.Id);
+        session.Start(At.Utc(BlockStart), block.Scheduled);
+        block.MarkRitualCompleted(At.Utc(BlockStart));
+
+        session.Complete(At.Utc(BlockStart.AddDays(1)), block);
+
+        session.EndedAt.Should().Be(At.Utc(BlockStart.AddHours(2)));
+        block.EndedEarly.Should().BeFalse("its stamp is the capped end, so it ran to time");
+        block.IsFinal(At.Utc(BlockStart.AddDays(1))).Should().BeTrue("the block knows its session ended");
+    }
+
+    [Fact]
+    public void Complete_WithAnotherSessionsBlock_Throws_AndChangesNothing()
+    {
+        var block = BlockOf2Hours();
+        var session = CreatePlannedSession(Guid.NewGuid());
+        session.Start(At.Utc(BlockStart));
+        block.MarkRitualCompleted(At.Utc(BlockStart));
+
+        var act = () => session.Complete(At.Utc(BlockStart.AddMinutes(30)), block);
+
+        act.Should().Throw<ArgumentException>();
+        session.Status.Should().Be(SessionStatus.Active);
+        block.IsFinal(At.Utc(BlockStart.AddMinutes(30))).Should().BeFalse();
+    }
+
+    [Fact]
+    public void Complete_Spontaneous_WithABlock_Throws()
+    {
+        var block = BlockOf2Hours();
+        var session = CreateSpontaneousSession();
+        session.Start(At.Utc(BlockStart));
+
+        var act = () => session.Complete(At.Utc(BlockStart.AddMinutes(10)), block);
+
+        act.Should().Throw<ArgumentException>();
+        session.Status.Should().Be(SessionStatus.Active);
+    }
+
+    [Fact]
+    public void Complete_WhenTheBlockRefusesTheStamp_LeavesTheSessionRunning()
+    {
+        // The block refuses a stamp before its Ritual (Gap 95). Asked first, so nothing is half done.
+        var block = BlockOf2Hours();
+        var session = CreatePlannedSession(block.Id);
+        session.Start(At.Utc(BlockStart), block.Scheduled);
+
+        var act = () => session.Complete(At.Utc(BlockStart.AddMinutes(30)), block);
+
+        act.Should().Throw<InvalidOperationException>();
+        session.Status.Should().Be(SessionStatus.Active);
+        session.EndedAt.Should().BeNull();
     }
 
     [Fact]
@@ -649,7 +756,7 @@ public class SessionTests
     {
         var session = CreateSpontaneousSession();
         session.Start(At.Utc(BlockStart));
-        session.Complete(At.Utc(BlockStart.AddMinutes(20).AddSeconds(40)));
+        session.Complete(At.Utc(BlockStart.AddMinutes(20).AddSeconds(40)), null);
 
         session.CountedTime(originatingBlock: null).Should().Be(TimeSpan.FromMinutes(20));
     }
@@ -688,7 +795,7 @@ public class SessionTests
     {
         var session = CreatePlannedSession(Guid.NewGuid());
         session.Start(At.Utc(BlockStart));
-        session.Complete(At.Utc(BlockStart.AddMinutes(25)));
+        session.Complete(At.Utc(BlockStart.AddMinutes(25)), null);
 
         session.CountedTime(originatingBlock: null).Should().Be(TimeSpan.FromMinutes(25));
     }

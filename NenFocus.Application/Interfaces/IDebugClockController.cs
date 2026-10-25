@@ -13,6 +13,7 @@ public interface IDebugClockController
     void AdvanceBy(TimeSpan amount);
     void Reset();
 
-    /// <summary>Raised whenever the effective time changes — either the override moved, or a live second ticked over.</summary>
-    event EventHandler? Changed;
+    /// <summary>Raised when the override moves — SetTo, AdvanceBy or Reset — never as time simply passes
+    /// (Gap 89 Slice A; the screen's paces are <see cref="IDisplayClock"/>'s).</summary>
+    event EventHandler? Jumped;
 }

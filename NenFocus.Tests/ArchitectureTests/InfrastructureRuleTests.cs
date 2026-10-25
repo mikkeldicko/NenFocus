@@ -43,4 +43,18 @@ public class InfrastructureRuleTests
 
         KnownExceptions.Check(violations, []);
     }
+
+    /// <summary>One heartbeat (Gap 89 Slice A): one "now" per tick, every clock-driven use case in a fixed
+    /// order. Two loops each read their own "now" and raced at the same moment (F4). A new clock-driven job
+    /// is a step in HeartbeatService, not a second BackgroundService; display paces are IDisplayClock's.</summary>
+    [Fact]
+    public void ThereIsOneHeartbeat()
+    {
+        var others = typeof(NenFocus.Infrastructure.Services.HeartbeatService).Assembly.GetTypes()
+            .Where(t => typeof(Microsoft.Extensions.Hosting.IHostedService).IsAssignableFrom(t) && !t.IsAbstract)
+            .Where(t => t != typeof(NenFocus.Infrastructure.Services.HeartbeatService))
+            .Select(t => t.FullName!);
+
+        KnownExceptions.Check(others, []);
+    }
 }

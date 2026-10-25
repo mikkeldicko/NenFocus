@@ -44,9 +44,9 @@ public class MainPageBreakFlipTests
             Timeline = session.Timeline, BreakPresetName = "Classic"
         });
 
-        using var monitor = new ActiveSessionMonitor(sessionState, Substitute.For<IServiceScopeFactory>(), clock,
+        using var monitor = new ActiveSessionMonitor(sessionState, clock,
             Substitute.For<IBreakTransitionResponder>(), NullLogger<ActiveSessionMonitor>.Instance);
-        var vm = new MainPageViewModel(() => { }, _ => { }, sessionState, monitor,
+        var vm = new MainPageViewModel(() => { }, sessionState, monitor,
             Substitute.For<ICommandDispatcher>(), clock);
         var view = new MainPageView { DataContext = vm };
         Show(view);

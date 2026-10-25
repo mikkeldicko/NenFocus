@@ -132,6 +132,13 @@ public class Session : AggregateRoot
 
     /// <summary>True while <paramref name="at"/> falls inside one of this running
     /// session's break slots — whether it *is* a break; see LiftsBlockingAt for what it does.</summary>
+    /// <summary>
+    /// Its time is up at <paramref name="at"/> and nothing has ended it yet — the clock's reason
+    /// to auto-end it (Gap 89 Slice A). The same "ended" the monitor's reading reports.
+    /// </summary>
+    public bool IsDueForAutoEnd(Moment at) =>
+        Status == SessionStatus.Active && Timeline is { } timeline && timeline.ReadingAt(at).HasEnded;
+
     public bool IsOnBreakAt(Moment at) => CurrentBreakAt(at) is not null;
 
     /// <summary>True when this session's own preset should stop being enforced at
@@ -157,17 +164,25 @@ public class Session : AggregateRoot
     public int BreaksTaken => EndedAt is { } endedAt ? BreaksTakenBy(endedAt) : 0;
 
     /// <summary>
-    /// Ends the session. The recorded end is capped at EndAt: a session can never run
-    /// longer than planned, however late its end is noticed (sleep, a restart, a skipped
-    /// clock). The break schedule is trimmed to what actually happened by then.
+    /// Ends the session — the one ending, whether you ended it or its time ran out (Gap 89
+    /// Slice A). The recorded end is capped at EndAt: a session can never run longer than
+    /// planned, however late its end is noticed (sleep, a restart, a skipped clock). The break
+    /// schedule is trimmed to what actually happened by then, and a planned session's block is
+    /// stamped with that same end, always, early or on time (Gap 86). The block is asked first,
+    /// so a stamp it refuses leaves the session running. A planned session whose block is gone
+    /// ends without one; the block passed must be its own.
     /// </summary>
-    public void Complete(Moment endedAt)
+    public void Complete(Moment endedAt, FocusBlock? originatingBlock)
     {
         if (Status == SessionStatus.Completed)
             throw new InvalidOperationException(
                 "Session is already completed.");
+        if (originatingBlock is not null && originatingBlock.Id != OriginatingBlockId)
+            throw new ArgumentException("This block is not the one this session was started for.", nameof(originatingBlock));
 
         var actualEnd = EndAt is { } plannedEnd && endedAt > plannedEnd ? plannedEnd : endedAt;
+
+        originatingBlock?.MarkSessionEnded(actualEnd);
 
         Status = SessionStatus.Completed;
         EndedAt = actualEnd;

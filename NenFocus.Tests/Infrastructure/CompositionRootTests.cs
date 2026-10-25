@@ -16,8 +16,7 @@ namespace NenFocus.Tests.Infrastructure;
 /// captive-dependency lifetime mismatch (a Singleton capturing a Scoped service — found and
 /// fixed the same day: SessionStateService was injecting ISessionRepository/
 /// IBlockPresetRepository directly instead of resolving them per-operation via
-/// IServiceScopeFactory, the pattern its siblings ActiveSessionMonitor and
-/// ScheduledEnforcementService already used correctly) fail a test immediately.
+/// IServiceScopeFactory, the pattern the heartbeat already used correctly) fail a test immediately.
 /// </summary>
 public class CompositionRootTests
 {

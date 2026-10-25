@@ -282,7 +282,7 @@ public class ChangeTrackingRoundTripTests : SqliteRepositoryTestBase
         var session = RunningSessionWithBreaks();
         await SeedAsync(session);
 
-        await ChangeAndCommitAsync(SessionById(session.Id), s => s.Complete(At.Utc(Day.AddHours(9).AddMinutes(40))));
+        await ChangeAndCommitAsync(SessionById(session.Id), s => s.Complete(At.Utc(Day.AddHours(9).AddMinutes(40)), null));
 
         var reloaded = await ReloadAsync(SessionById(session.Id));
         reloaded.Status.Should().Be(SessionStatus.Completed);
@@ -294,7 +294,7 @@ public class ChangeTrackingRoundTripTests : SqliteRepositoryTestBase
     public async Task Session_ReflectionAndAcknowledgement_AreSavedByTheCommit()
     {
         var session = RunningSessionWithBreaks();
-        session.Complete(At.Utc(Day.AddHours(11)));
+        session.Complete(At.Utc(Day.AddHours(11)), null);
         await SeedAsync(session);
 
         await ChangeAndCommitAsync(SessionById(session.Id), s =>

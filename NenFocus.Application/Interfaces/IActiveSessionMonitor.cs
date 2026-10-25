@@ -1,4 +1,3 @@
-using NenFocus.Application.DTOs;
 using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Application.Interfaces;
@@ -16,6 +15,4 @@ public interface IActiveSessionMonitor
 
     /// <summary>Each second, the new reading — delivered with the event.</summary>
     event EventHandler<TimelineReading>? Tick;
-
-    event EventHandler<PostSessionDto>? SessionAutoEnded;
 }

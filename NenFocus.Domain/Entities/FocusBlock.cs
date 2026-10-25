@@ -240,9 +240,10 @@ public sealed class FocusBlock : PlannedBlock
 
     /// <summary>
     /// Refuses a stamp the block's own answers (late, outcome, credit) can't interpret: no
-    /// session can end on a block whose Ritual wasn't done, or before it was (Gap 95).
+    /// session can end on a block whose Ritual wasn't done, or before it was (Gap 95). Stamped
+    /// only by its session's <see cref="Session.Complete"/> (Gap 89 Slice A), so it is internal.
     /// </summary>
-    public void MarkSessionEnded(Moment endedAt)
+    internal void MarkSessionEnded(Moment endedAt)
     {
         if (SessionEndedAt.HasValue)
             throw new InvalidOperationException(

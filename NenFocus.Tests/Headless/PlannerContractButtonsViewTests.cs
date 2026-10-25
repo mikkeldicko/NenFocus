@@ -47,7 +47,7 @@ public class PlannerContractButtonsViewTests
         var systemClock = TestClock.Create();
         systemClock.SetTimeZoneOffset(TimeSpan.Zero);
         systemClock.SetNow(new DateTime(2026, 10, 7, 7, 0, 0, DateTimeKind.Utc));
-        var vm = new PlannerPageViewModel(queries, Substitute.For<ICommandDispatcher>(), Substitute.For<IPlannerClockService>(),
+        var vm = new PlannerPageViewModel(queries, Substitute.For<ICommandDispatcher>(), Substitute.For<IDisplayClock>(),
             Substitute.For<IActiveSessionState>(), Substitute.For<IRecapRelay>(), systemClock);
         var view = new PlannerPageView { DataContext = vm };
         Show(view);

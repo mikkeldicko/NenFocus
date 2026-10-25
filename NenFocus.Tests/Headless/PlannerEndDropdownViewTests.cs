@@ -70,7 +70,7 @@ public class PlannerEndDropdownViewTests
     {
         var queries = new FakeQueryDispatcher().Answer<GetAllBlockPresetsQuery, IReadOnlyList<BlockPresetDto>>(_ =>
             [new() { Id = Guid.NewGuid(), Name = "Deep Work", PresetType = BlockPresetType.Focus }]);
-        var clock = Substitute.For<IPlannerClockService>();
+        var clock = Substitute.For<IDisplayClock>();
         var systemClock = TestClock.Create();
         systemClock.SetTimeZoneOffset(TimeSpan.Zero);
         systemClock.SetNow(new DateTime(2026, 9, 28, 6, 0, 0, DateTimeKind.Utc)); // a Monday: column 1 (Tuesday) is still ahead

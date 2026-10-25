@@ -67,7 +67,7 @@ public class BlockPlacementCheckerTests
     public void FinishedSession_IsNotInTheWay()
     {
         var session = RunningSession(7, 9);
-        session.Complete(At.Utc(Day.AddHours(7.5)));
+        session.Complete(At.Utc(Day.AddHours(7.5)), null);
 
         CheckFree(Slot(8, 9), running: session).Should().Be(PlacementVerdict.Allowed);
     }

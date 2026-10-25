@@ -50,7 +50,7 @@ public static class DependencyInjection
         services.AddSingleton<ISystemClock>(sp => sp.GetRequiredService<SystemClock>());
         services.AddSingleton<IDebugClockController>(sp => sp.GetRequiredService<SystemClock>());
         services.AddSingleton<IActiveSessionMonitor, ActiveSessionMonitor>();
-        services.AddSingleton<IPlannerClockService, PlannerClockService>();
+        services.AddSingleton<IDisplayClock, DisplayClock>();
         services.AddSingleton<IDomainEventPublisher, InProcessDomainEventPublisher>();
 
         // Stateless, thread-safe — hold only IServiceScopeFactory, so one Singleton instance
@@ -61,8 +61,8 @@ public static class DependencyInjection
 
         services.AddScoped<IUnitOfWork, EfCoreUnitOfWork>();
 
-        services.AddHostedService<ScheduledEnforcementService>();
-        services.AddHostedService<NenContractHeartbeatService>();
+        // The one clock-driven loop (Gap 89 Slice A).
+        services.AddHostedService<HeartbeatService>();
 
         return services;
     }

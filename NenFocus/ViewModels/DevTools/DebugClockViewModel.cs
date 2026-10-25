@@ -29,12 +29,13 @@ public partial class DebugClockViewModel : ViewModelBase
     // (a momentarily empty field, or before the control's own default first applies).
     [ObservableProperty] private decimal? _customMinutes = 5;
 
-    public DebugClockViewModel(ISystemClock clock, IDebugClockController controller)
+    public DebugClockViewModel(ISystemClock clock, IDebugClockController controller, IDisplayClock displayClock)
     {
         _clock = clock;
         _controller = controller;
 
-        _controller.Changed += (_, _) =>
+        // The live second-hand; a jump raises it at once too (Gap 89 Slice A).
+        displayClock.SecondTicked += (_, _) =>
             Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(Refresh);
 
         Refresh();

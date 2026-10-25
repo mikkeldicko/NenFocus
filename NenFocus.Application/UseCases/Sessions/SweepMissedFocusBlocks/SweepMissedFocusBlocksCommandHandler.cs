@@ -9,23 +9,20 @@ public sealed class SweepMissedFocusBlocksCommandHandler
 {
     private readonly IPlannedBlockRepository _blocks;
     private readonly ICommandHandler<MarkFocusBlockMissedCommand, MarkFocusBlockMissedResult> _markMissed;
-    private readonly ISystemClock _clock;
 
     public SweepMissedFocusBlocksCommandHandler(
         IPlannedBlockRepository blocks,
-        ICommandHandler<MarkFocusBlockMissedCommand, MarkFocusBlockMissedResult> markMissed,
-        ISystemClock clock)
+        ICommandHandler<MarkFocusBlockMissedCommand, MarkFocusBlockMissedResult> markMissed)
     {
         _blocks = blocks;
         _markMissed = markMissed;
-        _clock = clock;
     }
 
     public async Task<SweepMissedFocusBlocksResult> HandleAsync(
         SweepMissedFocusBlocksCommand command,
         CancellationToken ct = default)
     {
-        var unresolved = await _blocks.GetUnresolvedFocusBlocksAsync(command.AsOf ?? _clock.Now, ct);
+        var unresolved = await _blocks.GetUnresolvedFocusBlocksAsync(command.AsOf, ct);
 
         var missedSessions = new List<PostSessionDto>();
         foreach (var block in unresolved.OrderBy(b => b.Scheduled))

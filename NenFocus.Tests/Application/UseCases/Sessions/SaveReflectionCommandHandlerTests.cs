@@ -38,7 +38,7 @@ public class SaveReflectionCommandHandlerTests : UseCaseTestBase
     public async Task ACompletedSession_StoresTheReflection()
     {
         var session = Spontaneous();
-        session.Complete(At.Utc(Now));
+        session.Complete(At.Utc(Now), null);
         await SeedAsync(session);
 
         var result = await ReflectAsync(session.Id, "Went well");

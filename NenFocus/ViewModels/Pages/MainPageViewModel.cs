@@ -18,7 +18,6 @@ namespace NenFocus.ViewModels.Pages;
 public partial class MainPageViewModel : ViewModelBase
 {
     private readonly Action _onStartRitual;
-    private readonly Action<PostSessionDto> _onShowPostSession;
     private readonly IActiveSessionState _sessionState;
     private readonly IActiveSessionMonitor _monitor;
     private readonly ICommandDispatcher _commandDispatcher;
@@ -75,14 +74,12 @@ public partial class MainPageViewModel : ViewModelBase
 
     public MainPageViewModel(
         Action onStartRitual,
-        Action<PostSessionDto> onShowPostSession,
         IActiveSessionState sessionState,
         IActiveSessionMonitor monitor,
         ICommandDispatcher commandDispatcher,
         ISystemClock clock)
     {
         _onStartRitual = onStartRitual;
-        _onShowPostSession = onShowPostSession;
         _sessionState = sessionState;
         _monitor = monitor;
         _commandDispatcher = commandDispatcher;
@@ -91,7 +88,6 @@ public partial class MainPageViewModel : ViewModelBase
         _sessionState.SessionChanged += OnSessionChanged;
 
         _monitor.Tick += OnMonitorTick;
-        _monitor.SessionAutoEnded += OnSessionAutoEnded;
 
         // IActiveSessionState.RefreshAsync() runs once, awaited, during app
         // startup (Program.Main) before this ViewModel is ever constructed — calling it
@@ -129,15 +125,6 @@ public partial class MainPageViewModel : ViewModelBase
         BreaksTaken = reading.BreaksTaken;
     }
 
-    private void OnSessionAutoEnded(object? sender, PostSessionDto postSession)
-    {
-        Dispatcher.UIThread.Post(() =>
-        {
-            ClearSession();
-            _onShowPostSession(postSession);
-        });
-    }
-
     private void ApplySession(SessionDto session)
     {
         _activeSessionId = session.Id;
@@ -160,9 +147,8 @@ public partial class MainPageViewModel : ViewModelBase
     [RelayCommand]
     private async Task EndSession()
     {
-        var result = await _commandDispatcher.DispatchAsync(new EndSessionCommand { SessionId = _activeSessionId });
-        if (result.Success && result.PostSession is not null)
-            _onShowPostSession(result.PostSession);
+        // Its Post-Session screen arrives through the Shell's queue, after the save (Gap 89 Slice A).
+        await _commandDispatcher.DispatchAsync(new EndSessionCommand { SessionId = _activeSessionId });
     }
 
     [RelayCommand(CanExecute = nameof(CanStartRitual))]

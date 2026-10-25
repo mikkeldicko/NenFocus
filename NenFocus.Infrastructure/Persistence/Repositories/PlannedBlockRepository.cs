@@ -26,7 +26,7 @@ public sealed class PlannedBlockRepository : IPlannedBlockRepository
         // cancelled block (its owning contract was broken) has vacated its schedule
         // entirely and must never count as a live block to any caller. Without this,
         // StartSessionCommandHandler would refuse a spontaneous session because a
-        // cancelled block "conflicts" with it, and ScheduledEnforcementService would
+        // cancelled block "conflicts" with it, and the heartbeat would
         // warn about a block that will never actually enforce.
         var blocks = await _context.PlannedBlocks
             .Where(OnSlot<PlannedBlock, bool>(b => b.Scheduled, TimeSlot.Filters.Overlaps(range)))
