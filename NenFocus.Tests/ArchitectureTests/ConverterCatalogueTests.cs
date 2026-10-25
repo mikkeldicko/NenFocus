@@ -23,7 +23,8 @@ public class ConverterCatalogueTests
 
     private static List<string> ConvertersInCode() =>
         typeof(ShellViewModel).Assembly.GetTypes()
-            .Where(t => !t.IsAbstract && typeof(IValueConverter).IsAssignableFrom(t))
+            // One value or several (a MultiBinding of a start and an end) — both are converters (Gap 89 Slice B).
+            .Where(t => !t.IsAbstract && (typeof(IValueConverter).IsAssignableFrom(t) || typeof(IMultiValueConverter).IsAssignableFrom(t)))
             .Select(t => t.Name)
             .ToList();
 

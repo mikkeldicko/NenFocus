@@ -64,7 +64,7 @@ public sealed class GetNenContractsForDateRangeQueryHandler
         var daysBehind = days.Count(d => d.Date <= clampedToday && !d.IsRest && !d.IsMet);
 
         var deficits = await _deficits.HandleAsync(new GetNenContractDeficitsQuery(contract.Id), cancellationToken);
-        var deficitHours = deficits.Aggregate(WholeMinutes.Zero, (sum, d) => sum + d.RemainingDeficit).Hours;
+        var deficit = deficits.Aggregate(WholeMinutes.Zero, (sum, d) => sum + d.RemainingDeficit);
 
         var dayStatuses = days.Select(d =>
         {
@@ -98,7 +98,7 @@ public sealed class GetNenContractsForDateRangeQueryHandler
             TotalDays = totalDays,
             DaysBehind = daysBehind,
             DaysConsidered = daysConsidered,
-            DeficitHours = deficitHours,
+            Deficit = deficit,
             AllowCancellation = contract.AllowCancellation,
             DayStatuses = dayStatuses,
             HasPeriodTarget = contract.HasPeriodTarget,

@@ -120,29 +120,25 @@ public class NamingRuleTests
         KnownExceptions.Check(violations, []);
     }
 
-    private static readonly string[] ConverterNameExceptions =
-    [
-        // Static formatters named like converters: ViewModels call them to build display strings,
-        // which the ViewModel Forbidden Zone bans (No String Formatting). → Gap 89 (ViewModel audit).
-        "NenFocus.Converters.DateRangeToLabelConverter: named …Converter but not an IValueConverter",
-        "NenFocus.Converters.DateTimeRangeToLabelConverter: named …Converter but not an IValueConverter",
-        "NenFocus.Converters.WorkHoursRangeToLabelConverter: named …Converter but not an IValueConverter",
-    ];
-
     [Fact]
     public void ConvertersAndIValueConverterGoTogether()
     {
         // Static classes count too: .NET marks them abstract + sealed.
         var concrete = UiTypes.Where(t => !t.IsInterface && (!t.IsAbstract || t.IsSealed)).ToList();
+        // One value or several (a MultiBinding of a start and an end): both are converters.
+        static bool IsConverter(Type t) =>
+            typeof(IValueConverter).IsAssignableFrom(t) || typeof(IMultiValueConverter).IsAssignableFrom(t);
 
         var violations = concrete
-            .Where(t => typeof(IValueConverter).IsAssignableFrom(t) && !t.Name.EndsWith("Converter", StringComparison.Ordinal))
+            .Where(t => IsConverter(t) && !t.Name.EndsWith("Converter", StringComparison.Ordinal))
             .Select(t => $"{t.FullName}: IValueConverter but not named …Converter")
             .Concat(concrete
-                .Where(t => t.Name.EndsWith("Converter", StringComparison.Ordinal) && !typeof(IValueConverter).IsAssignableFrom(t))
+                .Where(t => t.Name.EndsWith("Converter", StringComparison.Ordinal) && !IsConverter(t))
                 .Select(t => $"{t.FullName}: named …Converter but not an IValueConverter"));
 
-        KnownExceptions.Check(violations, ConverterNameExceptions);
+        // No exceptions since Gap 89 Slice B: the three static formatters named like converters are
+        // real converters now, or gone.
+        KnownExceptions.Check(violations, []);
     }
 
     [Fact]

@@ -1,5 +1,4 @@
 using System;
-using NenFocus.Converters;
 using NenFocus.Domain.Enums;
 
 namespace NenFocus.ViewModels.Planner;
@@ -67,7 +66,6 @@ public sealed record DayFloorPreviewViewModel(
     bool IsMet = true)
 {
     public bool HasBonus => BonusHours > 0;
-    public string BonusLabel => $"+{HoursToStringConverter.FormatHours(BonusHours)} bonus";
 
     // Unified across every strictness rule: a sealed contract's future day never needs a
     // met/unmet comparison shown, since it's provably always at-or-above its floor by the
@@ -81,18 +79,4 @@ public sealed record DayFloorPreviewViewModel(
     public bool ShowSimplifiedFuture =>
         !IsRestDay && Timing == DayTiming.Future && ContractStrictnessRule.HasValue
         && (!RequiredFloorHours.HasValue || CurrentHours <= RequiredFloorHours.Value);
-
-    // IsRestDay/RequiredFloorHours already carry whatever the Application layer resolved
-    // (a real committed floor stays pinned; an originally-rest day that later got a
-    // floor-counting block gets an ad-hoc floor and IsRestDay=false) — no special-casing
-    // needed here, this already renders correctly either way.
-    public string Label => IsRestDay
-        ? "Rest"
-        : IsContractFloorMode && Timing == DayTiming.Past
-            ? HoursToStringConverter.FormatHours(CurrentHours)
-            : ShowSimplifiedFuture
-                ? HoursToStringConverter.FormatHours(CurrentHours)
-                : RequiredFloorHours.HasValue
-                    ? $"{HoursToStringConverter.FormatHours(CurrentHours)} / {HoursToStringConverter.FormatHours(RequiredFloorHours.Value)}"
-                    : HoursToStringConverter.FormatHours(CurrentHours);
 }

@@ -22,7 +22,8 @@ public partial class PostContractViewModel : ViewModelBase
     public string Name { get; }
     public string HeaderLabel { get; }
     public string ReflectionPrompt { get; }
-    public string DateRangeLabel { get; }
+    public DateOnly StartDate { get; }
+    public DateOnly EndDate { get; }
     public double CommittedFocusHours { get; }
     public double TotalCompletedHours { get; }
     public double TotalBonusHours { get; }
@@ -71,7 +72,8 @@ public partial class PostContractViewModel : ViewModelBase
         ReflectionPrompt = data.Status == NenContractStatus.Broken
             ? "What led you to break this contract?"
             : "How did this contract go? What did you accomplish?";
-        DateRangeLabel = DateRangeToLabelConverter.FormatRange(data.StartDate, data.EndDate);
+        StartDate = data.StartDate;
+        EndDate = data.EndDate;
         CommittedFocusHours = data.CommittedFocusHours;
         TotalCompletedHours = data.TotalCompletedHours;
         TotalBonusHours = data.TotalBonusHours;
@@ -144,7 +146,6 @@ public partial class PostContractViewModel : ViewModelBase
 public sealed class DailyRecapItemViewModel
 {
     public DateOnly Date { get; }
-    public string DateLabel { get; }
 
     /// <summary>Null means rest day — the View's PercentageToLabelConverter renders that as
     /// "Rest" rather than the ViewModel deciding the display text itself.</summary>
@@ -153,7 +154,6 @@ public sealed class DailyRecapItemViewModel
     public DailyRecapItemViewModel(DateOnly date, double? percentage)
     {
         Date = date;
-        DateLabel = DateRangeToLabelConverter.FormatDateShort(date);
         Percentage = percentage;
     }
 }

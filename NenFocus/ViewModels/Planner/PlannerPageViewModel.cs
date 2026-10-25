@@ -150,7 +150,8 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     // non-day-segmented Work Hours check, deliberately not extended to cross-midnight
     // either, per Gap K Part 1's own scope note).
     [ObservableProperty] private bool _formEndRollsToNextDay;
-    [ObservableProperty] private string _formEndDateText = string.Empty;
+    // The day End lands on when it rolls past midnight — worded by the View.
+    [ObservableProperty] private DateTime _formEndNextDay;
 
     // Duration preserved across a Start edit (End shifts to keep it); re-derived whenever
     // End itself is edited. Set alongside FormStartTime/FormEndTime by SetFormTimes.
@@ -334,22 +335,12 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     // Upcoming even while it's the default (unswitched) selection.
     public bool IsSelectedContractUpcoming => SelectedContract?.Status == NenContractStatus.Scheduled;
 
-    // One format for every strictness rule — total completed vs. total committed hours,
-    // plus outstanding deficit. Uniform across Locked/DailyFlexibility/PeriodTimeBudget
-    // (with or without a whole-period target) since TotalCommittedHours/TotalCompletedHours are
-    // already computed the same way for all of them.
-    public string SelectedContractBannerText => SelectedContract is not { } c
-        ? string.Empty
-        : $"Contract: {c.Name} — Day {c.DayNumber}/{c.TotalDays} — " +
-          $"{c.TotalCompletedHours:0.#}h / {c.TotalCommittedHours:0.#}h completed" +
-          (c.DeficitHours > 0 ? $" — {MinutesToStringConverter.FormatMinutes(c.DeficitHours * 60)} deficit" : string.Empty) +
-          (c.TotalBonusHours > 0 ? $" — {MinutesToStringConverter.FormatMinutes(c.TotalBonusHours * 60)} bonus" : string.Empty);
+    // The banner's text is ContractRangeToBannerConverter's, from SelectedContract (Gap 89 Slice B).
 
     partial void OnSelectedContractChanged(NenContractRangeViewDto? value)
     {
         OnPropertyChanged(nameof(HasSelectedContract));
         OnPropertyChanged(nameof(IsContractBannerVisible));
-        OnPropertyChanged(nameof(SelectedContractBannerText));
         OnPropertyChanged(nameof(HasNoContracts));
         OnPropertyChanged(nameof(IsSelectedContractUpcoming));
         OnPropertyChanged(nameof(HasOtherContractThisWeek));
@@ -852,9 +843,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     private void UpdateEndRolloverDisplay(TimeSpan start, TimeSpan end)
     {
         FormEndRollsToNextDay = PlannerTimeShiftMath.EndRollsToNextDay(start, end);
-        FormEndDateText = FormEndRollsToNextDay
-            ? FormDate.DateTime.AddDays(1).ToString("MMM d, yyyy")
-            : string.Empty;
+        FormEndNextDay = FormDate.Date.AddDays(1);
     }
 
     /// <summary>

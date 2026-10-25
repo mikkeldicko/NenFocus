@@ -195,11 +195,13 @@ public partial class ContractWizardViewModel : ViewModelBase
                 EditingContractId = _editingContract?.Id
             },
             summaryName: _name,
-            summaryDateRange: DateRangeToLabelConverter.FormatRange(_startDate, _endDate),
+            startDate: _startDate,
+            endDate: _endDate,
             summaryMode: modeLabel,
             summaryStrictness: FriendlyStrictnessLabel(strictness),
-            summaryFloor: DailyFloorToLabelConverter.FormatFloor(fixedFloor),
-            summaryWorkHours: WorkHoursRangeToLabelConverter.FormatRange(workHoursStart, workHoursEnd),
+            dailyFloorHours: fixedFloor,
+            workHoursStart: workHoursStart,
+            workHoursEnd: workHoursEnd,
             summaryRestDays: restDays.Count > 0 ? string.Join(", ", restDays) : "None",
             summaryRedemptionPlacement: redemptionPlacementPolicy == RedemptionPlacementPolicy.CurrentDayOnly
                 ? "Current day only"

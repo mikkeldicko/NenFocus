@@ -22,9 +22,8 @@ public sealed class MinutesToStringConverter : IValueConverter
             _ => string.Empty
         };
 
-    /// <summary>Plain static entry point for non-XAML callers (e.g. a ViewModel string
-    /// property) that need the exact same format without going through IValueConverter —
-    /// one formatting rule, reusable from either side.</summary>
+    /// <summary>For converters that word a whole sentence (the contract banner) — never called
+    /// from a ViewModel (ViewModelRuleTests.NoViewModelFormatsValues).</summary>
     public static string FormatMinutes(double minutes)
     {
         var total = Math.Max(0, (int)Math.Round(minutes));

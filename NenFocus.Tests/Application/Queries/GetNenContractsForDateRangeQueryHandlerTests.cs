@@ -208,7 +208,7 @@ public class GetNenContractsForDateRangeQueryHandlerTests
 
         var result = (await CreateHandler().HandleAsync(AnyRange)).Single();
 
-        result.DeficitHours.Should().Be(2.0);
+        result.Deficit.Should().Be(WholeMinutes.Of(120));
     }
 
     [Theory]

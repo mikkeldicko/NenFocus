@@ -98,11 +98,18 @@
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <TextBlock Classes="field-label" Text="Daily floor:"/>
-                            <TextBlock Text="{Binding SelectedPresetFloorLabel}" FontSize="12" FontWeight="Medium" Foreground="#1A1A2E"/>
+                            <TextBlock Text="{Binding SelectedPreset.DailyFloorHours, Converter={x:Static conv:DailyFloorToLabelConverter.Instance}}" FontSize="12" FontWeight="Medium" Foreground="#1A1A2E"/>
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <TextBlock Classes="field-label" Text="Work hours:"/>
-                            <TextBlock Text="{Binding SelectedPresetWorkHoursLabel}" FontSize="12" FontWeight="Medium" Foreground="#1A1A2E"/>
+                            <TextBlock FontSize="12" FontWeight="Medium" Foreground="#1A1A2E">
+                                <TextBlock.Text>
+                                    <MultiBinding Converter="{x:Static conv:WorkHoursRangeToLabelConverter.Instance}">
+                                        <Binding Path="SelectedPreset.WorkHoursStart"/>
+                                        <Binding Path="SelectedPreset.WorkHoursEnd"/>
+                                    </MultiBinding>
+                                </TextBlock.Text>
+                            </TextBlock>
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <TextBlock Text="{Binding SelectedPresetCancellationLabel}" FontSize="12" FontWeight="Medium" Foreground="#1A1A2E"/>

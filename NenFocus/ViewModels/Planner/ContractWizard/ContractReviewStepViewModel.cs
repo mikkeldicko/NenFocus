@@ -17,22 +17,26 @@ public partial class ContractReviewStepViewModel : ViewModelBase
     private readonly Action _onBack;
 
     public string SummaryName { get; }
-    public string SummaryDateRange { get; }
+    public DateOnly StartDate { get; }
+    public DateOnly EndDate { get; }
     public string SummaryMode { get; }
     public string SummaryStrictness { get; }
-    public string SummaryFloor { get; }
-    public string SummaryWorkHours { get; }
+    public double? DailyFloorHours { get; }
+    public TimeOnly? WorkHoursStart { get; }
+    public TimeOnly? WorkHoursEnd { get; }
     public string SummaryRestDays { get; }
     public string SummaryRedemptionPlacement { get; }
 
     public ContractReviewStepViewModel(
         Func<NenContractDraftRules> getData,
         string summaryName,
-        string summaryDateRange,
+        DateOnly startDate,
+        DateOnly endDate,
         string summaryMode,
         string summaryStrictness,
-        string summaryFloor,
-        string summaryWorkHours,
+        double? dailyFloorHours,
+        TimeOnly? workHoursStart,
+        TimeOnly? workHoursEnd,
         string summaryRestDays,
         string summaryRedemptionPlacement,
         Action<NenContractDraftRules> onReadyToSchedule,
@@ -40,11 +44,13 @@ public partial class ContractReviewStepViewModel : ViewModelBase
     {
         _getData = getData;
         SummaryName = summaryName;
-        SummaryDateRange = summaryDateRange;
+        StartDate = startDate;
+        EndDate = endDate;
         SummaryMode = summaryMode;
         SummaryStrictness = summaryStrictness;
-        SummaryFloor = summaryFloor;
-        SummaryWorkHours = summaryWorkHours;
+        DailyFloorHours = dailyFloorHours;
+        WorkHoursStart = workHoursStart;
+        WorkHoursEnd = workHoursEnd;
         SummaryRestDays = summaryRestDays;
         SummaryRedemptionPlacement = summaryRedemptionPlacement;
         _onReadyToSchedule = onReadyToSchedule;

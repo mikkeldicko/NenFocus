@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:NenFocus.ViewModels.Planner.ContractWizard"
+             xmlns:conv="using:NenFocus.Converters"
              x:DataType="vm:ContractReviewStepViewModel"
              x:Class="NenFocus.Views.Planner.ContractWizard.ContractReviewStepView"
              Background="Transparent">
@@ -26,11 +27,11 @@
         <Border Background="#F8F8FB" CornerRadius="8" Padding="16">
             <StackPanel Spacing="10">
                 <Grid ColumnDefinitions="120,*"><TextBlock Grid.Column="0" Classes="summaryLabel" Text="Name"/><TextBlock Grid.Column="1" Classes="summaryValue" Text="{Binding SummaryName}"/></Grid>
-                <Grid ColumnDefinitions="120,*"><TextBlock Grid.Column="0" Classes="summaryLabel" Text="Dates"/><TextBlock Grid.Column="1" Classes="summaryValue" Text="{Binding SummaryDateRange}"/></Grid>
+                <Grid ColumnDefinitions="120,*"><TextBlock Grid.Column="0" Classes="summaryLabel" Text="Dates"/><TextBlock Grid.Column="1" Classes="summaryValue"><TextBlock.Text><MultiBinding Converter="{x:Static conv:DateRangeToLabelConverter.Instance}"><Binding Path="StartDate"/><Binding Path="EndDate"/></MultiBinding></TextBlock.Text></TextBlock></Grid>
                 <Grid ColumnDefinitions="120,*"><TextBlock Grid.Column="0" Classes="summaryLabel" Text="Mode"/><TextBlock Grid.Column="1" Classes="summaryValue" Text="{Binding SummaryMode}"/></Grid>
                 <Grid ColumnDefinitions="120,*"><TextBlock Grid.Column="0" Classes="summaryLabel" Text="Strictness"/><TextBlock Grid.Column="1" Classes="summaryValue" Text="{Binding SummaryStrictness}"/></Grid>
-                <Grid ColumnDefinitions="120,*"><TextBlock Grid.Column="0" Classes="summaryLabel" Text="Daily floor"/><TextBlock Grid.Column="1" Classes="summaryValue" Text="{Binding SummaryFloor}"/></Grid>
-                <Grid ColumnDefinitions="120,*"><TextBlock Grid.Column="0" Classes="summaryLabel" Text="Work hours"/><TextBlock Grid.Column="1" Classes="summaryValue" Text="{Binding SummaryWorkHours}"/></Grid>
+                <Grid ColumnDefinitions="120,*"><TextBlock Grid.Column="0" Classes="summaryLabel" Text="Daily floor"/><TextBlock Grid.Column="1" Classes="summaryValue" Text="{Binding DailyFloorHours, Converter={x:Static conv:DailyFloorToLabelConverter.Instance}}"/></Grid>
+                <Grid ColumnDefinitions="120,*"><TextBlock Grid.Column="0" Classes="summaryLabel" Text="Work hours"/><TextBlock Grid.Column="1" Classes="summaryValue"><TextBlock.Text><MultiBinding Converter="{x:Static conv:WorkHoursRangeToLabelConverter.Instance}"><Binding Path="WorkHoursStart"/><Binding Path="WorkHoursEnd"/></MultiBinding></TextBlock.Text></TextBlock></Grid>
                 <Grid ColumnDefinitions="120,*"><TextBlock Grid.Column="0" Classes="summaryLabel" Text="Rest days"/><TextBlock Grid.Column="1" Classes="summaryValue" Text="{Binding SummaryRestDays}" TextWrapping="Wrap"/></Grid>
                 <Grid ColumnDefinitions="120,*"><TextBlock Grid.Column="0" Classes="summaryLabel" Text="Redemption"/><TextBlock Grid.Column="1" Classes="summaryValue" Text="{Binding SummaryRedemptionPlacement}"/></Grid>
             </StackPanel>

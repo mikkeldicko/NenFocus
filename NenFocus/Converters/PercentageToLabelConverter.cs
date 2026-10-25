@@ -14,7 +14,7 @@ public sealed class PercentageToLabelConverter : IValueConverter
     public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
         => value is double percentage ? FormatPercentage(percentage) : "Rest";
 
-    public static string FormatPercentage(double percentage) => $"{percentage * 100:0}%";
+    private static string FormatPercentage(double percentage) => $"{percentage * 100:0}%";
 
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
         => throw new NotSupportedException();

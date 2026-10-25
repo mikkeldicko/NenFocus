@@ -9,6 +9,7 @@
 	<UserControl.Resources>
 		<conv:HoursToStringConverter x:Key="HoursConverter"/>
 		<conv:PercentageToLabelConverter x:Key="PercentageConverter"/>
+		<conv:DateTimeToStringConverter x:Key="DateConverter"/>
 	</UserControl.Resources>
 
 	<UserControl.Styles>
@@ -76,10 +77,17 @@
                                TextWrapping="Wrap"
                                TextAlignment="Center"/>
 
-					<TextBlock Text="{Binding DateRangeLabel}"
+					<TextBlock
                                FontSize="13"
                                Foreground="#888899"
-                               HorizontalAlignment="Center"/>
+                               HorizontalAlignment="Center">
+						<TextBlock.Text>
+							<MultiBinding Converter="{x:Static conv:DateRangeToLabelConverter.Instance}">
+								<Binding Path="StartDate"/>
+								<Binding Path="EndDate"/>
+							</MultiBinding>
+						</TextBlock.Text>
+					</TextBlock>
 
 					<!-- Divider -->
 					<Border Height="1" Background="#EEEEF5"/>
@@ -182,7 +190,7 @@
 							<DataTemplate DataType="vm:DailyRecapItemViewModel">
 								<Border Classes="day-tile" Margin="0,0,8,8">
 									<StackPanel Spacing="2" HorizontalAlignment="Center">
-										<TextBlock Text="{Binding DateLabel}"
+										<TextBlock Text="{Binding Date, Converter={StaticResource DateConverter}, ConverterParameter='MMM d'}"
                                                    FontSize="10"
                                                    Foreground="#AAAABC"
                                                    HorizontalAlignment="Center"/>

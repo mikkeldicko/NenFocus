@@ -1,4 +1,5 @@
 using NenFocus.Domain.Enums;
+using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Application.DTOs;
 
@@ -40,7 +41,9 @@ public sealed record NenContractRangeViewDto
     /// <summary>Non-rest-day count from StartDate through today (or EndDate) — DaysBehind's denominator.</summary>
     public int DaysConsidered { get; init; }
 
-    public double DeficitHours { get; init; }
+    /// <summary>What is still owed across the contract's missed and late blocks — whole minutes, as
+    /// the Domain counts it (it used to arrive as hours and be turned back into minutes for display).</summary>
+    public WholeMinutes Deficit { get; init; } = WholeMinutes.Zero;
 
     /// <summary>Mirrors NenContract.AllowCancellation — drives whether the Planner's Cancel button is shown.</summary>
     public bool AllowCancellation { get; init; }

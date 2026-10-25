@@ -1,21 +1,21 @@
 using System;
+using System.Collections.Generic;
+using System.Globalization;
+using Avalonia.Data.Converters;
 
 namespace NenFocus.Converters;
 
-/// <summary>"09:00 – 17:00" for a set Work Hours window, "No constraint" when none is fixed —
-/// was independently hand-rolled in ContractPresetCardViewModel, ContractRulesStepViewModel,
-/// and ContractWizardViewModel; consolidated here so the three copies can't drift apart. No
-/// IValueConverter here (unlike this codebase's other formatters) — Start and End are two
-/// separate bound values with no MultiBinding precedent in this codebase, so this is a plain
-/// static entry point a ViewModel calls directly, the same idiom
-/// MinutesToStringConverter.FormatMinutes already established for exactly this situation.</summary>
-public static class WorkHoursRangeToLabelConverter
+/// <summary>"09:00 – 17:00" for a set Work Hours window, "No constraint" when none is fixed — a
+/// MultiBinding of start and end (Gap 89 Slice B). One wording for the preset cards, the wizard's
+/// rules step and its summary, which used to build it three times.</summary>
+public sealed class WorkHoursRangeToLabelConverter : IMultiValueConverter
 {
-    public static string FormatRange(TimeOnly? start, TimeOnly? end)
-        => start is { } s && end is { } e ? $"{s:HH:mm} – {e:HH:mm}" : "No constraint";
+    public static readonly WorkHoursRangeToLabelConverter Instance = new();
 
-    /// <summary>Bare "9:00 AM – 5:00 PM" range, no "No constraint" fallback — for a caller
-    /// that already knows the window exists (e.g. a live placement-validation message quoting
-    /// the Work Hours window it just rejected against).</summary>
+    public object Convert(IList<object?> values, Type targetType, object? parameter, CultureInfo culture)
+        => values is [TimeOnly start, TimeOnly end, ..] ? $"{start:HH:mm} – {end:HH:mm}" : "No constraint";
+
+    /// <summary>Bare "9:00 AM – 5:00 PM", no fallback — only for the drafting placement message
+    /// quoting the window it rejected against, which Gap 68 deletes with ValidateDraftPlacement.</summary>
     public static string FormatKnownWindow12Hour(TimeOnly start, TimeOnly end) => $"{start:h:mm tt} – {end:h:mm tt}";
 }

@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
@@ -35,8 +36,6 @@ public partial class ContractPresetCardViewModel : ViewModelBase
     public bool KeepBlockingDuringBreaks { get; }
     public bool BonusBlocksFollowStrictness { get; }
 
-    public string FloorLabel => DailyFloorToLabelConverter.FormatFloor(DailyFloorHours);
-    public string WorkHoursLabel => WorkHoursRangeToLabelConverter.FormatRange(WorkHoursStart, WorkHoursEnd);
     public string CancellationLabel => AllowCancellation ? "Cancellation allowed" : "No cancellation";
     public string RedemptionPlacementLabel => RedemptionPlacementPolicy == RedemptionPlacementPolicy.CurrentDayOnly
         ? "Redemption: current day only"
@@ -159,7 +158,8 @@ public partial class ContractPresetPageViewModel : ViewModelBase
         FormName = card.Name;
         FormStrictnessRule = card.StrictnessRule;
         IsDailyFloorEnabled = card.DailyFloorHours.HasValue;
-        if (card.DailyFloorHours.HasValue) DailyFloorHoursText = card.DailyFloorHours.Value.ToString("0.##");
+        // An editable field's starting text, not display formatting — floors are whole hours (Gap 92).
+        if (card.DailyFloorHours is { } floor) DailyFloorHoursText = floor.ToString(CultureInfo.CurrentCulture);
         AllowCancellation = card.AllowCancellation;
         IsWorkHoursEnabled = card.WorkHoursStart.HasValue;
         if (card.WorkHoursStart is { } start) WorkHoursStart = FieldTime(start);

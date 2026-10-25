@@ -79,14 +79,9 @@ public class ViewModelRuleTests
 
     private static readonly string[] ValueFormattingExceptions =
     [
-        // All → Gap 89 (ViewModel audit): values should reach the View raw and be formatted by a converter.
-        "NenFocus/ViewModels/Planner/PlannerPageViewModel.cs has 7",
-        "NenFocus/ViewModels/Presets/ContractPresetPageViewModel.cs has 3",
-        "NenFocus/ViewModels/Planner/DayFloorPreviewViewModel.cs has 6",
-        "NenFocus/ViewModels/Planner/ContractWizard/ContractWizardViewModel.cs has 3",
-        "NenFocus/ViewModels/Recaps/PostContractViewModel.cs has 2",
-        "NenFocus/ViewModels/Planner/ContractWizard/ContractRulesStepViewModel.cs has 2",
-        "NenFocus/ViewModels/Planner/HourLabelViewModel.cs has 1",
+        // ValidateDraftPlacement's two messages quoting the contract's dates and Work Hours — Gap 68
+        // replaces it with the draft calendar's own answer. Everything else reaches the View raw (Gap 89 Slice B).
+        "NenFocus/ViewModels/Planner/PlannerPageViewModel.cs has 2",
     ];
 
     /// <summary>A ViewModel exposes the raw value; a converter turns it into text (MODULE_STANDARDS → No String

@@ -277,7 +277,7 @@ These converters are approved. Reuse before creating new ones. **This list must 
 | `TimeSpanToStringConverter` | `TimeSpanConverter` | `TimeSpan` → `string` | Optional format string, default `hh\:mm\:ss`. Automatically escapes unescaped `:` in the format string before falling back to the default — never throws in a binding. |
 | `DurationToStringConverter` | _(inline)_ | `TimeSpan` → `string` | None. Produces human-readable "Xh Ym" (e.g. "2h 30m"), "Xm" (e.g. "45m"), or — under a minute — "Ns" (e.g. "45s", never a bare "0m") for display in the post-session summary. Use instead of `TimeSpanToStringConverter` when the compact human-readable form is needed rather than a clock format. |
 | `TimeSpanToHumanReadableConverter` | `Instance` | `TimeSpan` → `string` | None. Spells out a duration in words ("5 minutes", "1 hour", "1h 30m") for prose contexts — e.g. the Ritual's late-to-block notice — where `DurationToStringConverter`'s compact "5m" form reads fine in a stat chip but not mid-sentence. |
-| `DateTimeToStringConverter` | `DateTimeConverter` | `DateTime` → `string` | Optional format string, default `h:mm tt`. |
+| `DateTimeToStringConverter` | `DateTimeConverter` | `DateTime` or `DateOnly` → `string` | Optional format string, default `h:mm tt` (e.g. `MMM d` for a calendar day). |
 | `DateTimeToUpperStringConverter` | `DateTimeUpperConverter` | `DateTime` → uppercase `string` | Optional format string, default `ddd`. Result is `.ToUpperInvariant()`. Use for day-name headers. |
 | `BoolToDotFillConverter` | _(inline)_ | `bool` → brush | — |
 | `BoolToOpacityConverter` | _(inline)_ | `bool` → opacity | — |
@@ -299,14 +299,19 @@ These converters are approved. Reuse before creating new ones. **This list must 
 | `FocusBlockOutcomeToBrushConverter` | `Instance` | `FocusBlockOutcome` → brush | None. Missed red, late/early amber, on time green, else neutral grey — mirrors the Planner tile colours (`UI_UX_STANDARDS.md`). |
 | `EnumEqualConverter` | `Instance` | any enum (nullable) → `bool` | Enum member name. `true` when `value.ToString()` equals it — one converter for every enum-driven visibility. |
 | `DayFloorStatusHasBonusConverter` | `Instance` | `DayFloorPreviewViewModel?` → `bool` | None. Whether the Bonus pill shows; bound to the whole status so a null (no contract) is `false`, same null-safety as `DayFloorStatusToBrushConverter`. |
-| `DailyFloorToLabelConverter` | `Instance` | `double?` (hours) → `string` | None. "1.5h / day", or "Derived from scheduled blocks" when null. Also `FormatFloor(hours)`. |
-| `HoursToStringConverter` | `Instance` | `double` (hours) → `string` | None. "2.5h" — one decimal-hours figure (day badges, bonus pill). Also `FormatHours(hours)`. |
+| `DailyFloorToLabelConverter` | `Instance` | `double?` (hours) → `string` | None. "1.5h / day", or "Derived from scheduled blocks" when null. |
+| `HoursToStringConverter` | `Instance` | `double` (hours) → `string` | None. "2.5h" — one decimal-hours figure (day badges, bonus pill). Also `FormatHours(hours)`, for converters that word a sentence. |
+| `DayFloorStatusToLabelConverter` | `Instance` | `DayFloorPreviewViewModel?` → `string` | None. A day badge's text: "Rest", "2.5h", or "2h / 3h" when the comparison is the point; which numbers is the status's own (`ShowSimplifiedFuture`, `IsContractFloorMode`). Null → empty (Gap 89 Slice B). |
+| `DayFloorStatusToBonusLabelConverter` | `Instance` | `DayFloorPreviewViewModel?` → `string` | None. The Bonus pill's "+1.5h bonus"; null → empty (Gap 89 Slice B). |
+| `ContractRangeToBannerConverter` | `Instance` | `NenContractRangeViewDto?` → `string` | None. The Planner's contract banner: "Contract: Name — Day 2/7 — 3.5h / 10h completed — 1h 30m deficit — 45 min bonus", deficit and bonus only when above zero (Gap 89 Slice B). |
+| `DateRangeToLabelConverter` | `Instance` | `DateOnly`, `DateOnly` → `string` (`MultiBinding`) | None. "Jan 1, 2026 – Jan 31, 2026". `FormatRangeShort` stays only for `ValidateDraftPlacement` (→ Gap 68). |
+| `WorkHoursRangeToLabelConverter` | `Instance` | `TimeOnly?`, `TimeOnly?` → `string` (`MultiBinding`) | None. "09:00 – 17:00", "No constraint" when either is missing. `FormatKnownWindow12Hour` stays only for `ValidateDraftPlacement` (→ Gap 68). |
 | `MinutesToStringConverter` | `Instance` | `WholeMinutes`/`double`/`int` (minutes) → `string` | None. "1h 30m" / "1h" / "30 min" — never a pointless "0m". Also `FormatMinutes(minutes)`. |
 | `DurationLabelConverter` | `DurationLabelConverter` | `TimeSpan` → `string` | None. Parenthesized End-dropdown suffix: "(30 mins)", "(1 hr)", "(1.5 hrs)". A sibling of `DurationToStringConverter`, not a change to it (that one is shared with Post-Session). |
 | `TimeOfDayToStringConverter` | `Instance` | `TimeSpan?` ↔ `string` (two-way) | None. "10:30", "24:00" for the end of the day; back: a time, or null for anything that isn't one (no day part — "93" is not 93 days). The one place time-of-day text is made or read (Gap 89 Slice B); `Format`/`TryParse` serve the `TimeOfDayBox` control. |
-| `PercentageToLabelConverter` | `Instance` | `double?` (fraction) → `string` | None. "50%" / "133%" (uncapped), "Rest" when null. Also `FormatPercentage(fraction)`. |
+| `PercentageToLabelConverter` | `Instance` | `double?` (fraction) → `string` | None. "50%" / "133%" (uncapped), "Rest" when null. |
 
-**Static `Format…` entry points** (`FormatFloor`, `FormatHours`, `FormatMinutes`, `FormatPercentage`) let a ViewModel weave the same text into a composed string. Calling them from a ViewModel is still "No String Formatting" — the Gap 89 ViewModel audit decides what replaces it, together with the three static formatters that are named like converters but aren't (`DateRangeToLabelConverter`, `DateTimeRangeToLabelConverter`, `WorkHoursRangeToLabelConverter`).
+**Static `Format…` helpers** (`HoursToStringConverter.FormatHours`, `MinutesToStringConverter.FormatMinutes`) are for converters that word a whole sentence (`ContractRangeToBannerConverter`, the day-badge converters) — no ViewModel calls one (`NoViewModelFormatsValues`, whose one entry is `ValidateDraftPlacement` → Gap 68). A start-and-end value is a two-input converter in a `MultiBinding` (`DateRangeToLabelConverter`, `WorkHoursRangeToLabelConverter`), not a static helper a ViewModel calls (Gap 89 Slice B; `NamingRuleTests` counts `IMultiValueConverter` as a converter).
 
 ---
 

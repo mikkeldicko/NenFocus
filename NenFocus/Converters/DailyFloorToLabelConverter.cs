@@ -14,9 +14,7 @@ public sealed class DailyFloorToLabelConverter : IValueConverter
     public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
         => FormatFloor(value as double?);
 
-    /// <summary>Plain static entry point for a ViewModel string property that needs to weave
-    /// this into a larger composed value — same idiom as MinutesToStringConverter.FormatMinutes.</summary>
-    public static string FormatFloor(double? hours)
+    private static string FormatFloor(double? hours)
         => hours is { } floor ? $"{floor:0.##}h / day" : "Derived from scheduled blocks";
 
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)

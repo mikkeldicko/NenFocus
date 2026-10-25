@@ -106,8 +106,15 @@
                                                            FontSize="11" FontWeight="SemiBold" Foreground="#1A1A2E"/>
 											</Border>
 										</StackPanel>
-										<TextBlock Text="{Binding FloorLabel}" FontSize="12" Foreground="#AAAABC"/>
-										<TextBlock Text="{Binding WorkHoursLabel}" FontSize="12" Foreground="#AAAABC"/>
+										<TextBlock Text="{Binding DailyFloorHours, Converter={x:Static conv:DailyFloorToLabelConverter.Instance}}" FontSize="12" Foreground="#AAAABC"/>
+										<TextBlock FontSize="12" Foreground="#AAAABC">
+											<TextBlock.Text>
+												<MultiBinding Converter="{x:Static conv:WorkHoursRangeToLabelConverter.Instance}">
+													<Binding Path="WorkHoursStart"/>
+													<Binding Path="WorkHoursEnd"/>
+												</MultiBinding>
+											</TextBlock.Text>
+										</TextBlock>
 										<TextBlock Text="{Binding CancellationLabel}" FontSize="12" Foreground="#AAAABC"/>
 										<TextBlock Text="{Binding RedemptionPlacementLabel}" FontSize="12" Foreground="#AAAABC"/>
 										<TextBlock Text="{Binding BreakBlockingLabel}" FontSize="12" Foreground="#AAAABC"/>

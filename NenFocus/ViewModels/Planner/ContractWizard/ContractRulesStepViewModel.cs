@@ -85,21 +85,14 @@ public partial class ContractRulesStepViewModel : ViewModelBase
 
     partial void OnSelectedPresetChanged(ContractPresetDto? value)
     {
-        OnPropertyChanged(nameof(SelectedPresetFloorLabel));
-        OnPropertyChanged(nameof(SelectedPresetWorkHoursLabel));
         OnPropertyChanged(nameof(SelectedPresetCancellationLabel));
         OnPropertyChanged(nameof(SelectedPresetRedemptionPlacementLabel));
         OnPropertyChanged(nameof(SelectedPresetBreakBlockingLabel));
         OnPropertyChanged(nameof(SelectedPresetBonusBlocksLabel));
     }
 
-    // Read-only confirmation text for the picked preset — shares its formatters with
-    // ContractWizardViewModel's own Review-step summary strings, so the two can't drift apart.
-    public string SelectedPresetFloorLabel => DailyFloorToLabelConverter.FormatFloor(SelectedPreset?.DailyFloorHours);
-
-    public string SelectedPresetWorkHoursLabel =>
-        WorkHoursRangeToLabelConverter.FormatRange(SelectedPreset?.WorkHoursStart, SelectedPreset?.WorkHoursEnd);
-
+    // Read-only confirmation text for the picked preset. Its floor and Work Hours are worded by the
+    // View with the converters the Review step uses too, so the two can't drift apart (Gap 89 Slice B).
     public string SelectedPresetCancellationLabel =>
         (SelectedPreset?.AllowCancellation ?? false) ? "Cancellation allowed" : "No cancellation";
 
