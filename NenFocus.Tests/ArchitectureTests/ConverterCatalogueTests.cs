@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 using Avalonia.Data.Converters;
-using NenFocus.ViewModels;
+using NenFocus.ViewModels.Shell;
 
 namespace NenFocus.Tests.ArchitectureTests;
 

@@ -62,7 +62,7 @@ For the *rules* on what ViewModels are forbidden from doing, see `MODULE_STANDAR
 
 ## ViewLocator Convention
 
-`XyzViewModel` resolves to `NenFocus.Views.XyzView`. The `ViewLocator` strips the `ViewModel` suffix and adds `View`, then looks up the type in `NenFocus.Views`.
+Views mirror ViewModels folder for folder, one folder per app area (Gap 89 Slice B): `NenFocus.ViewModels.<Area>.XyzViewModel` resolves to `NenFocus.Views.<Area>.XyzView` — the `ViewLocator` swaps `ViewModels` for `Views` in the namespace and the `ViewModel` suffix for `View` (`ViewLocator.ViewNameFor`). Areas: `Shell`, `Main`, `Ritual`, `Planner` (with `Planner/ContractWizard`), `Presets`, `Recaps`, `Insights`, `Settings`, `DevTools`. A new area is a new folder on both sides; nothing sits loose in `ViewModels/` (only `ViewModelBase`) or `Views/`. `Views/Controls/` holds shared parts used by many screens (`TimeOfDayBox`) — they have no ViewModel. Guarded by `ViewLocationRuleTests`.
 
 Naming rules:
 - ViewModel class: `<Page>ViewModel` — e.g. `MainPageViewModel`, `HatsuPageViewModel`
@@ -133,7 +133,7 @@ ViewModels expose raw values and Views format them with converters — the rule 
 |-------|----------|------|
 | UI | `PlannerPageView.axaml.cs` | All drag state machine, ghost lifecycle, pointer routing |
 | UI | `PlannerPageViewModel` | `OpenNewBlockFormWithRangeCommand`, `MoveOrResizeBlockCommand`, `IsTileFullyLocked`, `DragError`, `EditingAllowances` and what reads it (`CanRescheduleBlock`, `CanChangePreset`, `CanSaveBlock`, `CanSplitBlock`, `CanDeleteFromForm`) |
-| UI | `PlannerDragMath` (`ViewModels/Components/`) | Pure static pixel-geometry helper: `YToSnappedTime`, `DeltaYToSnappedMinutes`, `ClampRange`, `ClampMoveStart`, `ClampResizeTopStart`, `ClampResizeBottomEnd`. No placement rules — overlap is `BlockPlacementChecker`'s (Gap 88 phase 8) |
+| UI | `PlannerDragMath` (`ViewModels/Planner/`) | Pure static pixel-geometry helper: `YToSnappedTime`, `DeltaYToSnappedMinutes`, `ClampRange`, `ClampMoveStart`, `ClampResizeTopStart`, `ClampResizeBottomEnd`. No placement rules — overlap is `BlockPlacementChecker`'s (Gap 88 phase 8) |
 | UI | `DragCreatedRange` | Record struct passed from code-behind → ViewModel on drag-create completion |
 | UI | `DragMoveResult` | Record struct passed from code-behind → ViewModel on drag-move/resize completion |
 | Application | Create/Update validators → `GetBlockPlacementVerdictQuery` → `BlockPlacementChecker` | Decide whether a drop or form save is allowed (past, contract hours, Focus time taken by a block or running session); the refusal text lands in `DragError`/`FormError` (Gap 88) |

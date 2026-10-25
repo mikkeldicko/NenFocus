@@ -7,6 +7,7 @@ using NenFocus.Domain.Events;
 using NenFocus.Domain.Services;
 using NenFocus.Infrastructure.Services;
 using NenFocus.ViewModels;
+using NenFocus.ViewModels.Shell;
 
 namespace NenFocus.Tests.ArchitectureTests;
 

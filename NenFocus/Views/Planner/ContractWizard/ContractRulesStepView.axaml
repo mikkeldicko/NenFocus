@@ -1,0 +1,148 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:NenFocus.ViewModels.Planner.ContractWizard"
+             xmlns:dto="using:NenFocus.Application.DTOs"
+             xmlns:conv="using:NenFocus.Converters"
+             x:DataType="vm:ContractRulesStepViewModel"
+             x:Class="NenFocus.Views.Planner.ContractWizard.ContractRulesStepView"
+             Background="Transparent">
+
+    <UserControl.Styles>
+        <Style Selector="Button.simpleCard">
+            <Setter Property="Background" Value="#F8F8FB"/>
+            <Setter Property="BorderBrush" Value="#DDDDE8"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="14"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+        <Style Selector="Button.simpleCard.active">
+            <Setter Property="Background" Value="#FFF8E5"/>
+            <Setter Property="BorderBrush" Value="#B8922A"/>
+        </Style>
+        <Style Selector="ToggleButton.restDayChip">
+            <Setter Property="Background" Value="#F0F0F8"/>
+            <Setter Property="Foreground" Value="#1A1A2E"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+        <Style Selector="ToggleButton.restDayChip:checked /template/ ContentPresenter">
+            <Setter Property="Background" Value="#B8922A"/>
+        </Style>
+        <Style Selector="ToggleButton.restDayChip:checked">
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+    </UserControl.Styles>
+
+    <ScrollViewer MaxHeight="440" Margin="0,8,0,0">
+        <StackPanel Spacing="16">
+            <StackPanel Spacing="2">
+                <TextBlock Text="Set the rules" FontSize="18" FontWeight="SemiBold" Foreground="#1A1A2E"/>
+                <TextBlock Text="These govern how much this contract's schedule can change once sealed." FontSize="12" Foreground="#7A7A8C"/>
+            </StackPanel>
+
+            <!-- ── Simple ─────────────────────────────────────────────────── -->
+            <ItemsControl ItemsSource="{Binding SimpleOptions}" IsVisible="{Binding !IsAdvanced}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Spacing="10"/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="vm:SimpleContractOptionViewModel">
+                        <Button Classes="simpleCard"
+                                Classes.active="{Binding IsSelected}"
+                                Command="{Binding $parent[UserControl].((vm:ContractRulesStepViewModel)DataContext).SelectSimpleOptionCommand}"
+                                CommandParameter="{Binding}">
+                            <StackPanel Spacing="2">
+                                <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" Foreground="#1A1A2E"/>
+                                <TextBlock Text="{Binding MentalModel}" FontSize="11" Foreground="#7A7A8C" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Button>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <!-- ── Preset pick (formerly Advanced) ───────────────────────────── -->
+            <StackPanel Spacing="14" IsVisible="{Binding IsAdvanced}">
+
+                <StackPanel Spacing="4" IsVisible="{Binding !HasNoSavedPresets}">
+                    <TextBlock Text="Contract Preset" FontSize="12" Foreground="#7A7A8C"/>
+                    <ComboBox ItemsSource="{Binding SavedPresets}"
+                              SelectedItem="{Binding SelectedPreset}"
+                              HorizontalAlignment="Stretch"
+                              PlaceholderText="Choose a preset">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate DataType="dto:ContractPresetDto">
+                                <TextBlock Text="{Binding Name}"/>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                </StackPanel>
+
+                <TextBlock Text="You don't have any Contract Presets yet. Create one on the Presets page, then come back here to pick it."
+                           IsVisible="{Binding HasNoSavedPresets}"
+                           FontSize="12" Foreground="#7A7A8C" TextWrapping="Wrap"/>
+
+                <!-- Read-only confirmation — a picked preset's rules apply exactly as saved. -->
+                <Border Background="#F8F8FB" CornerRadius="8" Padding="12,10"
+                        IsVisible="{Binding SelectedPreset, Converter={x:Static ObjectConverters.IsNotNull}}">
+                    <StackPanel Spacing="6">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock Text="Strictness:" FontSize="12" Foreground="#7A7A8C"/>
+                            <TextBlock Text="{Binding SelectedPreset.StrictnessRule, Converter={x:Static conv:StrictnessRuleToLabelConverter.Instance}}" FontSize="12" FontWeight="Medium" Foreground="#1A1A2E"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock Text="Daily floor:" FontSize="12" Foreground="#7A7A8C"/>
+                            <TextBlock Text="{Binding SelectedPresetFloorLabel}" FontSize="12" FontWeight="Medium" Foreground="#1A1A2E"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock Text="Work hours:" FontSize="12" Foreground="#7A7A8C"/>
+                            <TextBlock Text="{Binding SelectedPresetWorkHoursLabel}" FontSize="12" FontWeight="Medium" Foreground="#1A1A2E"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock Text="{Binding SelectedPresetCancellationLabel}" FontSize="12" FontWeight="Medium" Foreground="#1A1A2E"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock Text="{Binding SelectedPresetRedemptionPlacementLabel}" FontSize="12" FontWeight="Medium" Foreground="#1A1A2E"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock Text="{Binding SelectedPresetBreakBlockingLabel}" FontSize="12" FontWeight="Medium" Foreground="#1A1A2E"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock Text="{Binding SelectedPresetBonusBlocksLabel}" FontSize="12" FontWeight="Medium" Foreground="#1A1A2E"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <StackPanel Spacing="6">
+                    <TextBlock Text="Rest days" FontSize="12" Foreground="#7A7A8C"/>
+                    <ItemsControl ItemsSource="{Binding RestDayChips}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="vm:RestDayChipViewModel">
+                                <ToggleButton Classes="restDayChip" IsChecked="{Binding IsRestDay}" Content="{Binding Date, StringFormat='MMM d'}" Margin="0,0,6,6"/>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </StackPanel>
+
+            <TextBlock Text="{Binding Error}"
+                       IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                       FontSize="12" Foreground="#C03A2B" TextWrapping="Wrap"/>
+
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <Button Grid.Column="2" Classes="primary" Content="Continue" Command="{Binding ContinueCommand}"/>
+            </Grid>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

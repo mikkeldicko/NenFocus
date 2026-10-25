@@ -7,9 +7,9 @@ using NenFocus.Application.Interfaces;
 using NenFocus.Application.UseCases.Sessions.AcknowledgePostSession;
 using NenFocus.Application.UseCases.Sessions.SaveReflection;
 using NenFocus.Domain.Enums;
-using NenFocus.ViewModels.Pages;
-using NenFocus.Views;
 using NSubstitute;
+using NenFocus.ViewModels.Recaps;
+using NenFocus.Views.Recaps;
 using static NenFocus.Tests.Headless.HeadlessTestKit;
 
 namespace NenFocus.Tests.Headless;

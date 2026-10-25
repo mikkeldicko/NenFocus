@@ -5,12 +5,12 @@ using Avalonia.Markup.Xaml;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NenFocus.Application.Interfaces;
-using NenFocus.ViewModels;
-using NenFocus.Views;
 using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using NenFocus.ViewModels.Shell;
+using NenFocus.Views.Shell;
 
 namespace NenFocus;
 

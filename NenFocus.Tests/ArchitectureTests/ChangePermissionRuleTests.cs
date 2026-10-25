@@ -30,7 +30,7 @@ public class ChangePermissionRuleTests
 
         // The wizard's Review step holds a second copy of those three names → Gap 100 (one home
         // for user-facing text).
-        "NenFocus/ViewModels/Contracts/ContractWizardViewModel.cs has 3",
+        "NenFocus/ViewModels/Planner/ContractWizard/ContractWizardViewModel.cs has 3",
     ];
 
     [Fact]

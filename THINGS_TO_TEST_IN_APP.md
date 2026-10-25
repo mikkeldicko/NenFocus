@@ -19,6 +19,7 @@ go. When a gap closes, its passed checks are removed from this file; the gap's e
 - [ ] **A wrong time shows red only after leaving.** Type `abc` in Start, Tab away: red border, Create Block says "Invalid time format. Use HH:mm."; click back in: the red goes.
 - [ ] **Split's four fields work the same way.** Open Split on a bound block: the four fields prefill, End rows show lengths, changing a piece's Start keeps its length.
 - [ ] **Contract Presets' Work Hours fields.** New preset with Work Hours 18:00–24:00 saves; reopening it shows 24:00 (it used to show 23:59).
+- [ ] **Every screen still opens (new folder layout).** Click through Main, Planner, Presets (both tabs), Insights, Settings; run a Ritual to its end (Post-Session shows); open the Nen Contract wizard; open the debug clock. None shows "Not Found: …".
 - [ ] **Draft tiles still show while drafting a contract.** Make a contract, place two blocks while drafting (one Focus, one Background): both tiles appear in the draft style with their preset names, can be dragged and edited, and Seal saves them. (Draft tiles are no longer built as fake block DTOs; no automated test reaches drafting.)
 
 ## Gap 112 — Infrastructure holds no rules (run as administrator)

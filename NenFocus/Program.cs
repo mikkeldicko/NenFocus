@@ -4,10 +4,10 @@ using Microsoft.Extensions.Hosting;
 using NenFocus.Application.Interfaces;
 using NenFocus.Infrastructure;
 using NenFocus.Infrastructure.Services;
-using NenFocus.ViewModels;
 using System;
 using System.IO;
 using System.Threading.Tasks;
+using NenFocus.ViewModels.Shell;
 
 namespace NenFocus;
 

@@ -1,7 +1,7 @@
 using System.Text.RegularExpressions;
 using NenFocus.Application.Interfaces;
 using NenFocus.Infrastructure.Services;
-using NenFocus.ViewModels;
+using NenFocus.ViewModels.Shell;
 
 namespace NenFocus.Tests.ArchitectureTests;
 

@@ -12,8 +12,10 @@ using NenFocus.Domain.ValueObjects;
 using NenFocus.Infrastructure;
 using NenFocus.Infrastructure.Persistence;
 using NenFocus.Infrastructure.Services;
-using NenFocus.ViewModels;
 using NSubstitute;
+using NenFocus.ViewModels.Main;
+using NenFocus.ViewModels.Recaps;
+using NenFocus.ViewModels.Shell;
 using static NenFocus.Tests.Headless.HeadlessTestKit;
 
 namespace NenFocus.Tests.Headless;
@@ -233,7 +235,7 @@ public class ShellHeartbeatIntegrationTests : IAsyncDisposable
         var shell = await CreateShellAsync();
         var shown = ScreensShown(shell);
         await StartSpontaneousSessionAsync(presetId, minutes: 30);
-        var main = (NenFocus.ViewModels.Pages.MainPageViewModel)shell.NavItems[0].PageViewModel;
+        var main = (MainPageViewModel)shell.NavItems[0].PageViewModel;
 
         _clock.SetNow(Now.AddMinutes(10));
         await main.EndSessionCommand.ExecuteAsync(null);

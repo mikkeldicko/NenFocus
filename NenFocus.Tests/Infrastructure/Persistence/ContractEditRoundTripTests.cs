@@ -7,8 +7,8 @@ using NenFocus.Domain.Enums;
 using NenFocus.Domain.ValueObjects;
 using NenFocus.Domain.Services;
 using NenFocus.Infrastructure.Persistence.Repositories;
-using NenFocus.ViewModels.Contracts;
 using NSubstitute;
+using NenFocus.ViewModels.Planner.ContractWizard;
 
 namespace NenFocus.Tests.Infrastructure.Persistence;
 

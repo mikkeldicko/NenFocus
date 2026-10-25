@@ -9,9 +9,9 @@ using NenFocus.Application.UseCases.Planner.SplitPlannedBlock;
 using NenFocus.Application.UseCases.Planner.UpdatePlannedBlock;
 using NenFocus.Domain.Enums;
 using NenFocus.Domain.ValueObjects;
-using NenFocus.ViewModels.Pages;
-using NenFocus.Views;
 using NSubstitute;
+using NenFocus.ViewModels.Planner;
+using NenFocus.Views.Planner;
 using static NenFocus.Tests.Headless.HeadlessTestKit;
 
 namespace NenFocus.Tests.Headless;

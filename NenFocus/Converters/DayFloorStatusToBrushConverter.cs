@@ -3,7 +3,7 @@ using System.Globalization;
 using Avalonia.Data.Converters;
 using Avalonia.Media;
 using NenFocus.Domain.Enums;
-using NenFocus.ViewModels.Components;
+using NenFocus.ViewModels.Planner;
 
 namespace NenFocus.Converters;
 

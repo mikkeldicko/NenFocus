@@ -5,8 +5,10 @@ using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.GetFocusBlockRitualContext;
 using NenFocus.Domain.Enums;
 using NenFocus.Domain.ValueObjects;
-using NenFocus.ViewModels;
 using NSubstitute;
+using NenFocus.ViewModels.Main;
+using NenFocus.ViewModels.Recaps;
+using NenFocus.ViewModels.Shell;
 using static NenFocus.Tests.Headless.HeadlessTestKit;
 
 namespace NenFocus.Tests.Headless;
@@ -85,7 +87,7 @@ public class ShellRitualPromptTests
         var shell = CreateShell();
 
         shell.IsRitualActive.Should().BeFalse();
-        var main = (NenFocus.ViewModels.Pages.MainPageViewModel)shell.CurrentPage;
+        var main = (MainPageViewModel)shell.CurrentPage;
         main.HasActiveSession.Should().BeTrue();
         main.SessionGoal.Should().Be("Thesis");
     }

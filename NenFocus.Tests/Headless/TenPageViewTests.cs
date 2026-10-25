@@ -3,7 +3,7 @@ using Avalonia.Headless.XUnit;
 using Avalonia.LogicalTree;
 using FluentAssertions;
 using NenFocus.ViewModels.Ritual;
-using NenFocus.Views;
+using NenFocus.Views.Ritual;
 
 namespace NenFocus.Tests.Headless;
 

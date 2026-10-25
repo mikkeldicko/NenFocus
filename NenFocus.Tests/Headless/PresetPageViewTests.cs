@@ -7,9 +7,9 @@ using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.GetAllBlockPresets;
 using NenFocus.Application.Queries.GetAllContractPresets;
 using NenFocus.Domain.Enums;
-using NenFocus.ViewModels.Pages;
-using NenFocus.Views;
 using NSubstitute;
+using NenFocus.ViewModels.Presets;
+using NenFocus.Views.Presets;
 using static NenFocus.Tests.Headless.HeadlessTestKit;
 
 namespace NenFocus.Tests.Headless;

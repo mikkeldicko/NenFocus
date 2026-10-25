@@ -1,0 +1,109 @@
+﻿<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:NenFocus.ViewModels.Ritual"
+             xmlns:conv="using:NenFocus.Converters"
+             x:DataType="vm:RitualShellViewModel"
+             x:Class="NenFocus.Views.Ritual.RitualShellView"
+             Background="#FAFAF8">
+
+    <UserControl.Resources>
+        <conv:DateTimeToStringConverter x:Key="DateTimeConverter"/>
+    </UserControl.Resources>
+
+    <UserControl.Styles>
+        <Style Selector="Button.back-btn">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Padding" Value="4"/>
+        </Style>
+        <Style Selector="Button.back-btn /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="Button.back-btn:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+    </UserControl.Styles>
+
+    <Grid RowDefinitions="56,*">
+
+        <!-- ── Top bar ──────────────────────────────────────────────── -->
+        <Grid Grid.Row="0"
+              ColumnDefinitions="120,*,120"
+              Margin="28,0">
+
+            <!-- Back -->
+            <Button Grid.Column="0"
+                    Classes="back-btn"
+                    IsVisible="{Binding IsBackVisible}"
+                    VerticalAlignment="Center"
+                    Command="{Binding GoBackCommand}">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBlock Text="←" FontSize="15" Foreground="#AAAABC" VerticalAlignment="Center"/>
+                    <TextBlock Text="Back" FontSize="13" Foreground="#AAAABC" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+
+            <!-- Step dots -->
+            <StackPanel Grid.Column="1"
+                        Orientation="Horizontal"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Spacing="10">
+                <Ellipse Width="7" Height="7"
+                         Fill="{Binding IsDot0Active, Converter={x:Static conv:BoolToDotFillConverter.Instance}}"/>
+                <Ellipse Width="7" Height="7"
+                         Fill="{Binding IsDot1Active, Converter={x:Static conv:BoolToDotFillConverter.Instance}}"/>
+                <Ellipse Width="7" Height="7"
+                         Fill="{Binding IsDot2Active, Converter={x:Static conv:BoolToDotFillConverter.Instance}}"/>
+                <Ellipse Width="7" Height="7"
+                         Fill="{Binding IsDot3Active, Converter={x:Static conv:BoolToDotFillConverter.Instance}}"/>
+            </StackPanel>
+
+        </Grid>
+
+        <!-- ── Step content with crossfade ──────────────────────────── -->
+        <TransitioningContentControl Grid.Row="1"
+                                      Content="{Binding CurrentStep}">
+            <TransitioningContentControl.PageTransition>
+                <CrossFade Duration="0:0:0.45"/>
+            </TransitioningContentControl.PageTransition>
+        </TransitioningContentControl>
+
+        <!-- ── Late-to-block modal — spans both rows, rendered last so it overlays ──
+             the top bar and step content alike; the user must dismiss it before
+             touching Back or any step. Content behind stays visible but non-interactive
+             since this Panel captures all pointer input across its full bounds. ── -->
+        <Panel Grid.Row="0" Grid.RowSpan="2" IsVisible="{Binding IsLateToBlock}">
+            <Border Background="#80000000"/>
+            <Border Background="#FFFFFF"
+                    CornerRadius="8"
+                    Padding="24"
+                    MaxWidth="450"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    BoxShadow="0 4 12 #40000000">
+                <StackPanel Spacing="16">
+                    <TextBlock Text="Scheduled Block Active"
+                               FontSize="16" FontWeight="SemiBold"
+                               Foreground="#1A1A2E"/>
+                    <TextBlock TextWrapping="Wrap" Foreground="#888899">
+                        <Run Text="You have a scheduled focus block ("/>
+                        <Run Text="{Binding LateBlockStart, Converter={StaticResource DateTimeConverter}, Mode=OneWay}"/>
+                        <Run Text=" – "/>
+                        <Run Text="{Binding LateBlockEnd, Converter={StaticResource DateTimeConverter}, Mode=OneWay}"/>
+                        <Run Text=") that started "/>
+                        <Run Text="{Binding LateBy, Converter={x:Static conv:TimeSpanToHumanReadableConverter.Instance}, Mode=OneWay}"/>
+                        <Run Text=" ago. Complete the ritual to begin your session."/>
+                    </TextBlock>
+                    <Button Content="Continue to Ritual"
+                            Command="{Binding DismissLateNoticeCommand}"
+                            HorizontalAlignment="Right"/>
+                </StackPanel>
+            </Border>
+        </Panel>
+
+    </Grid>
+</UserControl>
+
+

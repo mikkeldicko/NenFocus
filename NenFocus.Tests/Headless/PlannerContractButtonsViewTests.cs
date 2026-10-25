@@ -8,9 +8,9 @@ using NenFocus.Application.Queries.CheckNenContractCancellable;
 using NenFocus.Application.Queries.GetInEffectNenContracts;
 using NenFocus.Application.Queries.GetNenContractCompletionReadiness;
 using NenFocus.Domain.Enums;
-using NenFocus.ViewModels.Pages;
-using NenFocus.Views;
 using NSubstitute;
+using NenFocus.ViewModels.Planner;
+using NenFocus.Views.Planner;
 using static NenFocus.Tests.Headless.HeadlessTestKit;
 
 namespace NenFocus.Tests.Headless;

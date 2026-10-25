@@ -2,7 +2,7 @@ using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using NenFocus.Infrastructure;
 using NenFocus.Infrastructure.Persistence;
-using NenFocus.ViewModels;
+using NenFocus.ViewModels.Shell;
 
 namespace NenFocus.Tests.Infrastructure;
 

@@ -11,11 +11,10 @@ using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.GetAllBlockPresets;
 using NenFocus.Application.UseCases.Planner.CreatePlannedBlock;
 using NenFocus.Domain.Enums;
-using NenFocus.ViewModels.Components;
-using NenFocus.ViewModels.Pages;
-using NenFocus.Views;
 using NenFocus.Views.Controls;
 using NSubstitute;
+using NenFocus.ViewModels.Planner;
+using NenFocus.Views.Planner;
 using static NenFocus.Tests.Headless.HeadlessTestKit;
 
 namespace NenFocus.Tests.Headless;

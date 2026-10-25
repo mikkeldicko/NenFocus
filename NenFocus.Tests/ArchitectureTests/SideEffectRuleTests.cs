@@ -1,7 +1,7 @@
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.Services;
 using NenFocus.Infrastructure.Services;
-using NenFocus.ViewModels;
+using NenFocus.ViewModels.Shell;
 
 namespace NenFocus.Tests.ArchitectureTests;
 
@@ -62,7 +62,7 @@ public class SideEffectRuleTests
         // The missed-blocks sweep's batch: live triage needs every missed screen at once. → Gap 107.
         "NenFocus.Infrastructure/Services/HeartbeatService.cs",
         // "Acknowledged" when the screen closes, not after the save. → Gap 107.
-        "NenFocus/ViewModels/ShellViewModel.cs",
+        "NenFocus/ViewModels/Shell/ShellViewModel.cs",
     ];
 
     /// <summary>A screen or recap is relayed only by an event handler, after the commit, so it shows what

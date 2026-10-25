@@ -6,9 +6,9 @@ using NenFocus.Application.Interfaces;
 using NenFocus.Converters;
 using NenFocus.Infrastructure;
 using NenFocus.Infrastructure.Persistence;
-using NenFocus.ViewModels.Pages;
-using NenFocus.Views;
 using NSubstitute;
+using NenFocus.ViewModels.Presets;
+using NenFocus.Views.Presets;
 using static NenFocus.Tests.Headless.HeadlessTestKit;
 
 namespace NenFocus.Tests.Headless;

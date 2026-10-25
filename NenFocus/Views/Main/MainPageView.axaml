@@ -1,0 +1,303 @@
+﻿<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:NenFocus.ViewModels.Main"
+             xmlns:comp="using:NenFocus.ViewModels.Main"
+             xmlns:conv="using:NenFocus.Converters"
+             x:DataType="vm:MainPageViewModel"
+             x:Class="NenFocus.Views.Main.MainPageView"
+             Background="#F5F5F7">
+
+	<UserControl.Resources>
+		<conv:TimeSpanToStringConverter x:Key="TimeSpanConverter"/>
+		<conv:DateTimeToStringConverter x:Key="DateTimeConverter"/>
+	</UserControl.Resources>
+
+	<UserControl.Styles>
+
+		<!-- Activate Nen button -->
+		<Style Selector="Button.use-nen">
+			<Setter Property="Background" Value="#FFFFFF"/>
+			<Setter Property="BorderBrush" Value="#B8922A"/>
+			<Setter Property="BorderThickness" Value="1"/>
+			<Setter Property="CornerRadius" Value="12"/>
+			<Setter Property="HorizontalAlignment" Value="Stretch"/>
+			<Setter Property="HorizontalContentAlignment" Value="Center"/>
+			<Setter Property="Height" Value="82"/>
+			<Setter Property="Cursor" Value="Hand"/>
+		</Style>
+		<Style Selector="Button.use-nen /template/ ContentPresenter">
+			<Setter Property="Background" Value="#FFFFFF"/>
+			<Setter Property="Transitions">
+				<Transitions>
+					<BrushTransition Property="Background" Duration="0:0:0.15"/>
+				</Transitions>
+			</Setter>
+		</Style>
+		<Style Selector="Button.use-nen:pointerover /template/ ContentPresenter">
+			<Setter Property="Background" Value="#FDF6E8"/>
+		</Style>
+
+		<!-- Session action button (subtle outline) -->
+		<Style Selector="Button.session-action">
+			<Setter Property="Background" Value="Transparent"/>
+			<Setter Property="BorderBrush" Value="#E0E0EE"/>
+			<Setter Property="BorderThickness" Value="1"/>
+			<Setter Property="CornerRadius" Value="8"/>
+			<Setter Property="Padding" Value="20,8"/>
+			<Setter Property="Cursor" Value="Hand"/>
+		</Style>
+		<Style Selector="Button.session-action /template/ ContentPresenter">
+			<Setter Property="Background" Value="Transparent"/>
+			<Setter Property="Transitions">
+				<Transitions>
+					<BrushTransition Property="Background" Duration="0:0:0.12"/>
+				</Transitions>
+			</Setter>
+		</Style>
+		<Style Selector="Button.session-action:pointerover /template/ ContentPresenter">
+			<Setter Property="Background" Value="#F5F5FA"/>
+		</Style>
+
+		<!-- Checklist done state -->
+		<Style Selector="TextBlock.done">
+			<Setter Property="TextDecorations" Value="Strikethrough"/>
+			<Setter Property="Foreground" Value="#BBBBCC"/>
+		</Style>
+
+		<!-- Scrollbar hidden -->
+		<Style Selector="ScrollViewer">
+			<Setter Property="HorizontalScrollBarVisibility" Value="Disabled"/>
+		</Style>
+
+	</UserControl.Styles>
+
+	<ScrollViewer>
+		<StackPanel Margin="52,44,52,44" MaxWidth="600" Spacing="36">
+
+			<!-- ── Header ─────────────────────────────────────────── -->
+			<StackPanel Spacing="6">
+				<TextBlock Text="{Binding Greeting}"
+                           FontSize="28"
+                           FontWeight="SemiBold"
+                           Foreground="#1A1A2E"/>
+				<TextBlock Text="{Binding Today, Converter={StaticResource DateTimeConverter}, ConverterParameter='dddd, MMMM d'}"
+                           FontSize="13"
+                           Foreground="#AAAABC"/>
+			</StackPanel>
+
+			<!-- ── Activate Nen button (idle state) ───────────────────── -->
+			<Button Classes="use-nen"
+                    IsVisible="{Binding !HasActiveSession}"
+                    Command="{Binding StartRitualCommand}">
+				<StackPanel Orientation="Horizontal" Spacing="16">
+					<TextBlock Text="✦"
+                               FontSize="17"
+                               Foreground="#B8922A"
+                               VerticalAlignment="Center"/>
+					<TextBlock Text="ACTIVATE NEN"
+                               FontSize="15"
+                               FontWeight="Bold"
+                               Foreground="#B8922A"
+                               LetterSpacing="5"
+                               VerticalAlignment="Center"/>
+				</StackPanel>
+			</Button>
+
+			<!-- ── Active Session Panel ──────────────────────────── -->
+			<Border IsVisible="{Binding HasActiveSession}"
+                    Background="#FFFFFF"
+                    CornerRadius="14"
+                    BorderBrush="#E8E8F0"
+                    BorderThickness="1"
+                    Padding="32,30">
+				<StackPanel Spacing="20">
+
+					<!-- Status chip: SESSION ACTIVE -->
+					<StackPanel Orientation="Horizontal"
+                                HorizontalAlignment="Center"
+                                Spacing="8"
+                                IsVisible="{Binding !IsOnBreak}">
+						<Ellipse Width="6" Height="6"
+                                 Fill="#3A9E6A"
+                                 VerticalAlignment="Center"/>
+						<TextBlock Text="SESSION ACTIVE"
+                                   FontSize="9"
+                                   FontWeight="Medium"
+                                   Foreground="#3A9E6A"
+                                   LetterSpacing="3"/>
+					</StackPanel>
+
+					<!-- Status chip: ON BREAK -->
+					<StackPanel Orientation="Horizontal"
+                                HorizontalAlignment="Center"
+                                Spacing="8"
+                                IsVisible="{Binding IsOnBreak}">
+						<Ellipse Width="6" Height="6"
+                                 Fill="#B8922A"
+                                 VerticalAlignment="Center"/>
+						<TextBlock Text="ON BREAK"
+                                   FontSize="9"
+                                   FontWeight="Medium"
+                                   Foreground="#B8922A"
+                                   LetterSpacing="3"/>
+					</StackPanel>
+
+					<!-- Countdown timer (session) -->
+					<TextBlock Text="{Binding SessionTimeRemaining, Converter={StaticResource TimeSpanConverter}}"
+                               FontSize="52"
+                               FontWeight="Thin"
+                               FontFamily="Consolas,Courier New,monospace"
+                               Foreground="#1A1A2E"
+                               HorizontalAlignment="Center"
+                               LetterSpacing="6"
+                               IsVisible="{Binding !IsOnBreak}"/>
+
+					<!-- Break countdown overlay (shown during break) -->
+					<StackPanel IsVisible="{Binding IsOnBreak}"
+                                Spacing="10"
+                                HorizontalAlignment="Center">
+
+						<!-- Break countdown large -->
+						<TextBlock Text="{Binding BreakTimeRemaining, Converter={StaticResource TimeSpanConverter}, ConverterParameter=mm\\:ss}"
+                                   FontSize="52"
+                                   FontWeight="Thin"
+                                   FontFamily="Consolas,Courier New,monospace"
+                                   Foreground="#B8922A"
+                                   HorizontalAlignment="Center"
+                                   LetterSpacing="6"/>
+
+						<!-- Break progress bar -->
+						<ProgressBar Value="{Binding BreakProgress}"
+                                     Minimum="0"
+                                     Maximum="1"
+                                     Height="3"
+                                     CornerRadius="2"
+                                     Foreground="#B8922A"
+                                     Background="#EEEEF5"
+                                     Width="260"/>
+
+						<!-- Session time underneath (smaller, muted) -->
+						<TextBlock Text="{Binding SessionTimeRemaining, Converter={StaticResource TimeSpanConverter}, StringFormat='Session: {0}'}"
+                                   FontSize="12"
+                                   Foreground="#AAAABC"
+                                   HorizontalAlignment="Center"
+                                   Margin="0,4,0,0"/>
+
+						<!-- Contract rule: this break doesn't lift blocking (Gap 64) -->
+						<TextBlock Text="Blocking stays on during this break (contract rule)"
+                                   IsVisible="{Binding KeepsBlockingDuringBreak}"
+                                   FontSize="12"
+                                   Foreground="#B8922A"
+                                   HorizontalAlignment="Center"/>
+					</StackPanel>
+
+					<!-- Progress bar (session, shown when NOT on break), with break markers
+                         overlaid — see MainPageView.axaml.cs RenderBreakMarkers. A ColumnDefinitions
+                         collection can't be data-bound directly in Avalonia, so the marker layout is
+                         built in code-behind (a purely visual concern, not business logic) whenever
+                         BreakMarkers changes, rather than via a fragile MultiBinding/ElementName trick. -->
+					<Grid IsVisible="{Binding !IsOnBreak}">
+						<ProgressBar Value="{Binding SessionProgress}"
+                                     Minimum="0"
+                                     Maximum="1"
+                                     Height="3"
+                                     CornerRadius="2"
+                                     Foreground="#B8922A"
+                                     Background="#EEEEF5"/>
+						<Grid x:Name="BreakMarkersGrid" IsHitTestVisible="False"/>
+					</Grid>
+
+					<!-- Session goal -->
+					<TextBlock Text="{Binding SessionGoal}"
+                               FontSize="14"
+                               FontStyle="Italic"
+                               Foreground="#888899"
+                               HorizontalAlignment="Center"
+                               TextWrapping="Wrap"
+                               TextAlignment="Center"/>
+
+					<!-- Preset -->
+					<StackPanel Orientation="Horizontal"
+                                HorizontalAlignment="Center"
+                                Spacing="6">
+						<TextBlock Text="Preset"
+                                   FontSize="11"
+                                   Foreground="#BBBBCC"/>
+						<TextBlock Text="·"
+                                   FontSize="11"
+                                   Foreground="#BBBBCC"/>
+						<TextBlock Text="{Binding ActivePresetName}"
+                                   FontSize="11"
+                                   Foreground="#888899"/>
+					</StackPanel>
+
+					<!-- Action buttons -->
+					<StackPanel Orientation="Horizontal"
+                                HorizontalAlignment="Center"
+                                Spacing="12">
+
+						<!-- No break buttons: breaks follow the session's own break schedule
+                             (Gap 63). Ending a break early / skipping one is parked in Open Gap P. -->
+
+						<!-- End Session (always visible during active session) -->
+						<Button Classes="session-action"
+                                Command="{Binding EndSessionCommand}">
+							<TextBlock Text="End Session"
+                                       FontSize="12"
+                                       Foreground="#888899"/>
+						</Button>
+
+					</StackPanel>
+
+				</StackPanel>
+			</Border>
+
+			<!-- ── Section divider ───────────────────────────────── -->
+			<Border Height="1" Background="#E4E4EE" Margin="-2,0"/>
+
+			<!-- ── Today's checklist ─────────────────────────────── -->
+			<StackPanel Spacing="14">
+
+				<TextBlock Text="TODAY"
+                           FontSize="9"
+                           FontWeight="Medium"
+                           Foreground="#AAAABC"
+                           LetterSpacing="4"/>
+
+				<!-- Items -->
+				<ItemsControl ItemsSource="{Binding TodaysChecklist}">
+					<ItemsControl.ItemTemplate>
+						<DataTemplate DataType="comp:ChecklistItemViewModel">
+							<Border Padding="0,7">
+								<Grid ColumnDefinitions="Auto,*">
+									<CheckBox Grid.Column="0"
+                                              IsChecked="{Binding IsChecked}"
+                                              VerticalAlignment="Center"/>
+									<TextBlock Grid.Column="1"
+                                               Text="{Binding Text}"
+                                               Classes.done="{Binding IsChecked}"
+                                               Margin="12,0,0,0"
+                                               FontSize="14"
+                                               Foreground="#333344"
+                                               VerticalAlignment="Center"
+                                               TextWrapping="Wrap"/>
+								</Grid>
+							</Border>
+						</DataTemplate>
+					</ItemsControl.ItemTemplate>
+				</ItemsControl>
+
+				<!-- Empty state -->
+				<TextBlock IsVisible="{Binding HasNoChecklist}"
+                           Text="No tasks scheduled for today."
+                           FontSize="13"
+                           Foreground="#BBBBCC"
+                           FontStyle="Italic"/>
+
+			</StackPanel>
+
+		</StackPanel>
+	</ScrollViewer>
+
+</UserControl>
+

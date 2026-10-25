@@ -37,7 +37,7 @@ public class RawTimeFieldRuleTests
     [
         // Allowed: drag/resize pixel geometry on tile positions (MODULE_STANDARDS → UI → Views).
         // Its business rules are caught by the local-time rule.
-        "NenFocus/Views/PlannerPageView.axaml.cs has 6",
+        "NenFocus/Views/Planner/PlannerPageView.axaml.cs has 6",
     ];
 
     [Fact]

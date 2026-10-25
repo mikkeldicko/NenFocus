@@ -3,8 +3,8 @@ using FluentAssertions;
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.GetNenContractsForDateRange;
-using NenFocus.ViewModels.Pages;
 using NSubstitute;
+using NenFocus.ViewModels.Planner;
 using static NenFocus.Tests.Headless.HeadlessTestKit;
 
 namespace NenFocus.Tests.Headless;

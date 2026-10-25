@@ -2,7 +2,7 @@ using FluentAssertions;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.Services;
 using NenFocus.Infrastructure.Services;
-using NenFocus.ViewModels;
+using NenFocus.ViewModels.Shell;
 
 namespace NenFocus.Tests.Infrastructure;
 

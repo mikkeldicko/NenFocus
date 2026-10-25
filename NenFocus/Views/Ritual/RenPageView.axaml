@@ -1,0 +1,505 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:NenFocus.ViewModels.Ritual"
+             xmlns:conv="using:NenFocus.Converters"
+             x:DataType="vm:RenPageViewModel"
+             x:Class="NenFocus.Views.Ritual.RenPageView"
+             Background="Transparent">
+
+    <UserControl.Styles>
+        <Style Selector="Button.preset-card">
+            <Setter Property="Background" Value="#FFFFFF"/>
+            <Setter Property="BorderBrush" Value="#E4E4EE"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="Padding" Value="16,14"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+        </Style>
+        <Style Selector="Button.preset-card.selected /template/ ContentPresenter">
+            <Setter Property="Background" Value="#FDF6E8"/>
+            <Setter Property="BorderBrush" Value="#B8922A"/>
+            <Setter Property="BorderThickness" Value="2"/>
+        </Style>
+        <Style Selector="Button.preset-card.locked /template/ ContentPresenter">
+            <Setter Property="Background" Value="#F8F8FC"/>
+            <Setter Property="BorderBrush" Value="#AAAABC"/>
+        </Style>
+        <Style Selector="Button.preset-card /template/ ContentPresenter">
+            <Setter Property="Background" Value="#FFFFFF"/>
+        </Style>
+        <Style Selector="Button.chip">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="#DDDDE8"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="20"/>
+            <Setter Property="Padding" Value="10,4"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+        <Style Selector="Button.chip /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="Button.chip-locked">
+            <Setter Property="Background" Value="#F0F0F8"/>
+            <Setter Property="BorderBrush" Value="#DDDDE8"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="20"/>
+            <Setter Property="Padding" Value="10,4"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="IsHitTestVisible" Value="False"/>
+        </Style>
+        <Style Selector="Button.chip-locked /template/ ContentPresenter">
+            <Setter Property="Background" Value="#F0F0F8"/>
+        </Style>
+        <Style Selector="Button.remove-tag">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="2"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Foreground" Value="#AAAABC"/>
+        </Style>
+        <Style Selector="Button.add-btn">
+            <Setter Property="Background" Value="#1A1A2E"/>
+            <Setter Property="Foreground" Value="#FFFFFF"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="14,8"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FontSize" Value="12"/>
+        </Style>
+        <Style Selector="Button.add-btn /template/ ContentPresenter">
+            <Setter Property="Background" Value="#1A1A2E"/>
+        </Style>
+    </UserControl.Styles>
+
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+        <Grid HorizontalAlignment="Center" Width="600" Margin="0,0,0,40">
+            <StackPanel Spacing="0">
+
+                <!-- Kanji + Header -->
+                <TextBlock Text="錬"
+                           FontSize="72"
+                           FontWeight="Thin"
+                           Foreground="#DDDDE8"
+                           HorizontalAlignment="Center"
+                           Margin="0,0,0,20"/>
+                <TextBlock Text="Ren"
+                           FontSize="32"
+                           FontWeight="Light"
+                           Foreground="#1A1A2E"
+                           HorizontalAlignment="Center"
+                           LetterSpacing="6"/>
+                <TextBlock Text="Intensify your will."
+                           FontSize="13"
+                           FontStyle="Italic"
+                           Foreground="#AAAABC"
+                           HorizontalAlignment="Center"
+                           Margin="0,12,0,40"/>
+
+                <!-- ═══════════════════════════════════════════════ -->
+                <!-- PLANNED MODE — single locked preset card       -->
+                <!-- ═══════════════════════════════════════════════ -->
+                <StackPanel IsVisible="{Binding IsPlannedMode}" Spacing="0" Margin="0,0,0,28">
+
+                    <TextBlock Text="BLOCK PRESET"
+                               FontSize="9"
+                               FontWeight="Medium"
+                               Foreground="#AAAABC"
+                               LetterSpacing="3"
+                               Margin="0,0,0,6"/>
+
+                    <!-- Locked preset card — click to expand details + extra blocking -->
+                    <Button Classes="preset-card selected"
+                            Command="{Binding ToggleLockedPresetExpandedCommand}">
+                        <StackPanel Spacing="0" DataContext="{Binding LockedPresetCard}">
+
+                            <!-- Card header -->
+                            <StackPanel Spacing="6">
+                                <TextBlock Text="{Binding Preset.Name}"
+                                           FontSize="14"
+                                           FontWeight="Medium"
+                                           Foreground="#1A1A2E"/>
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <Border Background="#F0F0F8"
+                                            CornerRadius="4"
+                                            Padding="6,2">
+                                        <TextBlock Text="{Binding Preset.WebsiteFilterType}"
+                                                   FontSize="10"
+                                                   Foreground="#888899"/>
+                                    </Border>
+                                    <TextBlock FontSize="11" Foreground="#AAAABC"
+                                               VerticalAlignment="Center">
+                                        <Run Text="{Binding Preset.AppCount}"/>
+                                        <Run Text=" apps · "/>
+                                        <Run Text="{Binding Preset.SiteCount}"/>
+                                        <Run Text=" sites"/>
+                                    </TextBlock>
+                                </StackPanel>
+                            </StackPanel>
+
+                            <!-- Expanded panel -->
+                            <StackPanel IsVisible="{Binding IsExpanded}" Margin="0,16,0,4" Spacing="16">
+
+                                <!-- Locked websites (read-only) -->
+                                <StackPanel Spacing="8"
+                                            IsVisible="{Binding Preset.SiteCount, Converter={x:Static conv:CountToBoolConverter.IsNonZero}}">
+                                    <TextBlock Text="{Binding SitesLabel}"
+                                               FontSize="9" FontWeight="Medium"
+                                               Foreground="#AAAABC" LetterSpacing="3"/>
+                                    <ItemsControl ItemsSource="{Binding Preset.Websites}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate><WrapPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate DataType="x:String">
+                                                <Button Classes="chip-locked" Margin="0,0,6,6">
+                                                    <TextBlock Text="{Binding}" Foreground="#444455"/>
+                                                </Button>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+
+                                <!-- Locked apps (read-only) -->
+                                <StackPanel Spacing="8"
+                                            IsVisible="{Binding Preset.AppCount, Converter={x:Static conv:CountToBoolConverter.IsNonZero}}">
+                                    <TextBlock Text="BLOCKED APPS"
+                                               FontSize="9" FontWeight="Medium"
+                                               Foreground="#AAAABC" LetterSpacing="3"/>
+                                    <ItemsControl ItemsSource="{Binding Preset.BlockedApps}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate><WrapPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate DataType="x:String">
+                                                <Button Classes="chip-locked" Margin="0,0,6,6">
+                                                    <TextBlock Text="{Binding}" Foreground="#444455"/>
+                                                </Button>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+
+                                <!-- Divider -->
+                                <Rectangle Height="1" Fill="#E4E4EE"/>
+
+                                <!-- Extra sites (blocklist only) -->
+                                <StackPanel IsVisible="{Binding $parent[UserControl].((vm:RenPageViewModel)DataContext).CanAddSites}"
+                                            Spacing="8">
+                                    <TextBlock Text="BLOCK EXTRA SITES THIS SESSION"
+                                               FontSize="9" FontWeight="Medium"
+                                               Foreground="#AAAABC" LetterSpacing="3"/>
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <TextBox Grid.Column="0"
+                                                 Text="{Binding $parent[UserControl].((vm:RenPageViewModel)DataContext).AddSiteInput}"
+                                                 Watermark="e.g. youtube.com"
+                                                 FontSize="13" Padding="10,8"
+                                                 CornerRadius="6" Margin="0,0,8,0"/>
+                                        <Button Grid.Column="1"
+                                                Classes="add-btn"
+                                                Command="{Binding $parent[UserControl].((vm:RenPageViewModel)DataContext).AddSiteCommand}"
+                                                Content="Add"/>
+                                    </Grid>
+                                    <TextBlock IsVisible="{Binding $parent[UserControl].((vm:RenPageViewModel)DataContext).AddSiteError, Converter={x:Static conv:StringToVisibilityConverter.IsNonEmpty}}"
+                                               Text="{Binding $parent[UserControl].((vm:RenPageViewModel)DataContext).AddSiteError}"
+                                               FontSize="11" Foreground="#CC4444" Margin="0,-4,0,0"/>
+                                    <ItemsControl ItemsSource="{Binding $parent[UserControl].((vm:RenPageViewModel)DataContext).AdditionalBlockedSites}"
+                                                  IsVisible="{Binding $parent[UserControl].((vm:RenPageViewModel)DataContext).AdditionalBlockedSites.Count, Converter={x:Static conv:CountToBoolConverter.IsNonZero}}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate><WrapPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate DataType="x:String">
+                                                <Border Background="#F0F0F8" BorderBrush="#DDDDE8" BorderThickness="1"
+                                                        CornerRadius="20" Padding="10,4" Margin="0,0,6,6">
+                                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                                        <TextBlock Text="{Binding}" FontSize="11" Foreground="#444455" VerticalAlignment="Center"/>
+                                                        <Button Classes="remove-tag"
+                                                                Command="{Binding $parent[UserControl].((vm:RenPageViewModel)DataContext).RemoveAdditionalSiteCommand}"
+                                                                CommandParameter="{Binding}" Content="✕"/>
+                                                    </StackPanel>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+
+                                <!-- Extra apps (this session only) -->
+                                <StackPanel Spacing="8">
+                                    <TextBlock Text="BLOCK EXTRA APPS THIS SESSION"
+                                               FontSize="9" FontWeight="Medium"
+                                               Foreground="#AAAABC" LetterSpacing="3"/>
+                                    <ItemsControl ItemsSource="{Binding $parent[UserControl].((vm:RenPageViewModel)DataContext).AdditionalBlockedApps}"
+                                                  IsVisible="{Binding $parent[UserControl].((vm:RenPageViewModel)DataContext).AdditionalBlockedApps.Count, Converter={x:Static conv:CountToBoolConverter.IsNonZero}}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate><WrapPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate DataType="x:String">
+                                                <Border Background="#F0F0F8" BorderBrush="#DDDDE8" BorderThickness="1"
+                                                        CornerRadius="20" Padding="10,4" Margin="0,0,6,6">
+                                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                                        <TextBlock Text="{Binding}" FontSize="11" Foreground="#444455" VerticalAlignment="Center"/>
+                                                        <Button Classes="remove-tag"
+                                                                Command="{Binding $parent[UserControl].((vm:RenPageViewModel)DataContext).RemoveAdditionalAppCommand}"
+                                                                CommandParameter="{Binding}" Content="✕"/>
+                                                    </StackPanel>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <Button Name="BrowseForAppButton"
+                                            Background="#F0F0F8" BorderBrush="#DDDDE8" BorderThickness="1"
+                                            CornerRadius="6" Padding="14,8" Cursor="Hand"
+                                            HorizontalAlignment="Left">
+                                        <TextBlock Text="+ Add App" FontSize="12" Foreground="#444455"/>
+                                    </Button>
+                                </StackPanel>
+
+                            </StackPanel>
+                        </StackPanel>
+                    </Button>
+
+                </StackPanel>
+
+                <!-- ═══════════════════════════════════════════════ -->
+                <!-- SPONTANEOUS MODE                               -->
+                <!-- ═══════════════════════════════════════════════ -->
+                <StackPanel IsVisible="{Binding !IsPlannedMode}" Spacing="0" Margin="0,0,0,28">
+
+                    <TextBlock Text="BLOCK PRESET"
+                               FontSize="9" FontWeight="Medium"
+                               Foreground="#AAAABC" LetterSpacing="3"
+                               Margin="0,0,0,6"/>
+
+                    <!-- ── BROWSING: pick a preset ── -->
+                    <StackPanel IsVisible="{Binding !IsPresetSelected}" Spacing="0">
+
+                        <TextBlock IsVisible="{Binding IsLoading}"
+                                   Text="Loading presets…"
+                                   FontSize="13" Foreground="#AAAABC"
+                                   HorizontalAlignment="Center" Margin="0,0,0,24"/>
+
+                        <StackPanel IsVisible="{Binding !IsLoading}" Spacing="0">
+
+                            <TextBlock IsVisible="{Binding Presets.Count, Converter={x:Static conv:CountToVisibilityConverter.IsZero}}"
+                                       Text="No focus presets saved. Create one on the Block Presets page."
+                                       FontSize="13" Foreground="#BBBBCC"
+                                       FontStyle="Italic" TextWrapping="Wrap"/>
+
+                            <ItemsControl ItemsSource="{Binding Presets}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="vm:RenPresetCardViewModel">
+                                        <Button Classes="preset-card"
+                                                Command="{Binding $parent[UserControl].((vm:RenPageViewModel)DataContext).SelectPresetCommand}"
+                                                CommandParameter="{Binding}"
+                                                Margin="0,0,0,8">
+                                            <Grid ColumnDefinitions="*,Auto">
+                                                <StackPanel Grid.Column="0" Spacing="6">
+                                                    <TextBlock Text="{Binding Preset.Name}"
+                                                               FontSize="14" FontWeight="Medium"
+                                                               Foreground="#1A1A2E"/>
+                                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                                        <Border Background="#F0F0F8" CornerRadius="4" Padding="6,2">
+                                                            <TextBlock Text="{Binding Preset.WebsiteFilterType}"
+                                                                       FontSize="10" Foreground="#888899"/>
+                                                        </Border>
+                                                        <TextBlock FontSize="11" Foreground="#AAAABC" VerticalAlignment="Center">
+                                                            <Run Text="{Binding Preset.AppCount}"/>
+                                                            <Run Text=" apps · "/>
+                                                            <Run Text="{Binding Preset.SiteCount}"/>
+                                                            <Run Text=" sites"/>
+                                                        </TextBlock>
+                                                    </StackPanel>
+                                                </StackPanel>
+                                            </Grid>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- ── SELECTED: single card + extra blocking ── -->
+                    <StackPanel IsVisible="{Binding IsPresetSelected}" Spacing="0">
+
+                        <Button Classes="preset-card selected"
+                                Command="{Binding ToggleSelectedCardExpandedCommand}">
+                            <StackPanel Spacing="0" DataContext="{Binding SelectedPresetCard}">
+
+                                <!-- Card header -->
+                                <StackPanel Spacing="6">
+                                    <TextBlock Text="{Binding Preset.Name}"
+                                               FontSize="14" FontWeight="Medium"
+                                               Foreground="#1A1A2E"/>
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <Border Background="#F0F0F8" CornerRadius="4" Padding="6,2">
+                                            <TextBlock Text="{Binding Preset.WebsiteFilterType}"
+                                                       FontSize="10" Foreground="#888899"/>
+                                        </Border>
+                                        <TextBlock FontSize="11" Foreground="#AAAABC" VerticalAlignment="Center">
+                                            <Run Text="{Binding Preset.AppCount}"/>
+                                            <Run Text=" apps · "/>
+                                            <Run Text="{Binding Preset.SiteCount}"/>
+                                            <Run Text=" sites"/>
+                                        </TextBlock>
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <!-- Expanded panel -->
+                                <StackPanel IsVisible="{Binding IsExpanded}" Margin="0,16,0,4" Spacing="16">
+
+                                    <!-- Locked sites -->
+                                    <StackPanel Spacing="8"
+                                                IsVisible="{Binding Preset.SiteCount, Converter={x:Static conv:CountToBoolConverter.IsNonZero}}">
+                                        <TextBlock Text="{Binding SitesLabel}"
+                                                   FontSize="9" FontWeight="Medium"
+                                                   Foreground="#AAAABC" LetterSpacing="3"/>
+                                        <ItemsControl ItemsSource="{Binding Preset.Websites}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate><WrapPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate DataType="x:String">
+                                                    <Button Classes="chip-locked" Margin="0,0,6,6">
+                                                        <TextBlock Text="{Binding}" Foreground="#444455"/>
+                                                    </Button>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+
+                                    <!-- Locked apps -->
+                                    <StackPanel Spacing="8"
+                                                IsVisible="{Binding Preset.AppCount, Converter={x:Static conv:CountToBoolConverter.IsNonZero}}">
+                                        <TextBlock Text="BLOCKED APPS"
+                                                   FontSize="9" FontWeight="Medium"
+                                                   Foreground="#AAAABC" LetterSpacing="3"/>
+                                        <ItemsControl ItemsSource="{Binding Preset.BlockedApps}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate><WrapPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate DataType="x:String">
+                                                    <Button Classes="chip-locked" Margin="0,0,6,6">
+                                                        <TextBlock Text="{Binding}" Foreground="#444455"/>
+                                                    </Button>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+
+                                    <Rectangle Height="1" Fill="#E4E4EE"/>
+
+                                    <!-- Extra sites (blocklist only) -->
+                                    <StackPanel IsVisible="{Binding $parent[UserControl].((vm:RenPageViewModel)DataContext).CanAddSites}"
+                                                Spacing="8">
+                                        <TextBlock Text="BLOCK EXTRA SITES THIS SESSION"
+                                                   FontSize="9" FontWeight="Medium"
+                                                   Foreground="#AAAABC" LetterSpacing="3"/>
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <TextBox Grid.Column="0"
+                                                     Text="{Binding $parent[UserControl].((vm:RenPageViewModel)DataContext).AddSiteInput}"
+                                                     Watermark="e.g. youtube.com"
+                                                     FontSize="13" Padding="10,8"
+                                                     CornerRadius="6" Margin="0,0,8,0"/>
+                                            <Button Grid.Column="1" Classes="add-btn"
+                                                    Command="{Binding $parent[UserControl].((vm:RenPageViewModel)DataContext).AddSiteCommand}"
+                                                    Content="Add"/>
+                                        </Grid>
+                                        <TextBlock IsVisible="{Binding $parent[UserControl].((vm:RenPageViewModel)DataContext).AddSiteError, Converter={x:Static conv:StringToVisibilityConverter.IsNonEmpty}}"
+                                                   Text="{Binding $parent[UserControl].((vm:RenPageViewModel)DataContext).AddSiteError}"
+                                                   FontSize="11" Foreground="#CC4444" Margin="0,-4,0,0"/>
+                                        <ItemsControl ItemsSource="{Binding $parent[UserControl].((vm:RenPageViewModel)DataContext).AdditionalBlockedSites}"
+                                                      IsVisible="{Binding $parent[UserControl].((vm:RenPageViewModel)DataContext).AdditionalBlockedSites.Count, Converter={x:Static conv:CountToBoolConverter.IsNonZero}}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate><WrapPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate DataType="x:String">
+                                                    <Border Background="#F0F0F8" BorderBrush="#DDDDE8" BorderThickness="1"
+                                                            CornerRadius="20" Padding="10,4" Margin="0,0,6,6">
+                                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                                            <TextBlock Text="{Binding}" FontSize="11" Foreground="#444455" VerticalAlignment="Center"/>
+                                                            <Button Classes="remove-tag"
+                                                                    Command="{Binding $parent[UserControl].((vm:RenPageViewModel)DataContext).RemoveAdditionalSiteCommand}"
+                                                                    CommandParameter="{Binding}" Content="✕"/>
+                                                        </StackPanel>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+
+                                    <!-- Extra apps -->
+                                    <StackPanel Spacing="8">
+                                        <TextBlock Text="BLOCK EXTRA APPS THIS SESSION"
+                                                   FontSize="9" FontWeight="Medium"
+                                                   Foreground="#AAAABC" LetterSpacing="3"/>
+                                        <ItemsControl ItemsSource="{Binding $parent[UserControl].((vm:RenPageViewModel)DataContext).AdditionalBlockedApps}"
+                                                      IsVisible="{Binding $parent[UserControl].((vm:RenPageViewModel)DataContext).AdditionalBlockedApps.Count, Converter={x:Static conv:CountToBoolConverter.IsNonZero}}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate><WrapPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate DataType="x:String">
+                                                    <Border Background="#F0F0F8" BorderBrush="#DDDDE8" BorderThickness="1"
+                                                            CornerRadius="20" Padding="10,4" Margin="0,0,6,6">
+                                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                                            <TextBlock Text="{Binding}" FontSize="11" Foreground="#444455" VerticalAlignment="Center"/>
+                                                            <Button Classes="remove-tag"
+                                                                    Command="{Binding $parent[UserControl].((vm:RenPageViewModel)DataContext).RemoveAdditionalAppCommand}"
+                                                                    CommandParameter="{Binding}" Content="✕"/>
+                                                        </StackPanel>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                        <Button Name="BrowseForAppButtonSpontaneous"
+                                                Background="#F0F0F8" BorderBrush="#DDDDE8" BorderThickness="1"
+                                                CornerRadius="6" Padding="14,8" Cursor="Hand"
+                                                HorizontalAlignment="Left">
+                                            <TextBlock Text="+ Add App" FontSize="12" Foreground="#444455"/>
+                                        </Button>
+                                    </StackPanel>
+
+                                </StackPanel>
+                            </StackPanel>
+                        </Button>
+
+                        <!-- Change preset -->
+                        <Button Command="{Binding ChangePresetCommand}"
+                                Background="Transparent" BorderThickness="0"
+                                Padding="0,10,0,0" Cursor="Hand"
+                                HorizontalAlignment="Left">
+                            <TextBlock Text="← Change preset"
+                                       FontSize="12" Foreground="#AAAABC"/>
+                        </Button>
+
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- Continue -->
+                <Button HorizontalAlignment="Center"
+                        Command="{Binding ContinueCommand}"
+                        Background="Transparent"
+                        BorderBrush="#B8922A"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        Padding="40,12"
+                        Cursor="Hand">
+                    <TextBlock Text="Continue"
+                               FontSize="13"
+                               FontWeight="Medium"
+                               Foreground="#B8922A"
+                               LetterSpacing="2"/>
+                </Button>
+
+            </StackPanel>
+        </Grid>
+    </ScrollViewer>
+</UserControl>

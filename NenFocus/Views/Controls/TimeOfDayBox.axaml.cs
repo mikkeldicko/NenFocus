@@ -10,7 +10,7 @@ using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using NenFocus.Converters;
-using NenFocus.ViewModels.Components;
+using NenFocus.ViewModels.Planner;
 
 namespace NenFocus.Views.Controls;
 

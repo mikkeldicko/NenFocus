@@ -1,0 +1,43 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:NenFocus.ViewModels.Planner.ContractWizard"
+             x:DataType="vm:ContractBasicsStepViewModel"
+             x:Class="NenFocus.Views.Planner.ContractWizard.ContractBasicsStepView"
+             Background="Transparent">
+
+    <StackPanel Spacing="16" Margin="0,8,0,0">
+        <StackPanel Spacing="2">
+            <TextBlock Text="Make a Nen Contract" FontSize="18" FontWeight="SemiBold" Foreground="#1A1A2E"/>
+            <TextBlock Text="Start with the basics — you'll set the rules next, then schedule the blocks." FontSize="12" Foreground="#7A7A8C"/>
+        </StackPanel>
+
+        <StackPanel Spacing="4">
+            <TextBlock Text="Name" FontSize="12" Foreground="#7A7A8C"/>
+            <TextBox Text="{Binding Name}" Watermark="e.g. Study Month" Classes="formInput"/>
+        </StackPanel>
+
+        <StackPanel Spacing="4">
+            <TextBlock Text="Goal" FontSize="12" Foreground="#7A7A8C"/>
+            <TextBox Text="{Binding Goal}" Watermark="What is this contract for?" Classes="formInput"/>
+        </StackPanel>
+
+        <Grid ColumnDefinitions="*,12,*">
+            <StackPanel Grid.Column="0" Spacing="4">
+                <TextBlock Text="Start Date" FontSize="12" Foreground="#7A7A8C"/>
+                <DatePicker SelectedDate="{Binding StartDate}" HorizontalAlignment="Stretch"/>
+            </StackPanel>
+            <StackPanel Grid.Column="2" Spacing="4">
+                <TextBlock Text="End Date" FontSize="12" Foreground="#7A7A8C"/>
+                <DatePicker SelectedDate="{Binding EndDate}" HorizontalAlignment="Stretch"/>
+            </StackPanel>
+        </Grid>
+
+        <TextBlock Text="{Binding OverlapErrorMessage}"
+                   IsVisible="{Binding OverlapErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                   FontSize="12" Foreground="#C03A2B" TextWrapping="Wrap"/>
+
+        <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,8,0,0">
+            <Button Grid.Column="2" Classes="primary" Content="Continue" Command="{Binding ContinueCommand}"/>
+        </Grid>
+    </StackPanel>
+</UserControl>

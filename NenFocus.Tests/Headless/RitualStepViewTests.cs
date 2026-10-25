@@ -9,8 +9,8 @@ using NenFocus.Application.Queries.GetAvailableBreakTimerPresets;
 using NenFocus.Application.UseCases.Sessions.StartSession;
 using NenFocus.Domain.Enums;
 using NenFocus.ViewModels.Ritual;
-using NenFocus.Views;
 using NSubstitute;
+using NenFocus.Views.Ritual;
 using static NenFocus.Tests.Headless.HeadlessTestKit;
 
 namespace NenFocus.Tests.Headless;

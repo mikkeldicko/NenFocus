@@ -9,9 +9,9 @@ using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
 using NenFocus.Domain.ValueObjects;
 using NenFocus.Infrastructure.Services;
-using NenFocus.ViewModels.Pages;
-using NenFocus.Views;
 using NSubstitute;
+using NenFocus.ViewModels.Main;
+using NenFocus.Views.Main;
 using static NenFocus.Tests.Headless.HeadlessTestKit;
 
 namespace NenFocus.Tests.Headless;
