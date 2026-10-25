@@ -194,8 +194,9 @@ Grouped into six boxes, worked top to bottom (agreed 2026-09-28; architecture bo
 
 **4. Settings to MVP**
 1. **Gap 100 — One Home for User-Facing Text** (validators return typed reasons instead of sentences, wording built in one place; desktop text into resource files) — raised 2026-09-29 during Gap 98; direction agreed, not interrogated. Placement and permission validators convert inside Gaps 88/93; this gap does the rest. After the Architecture box so text moves once; before Gap 83 and Gap 77, its consumers.
-2. **Gap 83 — Settings Page MVP** — raised 2026-09-28; not interrogated.
-3. **Gap 78 (P) — Break Flexibility** (end/skip a break, break budget, extend session, edit at Hatsu, live Hatsu, focus-only floor) — raised 2026-09-27 during Gap 63; not interrogated; parts need Gap 83.
+2. **Gap 119 — One Home for the Look: Named Colours** (the 653 hand-typed hex colours in the views become named resources in `Styles/Colors.axaml`; a shrink-only count guards the rest) — raised 2026-10-25 during Gap 89 Slice B, which builds `Styles/` for buttons, error text and labels; direction agreed, not interrogated. Beside Gap 100 (one home for text); before Gap 83, whose settings (12/24 h, maybe a theme) read them.
+3. **Gap 83 — Settings Page MVP** — raised 2026-09-28; not interrogated.
+4. **Gap 78 (P) — Break Flexibility** (end/skip a break, break budget, extend session, edit at Hatsu, live Hatsu, focus-only floor) — raised 2026-09-27 during Gap 63; not interrogated; parts need Gap 83.
 
 **5. Insights — after boxes 3 and 4 reach MVP**
 1. **Gap 74 (G) — Nen Contract Recap Data for Insights** — interrogated 2026-08-12, widened 2026-08-30; not yet built.
@@ -206,7 +207,7 @@ Grouped into six boxes, worked top to bottom (agreed 2026-09-28; architecture bo
 3. **Gap 76 (K) — Enforcement Has No Life Independent of the GUI Process** (Windows Service split; first step since 2026-09-29: close to tray and refuse Quit while enforcing — "always active like other blockers") — interrogated 2026-09-07; not yet built.
 4. **Gap 77 (O) — Cross-Platform Suite: iOS App, Multi-Device Sync, "Hardcore iOS Lockdown"** — raised 2026-09-27; not interrogated.
 
-Next free number: **119** (118 built directly 2026-10-14; 116 and 117 raised 2026-10-13 during Gap 112; 115 raised 2026-10-08 during Gap 110; 114 raised 2026-10-08; 112 and 113 raised 2026-10-08; 111 built directly 2026-10-08; 109 and 110 raised 2026-10-07; 107 and 108 raised 2026-10-01; 105 and 106 raised 2026-09-30; 84–87 used 2026-09-28 by fixes built directly; 88–89 raised as open gaps the same day; 90–93, 95, 97, 98, 99, 100, 101, 102 and 103 raised 2026-09-29; 94, 96 and 104 fixes built directly the same day; 91 dropped the same day — the one-source questions are investigated one by one as their own gaps instead; 90 and 99 folded into 88 the same day — their write-ups live under Gap 88 in `DESIGN_GAP_HISTORY.md` since it closed 2026-10-01, so older references to them still resolve).
+Next free number: **120** (119 raised 2026-10-25 during Gap 89 Slice B; 118 built directly 2026-10-14; 116 and 117 raised 2026-10-13 during Gap 112; 115 raised 2026-10-08 during Gap 110; 114 raised 2026-10-08; 112 and 113 raised 2026-10-08; 111 built directly 2026-10-08; 109 and 110 raised 2026-10-07; 107 and 108 raised 2026-10-01; 105 and 106 raised 2026-09-30; 84–87 used 2026-09-28 by fixes built directly; 88–89 raised as open gaps the same day; 90–93, 95, 97, 98, 99, 100, 101, 102 and 103 raised 2026-09-29; 94, 96 and 104 fixes built directly the same day; 91 dropped the same day — the one-source questions are investigated one by one as their own gaps instead; 90 and 99 folded into 88 the same day — their write-ups live under Gap 88 in `DESIGN_GAP_HISTORY.md` since it closed 2026-10-01, so older references to them still resolve).
 
 \---
 

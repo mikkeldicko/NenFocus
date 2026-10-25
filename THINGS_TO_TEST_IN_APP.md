@@ -20,6 +20,9 @@ go. When a gap closes, its passed checks are removed from this file; the gap's e
 - [ ] **Split's four fields work the same way.** Open Split on a bound block: the four fields prefill, End rows show lengths, changing a piece's Start keeps its length.
 - [ ] **Contract Presets' Work Hours fields.** New preset with Work Hours 18:00–24:00 saves; reopening it shows 24:00 (it used to show 23:59).
 - [ ] **Every screen still opens (new folder layout).** Click through Main, Planner, Presets (both tabs), Insights, Settings; run a Ritual to its end (Post-Session shows); open the Nen Contract wizard; open the debug clock. None shows "Not Found: …".
+- [ ] **Buttons look the same everywhere (shared styles).** Planner form, presets pages, missed-sessions screen and the contract wizard: dark "Create"/"Save" buttons, grey-edged Cancel, solid red Delete. The wizard's Next/Seal buttons are styled now (they were plain grey before — its views never had the styles).
+- [ ] **Every "Are you sure?" looks and works the same.** Delete a block (snapshot), discard a contract draft, cancel a contract, delete a contract, delete a block preset and a contract preset: same card, the screen's own wording, Cancel/Keep left of the red button; deleting a preset in use shows the reason in red inside the card. "Can't Cancel Contract" shows with one OK button.
+- [ ] **Errors and labels.** A refused Planner save shows its red line under the form; the presets forms' errors sit in a pale red box; field names ("Start", "Date", "Name") are small grey labels as before.
 - [ ] **Draft tiles still show while drafting a contract.** Make a contract, place two blocks while drafting (one Focus, one Background): both tiles appear in the draft style with their preset names, can be dragged and edited, and Seal saves them. (Draft tiles are no longer built as fake block DTOs; no automated test reaches drafting.)
 
 ## Gap 112 — Infrastructure holds no rules (run as administrator)

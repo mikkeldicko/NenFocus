@@ -11,5 +11,8 @@
   
     <Application.Styles>
         <FluentTheme />
+        <StyleInclude Source="/Styles/Buttons.axaml"/>
+        <StyleInclude Source="/Styles/Text.axaml"/>
+        <StyleInclude Source="/Views/Controls/ModalDialog.axaml"/>
     </Application.Styles>
 </Application>

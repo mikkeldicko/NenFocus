@@ -1,0 +1,32 @@
+<!-- ModalDialog's look — the one place a dialog's backdrop, card, text and button row are
+     defined (Gap 89 Slice B). Included once in App.axaml. -->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="using:NenFocus.Views.Controls">
+    <Style Selector="controls|ModalDialog">
+        <Setter Property="ItemsPanel">
+            <ItemsPanelTemplate>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="12"/>
+            </ItemsPanelTemplate>
+        </Setter>
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Background="#88000000">
+                    <Border Background="#FFFFFF" CornerRadius="14" Width="400" Padding="32,28"
+                            HorizontalAlignment="Center" VerticalAlignment="Center"
+                            BoxShadow="0 12 48 0 #44000000">
+                        <StackPanel Spacing="20">
+                            <TextBlock Text="{TemplateBinding Title}"
+                                       FontSize="18" FontWeight="SemiBold" Foreground="#1A1A2E" TextWrapping="Wrap"/>
+                            <TextBlock Text="{TemplateBinding Message}"
+                                       FontSize="14" Foreground="#888899" TextWrapping="Wrap"/>
+                            <TextBlock Classes="error-text" Text="{TemplateBinding Error}"
+                                       IsVisible="{TemplateBinding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                            <ItemsPresenter Name="PART_ItemsPresenter" ItemsPanel="{TemplateBinding ItemsPanel}"/>
+                        </StackPanel>
+                    </Border>
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+</Styles>

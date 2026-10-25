@@ -1,0 +1,21 @@
+<!-- The app's text roles, one definition each (Gap 89 Slice B) — included once in App.axaml. -->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- A form field's name above it: "Start", "Date", "Block Preset". -->
+    <Style Selector="TextBlock.field-label">
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="Foreground" Value="#7A7A8C"/>
+    </Style>
+    <!-- What went wrong, right where it went wrong (a refused save, a failed delete). -->
+    <Style Selector="TextBlock.error-text">
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="Foreground" Value="#C03A2B"/>
+        <Setter Property="TextWrapping" Value="Wrap"/>
+    </Style>
+    <!-- A form-level error: a pale red box holding an error-text. -->
+    <Style Selector="Border.error-banner">
+        <Setter Property="Background" Value="#FFF5F5"/>
+        <Setter Property="CornerRadius" Value="8"/>
+        <Setter Property="Padding" Value="14,10"/>
+    </Style>
+</Styles>

@@ -12,29 +12,28 @@
         </StackPanel>
 
         <StackPanel Spacing="4">
-            <TextBlock Text="Name" FontSize="12" Foreground="#7A7A8C"/>
+            <TextBlock Classes="field-label" Text="Name"/>
             <TextBox Text="{Binding Name}" Watermark="e.g. Study Month" Classes="formInput"/>
         </StackPanel>
 
         <StackPanel Spacing="4">
-            <TextBlock Text="Goal" FontSize="12" Foreground="#7A7A8C"/>
+            <TextBlock Classes="field-label" Text="Goal"/>
             <TextBox Text="{Binding Goal}" Watermark="What is this contract for?" Classes="formInput"/>
         </StackPanel>
 
         <Grid ColumnDefinitions="*,12,*">
             <StackPanel Grid.Column="0" Spacing="4">
-                <TextBlock Text="Start Date" FontSize="12" Foreground="#7A7A8C"/>
+                <TextBlock Classes="field-label" Text="Start Date"/>
                 <DatePicker SelectedDate="{Binding StartDate}" HorizontalAlignment="Stretch"/>
             </StackPanel>
             <StackPanel Grid.Column="2" Spacing="4">
-                <TextBlock Text="End Date" FontSize="12" Foreground="#7A7A8C"/>
+                <TextBlock Classes="field-label" Text="End Date"/>
                 <DatePicker SelectedDate="{Binding EndDate}" HorizontalAlignment="Stretch"/>
             </StackPanel>
         </Grid>
 
-        <TextBlock Text="{Binding OverlapErrorMessage}"
-                   IsVisible="{Binding OverlapErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                   FontSize="12" Foreground="#C03A2B" TextWrapping="Wrap"/>
+        <TextBlock Classes="error-text" Text="{Binding OverlapErrorMessage}"
+                   IsVisible="{Binding OverlapErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
 
         <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,8,0,0">
             <Button Grid.Column="2" Classes="primary" Content="Continue" Command="{Binding ContinueCommand}"/>

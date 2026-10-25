@@ -71,7 +71,7 @@
             <StackPanel Spacing="14" IsVisible="{Binding IsAdvanced}">
 
                 <StackPanel Spacing="4" IsVisible="{Binding !HasNoSavedPresets}">
-                    <TextBlock Text="Contract Preset" FontSize="12" Foreground="#7A7A8C"/>
+                    <TextBlock Classes="field-label" Text="Contract Preset"/>
                     <ComboBox ItemsSource="{Binding SavedPresets}"
                               SelectedItem="{Binding SelectedPreset}"
                               HorizontalAlignment="Stretch"
@@ -93,15 +93,15 @@
                         IsVisible="{Binding SelectedPreset, Converter={x:Static ObjectConverters.IsNotNull}}">
                     <StackPanel Spacing="6">
                         <StackPanel Orientation="Horizontal" Spacing="6">
-                            <TextBlock Text="Strictness:" FontSize="12" Foreground="#7A7A8C"/>
+                            <TextBlock Classes="field-label" Text="Strictness:"/>
                             <TextBlock Text="{Binding SelectedPreset.StrictnessRule, Converter={x:Static conv:StrictnessRuleToLabelConverter.Instance}}" FontSize="12" FontWeight="Medium" Foreground="#1A1A2E"/>
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Spacing="6">
-                            <TextBlock Text="Daily floor:" FontSize="12" Foreground="#7A7A8C"/>
+                            <TextBlock Classes="field-label" Text="Daily floor:"/>
                             <TextBlock Text="{Binding SelectedPresetFloorLabel}" FontSize="12" FontWeight="Medium" Foreground="#1A1A2E"/>
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Spacing="6">
-                            <TextBlock Text="Work hours:" FontSize="12" Foreground="#7A7A8C"/>
+                            <TextBlock Classes="field-label" Text="Work hours:"/>
                             <TextBlock Text="{Binding SelectedPresetWorkHoursLabel}" FontSize="12" FontWeight="Medium" Foreground="#1A1A2E"/>
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Spacing="6">
@@ -120,7 +120,7 @@
                 </Border>
 
                 <StackPanel Spacing="6">
-                    <TextBlock Text="Rest days" FontSize="12" Foreground="#7A7A8C"/>
+                    <TextBlock Classes="field-label" Text="Rest days"/>
                     <ItemsControl ItemsSource="{Binding RestDayChips}">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
@@ -136,9 +136,8 @@
                 </StackPanel>
             </StackPanel>
 
-            <TextBlock Text="{Binding Error}"
-                       IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                       FontSize="12" Foreground="#C03A2B" TextWrapping="Wrap"/>
+            <TextBlock Classes="error-text" Text="{Binding Error}"
+                       IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
 
             <Grid ColumnDefinitions="Auto,*,Auto">
                 <Button Grid.Column="2" Classes="primary" Content="Continue" Command="{Binding ContinueCommand}"/>

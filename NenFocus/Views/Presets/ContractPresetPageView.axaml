@@ -30,62 +30,6 @@
 		<Style Selector="Border.preset-card:pointerover StackPanel.card-actions">
 			<Setter Property="Opacity" Value="1"/>
 		</Style>
-		<Style Selector="Button.icon-btn">
-			<Setter Property="Background" Value="Transparent"/>
-			<Setter Property="BorderThickness" Value="0"/>
-			<Setter Property="Padding" Value="8,5"/>
-			<Setter Property="CornerRadius" Value="6"/>
-			<Setter Property="Cursor" Value="Hand"/>
-		</Style>
-		<Style Selector="Button.icon-btn /template/ ContentPresenter">
-			<Setter Property="Transitions">
-				<Transitions>
-					<BrushTransition Property="Background" Duration="0:0:0.1"/>
-				</Transitions>
-			</Setter>
-		</Style>
-		<Style Selector="Button.icon-btn:pointerover /template/ ContentPresenter">
-			<Setter Property="Background" Value="#F0F0F8"/>
-		</Style>
-		<Style Selector="Button.icon-btn.danger:pointerover /template/ ContentPresenter">
-			<Setter Property="Background" Value="#FFF0F0"/>
-		</Style>
-		<Style Selector="Button.primary">
-			<Setter Property="Background" Value="#1A1A2E"/>
-			<Setter Property="Foreground" Value="#FFFFFF"/>
-			<Setter Property="BorderThickness" Value="0"/>
-			<Setter Property="CornerRadius" Value="8"/>
-			<Setter Property="Padding" Value="20,10"/>
-			<Setter Property="Cursor" Value="Hand"/>
-			<Setter Property="FontSize" Value="13"/>
-			<Setter Property="FontWeight" Value="Medium"/>
-		</Style>
-		<Style Selector="Button.primary:pointerover /template/ ContentPresenter">
-			<Setter Property="Background" Value="#2A2A4E"/>
-		</Style>
-		<Style Selector="Button.secondary">
-			<Setter Property="Background" Value="Transparent"/>
-			<Setter Property="Foreground" Value="#888899"/>
-			<Setter Property="BorderThickness" Value="1"/>
-			<Setter Property="BorderBrush" Value="#E0E0EE"/>
-			<Setter Property="CornerRadius" Value="8"/>
-			<Setter Property="Padding" Value="20,10"/>
-			<Setter Property="Cursor" Value="Hand"/>
-			<Setter Property="FontSize" Value="13"/>
-		</Style>
-		<Style Selector="Button.danger-btn">
-			<Setter Property="Background" Value="#C0392B"/>
-			<Setter Property="Foreground" Value="#FFFFFF"/>
-			<Setter Property="BorderThickness" Value="0"/>
-			<Setter Property="CornerRadius" Value="8"/>
-			<Setter Property="Padding" Value="20,10"/>
-			<Setter Property="Cursor" Value="Hand"/>
-			<Setter Property="FontSize" Value="13"/>
-			<Setter Property="FontWeight" Value="Medium"/>
-		</Style>
-		<Style Selector="Button.danger-btn:pointerover /template/ ContentPresenter">
-			<Setter Property="Background" Value="#A93226"/>
-		</Style>
 		<Style Selector="TextBox.form-field">
 			<Setter Property="Background" Value="#F8F8FC"/>
 			<Setter Property="BorderBrush" Value="#E0E0EE"/>
@@ -247,7 +191,7 @@
 						<StackPanel Spacing="6">
 							<CheckBox Content="Enforce a fixed daily floor" IsChecked="{Binding IsDailyFloorEnabled}"/>
 							<StackPanel Spacing="4" IsVisible="{Binding IsDailyFloorEnabled}">
-								<TextBlock Text="Daily floor (whole hours)" FontSize="12" Foreground="#7A7A8C"/>
+								<TextBlock Classes="field-label" Text="Daily floor (whole hours)"/>
 								<TextBox Classes="form-field" Text="{Binding DailyFloorHoursText}" Watermark="e.g. 3"/>
 							</StackPanel>
 						</StackPanel>
@@ -272,11 +216,11 @@
 							<CheckBox Content="Enforce work hours" IsChecked="{Binding IsWorkHoursEnabled}"/>
 							<Grid ColumnDefinitions="*,12,*" IsVisible="{Binding IsWorkHoursEnabled}">
 								<StackPanel Grid.Column="0" Spacing="4">
-									<TextBlock Text="Start" FontSize="12" Foreground="#7A7A8C"/>
+									<TextBlock Classes="field-label" Text="Start"/>
 									<controls:TimeOfDayBox Name="WorkHoursStartField" Value="{Binding WorkHoursStart}"/>
 								</StackPanel>
 								<StackPanel Grid.Column="2" Spacing="4">
-									<TextBlock Text="End" FontSize="12" Foreground="#7A7A8C"/>
+									<TextBlock Classes="field-label" Text="End"/>
 									<controls:TimeOfDayBox Name="WorkHoursEndField" Value="{Binding WorkHoursEnd}"/>
 								</StackPanel>
 							</Grid>
@@ -285,11 +229,9 @@
 					</StackPanel>
 
 					<!-- Error -->
-					<Border IsVisible="{Binding FormError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                            Background="#FFF5F5" CornerRadius="8" Padding="14,10"
+					<Border IsVisible="{Binding FormError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" Classes="error-banner"
                             Margin="32,16,32,0">
-						<TextBlock Text="{Binding FormError}" FontSize="13"
-                                   Foreground="#C0392B" TextWrapping="Wrap"/>
+						<TextBlock Classes="error-text" Text="{Binding FormError}"/>
 					</Border>
 
 					<!-- Footer -->
@@ -306,23 +248,13 @@
 		</Border>
 
 		<!-- DELETE CONFIRM -->
-		<Border IsVisible="{Binding IsConfirmDeleteVisible}" Background="#88000000">
-			<Border Background="#FFFFFF" CornerRadius="14" Width="400" Padding="32,28"
-                    HorizontalAlignment="Center" VerticalAlignment="Center"
-                    BoxShadow="0 12 48 0 #44000000">
-				<StackPanel Spacing="20">
-					<TextBlock Text="Delete Contract Preset" FontSize="18" FontWeight="SemiBold" Foreground="#1A1A2E"/>
-					<TextBlock Text="{Binding ConfirmDeleteMessage}" FontSize="14" Foreground="#888899" TextWrapping="Wrap"/>
-					<TextBlock Text="{Binding ConfirmDeleteError}"
-                               IsVisible="{Binding ConfirmDeleteError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                               FontSize="12" Foreground="#C03A2B" TextWrapping="Wrap"/>
-					<StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="12">
-						<Button Classes="secondary" Content="Cancel" Command="{Binding CancelDeleteCommand}"/>
-						<Button Classes="danger-btn" Content="Delete" Command="{Binding ConfirmDeleteCommand}"/>
-					</StackPanel>
-				</StackPanel>
-			</Border>
-		</Border>
+		<controls:ModalDialog IsVisible="{Binding IsConfirmDeleteVisible}"
+		                      Title="Delete Contract Preset"
+		                      Message="{Binding ConfirmDeleteMessage}"
+		                      Error="{Binding ConfirmDeleteError}">
+			<Button Classes="secondary" Content="Cancel" Command="{Binding CancelDeleteCommand}"/>
+			<Button Classes="danger-btn" Content="Delete" Command="{Binding ConfirmDeleteCommand}"/>
+		</controls:ModalDialog>
 
 	</Panel>
 </UserControl>

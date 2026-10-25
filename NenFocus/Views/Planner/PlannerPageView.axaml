@@ -111,22 +111,6 @@
 			<Setter Property="Padding" Value="10,8"/>
 		</Style>
 
-		<Style Selector="Button.primary">
-			<Setter Property="Background" Value="#1A1A2E"/>
-			<Setter Property="Foreground" Value="White"/>
-			<Setter Property="CornerRadius" Value="6"/>
-			<Setter Property="Padding" Value="16,8"/>
-			<Setter Property="Cursor" Value="Hand"/>
-		</Style>
-		<Style Selector="Button.secondary">
-			<Setter Property="Background" Value="Transparent"/>
-			<Setter Property="Foreground" Value="#1A1A2E"/>
-			<Setter Property="BorderBrush" Value="#DDDDE8"/>
-			<Setter Property="BorderThickness" Value="1"/>
-			<Setter Property="CornerRadius" Value="6"/>
-			<Setter Property="Padding" Value="14,8"/>
-			<Setter Property="Cursor" Value="Hand"/>
-		</Style>
 		<Style Selector="Button.bannerCancelBtn">
 			<Setter Property="Background" Value="Transparent"/>
 			<Setter Property="Foreground" Value="#7A7A8C"/>
@@ -160,15 +144,6 @@
 			<Setter Property="Background" Value="#00000008"/>
 		</Style>
 
-		<Style Selector="Button.danger">
-			<Setter Property="Background" Value="Transparent"/>
-			<Setter Property="Foreground" Value="#C03A2B"/>
-			<Setter Property="BorderBrush" Value="#E8C0BA"/>
-			<Setter Property="BorderThickness" Value="1"/>
-			<Setter Property="CornerRadius" Value="6"/>
-			<Setter Property="Padding" Value="14,8"/>
-			<Setter Property="Cursor" Value="Hand"/>
-		</Style>
 
 		<Style Selector="Button.typePill">
 			<Setter Property="Background" Value="#F0F0F8"/>
@@ -254,9 +229,8 @@
 								<TextBlock Text="Upcoming" FontSize="10" FontWeight="Medium" Foreground="White"/>
 							</Border>
 						</StackPanel>
-						<TextBlock Text="{Binding CoverDeficitErrorMessage}"
-                                   IsVisible="{Binding CoverDeficitErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                                   FontSize="12" Foreground="#C03A2B" TextWrapping="Wrap"/>
+						<TextBlock Classes="error-text" Text="{Binding CoverDeficitErrorMessage}"
+                                   IsVisible="{Binding CoverDeficitErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
 					</StackPanel>
 					<StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" Margin="8,0,0,0">
 						<Button Classes="coverDeficitBtn"
@@ -337,9 +311,8 @@
 						</StackPanel>
 						<TextBlock Text="{Binding DraftFloorSummaryText}" FontSize="12" Foreground="#5A5A6C"
                                    IsVisible="{Binding DraftFloorSummaryText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
-						<TextBlock Text="{Binding SealErrorMessage}"
-                                   IsVisible="{Binding SealErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                                   FontSize="12" Foreground="#C03A2B" TextWrapping="Wrap"/>
+						<TextBlock Classes="error-text" Text="{Binding SealErrorMessage}"
+                                   IsVisible="{Binding SealErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
 					</StackPanel>
 					<StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
 						<Button Classes="secondary" Content="Cancel" Command="{Binding RequestCancelDraftCommand}"/>
@@ -397,7 +370,7 @@
                             BorderThickness="0,0,0,1"
                             Padding="12,8"
                             IsVisible="{Binding DragError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-						<TextBlock Text="{Binding DragError}" FontSize="12" Foreground="#C03A2B" TextWrapping="Wrap"/>
+						<TextBlock Classes="error-text" Text="{Binding DragError}"/>
 					</Border>
 
 					<ScrollViewer Grid.Row="2" Name="GridScroller" VerticalScrollBarVisibility="Auto">
@@ -457,7 +430,7 @@
 					<ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
 						<StackPanel Spacing="14">
 							<StackPanel Spacing="4" IsVisible="{Binding ShowTypeToggle}">
-								<TextBlock Text="Type" FontSize="12" Foreground="#7A7A8C"/>
+								<TextBlock Classes="field-label" Text="Type"/>
 								<StackPanel Orientation="Horizontal" Spacing="8">
 									<Button Classes="typePill" Classes.active="{Binding IsFocusBlock}" Content="Focus" Command="{Binding SetFocusBlockCommand}" IsEnabled="{Binding CanRescheduleBlock}"/>
 									<Button Classes="typePill" Classes.active="{Binding !IsFocusBlock}" Content="Background" Command="{Binding SetBackgroundBlockCommand}" IsEnabled="{Binding CanRescheduleBlock}"/>
@@ -465,17 +438,17 @@
 							</StackPanel>
 
 							<StackPanel Spacing="4">
-								<TextBlock Text="Date" FontSize="12" Foreground="#7A7A8C"/>
+								<TextBlock Classes="field-label" Text="Date"/>
 								<DatePicker SelectedDate="{Binding FormDate}" IsEnabled="{Binding CanRescheduleBlock}"/>
 							</StackPanel>
 
 							<Grid ColumnDefinitions="*,12,*">
 								<StackPanel Grid.Column="0" Spacing="4">
-									<TextBlock Text="Start" FontSize="12" Foreground="#7A7A8C"/>
+									<TextBlock Classes="field-label" Text="Start"/>
 									<controls:TimeOfDayBox Name="FormStartTimeField" Value="{Binding FormStartTime}" IsEnabled="{Binding CanRescheduleBlock}"/>
 								</StackPanel>
 								<StackPanel Grid.Column="2" Spacing="4">
-									<TextBlock Text="End" FontSize="12" Foreground="#7A7A8C"/>
+									<TextBlock Classes="field-label" Text="End"/>
 									<controls:TimeOfDayBox Name="FormEndTimeField" Value="{Binding FormEndTime}" Options="{Binding EndTimeOptions}"
 									                       DurationFrom="{Binding FormStartTime}" IsEnabled="{Binding CanRescheduleBlock}"/>
 									<TextBlock Text="{Binding FormEndDateText}"
@@ -485,7 +458,7 @@
 							</Grid>
 
 							<StackPanel Spacing="4">
-								<TextBlock Text="Block Preset" FontSize="12" Foreground="#7A7A8C"/>
+								<TextBlock Classes="field-label" Text="Block Preset"/>
 								<ComboBox ItemsSource="{Binding AvailablePresets}"
                                           SelectedItem="{Binding SelectedPreset}"
                                           HorizontalAlignment="Stretch"
@@ -498,14 +471,13 @@
 								</ComboBox>
 							</StackPanel>
 
-							<TextBlock Text="{Binding FormError}"
-                                       IsVisible="{Binding FormError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                                       FontSize="12" Foreground="#C03A2B" TextWrapping="Wrap"/>
+							<TextBlock Classes="error-text" Text="{Binding FormError}"
+                                       IsVisible="{Binding FormError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
 						</StackPanel>
 					</ScrollViewer>
 
 					<Grid Grid.Row="2" ColumnDefinitions="Auto,Auto,*,Auto,Auto" Margin="0,16,0,0">
-						<Button Grid.Column="0" Classes="danger" Content="Delete" Command="{Binding DeleteCommand}" IsVisible="{Binding CanDeleteFromForm}"/>
+						<Button Grid.Column="0" Classes="danger-btn" Content="Delete" Command="{Binding DeleteCommand}" IsVisible="{Binding CanDeleteFromForm}"/>
 						<Button Grid.Column="1" Classes="secondary" Content="Split Block" Command="{Binding OpenSplitDialogCommand}" IsVisible="{Binding CanSplitBlock}" Margin="8,0,0,0"/>
 						<Button Grid.Column="3" Classes="secondary" Content="Cancel" Command="{Binding CloseFormCommand}"/>
 						<Button Grid.Column="4" Classes="primary" Content="{Binding SaveButtonLabel}" Command="{Binding SaveCommand}" Margin="8,0,0,0" IsVisible="{Binding CanSaveBlock}"/>
@@ -623,11 +595,10 @@
 					</ScrollViewer>
 
 					<StackPanel Grid.Row="3" Spacing="8" Margin="24,0,24,24">
-						<TextBlock Text="{Binding DeleteSnapshotErrorMessage}"
-                                   IsVisible="{Binding DeleteSnapshotErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                                   FontSize="12" Foreground="#C03A2B" TextWrapping="Wrap"/>
+						<TextBlock Classes="error-text" Text="{Binding DeleteSnapshotErrorMessage}"
+                                   IsVisible="{Binding DeleteSnapshotErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
 						<Grid ColumnDefinitions="Auto,*,Auto">
-							<Button Grid.Column="0" Classes="danger" Content="Delete" Command="{Binding RequestDeleteSnapshotBlockCommand}" IsVisible="{Binding CanDeleteSnapshotBlock}"/>
+							<Button Grid.Column="0" Classes="danger-btn" Content="Delete" Command="{Binding RequestDeleteSnapshotBlockCommand}" IsVisible="{Binding CanDeleteSnapshotBlock}"/>
 							<Button Grid.Column="2" Classes="primary" Content="Close" Command="{Binding CloseSnapshotCommand}"/>
 						</Grid>
 					</StackPanel>
@@ -635,21 +606,12 @@
 			</Border>
 		</Border>
 
-		<Border IsVisible="{Binding IsConfirmDeleteSnapshotVisible}" Background="#88000000">
-			<Border Background="#FFFFFF" CornerRadius="14" Width="400" Padding="32,28"
-                    HorizontalAlignment="Center" VerticalAlignment="Center"
-                    BoxShadow="0 12 48 0 #44000000">
-				<StackPanel Spacing="20">
-					<TextBlock Text="Delete this block?" FontSize="18" FontWeight="SemiBold" Foreground="#1A1A2E"/>
-					<TextBlock Text="This permanently removes it from the Planner, along with its session record. This cannot be undone."
-                               FontSize="14" Foreground="#888899" TextWrapping="Wrap"/>
-					<StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="12">
-						<Button Classes="secondary" Content="Keep It" Command="{Binding CancelDeleteSnapshotBlockCommand}"/>
-						<Button Classes="danger" Content="Delete" Command="{Binding ConfirmDeleteSnapshotBlockCommand}"/>
-					</StackPanel>
-				</StackPanel>
-			</Border>
-		</Border>
+		<controls:ModalDialog IsVisible="{Binding IsConfirmDeleteSnapshotVisible}"
+		                      Title="Delete this block?"
+		                      Message="This permanently removes it from the Planner, along with its session record. This cannot be undone.">
+			<Button Classes="secondary" Content="Keep It" Command="{Binding CancelDeleteSnapshotBlockCommand}"/>
+			<Button Classes="danger-btn" Content="Delete" Command="{Binding ConfirmDeleteSnapshotBlockCommand}"/>
+		</controls:ModalDialog>
 
 		<Border IsVisible="{Binding IsSplitDialogVisible}" Background="#88000000">
 			<Border Background="White" CornerRadius="12" Padding="24" Width="440" HorizontalAlignment="Center" VerticalAlignment="Center"
@@ -666,7 +628,7 @@
 
 					<StackPanel Spacing="4">
 						<StackPanel Orientation="Horizontal" Spacing="6">
-							<TextBlock Text="First Block" FontSize="12" Foreground="#7A7A8C"/>
+							<TextBlock Classes="field-label" Text="First Block"/>
 							<TextBlock Text="{Binding SplitFirstBlockDuration, Converter={StaticResource DurationLabelConverter}}"
                                        FontSize="12" Foreground="#7A7A8C" FontWeight="SemiBold"/>
 						</StackPanel>
@@ -683,7 +645,7 @@
 
 					<StackPanel Spacing="4">
 						<StackPanel Orientation="Horizontal" Spacing="6">
-							<TextBlock Text="Second Block" FontSize="12" Foreground="#7A7A8C"/>
+							<TextBlock Classes="field-label" Text="Second Block"/>
 							<TextBlock Text="{Binding SplitSecondBlockDuration, Converter={StaticResource DurationLabelConverter}}"
                                        FontSize="12" Foreground="#7A7A8C" FontWeight="SemiBold"/>
 						</StackPanel>
@@ -699,7 +661,7 @@
 					</StackPanel>
 
 					<StackPanel Orientation="Horizontal" Spacing="6">
-						<TextBlock Text="Total" FontSize="12" Foreground="#7A7A8C"/>
+						<TextBlock Classes="field-label" Text="Total"/>
 						<TextBlock Text="{Binding SplitTotalDuration, Converter={StaticResource DurationLabelConverter}}"
                                    Classes="splitTotalValue" Classes.mismatch="{Binding IsSplitTotalMismatched}"
                                    FontSize="12" FontWeight="SemiBold"/>
@@ -712,9 +674,8 @@
                                IsVisible="{Binding SplitWarningMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                                FontSize="12" Foreground="#C08A2B" TextWrapping="Wrap"/>
 
-					<TextBlock Text="{Binding SplitError}"
-                               IsVisible="{Binding SplitError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                               FontSize="12" Foreground="#C03A2B" TextWrapping="Wrap"/>
+					<TextBlock Classes="error-text" Text="{Binding SplitError}"
+                               IsVisible="{Binding SplitError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
 
 					<StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="12">
 						<Button Classes="secondary" Content="Cancel" Command="{Binding CloseSplitDialogCommand}"/>
@@ -724,65 +685,33 @@
 			</Border>
 		</Border>
 
-		<Border IsVisible="{Binding IsConfirmDiscardDraftVisible}" Background="#88000000">
-			<Border Background="#FFFFFF" CornerRadius="14" Width="400" Padding="32,28"
-                    HorizontalAlignment="Center" VerticalAlignment="Center"
-                    BoxShadow="0 12 48 0 #44000000">
-				<StackPanel Spacing="20">
-					<TextBlock Text="Discard Draft" FontSize="18" FontWeight="SemiBold" Foreground="#1A1A2E"/>
-					<TextBlock Text="{Binding ConfirmDiscardDraftMessage}" FontSize="14" Foreground="#888899" TextWrapping="Wrap"/>
-					<StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="12">
-						<Button Classes="secondary" Content="Keep Drafting" Command="{Binding CancelCancelDraftCommand}"/>
-						<Button Classes="danger" Content="Discard" Command="{Binding ConfirmCancelDraftCommand}"/>
-					</StackPanel>
-				</StackPanel>
-			</Border>
-		</Border>
+		<controls:ModalDialog IsVisible="{Binding IsConfirmDiscardDraftVisible}"
+		                      Title="Discard Draft"
+		                      Message="{Binding ConfirmDiscardDraftMessage}">
+			<Button Classes="secondary" Content="Keep Drafting" Command="{Binding CancelCancelDraftCommand}"/>
+			<Button Classes="danger-btn" Content="Discard" Command="{Binding ConfirmCancelDraftCommand}"/>
+		</controls:ModalDialog>
 
-		<Border IsVisible="{Binding IsConfirmCancelContractVisible}" Background="#88000000">
-			<Border Background="#FFFFFF" CornerRadius="14" Width="400" Padding="32,28"
-                    HorizontalAlignment="Center" VerticalAlignment="Center"
-                    BoxShadow="0 12 48 0 #44000000">
-				<StackPanel Spacing="20">
-					<TextBlock Text="Cancel Contract" FontSize="18" FontWeight="SemiBold" Foreground="#1A1A2E"/>
-					<TextBlock Text="{Binding ConfirmCancelContractMessage}" FontSize="14" Foreground="#888899" TextWrapping="Wrap"/>
-					<StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="12">
-						<Button Classes="secondary" Content="Keep Contract" Command="{Binding CancelCancelContractCommand}"/>
-						<Button Classes="danger" Content="Cancel Contract" Command="{Binding ConfirmCancelContractCommand}"/>
-					</StackPanel>
-				</StackPanel>
-			</Border>
-		</Border>
+		<controls:ModalDialog IsVisible="{Binding IsConfirmCancelContractVisible}"
+		                      Title="Cancel Contract"
+		                      Message="{Binding ConfirmCancelContractMessage}">
+			<Button Classes="secondary" Content="Keep Contract" Command="{Binding CancelCancelContractCommand}"/>
+			<Button Classes="danger-btn" Content="Cancel Contract" Command="{Binding ConfirmCancelContractCommand}"/>
+		</controls:ModalDialog>
 
 		<!-- A refused cancel (e.g. a session is running) must be read and dismissed — never a line in the popover. -->
-		<Border IsVisible="{Binding CancelContractErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" Background="#88000000">
-			<Border Background="#FFFFFF" CornerRadius="14" Width="400" Padding="32,28"
-                    HorizontalAlignment="Center" VerticalAlignment="Center"
-                    BoxShadow="0 12 48 0 #44000000">
-				<StackPanel Spacing="20">
-					<TextBlock Text="Can't Cancel Contract" FontSize="18" FontWeight="SemiBold" Foreground="#1A1A2E"/>
-					<TextBlock Text="{Binding CancelContractErrorMessage}" FontSize="14" Foreground="#888899" TextWrapping="Wrap"/>
-					<StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="12">
-						<Button Classes="primary" Content="OK" Command="{Binding DismissCancelContractErrorCommand}"/>
-					</StackPanel>
-				</StackPanel>
-			</Border>
-		</Border>
+		<controls:ModalDialog IsVisible="{Binding CancelContractErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+		                      Title="Can't Cancel Contract"
+		                      Message="{Binding CancelContractErrorMessage}">
+			<Button Classes="primary" Content="OK" Command="{Binding DismissCancelContractErrorCommand}"/>
+		</controls:ModalDialog>
 
-		<Border IsVisible="{Binding IsConfirmDeleteContractVisible}" Background="#88000000">
-			<Border Background="#FFFFFF" CornerRadius="14" Width="400" Padding="32,28"
-                    HorizontalAlignment="Center" VerticalAlignment="Center"
-                    BoxShadow="0 12 48 0 #44000000">
-				<StackPanel Spacing="20">
-					<TextBlock Text="Delete Contract" FontSize="18" FontWeight="SemiBold" Foreground="#1A1A2E"/>
-					<TextBlock Text="{Binding ConfirmDeleteContractMessage}" FontSize="14" Foreground="#888899" TextWrapping="Wrap"/>
-					<StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="12">
-						<Button Classes="secondary" Content="Keep It" Command="{Binding CancelDeleteContractCommand}"/>
-						<Button Classes="danger" Content="Delete" Command="{Binding ConfirmDeleteContractCommand}"/>
-					</StackPanel>
-				</StackPanel>
-			</Border>
-		</Border>
+		<controls:ModalDialog IsVisible="{Binding IsConfirmDeleteContractVisible}"
+		                      Title="Delete Contract"
+		                      Message="{Binding ConfirmDeleteContractMessage}">
+			<Button Classes="secondary" Content="Keep It" Command="{Binding CancelDeleteContractCommand}"/>
+			<Button Classes="danger-btn" Content="Delete" Command="{Binding ConfirmDeleteContractCommand}"/>
+		</controls:ModalDialog>
 
 		<Popup IsOpen="{Binding IsNenContractPopoverVisible, Mode=TwoWay}"
                PlacementTarget="{Binding #NenContractButton}"
@@ -818,9 +747,8 @@
 											<TextBlock Text="{Binding PopoverActiveContract.StrictnessRule, Converter={x:Static conv:StrictnessRuleToLabelConverter.Instance}}"
                                                    FontSize="12" Foreground="#888899"/>
 										</StackPanel>
-										<TextBlock Text="{Binding CompleteContractErrorMessage}"
-                                               IsVisible="{Binding CompleteContractErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                                               FontSize="11" Foreground="#C03A2B" TextWrapping="Wrap"/>
+										<TextBlock Classes="error-text" Text="{Binding CompleteContractErrorMessage}"
+                                               IsVisible="{Binding CompleteContractErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
 									</StackPanel>
 								</Button>
 								<StackPanel Grid.Column="1" Spacing="6" VerticalAlignment="Top">
@@ -881,9 +809,8 @@
 						</ItemsControl>
 					</StackPanel>
 
-					<TextBlock Text="{Binding DeleteContractErrorMessage}"
-                               IsVisible="{Binding DeleteContractErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                               FontSize="12" Foreground="#C03A2B" TextWrapping="Wrap"/>
+					<TextBlock Classes="error-text" Text="{Binding DeleteContractErrorMessage}"
+                               IsVisible="{Binding DeleteContractErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
 
 					<Button Classes="primary" Content="Make Nen Contract"
                             HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"

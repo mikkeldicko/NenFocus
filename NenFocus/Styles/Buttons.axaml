@@ -1,0 +1,94 @@
+<!-- The app's buttons, one definition each (Gap 89 Slice B) — included once in App.axaml.
+     A screen may add a local style for what differs (padding, alignment), never a second copy. -->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Style Selector="Button.primary">
+        <Setter Property="Background" Value="#1A1A2E"/>
+        <Setter Property="Foreground" Value="#FFFFFF"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="CornerRadius" Value="8"/>
+        <Setter Property="Padding" Value="20,10"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="FontWeight" Value="Medium"/>
+    </Style>
+    <Style Selector="Button.primary:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="#2A2A4E"/>
+    </Style>
+    <Style Selector="Button.secondary">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="#888899"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="BorderBrush" Value="#E0E0EE"/>
+        <Setter Property="CornerRadius" Value="8"/>
+        <Setter Property="Padding" Value="20,10"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="FontSize" Value="13"/>
+    </Style>
+    <Style Selector="Button.danger-btn">
+        <Setter Property="Background" Value="#C0392B"/>
+        <Setter Property="Foreground" Value="#FFFFFF"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="CornerRadius" Value="8"/>
+        <Setter Property="Padding" Value="20,10"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="FontWeight" Value="Medium"/>
+    </Style>
+    <Style Selector="Button.danger-btn:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="#A93226"/>
+    </Style>
+    <Style Selector="Button.icon-btn">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Padding" Value="8,5"/>
+        <Setter Property="CornerRadius" Value="6"/>
+        <Setter Property="Cursor" Value="Hand"/>
+    </Style>
+    <Style Selector="Button.icon-btn /template/ ContentPresenter">
+        <Setter Property="Transitions">		
+            <Transitions>
+                <BrushTransition Property="Background" Duration="0:0:0.1"/>
+            </Transitions>
+        </Setter>
+    </Style>
+    <Style Selector="Button.icon-btn:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="#F0F0F8"/>
+    </Style>
+    <Style Selector="Button.icon-btn.danger:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="#FFF0F0"/>
+    </Style>
+    <Style Selector="Button.back-btn">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Padding" Value="4"/>
+    </Style>
+    <Style Selector="Button.back-btn /template/ ContentPresenter">
+        <Setter Property="Background" Value="Transparent"/>
+    </Style>
+    <Style Selector="Button.back-btn:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="Transparent"/>
+    </Style>
+    <Style Selector="Button.done-btn">
+        <Setter Property="Background" Value="#FFFFFF"/>
+        <Setter Property="BorderBrush" Value="#B8922A"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="10"/>
+        <Setter Property="HorizontalAlignment" Value="Stretch"/>
+        <Setter Property="HorizontalContentAlignment" Value="Center"/>
+        <Setter Property="Height" Value="48"/>
+        <Setter Property="Cursor" Value="Hand"/>
+    </Style>
+    <Style Selector="Button.done-btn /template/ ContentPresenter">
+        <Setter Property="Background" Value="#FFFFFF"/>
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="Background" Duration="0:0:0.15"/>
+            </Transitions>
+        </Setter>
+    </Style>
+    <Style Selector="Button.done-btn:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="#FDF6E8"/>
+    </Style>
+</Styles>

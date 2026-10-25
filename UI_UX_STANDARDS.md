@@ -72,6 +72,16 @@ Naming rules:
 
 ---
 
+## Shared Look: Styles and Controls (added 2026-10-25, Gap 89 Slice B)
+
+The look has one definition per thing, included once in `App.axaml` — copied styles had drifted (Delete was a red outline in the Planner, solid red on the presets pages; errors came in two sizes and two reds).
+
+- **A style** (`NenFocus/Styles/`) when only the look repeats: `Buttons.axaml` — `primary`, `secondary`, `danger-btn` (solid red; `danger` alone is the presets' red icon hover), `icon-btn`, `back-btn`, `done-btn`; `Text.axaml` — `field-label` (a field's name above it), `error-text` (what went wrong, where it went wrong), `error-banner` (a pale red box around a form-level error). A screen may add a local style for what differs (the missed-sessions screen's taller buttons), never a second copy. Guarded by `SharedStyleRuleTests`.
+- **A control** (`Views/Controls/`) when structure and behaviour repeat: `TimeOfDayBox` (every time field), `ModalDialog` (every "Are you sure?" and every notice to dismiss — title, message, error, the screen's buttons). Only `ModalDialog` dims the screen, apart from a listed few full-form overlays (`SharedStyleRuleTests.OnlyModalDialogDimsTheScreen`).
+- Colours are still typed by hand everywhere; naming them is Gap 119.
+
+---
+
 ## ViewModel Binding Contract
 
 What a ViewModel may and may not hold or do (dispatchers only, no handlers, no timers, math or value formatting, no Domain entities; code-behind does pixel geometry only) is `MODULE_STANDARDS.md` → UI and The ViewModel Forbidden Zone, guarded by the architecture tests. The UI-only conventions:
@@ -144,7 +154,7 @@ ViewModels expose raw values and Views format them with converters — the rule 
 
 **Split dialog:** each piece has a start and an end time. A date field per piece shows only when `Allowances.SplitPiecesMayChangeDay` is set (a bound block under Period Study); otherwise both pieces stay on the block's own day.
 
-**Block Snapshot — read-only view for a done block (Gap 28):** clicking a **done** block opens a separate read-only overlay, not the edit form. "Done" means: a Focus block whose `Outcome` has resolved; a Background block that has ended. The running session's own block opens nothing (checked first, via `ActiveSession?.OriginatingBlockId` — unreliable after a restart, see Gap 89 area 4 F2).
+**Block Snapshot — read-only view for a done block (Gap 28):** clicking a **done** block opens a separate read-only overlay, not the edit form. "Done" is the block's own answer, `PlannedBlockDto.IsFinal` (`PlannedBlock.IsFinal`: ended; for a Focus block, its session ended or it was missed — Gap 89 Slice B, A3). The running session's own block opens nothing (checked first, via `ActiveSession?.OriginatingBlockId`, read from the database since Gap 92; whether it should open a read-only view instead is Gap 79/114's).
 
 - **Focus block with a session** (`GetSessionSnapshotForBlockQuery` returns one): type/outcome/redemption badges, date, time range, duration, Zetsu goal, reflection (placeholder when blank — a valid outcome, not an error), an expandable list of blocked attempts, and — for a redemption block — which missed blocks it covered and how much.
 - **No session** (a missed Focus block, or any Background block): type, preset, date, scheduled time range, duration only. Cancelled blocks never appear as tiles (`GetPlannedBlocksForDayQueryHandler` filters them out).

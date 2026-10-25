@@ -29,18 +29,6 @@
         <Style Selector="Button.preset-card /template/ ContentPresenter">
             <Setter Property="Background" Value="#FFFFFF"/>
         </Style>
-        <Style Selector="Button.chip">
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="BorderBrush" Value="#DDDDE8"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="CornerRadius" Value="20"/>
-            <Setter Property="Padding" Value="10,4"/>
-            <Setter Property="FontSize" Value="11"/>
-            <Setter Property="Cursor" Value="Hand"/>
-        </Style>
-        <Style Selector="Button.chip /template/ ContentPresenter">
-            <Setter Property="Background" Value="Transparent"/>
-        </Style>
         <Style Selector="Button.chip-locked">
             <Setter Property="Background" Value="#F0F0F8"/>
             <Setter Property="BorderBrush" Value="#DDDDE8"/>

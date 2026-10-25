@@ -14,27 +14,6 @@
 	<UserControl.Styles>
 
 		<!-- Done button -->
-		<Style Selector="Button.done-btn">
-			<Setter Property="Background" Value="#FFFFFF"/>
-			<Setter Property="BorderBrush" Value="#B8922A"/>
-			<Setter Property="BorderThickness" Value="1"/>
-			<Setter Property="CornerRadius" Value="10"/>
-			<Setter Property="HorizontalAlignment" Value="Stretch"/>
-			<Setter Property="HorizontalContentAlignment" Value="Center"/>
-			<Setter Property="Height" Value="48"/>
-			<Setter Property="Cursor" Value="Hand"/>
-		</Style>
-		<Style Selector="Button.done-btn /template/ ContentPresenter">
-			<Setter Property="Background" Value="#FFFFFF"/>
-			<Setter Property="Transitions">
-				<Transitions>
-					<BrushTransition Property="Background" Duration="0:0:0.15"/>
-				</Transitions>
-			</Setter>
-		</Style>
-		<Style Selector="Button.done-btn:pointerover /template/ ContentPresenter">
-			<Setter Property="Background" Value="#FDF6E8"/>
-		</Style>
 
 		<!-- Reflection TextBox -->
 		<Style Selector="TextBox.reflection">

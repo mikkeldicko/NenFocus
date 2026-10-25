@@ -326,6 +326,7 @@ These converters are approved. Reuse before creating new ones. **This list must 
 | Domain service | Agent noun — names the role it plays (`-Engine`, `-Classifier`, `-Calculator`, `-Checker`, …); never `-Service`, which is reserved for Infrastructure and the Application↔UI bridges. A `sealed class` in `Domain/Services/`, no interface (Gap 111) | `PolicyEngine`, `BlockPlacementChecker`, `BlockChangeChecker` |
 | ViewModel | `<Page>ViewModel` | `MainPageViewModel`, `HatsuPageViewModel` |
 | Converter | `<Input>To<Output>Converter` for a mapping; `<What>EqualConverter` / `<Subject>Has<X>Converter` for a yes/no test (added 2026-09-29, Gap 98 — the catalogue already listed `IntEqualConverter`). Every converter is listed in the Converter Catalogue above — a test fails otherwise | `TimeSpanToStringConverter`, `StringEqualConverter` |
+| Control | A noun naming what it is on screen, in `Views/Controls/`; no ViewModel — a screen gives it values and content (added 2026-10-25, Gap 89 Slice B). Its look lives with it (`<Control>.axaml`). A control when structure and behaviour repeat; a shared style (`Styles/`) when only the look does — see `UI_UX_STANDARDS.md` → Shared Look | `TimeOfDayBox`, `ModalDialog` |
 
 ---
 
