@@ -1,4 +1,5 @@
 using FluentAssertions;
+using NenFocus.Domain.Entities;
 using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Tests.Domain.ValueObjects;
@@ -14,11 +15,12 @@ public class SessionDurationTests
     }
 
     [Fact]
-    public void Constructor_TwentyFourHours_IsAllowed()
+    public void Constructor_AsLongAsAFocusBlock_IsAllowed()
     {
-        var duration = new SessionDuration(TimeSpan.FromHours(24));
+        // One rule for every focus period: FocusBlock.MaxLength (Gap 89 Slice B, A1).
+        var duration = new SessionDuration(FocusBlock.MaxLength);
 
-        duration.Value.Should().Be(TimeSpan.FromHours(24));
+        duration.Value.Should().Be(FocusBlock.MaxLength);
     }
 
     [Fact]
@@ -30,9 +32,9 @@ public class SessionDurationTests
     }
 
     [Fact]
-    public void Constructor_OverTwentyFourHours_Throws()
+    public void Constructor_LongerThanAFocusBlock_Throws()
     {
-        var act = () => new SessionDuration(TimeSpan.FromHours(24).Add(TimeSpan.FromMinutes(1)));
+        var act = () => new SessionDuration(FocusBlock.MaxLength.Add(TimeSpan.FromMinutes(1)));
 
         act.Should().Throw<ArgumentException>();
     }

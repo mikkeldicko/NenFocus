@@ -160,4 +160,21 @@ public class RitualStepViewTests
         VisibleTexts(view).Should().Contain("Please select a duration greater than zero.");
         ButtonWithText(view, "START SESSION").IsEffectivelyEnabled.Should().BeFalse();
     }
+
+    [AvaloniaFact]
+    public void Hatsu_OffersUpToTwelveHours_AsLongAsAFocusBlock()
+    {
+        // One rule for every focus period, FocusBlock.MaxLength (Gap 89 Slice B, A1) — it used to stop at 8 h.
+        var vm = new HatsuPageViewModel(Substitute.For<ICommandDispatcher>(), new FakeQueryDispatcher(),
+            TestClock.Create(), () => new HatsuData(), () => { }, () => { });
+        var view = new HatsuPageView { DataContext = vm };
+        var window = Show(view);
+
+        Click(window, ButtonWithText(view, "12 h"));
+        Click(window, ButtonWithText(view, "0 min"));
+        ButtonWithText(view, "START SESSION").IsEffectivelyEnabled.Should().BeTrue("12 h is a Focus block's longest");
+
+        Click(window, ButtonWithText(view, "15 min"));
+        ButtonWithText(view, "START SESSION").IsEffectivelyEnabled.Should().BeFalse("12 h 15 m is longer than any Focus block");
+    }
 }

@@ -133,6 +133,18 @@
 							<Button Classes="chip" Content="8 h"
                                     Classes.active="{Binding SelectedHours, Converter={x:Static conv:IntEqualConverter.Instance}, ConverterParameter=8}"
                                     Command="{Binding SelectHoursCommand}" CommandParameter="8"/>
+							<Button Classes="chip" Content="9 h"
+                                    Classes.active="{Binding SelectedHours, Converter={x:Static conv:IntEqualConverter.Instance}, ConverterParameter=9}"
+                                    Command="{Binding SelectHoursCommand}" CommandParameter="9"/>
+							<Button Classes="chip" Content="10 h"
+                                    Classes.active="{Binding SelectedHours, Converter={x:Static conv:IntEqualConverter.Instance}, ConverterParameter=10}"
+                                    Command="{Binding SelectHoursCommand}" CommandParameter="10"/>
+							<Button Classes="chip" Content="11 h"
+                                    Classes.active="{Binding SelectedHours, Converter={x:Static conv:IntEqualConverter.Instance}, ConverterParameter=11}"
+                                    Command="{Binding SelectHoursCommand}" CommandParameter="11"/>
+							<Button Classes="chip" Content="12 h"
+                                    Classes.active="{Binding SelectedHours, Converter={x:Static conv:IntEqualConverter.Instance}, ConverterParameter=12}"
+                                    Command="{Binding SelectHoursCommand}" CommandParameter="12"/>
 						</WrapPanel>
 					</StackPanel>
 

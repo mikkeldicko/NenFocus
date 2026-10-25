@@ -1,6 +1,7 @@
 using FluentValidation;
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
+using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
 using NenFocus.Domain.ValueObjects;
 
@@ -12,7 +13,12 @@ public sealed class StartSessionValidator : AbstractValidator<StartSessionComman
     {
         RuleFor(x => x.Goal).NotEmpty().MaximumLength(500);
         RuleFor(x => x.PresetId).NotEmpty().WithMessage("A block preset must be selected.");
-        RuleFor(x => x.DurationMinutes).InclusiveBetween(1, 480);
+        // A focus period lasts at least a minute and at most FocusBlock.MaxLength (Gap 89 Slice B, A1).
+        // A planned session is its block's length — the block was held to the cap when it was saved —
+        // so only a spontaneous one's chosen length is checked here.
+        RuleFor(x => x.DurationMinutes).GreaterThanOrEqualTo(1);
+        When(x => x.OriginatingBlockId is null, () =>
+            RuleFor(x => x.DurationMinutes).LessThanOrEqualTo((int)FocusBlock.MaxLength.TotalMinutes));
 
         // Only spontaneous sessions carry a PresetId chosen by the user — planned sessions
         // derive the preset from the FocusBlock, which was already validated at scheduling

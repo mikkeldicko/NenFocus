@@ -89,7 +89,8 @@ public partial class HatsuPageViewModel : ViewModelBase
 
     public bool CanStart => IsPlannedMode
         ? !PlannedSchedule!.HasEnded(_clock.Now) && !IsStarting
-        : TotalMinutes > 0 && TotalMinutes <= 480 && !IsStarting;
+        // At most as long as a Focus block — the one rule for every focus period (Gap 89 Slice B, A1).
+        : TotalMinutes > 0 && TimeSpan.FromMinutes(TotalMinutes) <= PlanningLimits.FocusBlockMaxLength && !IsStarting;
 
     public HatsuPageViewModel(
         ICommandDispatcher commandDispatcher,

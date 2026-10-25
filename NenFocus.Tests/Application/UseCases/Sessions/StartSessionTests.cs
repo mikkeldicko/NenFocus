@@ -192,6 +192,33 @@ public class StartSessionTests : UseCaseTestBase
 
     // ── Planned ──────────────────────────────────────────────────────────────
 
+    // ── Length: one rule, a Focus period is at most FocusBlock.MaxLength (Gap 89 Slice B, A1) ──
+
+    [Fact]
+    public async Task APlannedBlockLongerThanEightHours_StartsItsSession()
+    {
+        // Hatsu sends what is left of the block. The validator used to hold every session to
+        // 480 minutes, so a 10-hour block — which the Planner allows — could never start.
+        var block = Block(Now.AddMinutes(-1), Now.AddHours(10).AddMinutes(-1));
+        await SeedAsync(block);
+
+        var session = await StartedAsync(PlannedCommand(block) with { DurationMinutes = 599 });
+
+        session.EndAt.Should().Be(At.Utc(Now.AddHours(10).AddMinutes(-1)));
+    }
+
+    [Fact]
+    public async Task ASpontaneousSession_MayRunAsLongAsAFocusBlock()
+    {
+        var session = await StartedAsync(SpontaneousCommand() with { DurationMinutes = (int)FocusBlock.MaxLength.TotalMinutes });
+
+        session.EndAt.Should().Be(At.Utc(Now.Add(FocusBlock.MaxLength)));
+    }
+
+    [Fact]
+    public async Task ASpontaneousSessionLongerThanAFocusBlock_IsRefused()
+        => await ShouldBeRefused(SpontaneousCommand() with { DurationMinutes = (int)FocusBlock.MaxLength.TotalMinutes + 1 });
+
     [Fact]
     public async Task APlannedSession_StampsItsBlocksRitual()
     {

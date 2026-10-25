@@ -67,7 +67,7 @@ public class StartSessionValidatorTests
 
     [Theory]
     [InlineData(0)]
-    [InlineData(481)]
+    [InlineData(721)]   // FocusBlock.MaxLength (12 h) and a minute
     public async Task Validate_DurationOutOfRange_IsInvalid(int minutes)
     {
         var command = ValidCommand(Guid.NewGuid()) with { DurationMinutes = minutes };
@@ -79,7 +79,7 @@ public class StartSessionValidatorTests
 
     [Theory]
     [InlineData(1)]
-    [InlineData(480)]
+    [InlineData(720)]   // FocusBlock.MaxLength: a session may run as long as a Focus block
     public async Task Validate_DurationAtBoundary_IsValid(int minutes)
     {
         var presetId = Guid.NewGuid();
