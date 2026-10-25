@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using CommunityToolkit.Mvvm.Input;
 
 namespace NenFocus.ViewModels.Planner.ContractWizard;
@@ -24,7 +25,7 @@ public partial class ContractReviewStepViewModel : ViewModelBase
     public double? DailyFloorHours { get; }
     public TimeOnly? WorkHoursStart { get; }
     public TimeOnly? WorkHoursEnd { get; }
-    public string SummaryRestDays { get; }
+    public IReadOnlyList<DateOnly> RestDays { get; }
     public string SummaryRedemptionPlacement { get; }
 
     public ContractReviewStepViewModel(
@@ -37,7 +38,7 @@ public partial class ContractReviewStepViewModel : ViewModelBase
         double? dailyFloorHours,
         TimeOnly? workHoursStart,
         TimeOnly? workHoursEnd,
-        string summaryRestDays,
+        IReadOnlyList<DateOnly> restDays,
         string summaryRedemptionPlacement,
         Action<NenContractDraftRules> onReadyToSchedule,
         Action onBack)
@@ -51,7 +52,7 @@ public partial class ContractReviewStepViewModel : ViewModelBase
         DailyFloorHours = dailyFloorHours;
         WorkHoursStart = workHoursStart;
         WorkHoursEnd = workHoursEnd;
-        SummaryRestDays = summaryRestDays;
+        RestDays = restDays;
         SummaryRedemptionPlacement = summaryRedemptionPlacement;
         _onReadyToSchedule = onReadyToSchedule;
         _onBack = onBack;

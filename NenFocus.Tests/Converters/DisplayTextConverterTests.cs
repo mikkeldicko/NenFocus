@@ -69,6 +69,14 @@ public class DisplayTextConverterTests
     }
 
     [Fact]
+    public void RestDays_ReadAsTheirChipsDo_OrNone()
+    {
+        // The wizard summary used to join the dates' default ToString() (the culture's short date).
+        One(DateListToLabelConverter.Instance, new[] { new DateOnly(2026, 3, 5), new DateOnly(2026, 3, 12) }).Should().Be("Mar 5, Mar 12");
+        One(DateListToLabelConverter.Instance, Array.Empty<DateOnly>()).Should().Be("None");
+    }
+
+    [Fact]
     public void TheContractBanner_NamesTheDayTheHoursTheDeficitAndTheBonus()
     {
         var contract = new NenContractRangeViewDto

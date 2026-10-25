@@ -99,7 +99,7 @@ Tactical implementation details, current build state, and platform-specific gotc
 - **`BlockPreset` lock only protected the Blocklist direction** (2026-08-21) — see `DESIGN_GAP_HISTORY.md` Gap 30.
 - **A Planned Session could hang forever at `00:00:00`** (2026-08-21) — see `DESIGN_GAP_HISTORY.md` Gap 31.
 - **"Application Handler Forbidden Zone" rule written, then used to audit and fix 3 more instances of the same bug shape** (2026-08-21) — see `DESIGN_GAP_HISTORY.md` Gap 32.
-- **Planner's six time-picker fields rebuilt from `AutoCompleteBox` to a hand-owned control** (2026-09-02) — see `DESIGN_GAP_HISTORY.md` Gap 47.
+- **Planner's six time-picker fields rebuilt from `AutoCompleteBox` to a hand-owned control** (2026-09-02) — see `DESIGN_GAP_HISTORY.md` Gap 47. Since Gap 89 Slice B every time field (Planner and Contract Presets) is the shared `TimeOfDayBox`.
 - **Split dialog: duration labels, live overlap + Work Hours validation** (2026-09-02) — see `DESIGN_GAP_HISTORY.md` Gap 48.
 - **Redemption Placement Policy — Cover Deficit stopped requiring same-day-as-missed** (2026-09-04) — see `DESIGN_GAP_HISTORY.md` Gap 49.
 - **Debug-only seed fixtures for the redemption placement policy** (2026-09-04) — `HostExtensions.EnsureDatabase()`, `#if DEBUG`-gated, five test contracts.
@@ -141,7 +141,7 @@ Tactical implementation details, current build state, and platform-specific gotc
 
 | Area | Notes |
 |------|-------|
-| Insights page | Not built. `InsightsPageView.axaml` is a static "Coming soon" placeholder backed by a generic stub in `StubPageViewModels.cs` — no query, no handler, no DTO exist yet. Also the intended home for Gap C1 (weighted Day-Met percentage day-strip) — `NenContract.PercentOfFloorMet` is not yet built, only designed. |
+| Insights page | Not built. `InsightsPageView.axaml` is a static "Coming soon" placeholder backed by an empty `ViewModels/Insights/InsightsPageViewModel.cs` — no query, no handler, no DTO exist yet. Also the intended home for Gap C1 (weighted Day-Met percentage day-strip) — `NenContract.PercentOfFloorMet` is not yet built, only designed. |
 | Universal usage tracking + Usage Ceiling | See `OPEN_GAPS.md` → Open Gap A. Domain shape settled; not yet built. |
 | Planned Period / Strict Mode | Superseded by Nen Contract — kept only as a historical cross-reference; do not build a second, parallel feature for this. |
 | Recurring Blocks | See `OPEN_GAPS.md` → Open Gap E. Domain shape settled; not yet built. |

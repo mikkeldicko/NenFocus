@@ -202,7 +202,7 @@ public partial class ContractWizardViewModel : ViewModelBase
             dailyFloorHours: fixedFloor,
             workHoursStart: workHoursStart,
             workHoursEnd: workHoursEnd,
-            summaryRestDays: restDays.Count > 0 ? string.Join(", ", restDays) : "None",
+            restDays: restDays,
             summaryRedemptionPlacement: redemptionPlacementPolicy == RedemptionPlacementPolicy.CurrentDayOnly
                 ? "Current day only"
                 : "Anywhere in the contract",

@@ -249,7 +249,7 @@ ViewModels must never hold or navigate a Domain entity (`Session`, `BlockPreset`
 
 > **Rule:** Data flows from the Application layer through DTOs (`SessionDto`, `BlockPresetDto`, etc.). The ViewModel binds to DTOs and their properties.
 >
-> The same goes for Domain services and entity constants (added 2026-09-29, Gap 98): no UI code names `NenFocus.Domain.Entities` or `NenFocus.Domain.Services`. A limit like `FocusBlock.MaxDurationHours` reaches the UI through Application, not by reading the entity. Guarded by `ViewModelRuleTests.NoUiCodeUsesDomainEntitiesOrServices`.
+> The same goes for Domain services and entity constants (added 2026-09-29, Gap 98): no UI code names `NenFocus.Domain.Entities` or `NenFocus.Domain.Services`. A limit like the Focus cap reaches the UI through Application (`PlanningLimits.FocusBlockMaxLength`, passing `FocusBlock.MaxLength` along — Gap 89 Slice B), not by reading the entity. Guarded by `ViewModelRuleTests.NoUiCodeUsesDomainEntitiesOrServices`.
 
 ---
 
@@ -304,6 +304,7 @@ These converters are approved. Reuse before creating new ones. **This list must 
 | `DayFloorStatusToLabelConverter` | `Instance` | `DayFloorPreviewViewModel?` → `string` | None. A day badge's text: "Rest", "2.5h", or "2h / 3h" when the comparison is the point; which numbers is the status's own (`ShowSimplifiedFuture`, `IsContractFloorMode`). Null → empty (Gap 89 Slice B). |
 | `DayFloorStatusToBonusLabelConverter` | `Instance` | `DayFloorPreviewViewModel?` → `string` | None. The Bonus pill's "+1.5h bonus"; null → empty (Gap 89 Slice B). |
 | `ContractRangeToBannerConverter` | `Instance` | `NenContractRangeViewDto?` → `string` | None. The Planner's contract banner: "Contract: Name — Day 2/7 — 3.5h / 10h completed — 1h 30m deficit — 45 min bonus", deficit and bonus only when above zero (Gap 89 Slice B). |
+| `DateListToLabelConverter` | `Instance` | `IEnumerable<DateOnly>` → `string` | None. "Mar 5, Mar 12" (as the rest-day chips show them), "None" when empty — the wizard summary's rest days (Gap 89 Slice B). |
 | `DateRangeToLabelConverter` | `Instance` | `DateOnly`, `DateOnly` → `string` (`MultiBinding`) | None. "Jan 1, 2026 – Jan 31, 2026". `FormatRangeShort` stays only for `ValidateDraftPlacement` (→ Gap 68). |
 | `WorkHoursRangeToLabelConverter` | `Instance` | `TimeOnly?`, `TimeOnly?` → `string` (`MultiBinding`) | None. "09:00 – 17:00", "No constraint" when either is missing. `FormatKnownWindow12Hour` stays only for `ValidateDraftPlacement` (→ Gap 68). |
 | `MinutesToStringConverter` | `Instance` | `WholeMinutes`/`double`/`int` (minutes) → `string` | None. "1h 30m" / "1h" / "30 min" — never a pointless "0m". Also `FormatMinutes(minutes)`. |
