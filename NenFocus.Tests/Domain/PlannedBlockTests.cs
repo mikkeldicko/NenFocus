@@ -496,9 +496,23 @@ public class PlannedBlockTests
     }
 
     [Fact]
+    public void FocusBlock_FitsMaxLength_UpToAndIncludingTheCap()
+    {
+        // The one place the cap is asked — the entity and both block validators (Gap 89 Slice B, A2).
+        FocusBlock.FitsMaxLength(At.Slot(Start, Start.Add(FocusBlock.MaxLength))).Should().BeTrue();
+        FocusBlock.FitsMaxLength(At.Slot(Start, Start.Add(FocusBlock.MaxLength).AddMinutes(1))).Should().BeFalse();
+    }
+
+    [Fact]
+    public void FocusBlock_MaxLength_IsTwelveHours()
+    {
+        FocusBlock.MaxLength.Should().Be(TimeSpan.FromHours(12));
+    }
+
+    [Fact]
     public void FocusBlock_Create_ExceedsMaxDuration_Throws()
     {
-        var act = () => FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, Start.AddHours(FocusBlock.MaxDurationHours).AddMinutes(1)));
+        var act = () => FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, Start.Add(FocusBlock.MaxLength).AddMinutes(1)));
 
         act.Should().Throw<ArgumentException>();
     }
@@ -506,18 +520,18 @@ public class PlannedBlockTests
     [Fact]
     public void FocusBlock_Create_AtExactlyMaxDuration_Succeeds()
     {
-        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, Start.AddHours(FocusBlock.MaxDurationHours)));
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, Start.Add(FocusBlock.MaxLength)));
 
-        block.GetDuration().Should().Be(TimeSpan.FromHours(FocusBlock.MaxDurationHours));
+        block.GetDuration().Should().Be(FocusBlock.MaxLength);
     }
 
     [Fact]
     public void BackgroundBlock_Create_ExceedsFocusMaxDuration_Succeeds()
     {
         // Background blocks have no duration cap at all — Focus-only by design.
-        var block = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, Start.AddHours(FocusBlock.MaxDurationHours).AddDays(3)));
+        var block = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, Start.Add(FocusBlock.MaxLength).AddDays(3)));
 
-        block.GetDuration().Should().Be(TimeSpan.FromHours(FocusBlock.MaxDurationHours).Add(TimeSpan.FromDays(3)));
+        block.GetDuration().Should().Be(FocusBlock.MaxLength.Add(TimeSpan.FromDays(3)));
     }
 
     [Fact]
@@ -525,7 +539,7 @@ public class PlannedBlockTests
     {
         var block = CreateFocusBlock();
 
-        var act = () => block.Reschedule(At.Slot(Start, Start.AddHours(FocusBlock.MaxDurationHours).AddMinutes(1)));
+        var act = () => block.Reschedule(At.Slot(Start, Start.Add(FocusBlock.MaxLength).AddMinutes(1)));
 
         act.Should().Throw<ArgumentException>();
         block.Scheduled.Should().Be(At.Slot(Start, End));
@@ -535,7 +549,7 @@ public class PlannedBlockTests
     public void FocusBlock_Reschedule_AtExactlyMaxDuration_Succeeds()
     {
         var block = CreateFocusBlock();
-        var newEnd = Start.AddHours(FocusBlock.MaxDurationHours);
+        var newEnd = Start.Add(FocusBlock.MaxLength);
 
         block.Reschedule(At.Slot(Start, newEnd));
 
@@ -546,7 +560,7 @@ public class PlannedBlockTests
     public void BackgroundBlock_Reschedule_ExceedsFocusMaxDuration_Succeeds()
     {
         var block = CreateBackgroundBlock();
-        var newEnd = Start.AddHours(FocusBlock.MaxDurationHours).AddDays(3);
+        var newEnd = Start.Add(FocusBlock.MaxLength).AddDays(3);
 
         block.Reschedule(At.Slot(Start, newEnd));
 

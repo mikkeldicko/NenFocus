@@ -53,9 +53,9 @@ public sealed class UpdatePlannedBlockValidator : AbstractValidator<UpdatePlanne
             .MustAsync(async (command, ct) =>
             {
                 var block = await _blocks.GetByIdAsync(command.BlockId, ct);
-                return block is not FocusBlock || command.Slot.Length <= TimeSpan.FromHours(FocusBlock.MaxDurationHours);
+                return block is not FocusBlock || FocusBlock.FitsMaxLength(command.Slot);
             })
-            .WithMessage($"A Focus block cannot exceed {FocusBlock.MaxDurationHours} hours.");
+            .WithMessage($"A Focus block cannot exceed {FocusBlock.MaxLength.TotalHours} hours.");
 
         // May this block change at all, and in this way? The one permission answer,
         // BlockChangeChecker (Gap 93): the block's own lock, then its contract's rules, then the

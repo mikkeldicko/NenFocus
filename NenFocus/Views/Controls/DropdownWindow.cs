@@ -2,21 +2,20 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace NenFocus.ViewModels.Components;
+namespace NenFocus.Views.Controls;
 
 /// <summary>
 /// Windows an ordered list down to at most <paramref name="windowSize"/> items centered on
 /// <paramref name="centerIndex"/>, padding toward whichever side has room when centering
 /// would run past an edge — e.g. windowing 5 around the second-to-last item pulls one more
-/// from before it rather than showing only 4. Pure and list-shape-agnostic (used for both
-/// Start's flat time-of-day list and End's generated duration-offset list).
+/// from before it rather than showing only 4. Pure and list-shape-agnostic — TimeOfDayBox's
+/// dropdown, for a Start field's list and an End field's alike (Gap 89 Slice B).
 /// </summary>
-internal static class PlannerDropdownWindow
+internal static class DropdownWindow
 {
     /// <summary>
-    /// Pure index arithmetic behind Center&lt;T&gt; — split out so the View's code-behind can
-    /// compute the same 5-item window bounds to scroll a live AutoCompleteBox popup to,
-    /// without needing the actual list of items (just its count).
+    /// Pure index arithmetic behind Center&lt;T&gt; — split out so TimeOfDayBox can compute the
+    /// same 5-item window bounds to scroll its popup to, from just the item count.
     /// </summary>
     internal static (int Start, int End) Bounds(int centerIndex, int count, int windowSize)
     {

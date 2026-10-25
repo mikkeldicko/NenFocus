@@ -49,7 +49,7 @@ public class GetPlannedBlocksForDayQueryHandlerTests
         dto.BlockPresetType.Should().Be(BlockPresetType.Focus);
         dto.WebsiteFilterType.Should().Be(WebsiteFilterType.Allowlist);
         dto.Shown.Should().Be(At.Slot(Start, End));
-        dto.HasEnded.Should().BeFalse();
+        dto.IsFinal.Should().BeFalse();
         dto.ContractBadge.Should().BeNull();
     }
 
@@ -192,7 +192,7 @@ public class GetPlannedBlocksForDayQueryHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_BlockAlreadyEnded_HasEndedIsTrue()
+    public async Task HandleAsync_BlockAlreadyEnded_IsFinal()
     {
         _clock.SetNow(End.AddMinutes(1));
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End));
@@ -201,7 +201,24 @@ public class GetPlannedBlocksForDayQueryHandlerTests
 
         var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
 
-        result.Should().ContainSingle().Subject.HasEnded.Should().BeTrue();
+        result.Should().ContainSingle().Subject.IsFinal.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task HandleAsync_FocusBlockWhoseSessionIsStillRunning_IsNotFinal()
+    {
+        // It has an outcome already (the Ritual was on time) but could still end early — the
+        // block's own answer, never the Planner's "has an outcome" (Gap 89 Slice B, A3).
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(),At.Slot(Start, End));
+        block.MarkRitualCompleted(At.Utc(Start));
+        _blocks.GetForRangeAsync(At.UtcZone.SlotCovering(Day), Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[block]);
+        _presets.GetAllAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<BlockPreset>)[]);
+
+        var result = await CreateHandler().HandleAsync(new GetPlannedBlocksForDayQuery { Date = Day });
+
+        var dto = result.Should().ContainSingle().Subject;
+        dto.Outcome.Should().NotBeNull();
+        dto.IsFinal.Should().BeFalse();
     }
 
     [Fact]

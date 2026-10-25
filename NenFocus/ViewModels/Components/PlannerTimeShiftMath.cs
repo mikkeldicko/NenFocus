@@ -42,4 +42,9 @@ internal static class PlannerTimeShiftMath
         var raw = newStartTimeOfDay + duration;
         return raw >= OneDay ? raw - OneDay : raw;
     }
+
+    /// <summary>A time of day without its seconds — what a form field shows and saves (the text
+    /// fields used to drop them by formatting "HH:mm" and parsing it back).</summary>
+    internal static TimeSpan ToWholeMinutes(TimeSpan timeOfDay) =>
+        new(timeOfDay.Days, timeOfDay.Hours, timeOfDay.Minutes, 0);
 }

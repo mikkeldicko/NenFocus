@@ -12,12 +12,6 @@ namespace NenFocus.Tests.ArchitectureTests;
 /// </summary>
 public class DtoBuilderRuleTests
 {
-    private static readonly string[] KnownMultipleBuilders =
-    [
-        // → Gap 89 area 2: the Planner builds draft tiles as PlannedBlockDtos beside the day query.
-        "PlannedBlockDto built in 2 files",
-    ];
-
     [Fact]
     public void EachDtoIsBuiltInOnePlace()
     {
@@ -29,6 +23,7 @@ public class DtoBuilderRuleTests
             .Where(x => x.Builders > 1)
             .Select(x => $"{x.Name} built in {x.Builders} files");
 
-        KnownExceptions.Check(violations, KnownMultipleBuilders);
+        // No exceptions since Gap 89 Slice B: a draft tile is built from the draft, not a fake PlannedBlockDto.
+        KnownExceptions.Check(violations, []);
     }
 }

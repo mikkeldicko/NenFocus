@@ -1,20 +1,19 @@
 using System;
 using System.Collections.Generic;
 
-namespace NenFocus.ViewModels.Components;
+namespace NenFocus.Views.Controls;
 
 /// <summary>
-/// Pure lookup math for the Planner block form's Google-Calendar-style time dropdown: the
-/// list of options is always shown in full (never sliced down by typing — see
-/// PlannerPageViewModel's Visible*TimeOptions removal), so typing and arrow-key navigation
+/// Pure lookup math for TimeOfDayBox's Google-Calendar-style time dropdown: the list of
+/// options is always shown in full (never sliced down by typing), so typing and arrow-key navigation
 /// only ever change *where the popup is scrolled/highlighted*, never *what's in it*.
 /// Zero business-rule content, same category as <see cref="PlannerTimeShiftMath"/>.
 /// </summary>
-internal static class PlannerTimeOptionLookup
+internal static class TimeOptionLookup
 {
     /// <summary>
     /// Best-guess time-of-day from partial typed digits, for live dropdown centering only —
-    /// not a validity check (see PlannerPageViewModel.TryParseFormTime for that). Strips any
+    /// not a validity check (see TimeOfDayToStringConverter.TryParse for that). Strips any
     /// non-digit characters and reads the leading one-or-two digits as an hour: "14" and
     /// "144" both guess hour 14 (a third digit doesn't refine the guess until the text is a
     /// complete, valid time — see the two-digit-then-fall-back-to-one-digit rule below).

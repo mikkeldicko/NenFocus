@@ -1,9 +1,9 @@
 using FluentAssertions;
-using NenFocus.ViewModels.Components;
+using NenFocus.Views.Controls;
 
-namespace NenFocus.Tests.ViewModels.Components;
+namespace NenFocus.Tests.Views.Controls;
 
-public class PlannerDropdownWindowTests
+public class DropdownWindowTests
 {
     // Mirrors TimeOptions: 00:00, 00:15, ..., 23:45, 24:00 (97 entries, index 0..96).
     private static readonly List<string> TimeOptions = BuildTimeOptions();
@@ -23,7 +23,7 @@ public class PlannerDropdownWindowTests
     {
         var centerIndex = TimeOptions.IndexOf("14:00");
 
-        var window = PlannerDropdownWindow.Center(TimeOptions, centerIndex, 5);
+        var window = DropdownWindow.Center(TimeOptions, centerIndex, 5);
 
         window.Should().Equal("13:30", "13:45", "14:00", "14:15", "14:30");
     }
@@ -35,7 +35,7 @@ public class PlannerDropdownWindowTests
         // so one extra entry is pulled from before instead of showing only 4.
         var centerIndex = TimeOptions.IndexOf("23:45");
 
-        var window = PlannerDropdownWindow.Center(TimeOptions, centerIndex, 5);
+        var window = DropdownWindow.Center(TimeOptions, centerIndex, 5);
 
         window.Should().Equal("23:00", "23:15", "23:30", "23:45", "24:00");
     }
@@ -45,7 +45,7 @@ public class PlannerDropdownWindowTests
     {
         var centerIndex = TimeOptions.IndexOf("24:00");
 
-        var window = PlannerDropdownWindow.Center(TimeOptions, centerIndex, 5);
+        var window = DropdownWindow.Center(TimeOptions, centerIndex, 5);
 
         window.Should().HaveCount(5);
         window.Should().Equal("23:00", "23:15", "23:30", "23:45", "24:00");
@@ -56,7 +56,7 @@ public class PlannerDropdownWindowTests
     {
         var centerIndex = TimeOptions.IndexOf("00:00");
 
-        var window = PlannerDropdownWindow.Center(TimeOptions, centerIndex, 5);
+        var window = DropdownWindow.Center(TimeOptions, centerIndex, 5);
 
         window.Should().HaveCount(5);
         window.Should().Equal("00:00", "00:15", "00:30", "00:45", "01:00");
@@ -67,7 +67,7 @@ public class PlannerDropdownWindowTests
     {
         var centerIndex = TimeOptions.IndexOf("00:15");
 
-        var window = PlannerDropdownWindow.Center(TimeOptions, centerIndex, 5);
+        var window = DropdownWindow.Center(TimeOptions, centerIndex, 5);
 
         window.Should().HaveCount(5);
         window.Should().Equal("00:00", "00:15", "00:30", "00:45", "01:00");
@@ -78,7 +78,7 @@ public class PlannerDropdownWindowTests
     {
         var small = new[] { "10:00", "10:30", "11:00" };
 
-        var window = PlannerDropdownWindow.Center(small, 1, 5);
+        var window = DropdownWindow.Center(small, 1, 5);
 
         window.Should().Equal(small);
     }

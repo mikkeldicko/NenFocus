@@ -2,8 +2,11 @@ using Avalonia.Headless.XUnit;
 using FluentAssertions;
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
+using NenFocus.Application.Queries.GetAllBlockPresets;
 using NenFocus.Application.Queries.GetPlannedBlocksForDay;
+using NenFocus.Application.UseCases.Planner.DeletePlannedBlock;
 using NenFocus.Application.UseCases.Planner.SplitPlannedBlock;
+using NenFocus.Application.UseCases.Planner.UpdatePlannedBlock;
 using NenFocus.Domain.Enums;
 using NenFocus.Domain.ValueObjects;
 using NenFocus.ViewModels.Pages;
@@ -116,6 +119,29 @@ public class PlannerBlockLockViewTests
         vm.ShowSplitDates.Should().BeFalse();
     }
 
+    [AvaloniaFact]
+    public async Task ASavedBlock_KeepsItsType_AndSaveUpdatesItInPlace()
+    {
+        // A block's type is never changed in place (Gap 89 Slice B, A4): the form hides the
+        // toggle, and Save is one Update — never a Delete followed by a Create.
+        var block = Block(new BlockChangeAllowances(CanReschedule: true, CanChangePreset: true, CanSplit: false, CanDelete: true));
+        var commands = Substitute.For<ICommandDispatcher>();
+        commands.DispatchAsync(Arg.Any<UpdatePlannedBlockCommand>(), Arg.Any<CancellationToken>())
+            .Returns(UpdatePlannedBlockResult.Ok());
+        var vm = CreatePlanner(block, commands, presets:
+        [
+            new BlockPresetDto { Id = block.PresetId, Name = block.PresetName, PresetType = BlockPresetType.Focus }
+        ]);
+        Show(new PlannerPageView { DataContext = vm });
+
+        await vm.EditBlockCommand.ExecuteAsync(vm.Tiles.Single());
+        vm.ShowTypeToggle.Should().BeFalse();
+        await vm.SaveCommand.ExecuteAsync(null);
+
+        await commands.Received(1).DispatchAsync(Arg.Is<UpdatePlannedBlockCommand>(c => c.BlockId == block.Id), Arg.Any<CancellationToken>());
+        await commands.DidNotReceive().DispatchAsync(Arg.Any<DeletePlannedBlockCommand>(), Arg.Any<CancellationToken>());
+    }
+
     private static PlannedBlockDto Block(BlockChangeAllowances allowances) => new()
     {
         Id = Guid.NewGuid(),
@@ -126,10 +152,11 @@ public class PlannerBlockLockViewTests
         Allowances = allowances,
     };
 
-    private static PlannerPageViewModel CreatePlanner(PlannedBlockDto block, ICommandDispatcher? commands = null)
+    private static PlannerPageViewModel CreatePlanner(PlannedBlockDto block, ICommandDispatcher? commands = null, IReadOnlyList<BlockPresetDto>? presets = null)
     {
-        var queries = new FakeQueryDispatcher().Answer<GetPlannedBlocksForDayQuery, IReadOnlyList<PlannedBlockDto>>(q =>
-            q.Date == Today ? [block] : []);
+        var queries = new FakeQueryDispatcher()
+            .Answer<GetPlannedBlocksForDayQuery, IReadOnlyList<PlannedBlockDto>>(q => q.Date == Today ? [block] : [])
+            .Answer<GetAllBlockPresetsQuery, IReadOnlyList<BlockPresetDto>>(_ => presets ?? []);
         var clock = Substitute.For<IDisplayClock>();
         var systemClock = TestClock.Create();
         systemClock.SetTimeZoneOffset(TimeSpan.Zero);

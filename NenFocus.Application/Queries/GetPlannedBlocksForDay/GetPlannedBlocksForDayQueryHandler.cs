@@ -79,7 +79,7 @@ public sealed class GetPlannedBlocksForDayQueryHandler
                 Shown = shown,
                 WebsiteFilterType = preset?.WebsiteFilterType ?? WebsiteFilterType.Blocklist,
                 ContractId = b.Membership?.ContractId,
-                HasEnded = b.HasEnded(now),
+                IsFinal = b.IsFinal(now),
                 Allowances = _changes.AllowancesFor(
                     b, b.Membership is { } membership ? contractsById.GetValueOrDefault(membership.ContractId) : null, now),
                 Outcome = focusBlock?.Outcome(now),

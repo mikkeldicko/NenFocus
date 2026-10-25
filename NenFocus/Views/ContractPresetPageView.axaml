@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:NenFocus.ViewModels.Pages"
              xmlns:conv="using:NenFocus.Converters"
+             xmlns:controls="using:NenFocus.Views.Controls"
              x:DataType="vm:ContractPresetPageViewModel"
              x:Class="NenFocus.Views.ContractPresetPageView"
              Background="#F5F5F7">
@@ -272,11 +273,11 @@
 							<Grid ColumnDefinitions="*,12,*" IsVisible="{Binding IsWorkHoursEnabled}">
 								<StackPanel Grid.Column="0" Spacing="4">
 									<TextBlock Text="Start" FontSize="12" Foreground="#7A7A8C"/>
-									<AutoCompleteBox ItemsSource="{Binding TimeOptions}" Text="{Binding WorkHoursStartText, Mode=TwoWay}" FilterMode="Contains" Watermark="HH:mm"/>
+									<controls:TimeOfDayBox Name="WorkHoursStartField" Value="{Binding WorkHoursStart}"/>
 								</StackPanel>
 								<StackPanel Grid.Column="2" Spacing="4">
 									<TextBlock Text="End" FontSize="12" Foreground="#7A7A8C"/>
-									<AutoCompleteBox ItemsSource="{Binding TimeOptions}" Text="{Binding WorkHoursEndText, Mode=TwoWay}" FilterMode="Contains" Watermark="HH:mm"/>
+									<controls:TimeOfDayBox Name="WorkHoursEndField" Value="{Binding WorkHoursEnd}"/>
 								</StackPanel>
 							</Grid>
 						</StackPanel>

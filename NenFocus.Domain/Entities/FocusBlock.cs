@@ -13,7 +13,11 @@ public sealed class FocusBlock : PlannedBlock
     /// Start/End, the same justification already used for the entity's own end &gt; start
     /// guard — no repository lookup needed, so nothing pushes it out of Domain.
     /// </summary>
-    public const int MaxDurationHours = 12;
+    public static TimeSpan MaxLength { get; } = TimeSpan.FromHours(12);
+
+    /// <summary>Whether a Focus block may run this long — asked by the entity itself and by the
+    /// validators that want a friendly refusal first, so the cap has one formula (Gap 89 Slice B).</summary>
+    public static bool FitsMaxLength(TimeSlot slot) => slot.Length <= MaxLength;
 
     /// <summary>
     /// A Ritual completed within this many minutes after the scheduled start still counts as on
@@ -225,8 +229,8 @@ public sealed class FocusBlock : PlannedBlock
 
     private static void ValidateDuration(TimeSlot slot)
     {
-        if (slot.Length > TimeSpan.FromHours(MaxDurationHours))
-            throw new ArgumentException($"A Focus block cannot exceed {MaxDurationHours} hours.");
+        if (!FitsMaxLength(slot))
+            throw new ArgumentException($"A Focus block cannot exceed {MaxLength.TotalHours} hours.");
     }
 
     public void MarkRitualCompleted(Moment completedAt)
@@ -290,7 +294,7 @@ public sealed class FocusBlock : PlannedBlock
     /// whose REDEMPTION badge implies its whole span is accounted-for deficit coverage.
     /// Pure and self-contained (only this block's own Start/End and receipt), so it
     /// lives here rather than in an Application handler — the same justification already
-    /// used for MaxDurationHours/ValidateDuration on this entity. Exact: the receipt is whole
+    /// used for MaxLength/ValidateDuration on this entity. Exact: the receipt is whole
     /// minutes, so the capped end is too and nothing is rounded (Gap 92, V10 — this used to need a
     /// long argument with MODULE_STANDARDS.md's "round a fraction before persisting" rule).
     /// </summary>

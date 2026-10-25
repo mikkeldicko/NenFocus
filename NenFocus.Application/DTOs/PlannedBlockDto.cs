@@ -22,10 +22,11 @@ public sealed record PlannedBlockDto
     public Guid? ContractId { get; init; }
 
     /// <summary>
-    /// PlannedBlock.HasEnded(now). The Planner uses it to pick the read-only snapshot over the
-    /// edit form for a Background block; what may be done to the block is <see cref="Allowances"/>.
+    /// PlannedBlock.IsFinal(now) — the block's story is over (ended; for a Focus block, its session
+    /// ended or it was missed). The Planner shows the read-only snapshot for a final block and the
+    /// form otherwise (Gap 89 Slice B, A3); what may be done to the block is <see cref="Allowances"/>.
     /// </summary>
-    public bool HasEnded { get; init; }
+    public bool IsFinal { get; init; }
 
     /// <summary>
     /// What may be done to this block at all — BlockChangeChecker's answer, the same one the

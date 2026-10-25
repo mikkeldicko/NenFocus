@@ -147,8 +147,8 @@ public class UpdatePlannedBlockTests : UseCaseTestBase
         var block = Focus(Now.AddHours(1), Now.AddHours(2));
         await SeedAsync(block);
 
-        await ShouldBeRefused(block, Command(block, Now.AddHours(1), Now.AddHours(1 + FocusBlock.MaxDurationHours).AddMinutes(1)),
-            $"A Focus block cannot exceed {FocusBlock.MaxDurationHours} hours.");
+        await ShouldBeRefused(block, Command(block, Now.AddHours(1), Now.AddHours(1).Add(FocusBlock.MaxLength).AddMinutes(1)),
+            $"A Focus block cannot exceed {FocusBlock.MaxLength.TotalHours} hours.");
     }
 
     [Fact]
@@ -157,7 +157,7 @@ public class UpdatePlannedBlockTests : UseCaseTestBase
         var block = Focus(Now.AddHours(1), Now.AddHours(2));
         await SeedAsync(block);
 
-        await ShouldBeAllowed(Command(block, Now.AddHours(1), Now.AddHours(1 + FocusBlock.MaxDurationHours)));
+        await ShouldBeAllowed(Command(block, Now.AddHours(1), Now.AddHours(1).Add(FocusBlock.MaxLength)));
     }
 
     [Fact]
@@ -166,7 +166,7 @@ public class UpdatePlannedBlockTests : UseCaseTestBase
         var block = Background(Now.AddHours(1), Now.AddHours(2));
         await SeedAsync(block);
 
-        await ShouldBeAllowed(Command(block, Now.AddHours(1), Now.AddHours(1 + FocusBlock.MaxDurationHours).AddDays(1)));
+        await ShouldBeAllowed(Command(block, Now.AddHours(1), Now.AddHours(1).Add(FocusBlock.MaxLength).AddDays(1)));
     }
 
     // ── The block's own lock, asked before placement ─────────────────────────

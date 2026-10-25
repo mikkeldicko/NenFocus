@@ -3,6 +3,7 @@ using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using NenFocus.Application.Interfaces;
+using NenFocus.Converters;
 using NenFocus.Infrastructure;
 using NenFocus.Infrastructure.Persistence;
 using NenFocus.ViewModels.Pages;
@@ -54,7 +55,7 @@ public class ContractPresetFormIntegrationTests : IAsyncDisposable
         _vm.IsDailyFloorEnabled = floorHours is not null;
         if (floorHours is not null) _vm.DailyFloorHoursText = floorHours;
         _vm.IsWorkHoursEnabled = workStart is not null;
-        if (workStart is not null) { _vm.WorkHoursStartText = workStart; _vm.WorkHoursEndText = workEnd!; }
+        if (workStart is not null) { _vm.WorkHoursStart = Time(workStart); _vm.WorkHoursEnd = Time(workEnd!); }
         Settle();
 
         await _vm.SaveCommand.ExecuteAsync(null);
@@ -95,6 +96,25 @@ public class ContractPresetFormIntegrationTests : IAsyncDisposable
         await SaveNewAsync("Half Hours", floorHours: "1.5");
 
         VisibleTexts(_view).Should().Contain("Daily floor must be a whole number of hours.");
+    }
+
+    private static TimeSpan Time(string text) =>
+        TimeOfDayToStringConverter.TryParse(text, out var time) ? time : throw new ArgumentException(text);
+
+    [AvaloniaFact]
+    public async Task WorkHoursEndingAtMidnight_ReopenAs2400_AndSaveUnchanged()
+    {
+        // TimeOnly keeps midnight as MaxValue, which used to reopen as 23:59 and save back as 23:59.
+        await SaveNewAsync("Late", floorHours: null, "18:00", "24:00");
+        _vm.Presets.Single(p => p.Name == "Late").WorkHoursEnd.Should().Be(TimeOnly.MaxValue);
+
+        _vm.EditPresetCommand.Execute(_vm.Presets.Single(p => p.Name == "Late"));
+        _vm.WorkHoursEnd.Should().Be(TimeSpan.FromDays(1));
+        await _vm.SaveCommand.ExecuteAsync(null);
+        for (var i = 0; i < 5; i++) { Settle(); await Task.Delay(20); }
+
+        _vm.FormError.Should().BeNull();
+        _vm.Presets.Single(p => p.Name == "Late").WorkHoursEnd.Should().Be(TimeOnly.MaxValue);
     }
 
     [AvaloniaFact]

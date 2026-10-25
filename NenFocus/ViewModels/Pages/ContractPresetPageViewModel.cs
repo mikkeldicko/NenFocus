@@ -76,7 +76,6 @@ public partial class ContractPresetPageViewModel : ViewModelBase
 
     public IReadOnlyList<StrictnessRule> StrictnessOptions { get; } = Enum.GetValues<StrictnessRule>();
     public IReadOnlyList<RedemptionPlacementPolicy> RedemptionPlacementOptions { get; } = Enum.GetValues<RedemptionPlacementPolicy>();
-    public ObservableCollection<string> TimeOptions { get; } = new();
 
     // ── Form state ────────────────────────────────────────────────────────
     [ObservableProperty] private bool _isFormVisible;
@@ -92,8 +91,9 @@ public partial class ContractPresetPageViewModel : ViewModelBase
     [ObservableProperty] private bool _keepBlockingDuringBreaks;
     [ObservableProperty] private bool _bonusBlocksFollowStrictness;
     [ObservableProperty] private bool _isWorkHoursEnabled;
-    [ObservableProperty] private string _workHoursStartText = "09:00";
-    [ObservableProperty] private string _workHoursEndText = "17:00";
+    // Null while the field holds text that isn't a time (the field shows it red).
+    [ObservableProperty] private TimeSpan? _workHoursStart = TimeSpan.FromHours(9);
+    [ObservableProperty] private TimeSpan? _workHoursEnd = TimeSpan.FromHours(17);
     [ObservableProperty] private RedemptionPlacementPolicy _formRedemptionPlacementPolicy = RedemptionPlacementPolicy.AnywhereInContract;
 
     public string SaveButtonLabel => IsEditing ? "Save Changes" : "Create Preset";
@@ -108,11 +108,6 @@ public partial class ContractPresetPageViewModel : ViewModelBase
     {
         _queryDispatcher = queryDispatcher;
         _commandDispatcher = commandDispatcher;
-
-        for (int h = 0; h < 24; h++)
-            for (int m = 0; m < 60; m += 15)
-                TimeOptions.Add($"{h:D2}:{m:D2}");
-        TimeOptions.Add("24:00");
 
         Presets.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasNoPresets));
         _ = LoadPresetsAsync();
@@ -136,8 +131,8 @@ public partial class ContractPresetPageViewModel : ViewModelBase
         DailyFloorHoursText = "3";
         AllowCancellation = true;
         IsWorkHoursEnabled = false;
-        WorkHoursStartText = "09:00";
-        WorkHoursEndText = "17:00";
+        WorkHoursStart = TimeSpan.FromHours(9);
+        WorkHoursEnd = TimeSpan.FromHours(17);
         FormRedemptionPlacementPolicy = RedemptionPlacementPolicy.AnywhereInContract;
         KeepBlockingDuringBreaks = false;
         BonusBlocksFollowStrictness = false;
@@ -167,8 +162,8 @@ public partial class ContractPresetPageViewModel : ViewModelBase
         if (card.DailyFloorHours.HasValue) DailyFloorHoursText = card.DailyFloorHours.Value.ToString("0.##");
         AllowCancellation = card.AllowCancellation;
         IsWorkHoursEnabled = card.WorkHoursStart.HasValue;
-        if (card.WorkHoursStart.HasValue) WorkHoursStartText = FormatTime(card.WorkHoursStart.Value);
-        if (card.WorkHoursEnd.HasValue) WorkHoursEndText = FormatTime(card.WorkHoursEnd.Value);
+        if (card.WorkHoursStart is { } start) WorkHoursStart = FieldTime(start);
+        if (card.WorkHoursEnd is { } end) WorkHoursEnd = FieldTime(end);
         FormRedemptionPlacementPolicy = card.RedemptionPlacementPolicy;
         KeepBlockingDuringBreaks = card.KeepBlockingDuringBreaks;
         BonusBlocksFollowStrictness = card.BonusBlocksFollowStrictness;
@@ -199,12 +194,12 @@ public partial class ContractPresetPageViewModel : ViewModelBase
         WorkHours? workHours = null;
         if (IsWorkHoursEnabled)
         {
-            if (!TryParseTime(WorkHoursStartText, out var start) || !TryParseTime(WorkHoursEndText, out var end))
+            if (WorkHoursStart is not { } startField || WorkHoursEnd is not { } endField)
             {
                 FormError = "Work hours must be valid times.";
                 return;
             }
-            workHours = WorkHours.TryCreate(start, end);
+            workHours = WorkHours.TryCreate(WorkHoursTime(startField), WorkHoursTime(endField));
             if (workHours is null)
             {
                 FormError = "Work hours end must be after start.";
@@ -289,11 +284,12 @@ public partial class ContractPresetPageViewModel : ViewModelBase
         IsConfirmDeleteVisible = false;
     }
 
-    private static bool TryParseTime(string s, out TimeOnly time)
-    {
-        if (s == "24:00") { time = TimeOnly.MaxValue; return true; }
-        return TimeOnly.TryParse(s, out time);
-    }
+    // WorkHours keeps the end of the day as TimeOnly.MaxValue, a field as 24:00 — mapped here both
+    // ways, so a preset ending at midnight reopens as 24:00 and saves unchanged (it used to come back
+    // as 23:59). A WorkHours quirk, not a text one → Gap 82.
+    private static TimeOnly WorkHoursTime(TimeSpan field) =>
+        field >= TimeSpan.FromDays(1) ? TimeOnly.MaxValue : TimeOnly.FromTimeSpan(field);
 
-    private static string FormatTime(TimeOnly t) => t.ToString("HH:mm");
+    private static TimeSpan FieldTime(TimeOnly time) =>
+        time == TimeOnly.MaxValue ? TimeSpan.FromDays(1) : time.ToTimeSpan();
 }

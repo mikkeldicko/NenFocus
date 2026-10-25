@@ -1,13 +1,8 @@
 using System;
 using System.Collections.Generic;
-using NenFocus.Domain.Entities;
+using NenFocus.Application.DTOs;
 
 namespace NenFocus.ViewModels.Components;
-
-/// <summary>One selectable entry in the Planner form's End dropdown — TimeText is the
-/// raw parseable value written back to FormEndTime on selection (via ValueMemberBinding),
-/// Duration drives the parenthesized suffix shown for each entry (via DurationLabelConverter).</summary>
-public sealed record PlannerEndTimeOption(string TimeText, TimeSpan Duration);
 
 /// <summary>
 /// Generates the End dropdown's duration offsets from Start — Start+15/30/45/60 (first
@@ -20,7 +15,8 @@ public sealed record PlannerEndTimeOption(string TimeText, TimeSpan Duration);
 /// </summary>
 internal static class PlannerEndTimeOptions
 {
-    /// <summary>Latest offset that stays within the same day-cycle — 23:30, one 30-minute
+    /// <summary>Not a rule — Background blocks have no Domain cap; this is only how far the
+    /// dropdown reaches. Latest offset that stays within the same day-cycle — 23:30, one 30-minute
     /// step short of a full 24h (which would place End back exactly on Start).</summary>
     private static readonly TimeSpan JustUnderOneDay = TimeSpan.FromHours(23) + TimeSpan.FromMinutes(30);
 
@@ -28,7 +24,7 @@ internal static class PlannerEndTimeOptions
     /// a Cover Deficit tile stops at the debt (Gap 106, decision 19).</param>
     internal static IReadOnlyList<TimeSpan> GenerateOffsets(bool isFocus, TimeSpan? maximum = null)
     {
-        var maxDuration = isFocus ? TimeSpan.FromHours(FocusBlock.MaxDurationHours) : JustUnderOneDay;
+        var maxDuration = isFocus ? PlanningLimits.FocusBlockMaxLength : JustUnderOneDay;
         if (maximum is { } cap && cap < maxDuration) maxDuration = cap;
         var offsets = new List<TimeSpan>();
 

@@ -36,8 +36,8 @@ public sealed class CreatePlannedBlockValidator : AbstractValidator<CreatePlanne
             // invariant; this exists only to produce a friendly FormError instead of an
             // unhandled exception.
             .Must((command, slot) => command.BlockPresetType != BlockPresetType.Focus
-                || slot.Length <= TimeSpan.FromHours(FocusBlock.MaxDurationHours))
-            .WithMessage($"A Focus block cannot exceed {FocusBlock.MaxDurationHours} hours.");
+                || FocusBlock.FitsMaxLength(slot))
+            .WithMessage($"A Focus block cannot exceed {FocusBlock.MaxLength.TotalHours} hours.");
 
         // The one placement rule (Gap 88 phase 8): not in the past → inside the contract's
         // window → free for Focus. The query finds the contract the slot sits in and owns the

@@ -145,16 +145,16 @@ public class CreatePlannedBlockTests : UseCaseTestBase
 
     [Fact]
     public Task AFocusBlockOverItsMaxDuration_IsRefused() =>
-        ShouldBeRefused(FocusCommand(Start, Start.AddHours(FocusBlock.MaxDurationHours).AddMinutes(1)),
-            $"A Focus block cannot exceed {FocusBlock.MaxDurationHours} hours.");
+        ShouldBeRefused(FocusCommand(Start, Start.Add(FocusBlock.MaxLength).AddMinutes(1)),
+            $"A Focus block cannot exceed {FocusBlock.MaxLength.TotalHours} hours.");
 
     [Fact]
     public async Task AFocusBlockAtExactlyItsMaxDuration_IsAllowed() =>
-        (await CreatedAsync(FocusCommand(Start, Start.AddHours(FocusBlock.MaxDurationHours)))).Should().NotBeNull();
+        (await CreatedAsync(FocusCommand(Start, Start.Add(FocusBlock.MaxLength)))).Should().NotBeNull();
 
     [Fact]
     public async Task ABackgroundBlockLongerThanTheFocusMax_IsAllowed() =>
-        (await CreatedAsync(BackgroundCommand(Start, Start.AddHours(FocusBlock.MaxDurationHours).AddDays(1)))).Should().NotBeNull();
+        (await CreatedAsync(BackgroundCommand(Start, Start.Add(FocusBlock.MaxLength).AddDays(1)))).Should().NotBeNull();
 
     // ── Placement: the query's refusal reaches the command ──────────────────
 

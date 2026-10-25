@@ -39,12 +39,6 @@ public class ViewModelRuleTests
 
     private static readonly System.Text.RegularExpressions.Regex DomainEntityOrServiceUse = new(@"\bDomain\s*\.\s*(Entities|Services)\b");
 
-    private static readonly string[] DomainUseExceptions =
-    [
-        // Reads FocusBlock.MaxDurationHours to cap the End dropdown — a business rule in the UI. → Gap 89 area 2.
-        "NenFocus/ViewModels/Components/PlannerEndTimeOptions.cs",
-    ];
-
     /// <summary>The UI sees the Domain only through Application's DTOs — never an entity, never a
     /// Domain service. A source scan, not reflection: an entity's constant is copied into the caller at
     /// compile time, so the compiled UI wouldn't mention the entity at all.</summary>
@@ -55,7 +49,8 @@ public class ViewModelRuleTests
             .Where(f => DomainEntityOrServiceUse.IsMatch(f.Code))
             .Select(f => f.Path);
 
-        KnownExceptions.Check(violations, DomainUseExceptions);
+        // No exceptions since Gap 89 Slice B: the Focus cap reaches the UI through PlanningLimits.
+        KnownExceptions.Check(violations, []);
     }
 
     // Any timer type, or a Task.Delay loop — in Views too, so polling can't just move there.
@@ -85,8 +80,8 @@ public class ViewModelRuleTests
     private static readonly string[] ValueFormattingExceptions =
     [
         // All → Gap 89 (ViewModel audit): values should reach the View raw and be formatted by a converter.
-        "NenFocus/ViewModels/Pages/PlannerPageViewModel.cs has 31",
-        "NenFocus/ViewModels/Pages/ContractPresetPageViewModel.cs has 6",
+        "NenFocus/ViewModels/Pages/PlannerPageViewModel.cs has 7",
+        "NenFocus/ViewModels/Pages/ContractPresetPageViewModel.cs has 3",
         "NenFocus/ViewModels/Components/DayFloorPreviewViewModel.cs has 6",
         "NenFocus/ViewModels/Contracts/ContractWizardViewModel.cs has 3",
         "NenFocus/ViewModels/Pages/PostContractViewModel.cs has 2",
@@ -115,7 +110,6 @@ public class ViewModelRuleTests
         // (MODULE_STANDARDS → UI → Views: pixel geometry yes, business rules never). Helpers in ViewModels/Components.
         "NenFocus/ViewModels/Components/PlannerDragMath.cs",
         "NenFocus/ViewModels/Components/PlannerLayout.cs",
-        "NenFocus/ViewModels/Components/PlannerDropdownWindow.cs",
     ];
 
     /// <summary>A ViewModel binds ready-made values — progress, remaining time — computed by a service

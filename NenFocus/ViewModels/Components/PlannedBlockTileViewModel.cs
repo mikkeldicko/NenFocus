@@ -57,22 +57,35 @@ public partial class PlannedBlockTileViewModel : ViewModelBase
         BlockPresetType blockPresetType,
         int columnIndex,
         double top,
-        double height,
-        bool isDraft = false)
+        double height)
+        : this(dto.Id, dto.PresetName, blockPresetType, localStart, localEnd, columnIndex, top, height, isDraft: false)
     {
-        Id = dto.Id;
-        PresetName = dto.PresetName;
-        BlockPresetType = blockPresetType;
-        Start = localStart;
-        End = localEnd;
         WebsiteFilterType = dto.WebsiteFilterType;
-        ColumnIndex = columnIndex;
-        Top = top;
-        Height = height;
-        IsDraft = isDraft;
         Outcome = dto.Outcome;
         StartedLate = dto.StartedLate;
         EndedEarly = dto.EndedEarly;
         ContractBadge = dto.ContractBadge;
+    }
+
+    /// <summary>A contract draft's tile — not saved, so it has no block DTO, no outcome and no
+    /// badge (Gap 89 Slice B: a draft is never dressed up as a PlannedBlockDto).</summary>
+    public static PlannedBlockTileViewModel ForDraft(
+        Guid id, string presetName, BlockPresetType blockPresetType,
+        DateTime localStart, DateTime localEnd, int columnIndex, double top, double height) =>
+        new(id, presetName, blockPresetType, localStart, localEnd, columnIndex, top, height, isDraft: true);
+
+    private PlannedBlockTileViewModel(
+        Guid id, string presetName, BlockPresetType blockPresetType,
+        DateTime localStart, DateTime localEnd, int columnIndex, double top, double height, bool isDraft)
+    {
+        Id = id;
+        PresetName = presetName;
+        BlockPresetType = blockPresetType;
+        Start = localStart;
+        End = localEnd;
+        ColumnIndex = columnIndex;
+        Top = top;
+        Height = height;
+        IsDraft = isDraft;
     }
 }

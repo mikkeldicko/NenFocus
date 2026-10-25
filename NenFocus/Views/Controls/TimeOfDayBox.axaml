@@ -1,0 +1,66 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="using:NenFocus.Views.Controls"
+             xmlns:conv="using:NenFocus.Converters"
+             x:Class="NenFocus.Views.Controls.TimeOfDayBox">
+
+	<UserControl.Resources>
+		<conv:DurationLabelConverter x:Key="DurationLabelConverter"/>
+	</UserControl.Resources>
+
+	<UserControl.Styles>
+		<!-- Red border once a field left with text that isn't a time; a plain Border around the
+		     TextBox, so nothing reaches into the Fluent theme's own template. -->
+		<Style Selector="Border.invalid">
+			<Setter Property="BorderBrush" Value="#C03A2B"/>
+			<Setter Property="BorderThickness" Value="2"/>
+		</Style>
+		<!-- Exactly one row is highlighted at a time, tracked in code-behind: the value nearest
+		     what's typed, or the row last under the pointer (never reset when it leaves). -->
+		<Style Selector="Border.timeOption">
+			<Setter Property="Background" Value="Transparent"/>
+		</Style>
+		<Style Selector="Border.timeOption.highlighted">
+			<Setter Property="Background" Value="#EEF0FF"/>
+		</Style>
+		<!-- Each row's container (a plain ContentPresenter) otherwise sizes to its own text. -->
+		<Style Selector="ItemsControl.timeOptionsList ContentPresenter">
+			<Setter Property="HorizontalAlignment" Value="Stretch"/>
+			<Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+		</Style>
+	</UserControl.Styles>
+
+	<Panel>
+		<Border Name="Frame" CornerRadius="6">
+			<TextBox Name="Box" Watermark="HH:mm"/>
+		</Border>
+		<Popup Name="DropDown"
+		       PlacementTarget="{Binding #Box}"
+		       Placement="BottomEdgeAlignedLeft"
+		       IsLightDismissEnabled="True"
+		       OverlayDismissEventPassThrough="True"
+		       WindowManagerAddShadowHint="False">
+			<!-- PassThrough: the click that closes the dropdown also reaches what was clicked, so
+			     Save right after typing saves at once instead of only closing the list. -->
+			<Border Background="White" BorderBrush="#E6E6EE" BorderThickness="1" CornerRadius="6"
+			        Width="{Binding #Box.Bounds.Width}">
+				<ScrollViewer Name="Scroller" MaxHeight="200">
+					<ItemsControl Name="List" Classes="timeOptionsList">
+						<ItemsControl.ItemTemplate>
+							<DataTemplate DataType="controls:TimeOfDayOption">
+								<Border Classes="timeOption" Padding="10,6" HorizontalAlignment="Stretch">
+									<StackPanel Orientation="Horizontal" Spacing="6">
+										<TextBlock Text="{Binding Text}"/>
+										<TextBlock Text="{Binding Length, Converter={StaticResource DurationLabelConverter}}"
+										           IsVisible="{Binding Length, Converter={x:Static ObjectConverters.IsNotNull}}"
+										           Opacity="0.6"/>
+									</StackPanel>
+								</Border>
+							</DataTemplate>
+						</ItemsControl.ItemTemplate>
+					</ItemsControl>
+				</ScrollViewer>
+			</Border>
+		</Popup>
+	</Panel>
+</UserControl>
