@@ -2702,6 +2702,6 @@ Each was probed red by applying the surviving change by hand, then reverted; R1 
 - Test, red on the pre-fix sweep: **`CqrsRuleTests.CommandHandlersDoNotHoldCommandHandlers`** — recorded in `MODULE_STANDARDS.md`.
 - Exception lists shrunk: `TestDoubleRuleTests` and `ValidatorWordingRuleTests` (the `MarkFocusBlockMissed` validator deleted), `SideEffectRuleTests` (the heartbeat no longer relays the sweep's batch).
 
-**Stryker** (changed Domain files): *see below — run at close-out.*
+**Stryker** (changed Domain files): 506 mutants, 453 killed, 52 survived — **88.16%**. Survivors are the known ignorable kinds: 31 string mutations (exception wording → Gap 100), 9 statement removals (the `EnsureMine`/throw guards — defensive, untested by design), 8 equality and 1 conditional mutant on equivalent caps (`x < End ? x : End`), 1 null-coalescing (`?? []`), 2 Linq (`Append`/`Prepend` normalized by `.Order()`, and `FirstOrDefault` on the already-in-effect list). No behaviour change survived unguarded.
 
 **Principle demonstrated:** the booking/visit split, and that a redundant stored field is the same smell whether it holds a length or a preset id — the block owns the slot and the preset, the session owns the run.
