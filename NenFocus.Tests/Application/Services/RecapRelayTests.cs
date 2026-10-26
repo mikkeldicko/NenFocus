@@ -13,11 +13,11 @@ public class RecapRelayTests
         var relay = new RecapRelay();
         IReadOnlyList<PostSessionDto>? raisedWith = null;
         relay.PostSessionsReady += (_, postSessions) => raisedWith = postSessions;
-        var missed = new PostSessionDto { SessionId = Guid.NewGuid(), Status = SessionStatus.Missed, Recorded = At.Slot(new DateTime(2026, 9, 29, 8, 0, 0, DateTimeKind.Utc), new DateTime(2026, 9, 29, 8, 25, 0, DateTimeKind.Utc)) };
+        var completed = new PostSessionDto { SessionId = Guid.NewGuid(), Status = SessionStatus.Completed, Recorded = At.Slot(new DateTime(2026, 9, 29, 8, 0, 0, DateTimeKind.Utc), new DateTime(2026, 9, 29, 8, 25, 0, DateTimeKind.Utc)) };
 
-        relay.NotifyPostSessionsReady([missed]);
+        relay.NotifyPostSessionsReady([completed]);
 
-        raisedWith.Should().ContainSingle().Which.Should().Be(missed);
+        raisedWith.Should().ContainSingle().Which.Should().Be(completed);
     }
 
     [Fact]

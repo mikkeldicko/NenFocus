@@ -42,15 +42,16 @@ public class FocusBlockOwnAnswersTests
     }
 
     [Fact]
-    public void MarkSessionEnded_AtRitualMoment_IsAccepted()
+    public void MarkSessionEnded_AtRitualMoment_Throws()
     {
+        // A session always spans some time (Gap 89 Slice C) — ending at the very Ritual is refused.
         var block = NewBlock();
         var ritualAt = At.Utc(ScheduledStart.AddMinutes(30));
         block.MarkRitualCompleted(ritualAt);
 
-        block.MarkSessionEnded(ritualAt);
+        var act = () => block.MarkSessionEnded(ritualAt);
 
-        block.IsFinal(ritualAt).Should().BeTrue(); // the end was stamped
+        act.Should().Throw<ArgumentException>();
     }
 
     // --- IsFinal and OwnDeficit (decisions 10, 11; Redemption Rules 1, 13, 18) ---
@@ -104,7 +105,7 @@ public class FocusBlockOwnAnswersTests
         { "open, before end",              null,   null,  119,  null,  null,                                false, false, null,         null },
         { "missed at end",                 null,   null,  120,  null,  FocusBlockOutcome.Missed,            false, false, null,         null },
         { "missed long after",             null,   null,  600,  null,  FocusBlockOutcome.Missed,            false, false, null,         null },
-        { "cancelled, never started",      null,   null,  600,  30,    FocusBlockOutcome.Missed,            false, false, null,         null },
+        { "cancelled, never started",      null,   null,  600,  30,    FocusBlockOutcome.Cancelled,          false, false, null,         null },
         { "ritual before start, running",  -2,     null,  60,   null,  FocusBlockOutcome.CompletedOnTime,   false, false, [0, 120],     [0, 60] },
         { "on time, running",              0,      null,  60,   null,  FocusBlockOutcome.CompletedOnTime,   false, false, [0, 120],     [0, 60] },
         { "grace boundary, running",       5,      null,  60,   null,  FocusBlockOutcome.CompletedOnTime,   false, false, [0, 120],     [0, 60] },
@@ -116,11 +117,9 @@ public class FocusBlockOwnAnswersTests
         { "grace, ended early",            3,      90,    600,  null,  FocusBlockOutcome.EndedEarly,        false, true,  [0, 90],      [0, 90] },
         { "on time, ended early",          0,      45,    600,  null,  FocusBlockOutcome.EndedEarly,        false, true,  [0, 45],      [0, 45] },
         { "on time, force-ended after",    0,      150,   600,  null,  FocusBlockOutcome.CompletedOnTime,   false, false, [0, 120],     [0, 120] },
-        { "late, ended right at ritual",   30,     30,    600,  null,  FocusBlockOutcome.EndedEarly,        true,  true,  null,         null },
         { "ritual at end",                 120,    null,  600,  null,  FocusBlockOutcome.Missed,            false, false, null,         null },
         { "ritual after end",              130,    null,  600,  null,  FocusBlockOutcome.Missed,            false, false, null,         null },
-        { "ritual after end, ended",       130,    140,   600,  null,  FocusBlockOutcome.Missed,            false, false, null,         null },
-        { "on time, cancelled mid-way",    0,      40,    600,  40,    FocusBlockOutcome.EndedEarly,        false, true,  [0, 40],      [0, 40] },
+        { "cancelled mid-way",             0,      null,  600,  40,    FocusBlockOutcome.Cancelled,          false, false, null,         null },
         { "on time, seconds in end",       0,      60.5,  600,  null,  FocusBlockOutcome.EndedEarly,        false, true,  [0, 60.5],    [0, 60] },
         { "late with seconds, ended",      6.25,   60.1,  600,  null,  FocusBlockOutcome.EndedEarly,        true,  true,  [6.25, 60.1], [6.25, 59.25] },
         { "ended within first minute",     0,      0.5,   600,  null,  FocusBlockOutcome.EndedEarly,        false, true,  [0, 0.5],     null },  // Gap 113, S9

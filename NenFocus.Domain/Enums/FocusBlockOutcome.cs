@@ -5,5 +5,6 @@ public enum FocusBlockOutcome
     CompletedOnTime,
     StartedLate,
     Missed,
-    EndedEarly
+    EndedEarly,
+    Cancelled
 }

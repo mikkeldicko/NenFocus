@@ -79,8 +79,9 @@ public class CompleteNenContractTests : UseCaseTestBase
     public async Task WhileASessionRuns_IsRefused_WithItsReason_AndNothingChanges()
     {
         var contract = ActiveContract();
-        var running = Session.Create(Guid.NewGuid(), new SessionGoal("Focus"), new SessionDuration(TimeSpan.FromHours(1)), Guid.NewGuid(), SessionOrigin.Spontaneous);
-        running.Start(At.Utc(Now));
+        var running = Session.Start(Guid.NewGuid(), new SessionGoal("Focus"),
+            FocusBlock.Spontaneous(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Now, Now.AddHours(1))),
+            At.Utc(Now));
         await SeedAsync(contract, running);
 
         var result = await CompleteAsync(contract.Id);

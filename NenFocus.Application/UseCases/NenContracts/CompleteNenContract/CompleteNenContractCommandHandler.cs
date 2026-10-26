@@ -33,7 +33,7 @@ public sealed class CompleteNenContractCommandHandler
         var now = _clock.Now;
         var members = await _blocks.GetForContractAsync(contract.Id, ct);
         var sessions = await _sessions.GetHistoryAsync(
-            _clock.TimeZone.SlotCovering(contract.StartDate, contract.EndDate), presetId: null, ct);
+            _clock.TimeZone.SlotCovering(contract.StartDate, contract.EndDate), ct);
         var sessionRunning = await _sessions.GetActiveAsync(ct) is not null;
 
         // Asked first for its sentence; CompleteEarly asks it again itself, so no caller can

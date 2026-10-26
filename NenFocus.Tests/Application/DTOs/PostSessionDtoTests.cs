@@ -17,9 +17,8 @@ public class PostSessionDtoTests
     [Fact]
     public void From_MapsTheSessionAndGroupsItsAttempts()
     {
-        var session = Session.Create(Guid.NewGuid(), new SessionGoal("Write tests"),
-            new SessionDuration(TimeSpan.FromMinutes(60)), Guid.NewGuid(), SessionOrigin.Spontaneous);
-        session.Start(At.Utc(Start));
+        var block = FocusBlock.Spontaneous(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Start, Start.AddMinutes(60)));
+        var session = Session.Start(Guid.NewGuid(), new SessionGoal("Write tests"), block, At.Utc(Start));
         session.Complete(At.Utc(Start.AddMinutes(40)), null);
         BlockedAttempt Attempt(string name, BlockedAttemptType type) =>
             type == BlockedAttemptType.App
@@ -32,7 +31,7 @@ public class PostSessionDtoTests
             Attempt("steam.exe", BlockedAttemptType.App)
         };
 
-        var dto = PostSessionDto.From(session, originatingBlock: null, "Deep Work", attempts);
+        var dto = PostSessionDto.From(session, originatingBlock: block, "Deep Work", attempts);
 
         dto.SessionId.Should().Be(session.Id);
         dto.Status.Should().Be(SessionStatus.Completed);
@@ -51,10 +50,7 @@ public class PostSessionDtoTests
     {
         // Ritual 3 minutes in, ran to the end: Post-Session shows the 120 the contract counts.
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Start, Start.AddHours(2)));
-        var session = Session.Create(Guid.NewGuid(), new SessionGoal("Write tests"),
-            new SessionDuration(TimeSpan.FromHours(2)), block.BlockPresetId, SessionOrigin.Planned, originatingBlockId: block.Id);
-        session.Start(At.Utc(Start.AddMinutes(3)), block.Scheduled);
-        block.MarkRitualCompleted(At.Utc(Start.AddMinutes(3)));
+        var session = Session.Start(Guid.NewGuid(), new SessionGoal("Write tests"), block, At.Utc(Start.AddMinutes(3)));
         session.Complete(At.Utc(Start.AddHours(2)), block);
 
         PostSessionDto.From(session, block, "Deep Work", []).ActualDurationMinutes.Should().Be(120);

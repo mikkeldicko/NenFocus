@@ -62,7 +62,7 @@ public sealed class GetSessionSnapshotForBlockQueryHandler
         return new SessionSnapshotDto
         {
             Goal = session.Goal.Value,
-            Reflection = session.Reflection,
+            Reflection = session.Reflection.Text,
             Attempts = attempts
                 .Select(a => new BlockedAttemptSnapshotDto
                 {

@@ -54,10 +54,8 @@ public class GetBlockPlacementVerdictQueryHandlerTests
 
     private static Session RunningSession(DateTime startedAt, TimeSpan duration)
     {
-        var session = Session.Create(Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(duration),
-            Guid.NewGuid(), SessionOrigin.Spontaneous);
-        session.Start(At.Utc(startedAt));
-        return session;
+        var block = FocusBlock.Spontaneous(Guid.NewGuid(), Guid.NewGuid(), At.Slot(startedAt, startedAt + duration));
+        return Session.Start(Guid.NewGuid(), new SessionGoal("Goal"), block, At.Utc(startedAt));
     }
 
     // ── Outcomes and wording ─────────────────────────────────────────────────
@@ -109,9 +107,8 @@ public class GetBlockPlacementVerdictQueryHandlerTests
         // A Planned session's end is pinned to its block's scheduled end, while Duration is the
         // block's full length. Started 5 min late, StartedAt + Duration would overshoot the real
         // end by 5 min — a block right after the real end must still fit (Gap 32).
-        var session = Session.Create(Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromHours(1)),
-            Guid.NewGuid(), SessionOrigin.Planned, originatingBlockId: Guid.NewGuid());
-        session.Start(At.Utc(Start.AddMinutes(-55)), plannedWindow: At.PlannedWindowEnding(Start));
+        var session = Session.Start(Guid.NewGuid(), new SessionGoal("Goal"),
+            FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Start.AddHours(-1), Start)), At.Utc(Start.AddMinutes(-55)));
         _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns(session);
 
         var result = await CreateHandler().HandleAsync(NewFocus(At.Slot(Start, End)));

@@ -64,7 +64,7 @@ public class ShellRitualPromptTests
 
     private void SweepAnnouncesAMiss()
     {
-        var missed = new PostSessionDto { SessionId = Guid.NewGuid(), Status = SessionStatus.Missed, Recorded = At.Slot(new DateTime(2026, 9, 29, 8, 0, 0, DateTimeKind.Utc), new DateTime(2026, 9, 29, 8, 25, 0, DateTimeKind.Utc)) };
+        var missed = new PostSessionDto { SessionId = Guid.NewGuid(), Status = SessionStatus.Completed, Recorded = At.Slot(new DateTime(2026, 9, 29, 8, 0, 0, DateTimeKind.Utc), new DateTime(2026, 9, 29, 8, 25, 0, DateTimeKind.Utc)) };
         _recaps.PostSessionsReady += Raise.Event<EventHandler<IReadOnlyList<PostSessionDto>>>(_recaps, (IReadOnlyList<PostSessionDto>)[missed]);
         Settle();
     }

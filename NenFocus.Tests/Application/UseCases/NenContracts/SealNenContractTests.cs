@@ -242,9 +242,10 @@ public class SealNenContractTests : UseCaseTestBase
     {
         // Gap 88: Seal respects a running session too (BlockPlacementChecker.CheckFree).
         Clock.SetNow(new DateTime(2026, 1, 1, 10, 0, 0, DateTimeKind.Utc));
-        var running = Session.Create(Guid.NewGuid(), new SessionGoal("Focus"),
-            new SessionDuration(TimeSpan.FromHours(1)), Guid.NewGuid(), SessionOrigin.Spontaneous);
-        running.Start(At.Utc(new DateTime(2026, 1, 1, 10, 0, 0, DateTimeKind.Utc)));
+        var running = Session.Start(Guid.NewGuid(), new SessionGoal("Focus"),
+            FocusBlock.Spontaneous(Guid.NewGuid(), Guid.NewGuid(),
+                At.Slot(new DateTime(2026, 1, 1, 10, 0, 0, DateTimeKind.Utc), new DateTime(2026, 1, 1, 11, 0, 0, DateTimeKind.Utc))),
+            At.Utc(new DateTime(2026, 1, 1, 10, 0, 0, DateTimeKind.Utc)));
         await SeedAsync(running);
 
         await RefusedAsync(Command(blocks: [Focus(1, 10, 12)]));

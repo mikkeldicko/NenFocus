@@ -136,7 +136,7 @@ public class ShellHeartbeatIntegrationTests : IAsyncDisposable
     }
 
     [AvaloniaFact]
-    public async Task ARitualLeftOpenPastItsEnd_ClosesAndTheMissedScreenFollows()
+    public async Task ARitualLeftOpenPastItsEnd_ClosesAndNoScreenFollows()
     {
         var presetId = await SeedFocusPresetAsync();
         await SeedFocusBlockAsync(presetId, Now.AddMinutes(-50), Now.AddMinutes(10));
@@ -147,12 +147,11 @@ public class ShellHeartbeatIntegrationTests : IAsyncDisposable
         await TickAtAsync(Now.AddMinutes(10).AddSeconds(1));
 
         shell.IsRitualActive.Should().BeFalse();
-        shell.IsPostSessionActive.Should().BeTrue();
-        shell.PostSessionViewModel!.HeaderLabel.Should().Be("SESSION MISSED");
+        shell.IsPostSessionActive.Should().BeFalse("a miss is the block's record now, not a Post-Session screen (Gap 114)");
     }
 
     [AvaloniaFact]
-    public async Task BackToBackBlocks_TheMissedScreenComesBeforeTheNextRitual()
+    public async Task BackToBackBlocks_TheNextRitualStartsImmediately()
     {
         var presetId = await SeedFocusPresetAsync();
         await SeedFocusBlockAsync(presetId, Now.AddMinutes(-50), Now.AddMinutes(10));
@@ -162,14 +161,8 @@ public class ShellHeartbeatIntegrationTests : IAsyncDisposable
 
         await TickAtAsync(Now.AddMinutes(10).AddSeconds(1));
 
-        shell.IsPostSessionActive.Should().BeTrue();
-        shell.IsRitualActive.Should().BeFalse("the next Ritual waits behind the missed screen");
-
-        await shell.PostSessionViewModel!.DoneCommand.ExecuteAsync(null);
-        await SettleAsync();
-
-        shell.IsPostSessionActive.Should().BeFalse();
-        shell.IsRitualActive.Should().BeTrue();
+        shell.IsPostSessionActive.Should().BeFalse("a miss has no Post-Session screen (Gap 114)");
+        shell.IsRitualActive.Should().BeTrue("the next Ritual starts right away");
     }
 
     // ── Gap 89 Slice A: one path to the Post-Session screen, one heartbeat at startup ──
@@ -275,7 +268,7 @@ public class ShellHeartbeatIntegrationTests : IAsyncDisposable
     }
 
     [AvaloniaFact]
-    public async Task AContractThatEndedWhileClosed_ShowsItsRecapAtStartup_AfterTheMissedScreens()
+    public async Task AContractThatEndedWhileClosed_ShowsItsRecapAtStartup()
     {
         var presetId = await SeedFocusPresetAsync();
         await SeedFocusBlockAsync(presetId, Now.AddHours(-3), Now.AddHours(-2)); // never started: missed
@@ -296,14 +289,8 @@ public class ShellHeartbeatIntegrationTests : IAsyncDisposable
         try
         {
             var shell = await CreateShellAsync();
-            shell.IsPostSessionActive.Should().BeTrue();
-            shell.PostSessionViewModel!.HeaderLabel.Should().Be("SESSION MISSED", "what you missed comes first");
-            shell.IsPostContractActive.Should().BeFalse("the recap waits behind it");
-
-            await shell.PostSessionViewModel.DoneCommand.ExecuteAsync(null);
-            await SettleAsync();
-
-            shell.IsPostContractActive.Should().BeTrue();
+            shell.IsPostSessionActive.Should().BeFalse("a miss has no Post-Session screen (Gap 114)");
+            shell.IsPostContractActive.Should().BeTrue("the recap shows directly");
             shell.PostContractViewModel!.Name.Should().Be("Focused Week");
         }
         finally

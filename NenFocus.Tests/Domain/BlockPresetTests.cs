@@ -245,12 +245,11 @@ public class BlockPresetTests
     private static FocusBlock FocusOf(BlockPreset preset, DateTime from, DateTime to) =>
         FocusBlock.Create(Guid.NewGuid(), preset.Id, At.Slot(from, to));
 
-    private static Session RunningSessionOf(Guid presetId)
+    private static (Session Session, FocusBlock Block) RunningSessionOf(Guid presetId)
     {
-        var session = Session.Create(Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(30)),
-            presetId, SessionOrigin.Spontaneous);
-        session.Start(At.Utc(Now.AddMinutes(-5)));
-        return session;
+        var block = FocusBlock.Spontaneous(Guid.NewGuid(), presetId, At.Slot(Now.AddMinutes(-5), Now.AddMinutes(25)));
+        var session = Session.Start(Guid.NewGuid(), new SessionGoal("Goal"), block, At.Utc(Now.AddMinutes(-5)));
+        return (session, block);
     }
 
     private static OutstandingDeficit DeficitOf(Guid presetId) =>
@@ -267,13 +266,15 @@ public class BlockPresetTests
     public void IsLockedAt_TheRunningSessionUsesIt_IsTrue()
     {
         var preset = CreatePreset();
-        preset.IsLockedAt(At.Utc(Now), RunningSessionOf(preset.Id), [], NoDeficits).Should().BeTrue();
+        var (_, block) = RunningSessionOf(preset.Id);
+
+        preset.IsLockedAt(At.Utc(Now), null, [block], NoDeficits).Should().BeTrue();
     }
 
     [Fact]
     public void IsLockedAt_ARunningSessionOfAnotherPreset_IsFalse()
     {
-        CreatePreset().IsLockedAt(At.Utc(Now), RunningSessionOf(Guid.NewGuid()), [], NoDeficits).Should().BeFalse();
+        CreatePreset().IsLockedAt(At.Utc(Now), RunningSessionOf(Guid.NewGuid()).Session, [], NoDeficits).Should().BeFalse();
     }
 
     [Fact]

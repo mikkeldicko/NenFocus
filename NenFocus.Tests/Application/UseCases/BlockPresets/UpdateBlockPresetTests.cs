@@ -35,12 +35,10 @@ public class UpdateBlockPresetTests : UseCaseTestBase
         Websites = preset.Websites.Select(s => s.Url).ToList()
     };
 
-    private static Session RunningSessionUsing(BlockPreset preset)
+    private static (Session Session, FocusBlock Block) RunningSessionUsing(BlockPreset preset)
     {
-        var session = Session.Create(Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(30)),
-            preset.Id, SessionOrigin.Spontaneous);
-        session.Start(At.Utc(Now.AddMinutes(-5)));
-        return session;
+        var block = FocusBlock.Spontaneous(Guid.NewGuid(), preset.Id, At.Slot(Now.AddMinutes(-5), Now.AddMinutes(25)));
+        return (Session.Start(Guid.NewGuid(), new SessionGoal("Goal"), block, At.Utc(Now.AddMinutes(-5))), block);
     }
 
     private static FocusBlock FutureBlockUsing(BlockPreset preset) =>
@@ -130,7 +128,8 @@ public class UpdateBlockPresetTests : UseCaseTestBase
     public async Task UsedByTheRunningSession_AddingAnApp_IsAllowed()
     {
         var preset = Preset(apps: ["chrome"]);
-        await SeedAsync(preset, RunningSessionUsing(preset));
+        var (session, block) = RunningSessionUsing(preset);
+        await SeedAsync(preset, block, session);
 
         var result = await RunAsync(Command(preset) with { BlockedApps = ["chrome", "firefox"] });
 
@@ -177,7 +176,8 @@ public class UpdateBlockPresetTests : UseCaseTestBase
     public async Task InUse_AnythingButStricter_IsRefused_AndNothingChanges(string change)
     {
         var preset = Preset(apps: ["chrome", "firefox"], sites: ["reddit.com"]);
-        await SeedAsync(preset, RunningSessionUsing(preset));
+        var (session, block) = RunningSessionUsing(preset);
+        await SeedAsync(preset, block, session);
 
         var result = await RunAsync(Weaken(Command(preset), change));
 
@@ -194,7 +194,8 @@ public class UpdateBlockPresetTests : UseCaseTestBase
     {
         // Adding to an Allowlist lets more through — weaker, though it is an addition.
         var preset = Preset(sites: ["allowed-a.com"], filterType: WebsiteFilterType.Allowlist);
-        await SeedAsync(preset, RunningSessionUsing(preset));
+        var (session, block) = RunningSessionUsing(preset);
+        await SeedAsync(preset, block, session);
 
         var result = await RunAsync(Command(preset) with { Websites = ["allowed-a.com", "allowed-b.com"] });
 

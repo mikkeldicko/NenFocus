@@ -112,12 +112,14 @@ public class BlockPreset : AggregateRoot
 
     /// <summary>
     /// Locked at <paramref name="now"/> — it can't be deleted, and may only change as
-    /// <see cref="AllowsChangeWhileLocked"/> allows — while anything still depends on it: the running
-    /// session uses it; a block that uses it hasn't really ended (its ReservedSlot — so an early end or a
-    /// cancellation frees it); or a contract in effect still owes time of it (Cover Deficit places a new
-    /// block with it). The one rule both preset validators ask, through CheckBlockPresetLockedQuery (Gap 89
-    /// Slice D). <paramref name="blocksUsingIt"/> must be its own — another preset's block throws;
-    /// <paramref name="openDeficits"/> may be any contract's, of any preset: only its own count.
+    /// <see cref="AllowsChangeWhileLocked"/> allows — while anything still depends on it: a block
+    /// that uses it hasn't really ended (its ReservedSlot — so an early end or a cancellation frees
+    /// it; the running session's block is among these, Gap 114); or a contract in effect still owes
+    /// time of it (Cover Deficit places a new block with it). The one rule both preset validators ask,
+    /// through CheckBlockPresetLockedQuery (Gap 89 Slice D). <paramref name="blocksUsingIt"/> must be
+    /// its own — another preset's block throws; <paramref name="openDeficits"/> may be any contract's,
+    /// of any preset: only its own count. <paramref name="running"/> is no longer asked (every session
+    /// has a block) and is removed in phase 2.
     /// </summary>
     public bool IsLockedAt(Moment now, Session? running, IEnumerable<Block> blocksUsingIt,
         IEnumerable<OutstandingDeficit> openDeficits)
@@ -126,8 +128,7 @@ public class BlockPreset : AggregateRoot
         if (blocks.Any(b => b.BlockPresetId != Id))
             throw new ArgumentException("A block of another preset was passed in.", nameof(blocksUsingIt));
 
-        return running?.BlockPresetId == Id
-            || blocks.Any(b => b.ReservedSlot(now) is { } reserved && !reserved.HasEnded(now))
+        return blocks.Any(b => b.ReservedSlot(now) is { } reserved && !reserved.HasEnded(now))
             || openDeficits.Any(d => d.PresetId == Id);
     }
 

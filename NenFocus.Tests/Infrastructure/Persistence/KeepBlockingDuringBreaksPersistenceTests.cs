@@ -37,9 +37,9 @@ public class KeepBlockingDuringBreaksPersistenceTests : SqliteRepositoryTestBase
             plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
             sealedAt: TestAt.Utc(At.Date), timeZone: TestAt.UtcZone,
             keepBlockingDuringBreaks: keepBlocking);
-        var session = Session.Create(Guid.NewGuid(), new SessionGoal("Goal"),
-            new SessionDuration(TimeSpan.FromHours(1)), Guid.NewGuid(), SessionOrigin.Spontaneous);
-        session.Start(TestAt.Utc(At), keepBlockingDuringBreaks: keepBlocking);
+        var session = Session.Start(Guid.NewGuid(), new SessionGoal("Goal"),
+            FocusBlock.Spontaneous(Guid.NewGuid(), Guid.NewGuid(), TestAt.Slot(At, At.AddHours(1))),
+            TestAt.Utc(At), keepBlockingDuringBreaks: keepBlocking);
 
         Context.AddRange(preset, contract, session);
         await Context.SaveChangesAsync();

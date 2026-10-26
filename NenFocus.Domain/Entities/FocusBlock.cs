@@ -28,12 +28,18 @@ public sealed class FocusBlock : Block
     /// <summary>Null means the Ritual was never completed for this block.</summary>
     internal Moment? RitualCompletedAt { get; private set; }
 
+    /// <summary>How this block was booked — Planned in advance, or Spontaneous (a walk-in) at arrival (Gap 114, D2).</summary>
+    public FocusBlockBookingType BookingType { get; private set; }
+
     /// <summary>
-    /// When this block's session ended, early or on time — a faithful copy of the session's
-    /// own EndedAt, written in the same save; null while no session has ended (Gap 86). An
-    /// early end is simply one before End: every reader compares it to End itself.
+    /// This block's frozen result, written once by its own final transition — its session ended,
+    /// it was missed, or it was cancelled (Gap 114, D5). Null while the block's story is still
+    /// open; every answer below reads it once it exists, and derives live otherwise.
     /// </summary>
-    internal Moment? SessionEndedAt { get; private set; }
+    public FocusBlockResult? Result { get; private set; }
+
+    /// <summary>A missed block's own note on what got in the way (Gap 114, D3); a run's reflection lives on its Session.</summary>
+    public Reflection Reflection { get; private set; } = new(null);
 
     /// <summary>
     /// What this block covers of other blocks' deficits — <see cref="RedemptionReceipt.None"/>
@@ -61,13 +67,13 @@ public sealed class FocusBlock : Block
     public bool CountsTowardFloor => Membership is { CountsTowardFloor: true };
 
     /// <summary>
-    /// Window closed, Ritual never completed, not cancelled — what the missed-block sweep looks
-    /// for. <c>IBlockRepository.GetUnresolvedFocusBlocksAsync</c> asks the same rule in SQL
-    /// through <see cref="TimeSlot.Filters.HasEnded"/> and <see cref="Filters.NoRitualAndNotCancelled"/>;
-    /// a repository test checks the two agree.
+    /// Window closed, Ritual never completed, not cancelled, and not yet frozen — what the
+    /// missed-block sweep looks for. <c>IBlockRepository.GetUnresolvedFocusBlocksAsync</c> asks
+    /// the same rule in SQL through <see cref="TimeSlot.Filters.HasEnded"/> and
+    /// <see cref="Filters.NoRitualAndNotCancelled"/>; a repository test checks the two agree.
     /// </summary>
     public bool IsUnresolved(Moment asOf)
-        => HasEnded(asOf) && RitualCompletedAt is null && CancelledAt is null;
+        => Result is null && HasEnded(asOf) && RitualCompletedAt is null && CancelledAt is null;
 
     /// <summary>
     /// The block's rules as expressions a repository hands to the database, since the stamps they
@@ -75,9 +81,9 @@ public sealed class FocusBlock : Block
     /// </summary>
     public static class Filters
     {
-        /// <summary>The stamp half of <see cref="IsUnresolved"/>: Ritual never completed, not cancelled.</summary>
+        /// <summary>The stamp half of <see cref="IsUnresolved"/>: not frozen, Ritual never completed, not cancelled.</summary>
         public static Expression<Func<FocusBlock, bool>> NoRitualAndNotCancelled { get; } =
-            b => b.RitualCompletedAt == null && b.CancelledAt == null;
+            b => b.Result == null && b.RitualCompletedAt == null && b.CancelledAt == null;
     }
 
     /// <summary>
@@ -86,20 +92,22 @@ public sealed class FocusBlock : Block
     /// </summary>
     public bool IsLateAt(Moment moment) => moment > Scheduled.Start + TimeSpan.FromMinutes(GracePeriodMinutes);
 
-    /// <summary>The Ritual was completed past the grace period, but before the block's end.</summary>
-    public bool StartedLate =>
-        RitualCompletedAt is { } ritualCompletedAt && IsLateAt(ritualCompletedAt) && !Scheduled.HasEnded(ritualCompletedAt);
+    /// <summary>The Ritual was completed past the grace period, but before the block's end — read off
+    /// the worked span, so it stays true once the result is frozen (Gap 114, D5).</summary>
+    public bool StartedLate => WorkSlot() is { } work && work.Start > Scheduled.Start;
 
-    /// <summary>The session ended before the scheduled end.</summary>
-    public bool EndedEarly => SessionEndedAt is { } sessionEndedAt && !Scheduled.HasEnded(sessionEndedAt);
+    /// <summary>The session ended before the scheduled end — read off the worked span.</summary>
+    public bool EndedEarly => WorkSlot() is { } work && work.End < Scheduled.End;
 
     /// <summary>
     /// How the block resolved, or null while it could still be started (before its end, Ritual
     /// not done). One verdict per block, in this priority: Missed, EndedEarly, StartedLate,
     /// CompletedOnTime — <see cref="StartedLate"/> and <see cref="EndedEarly"/> can both be true.
+    /// Frozen once the block is final; derived live until then.
     /// </summary>
     public FocusBlockOutcome? Outcome(Moment asOf)
     {
+        if (Result is { } result) return result.Outcome;
         if (RitualCompletedAt is not { } ritualCompletedAt)
             return HasEnded(asOf) ? FocusBlockOutcome.Missed : null;
         if (Scheduled.HasEnded(ritualCompletedAt)) return FocusBlockOutcome.Missed;
@@ -108,19 +116,19 @@ public sealed class FocusBlock : Block
     }
 
     /// <summary>
-    /// The whole span the block is worked over, from its stamps alone: from the scheduled start
-    /// when the Ritual came within grace (blocking was already running), else from the Ritual;
-    /// to the session's end when it ended early, else the scheduled end (still planned while the
-    /// session runs). Null when the Ritual wasn't done, or nothing is left of the span. The grace
-    /// and early-end rules live only here.
+    /// The whole span the block is worked over: from the scheduled start when the Ritual came within
+    /// grace (blocking was already running), else from the Ritual; to the session's end when it ended
+    /// early, else the scheduled end. Once the block is final this is <see cref="Result"/>'s frozen
+    /// WorkSlot — the one grace-dependent fact, stored so a later rule change can't re-grade the past
+    /// (Gap 114, D5). Null when nothing was worked. The grace and early-end rules live only here.
     /// </summary>
     public TimeSlot? WorkSlot()
     {
+        if (Result is not null) return Result.WorkSlot;
         if (RitualCompletedAt is not { } ritualCompletedAt) return null;
 
         var start = IsLateAt(ritualCompletedAt) ? ritualCompletedAt : Scheduled.Start;
-        var end = EndedEarly ? SessionEndedAt!.Value : Scheduled.End;
-        return TimeSlot.TryCreate(start, end);
+        return TimeSlot.TryCreate(start, Scheduled.End);
     }
 
     /// <summary>
@@ -143,22 +151,25 @@ public sealed class FocusBlock : Block
         CreditedSlot(asOf) is { } slot ? WholeMinutes.TryExact(slot.Length) ?? WholeMinutes.Zero : WholeMinutes.Zero; // exact by construction
 
     /// <summary>
-    /// The block's story has concluded: its session ended, or it was missed. A session still
-    /// running isn't final — it could still end early (Redemption Rule 18).
+    /// The block's story has concluded: its result is frozen, or it was missed by the clock (its
+    /// window closed with no Ritual). A session still running isn't final — it could still end
+    /// early (Redemption Rule 18).
     /// </summary>
     public override bool IsFinal(Moment asOf)
-        => SessionEndedAt.HasValue || Outcome(asOf) == FocusBlockOutcome.Missed;
+        => Result is not null || Outcome(asOf) == FocusBlockOutcome.Missed;
 
     /// <summary>
     /// What this block failed to deliver of its own schedule — its side of the deficit ledger,
     /// however many blocks have since tried to redeem it. Zero until final, zero when it was
-    /// completed on time, and zero for a redemption block: a block covering someone else's
-    /// deficit never becomes a deficit source itself (Rule 13). Whole
-    /// minutes: the block's whole-minute length less its whole-minute credit, nothing rounded.
+    /// completed on time, zero when it was cancelled (a broken contract's block owes nothing),
+    /// and zero for a redemption block: a block covering someone else's deficit never becomes a
+    /// deficit source itself (Rule 13). Whole minutes: the block's whole-minute length less its
+    /// whole-minute credit, nothing rounded.
     /// </summary>
     internal WholeMinutes OwnDeficit(Moment asOf)
     {
-        if (IsRedemption || !IsFinal(asOf) || Outcome(asOf) == FocusBlockOutcome.CompletedOnTime)
+        if (IsRedemption || !IsFinal(asOf)
+            || Outcome(asOf) is FocusBlockOutcome.CompletedOnTime or FocusBlockOutcome.Cancelled)
             return WholeMinutes.Zero;
 
         return Length.Less(CreditAt(asOf));
@@ -176,6 +187,19 @@ public sealed class FocusBlock : Block
         => CreateWithReceipt(id, blockPresetId, scheduled, title, membership, RedemptionReceipt.None);
 
     /// <summary>
+    /// A walk-in block (Gap 114, D2): booked Spontaneous — created at the moment the user starts,
+    /// never booked ahead. Its Ritual is done at creation in the sense that the block is never saved
+    /// unarrived; the arrival itself is still stamped by <see cref="Session.Start"/>, the one writer.
+    /// </summary>
+    public static FocusBlock Spontaneous(
+        Guid id,
+        Guid blockPresetId,
+        TimeSlot scheduled,
+        string? title = null,
+        ContractMembership? membership = null)
+        => CreateWithReceipt(id, blockPresetId, scheduled, title, membership, RedemptionReceipt.None, FocusBlockBookingType.Spontaneous);
+
+    /// <summary>
     /// A block holding <paramref name="receipt"/>. Only the Domain writes a receipt (Gap 106,
     /// decision 8): <see cref="NenContract.PlaceRedemptionBlock"/> when a redemption block is
     /// placed, <see cref="SplitInto"/> when one is split.
@@ -186,7 +210,8 @@ public sealed class FocusBlock : Block
         TimeSlot scheduled,
         string? title,
         ContractMembership? membership,
-        RedemptionReceipt receipt)
+        RedemptionReceipt receipt,
+        FocusBlockBookingType bookingType = FocusBlockBookingType.Planned)
     {
         ValidateDuration(scheduled);
         if (receipt is { Entries.Count: > 0 } && membership is not { IsRedemption: true })
@@ -199,6 +224,7 @@ public sealed class FocusBlock : Block
             Scheduled = scheduled,
             Title = title,
             Membership = membership,
+            BookingType = bookingType,
             Receipt = receipt
         };
     }
@@ -217,8 +243,8 @@ public sealed class FocusBlock : Block
         var firstLength = WholeMinutes.TryExact(first.Length)
             ?? throw new ArgumentException("A planned block is a whole number of minutes long.", nameof(first));
         var (firstReceipt, secondReceipt) = Receipt.SplitAt(firstLength);
-        return (CreateWithReceipt(firstId, BlockPresetId, first, Title, Membership, firstReceipt),
-            CreateWithReceipt(secondId, BlockPresetId, second, Title, Membership, secondReceipt));
+        return (CreateWithReceipt(firstId, BlockPresetId, first, Title, Membership, firstReceipt, BookingType),
+            CreateWithReceipt(secondId, BlockPresetId, second, Title, Membership, secondReceipt, BookingType));
     }
 
     public override void Reschedule(TimeSlot scheduled)
@@ -233,7 +259,9 @@ public sealed class FocusBlock : Block
             throw new ArgumentException($"A Focus block cannot exceed {MaxLength.TotalHours} hours.");
     }
 
-    public void MarkRitualCompleted(Moment completedAt)
+    /// <summary>The arrival — written only by <see cref="Session.Start"/>, the one writer for both
+    /// booking types (Gap 114, D6). Internal so nothing else can stamp it.</summary>
+    internal void MarkRitualCompleted(Moment completedAt)
     {
         if (RitualCompletedAt.HasValue)
             throw new InvalidOperationException(
@@ -243,23 +271,86 @@ public sealed class FocusBlock : Block
     }
 
     /// <summary>
-    /// Refuses a stamp the block's own answers (late, outcome, credit) can't interpret: no
-    /// session can end on a block whose Ritual wasn't done, or before it was (Gap 95). Stamped
-    /// only by its session's <see cref="Session.Complete"/> (Gap 89 Slice A), so it is internal.
+    /// Freezes the block's result from its session's end (Gap 114, D5, D6): the worked span and
+    /// the verdict, computed once and never recomputed. Refuses a stamp the block's own answers
+    /// (late, outcome, credit) can't interpret: no session can end on a block whose Ritual wasn't
+    /// done, or before it was (Gap 95). Called only by its session's <see cref="Session.Complete"/>
+    /// (Gap 89 Slice A), so it is internal.
     /// </summary>
     internal void MarkSessionEnded(Moment endedAt)
     {
-        if (SessionEndedAt.HasValue)
+        if (Result is not null)
             throw new InvalidOperationException(
-                "Session end has already been marked for this block.");
+                "The block's result is already frozen.");
         if (RitualCompletedAt is not { } ritualCompletedAt)
             throw new InvalidOperationException(
                 "A session can't end on a block whose Ritual was never completed.");
-        if (endedAt < ritualCompletedAt)
+        if (Scheduled.HasEnded(ritualCompletedAt))
+            throw new InvalidOperationException(
+                "A session can't end on a block whose Ritual completed after it ended.");
+        if (endedAt <= ritualCompletedAt)
             throw new ArgumentException(
-                "A session can't end before its Ritual was completed.", nameof(endedAt));
+                "A session must run some time before it can end.", nameof(endedAt));
 
-        SessionEndedAt = endedAt;
+        var start = IsLateAt(ritualCompletedAt) ? ritualCompletedAt : Scheduled.Start;
+        // The worked span never runs past the block's scheduled end — the same cap Session.Complete
+        // already applies, owned here too so a frozen result can never exceed its own block.
+        var end = endedAt < Scheduled.End ? endedAt : Scheduled.End;
+        var workSlot = TimeSlot.TryCreate(start, end);
+        Result = new FocusBlockResult(OutcomeFor(workSlot), workSlot);
+    }
+
+    /// <summary>
+    /// Freezes a block the sweep found unresolved (window closed, Ritual never done, not cancelled,
+    /// not yet frozen) as Missed (Gap 114, D5). The sweep's own rule, asked here so no caller can
+    /// skip it. A missed block ran nothing, so it has no work and no credit.
+    /// </summary>
+    public void MarkMissed(Moment asOf)
+    {
+        if (!IsUnresolved(asOf))
+            throw new InvalidOperationException("Only an unresolved block can be marked missed.");
+        Result = new FocusBlockResult(FocusBlockOutcome.Missed, null);
+    }
+
+    /// <summary>
+    /// Cancelling a Focus block also freezes its result as Cancelled (Gap 114, D5 amd 2) — a
+    /// cancelled block is not Missed, and owes no deficit.
+    /// </summary>
+    public override void MarkCancelled(Moment cancelledAt)
+    {
+        if (Result is not null)
+            throw new InvalidOperationException("A block whose result is frozen can't be cancelled.");
+        base.MarkCancelled(cancelledAt);
+        Result = new FocusBlockResult(FocusBlockOutcome.Cancelled, null);
+    }
+
+    /// <summary>The one verdict per block, in this priority: Missed, EndedEarly, StartedLate,
+    /// CompletedOnTime — StartedLate and EndedEarly can both be true (Gap 95).</summary>
+    private FocusBlockOutcome OutcomeFor(TimeSlot? workSlot)
+    {
+        // MarkSessionEnded is only reached once the Ritual is done, so a null work slot means the
+        // session ended at its very start — zero work, i.e. ended early. Missed is MarkMissed's.
+        if (workSlot is null) return FocusBlockOutcome.EndedEarly;
+        if (workSlot.End < Scheduled.End) return FocusBlockOutcome.EndedEarly;
+        if (workSlot.Start > Scheduled.Start) return FocusBlockOutcome.StartedLate;
+        return FocusBlockOutcome.CompletedOnTime;
+    }
+
+    /// <summary>The user's note on why this block was missed — a missed block holds its own (Gap 114,
+    /// D3); a run's reflection lives on its Session.</summary>
+    public void SetReflection(string? text)
+    {
+        if (Result?.Outcome != FocusBlockOutcome.Missed)
+            throw new InvalidOperationException("Only a missed block has a reflection.");
+        Reflection = this.Reflection.WithText(text);
+    }
+
+    /// <summary>Dismissing the miss's recap screen — mirrors Session's acknowledgement (Gap 114, D3).</summary>
+    public void MarkPostSessionAcknowledged(Moment acknowledgedAt)
+    {
+        if (Result?.Outcome != FocusBlockOutcome.Missed)
+            throw new InvalidOperationException("Only a missed block has a post-session acknowledgement.");
+        Reflection = this.Reflection.Acknowledged(acknowledgedAt);
     }
 
     /// <summary>
@@ -284,7 +375,7 @@ public sealed class FocusBlock : Block
         if (RitualCompletedAt is null && Scheduled.HasEnded(asOf)) return Scheduled.Start;
 
         var end = base.EffectiveEnd(asOf);
-        return SessionEndedAt is { } endedEarly && endedEarly < end ? endedEarly : end;
+        return Result?.WorkSlot is { } work && work.End < end ? work.End : end;
     }
 
     /// <summary>

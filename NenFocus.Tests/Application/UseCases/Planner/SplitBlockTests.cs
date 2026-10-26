@@ -377,9 +377,9 @@ public class SplitBlockTests : UseCaseTestBase
     {
         // Gap 88: Split respects a running session too (BlockPlacementChecker.CheckFree).
         var block = await DailyFlexBlockAsync();
-        var running = Session.Create(Guid.NewGuid(), new SessionGoal("Focus"),
-            new SessionDuration(TimeSpan.FromHours(1)), SeededFocusPresetId, SessionOrigin.Spontaneous);
-        running.Start(At.Utc(OriginalStart.AddMinutes(30)));
+        var running = Session.Start(Guid.NewGuid(), new SessionGoal("Focus"),
+            FocusBlock.Spontaneous(Guid.NewGuid(), SeededFocusPresetId, At.Slot(OriginalStart.AddMinutes(30), OriginalStart.AddMinutes(90))),
+            At.Utc(OriginalStart.AddMinutes(30)));
         await SeedAsync(running);
 
         await ShouldBeRefused(AtTwoHours(block), "First block: A Focus block already exists in this time window.");

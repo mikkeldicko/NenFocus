@@ -67,16 +67,16 @@ public class BlockChangeCheckerTests
     }
 
     [Fact]
-    public void APlainBlock_OnceStarted_IsLocked_AndWhileRunningCannotBeDeleted()
+    public void APlainBlock_OnceStarted_IsLocked_AndCannotBeDeleted_RunningOrEnded()
     {
         var block = Plain(Slot(Tuesday, 10, 12));
         var running = At.Utc(2026, 1, 6, 11);
         var ended = At.Utc(2026, 1, 6, 12);
 
         Reschedule(block, Slot(Tuesday, 13, 15), null, asOf: running).Outcome.Should().Be(ChangeOutcome.BlockHasStarted);
-        Checker.CheckDelete(block, null, running).Outcome.Should().Be(ChangeOutcome.BlockIsRunning);
+        Checker.CheckDelete(block, null, running).Outcome.Should().Be(ChangeOutcome.BlockHasStarted);
         Reschedule(block, Slot(Tuesday, 13, 15), null, asOf: ended).Outcome.Should().Be(ChangeOutcome.BlockHasStarted);
-        Checker.CheckDelete(block, null, ended).Should().Be(ChangeVerdict.Allowed);
+        Checker.CheckDelete(block, null, ended).Outcome.Should().Be(ChangeOutcome.BlockHasStarted);
     }
 
     // ── Dragging never changes membership (Gap 106, decision 18) ─────────────
@@ -134,7 +134,7 @@ public class BlockChangeCheckerTests
 
         Reschedule(block, Slot(Tuesday, 13, 15), contract, asOf: At.Utc(2026, 1, 6, 11))
             .Outcome.Should().Be(ChangeOutcome.BlockHasStarted);
-        Checker.CheckDelete(block, contract, At.Utc(2026, 1, 6, 11)).Outcome.Should().Be(ChangeOutcome.BlockIsRunning);
+        Checker.CheckDelete(block, contract, At.Utc(2026, 1, 6, 11)).Outcome.Should().Be(ChangeOutcome.BlockHasStarted);
     }
 
     [Fact]
@@ -359,7 +359,7 @@ public class BlockChangeCheckerTests
         Checker.AllowancesFor(block, null, At.Utc(2026, 1, 6, 11))
             .Should().Be(new BlockChangeAllowances(false, false, false, false));
         Checker.AllowancesFor(block, null, At.Utc(2026, 1, 6, 12))
-            .Should().Be(new BlockChangeAllowances(false, false, false, CanDelete: true));
+            .Should().Be(new BlockChangeAllowances(false, false, false, false));
     }
 
     [Theory]

@@ -53,12 +53,12 @@ public sealed class PolicyEngine
                 pausedBlockIds.Add(originatingBlockId);
         }
 
+        // The active block's preset is the session's: every session belongs to a block (Gap 114),
+        // and a session on break is paused together with its block, so no session contributes a
+        // preset its block doesn't already. A session's own extras are added below, not here.
         var activePresetIds = activeBlocks
             .Where(b => !pausedBlockIds.Contains(b.Id))
             .Select(b => b.BlockPresetId)
-            .Concat(activeSessions
-                .Where(s => !pausedSessionIds.Contains(s.Id))
-                .Select(s => s.BlockPresetId))
             .ToHashSet();
         var activePresets = allPresets.Where(p => activePresetIds.Contains(p.Id)).ToList();
 

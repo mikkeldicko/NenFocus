@@ -148,10 +148,6 @@ public class NenFocusDbContext : DbContext
             entity.Property(s => s.Id)
                 .ValueGeneratedNever();
 
-            entity.Property(s => s.Origin)
-                .HasConversion<string>()
-                .IsRequired();
-
             entity.Property(s => s.OriginatingBlockId);
 
             // Storage backstops (Gap 92, C+ and A8b) — the rules live in the Domain (Focus time never
@@ -166,11 +162,16 @@ public class NenFocusDbContext : DbContext
                 .HasFilter("\"OriginatingBlockId\" IS NOT NULL")
                 .HasDatabaseName("IX_Sessions_OnePerOriginatingBlock");
 
-            entity.Property(s => s.StartedAt);
-            entity.Property(s => s.EndAt);
-            entity.Property(s => s.EndedAt);
-            entity.Property(s => s.Reflection)
-                .HasMaxLength(2000);
+            // The run's own times are Domain-only (Gap 89 leftover 2), mapped by name like a block's
+            // slot; the reflection is a value object with the trim/blank rule (Gap 114, D3).
+            entity.Property<Moment?>("StartedAt");
+            entity.Property<Moment?>("EndAt");
+            entity.Property<Moment?>("EndedAt");
+            entity.OwnsOne(s => s.Reflection, reflection =>
+            {
+                reflection.Property(r => r.Text).HasColumnName("Reflection").HasMaxLength(2000);
+                reflection.Property(r => r.AcknowledgedAt).HasColumnName("PostSessionAcknowledgedAt");
+            });
 
             entity.Property(s => s.Goal)
                 .HasConversion(
@@ -179,18 +180,8 @@ public class NenFocusDbContext : DbContext
                 .HasColumnName("Goal")
                 .IsRequired();
 
-            entity.Property(s => s.Duration)
-                .HasConversion(
-                    d => (long)d.Value.TotalMinutes,
-                    v => new SessionDuration(TimeSpan.FromMinutes(v)))
-                .HasColumnName("DurationMinutes")
-                .IsRequired();
-
             entity.Property(s => s.Status)
                 .HasConversion<string>()
-                .IsRequired();
-
-            entity.Property(s => s.BlockPresetId)
                 .IsRequired();
 
             // The session's BreakSchedule (Gap 63): one row per break, offsets from
@@ -366,7 +357,25 @@ public class NenFocusDbContext : DbContext
             // Gap 95: the block's stamps are Domain-only — every reader asks the block — so they're
             // mapped by name, like a slot's Start/End.
             entity.Property<Moment?>("RitualCompletedAt");
-            entity.Property<Moment?>("SessionEndedAt");
+
+            // Gap 114: how it was booked (D2), and its frozen result (D5) — the verdict and the
+            // worked span, null while the block's story is open. The reflection is a missed block's
+            // own note (D3).
+            entity.Property(b => b.BookingType).HasColumnName("BookingType").HasConversion<string>().IsRequired();
+            entity.OwnsOne(b => b.Result, result =>
+            {
+                result.Property(r => r.Outcome).HasColumnName("ResultOutcome").HasConversion<string>();
+                result.OwnsOne(r => r.WorkSlot, slot =>
+                {
+                    slot.Property<Moment>("Start").HasColumnName("ResultWorkStart");
+                    slot.Property<Moment>("End").HasColumnName("ResultWorkEnd");
+                });
+            });
+            entity.OwnsOne(b => b.Reflection, reflection =>
+            {
+                reflection.Property(r => r.Text).HasColumnName("Reflection").HasMaxLength(2000);
+                reflection.Property(r => r.AcknowledgedAt).HasColumnName("PostSessionAcknowledgedAt");
+            });
 
             // Gap 106: the receipt is a Focus block's own — still the same JSON column.
             entity.Property(b => b.Receipt)
@@ -577,10 +586,11 @@ public class NenFocusDbContext : DbContext
             entity.Property(c => c.CommittedFocusHours)
                 .IsRequired();
 
-            entity.Property(c => c.Reflection)
-                .HasMaxLength(2000);
-
-            entity.Property(c => c.PostContractAcknowledgedAt);
+            entity.OwnsOne(c => c.Reflection, reflection =>
+            {
+                reflection.Property(r => r.Text).HasColumnName("Reflection").HasMaxLength(2000);
+                reflection.Property(r => r.AcknowledgedAt).HasColumnName("PostContractAcknowledgedAt");
+            });
         });
     }
 }

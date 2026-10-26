@@ -12,9 +12,6 @@ public enum ChangeOutcome
     /// <summary>The block has started (running or ended): it can no longer be changed.</summary>
     BlockHasStarted,
 
-    /// <summary>The block is running right now: it can't be deleted until it ends.</summary>
-    BlockIsRunning,
-
     /// <summary>The block's contract is Completed or Broken: its blocks are history.</summary>
     ContractIsOver,
 

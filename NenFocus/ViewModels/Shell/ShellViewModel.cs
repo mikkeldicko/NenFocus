@@ -303,13 +303,9 @@ public partial class ShellViewModel : ViewModelBase
 
         if (!_suppressTriage)
         {
-            // Triage batching stays scoped to Missed sessions only — a Completed-but-
-            // undismissed post-session can never exceed one at a time (the overlay itself
-            // blocks starting a second session before the first is dismissed), so it has
-            // no batching case to cover and must never be swept into Triage's "skip all".
-            var missedCount = _pendingOverlays
-                .OfType<PendingPostSession>()
-                .Count(p => p.PostSession.Status == SessionStatus.Missed);
+            // Missed sessions no longer exist (Gap 114): the triage that batched them is Gap 107's
+            // to remove. The count is always zero, so the batch never fires, until then.
+            var missedCount = 0;
             if (missedCount > 3)
             {
                 ShowTriage(missedCount);
@@ -357,9 +353,9 @@ public partial class ShellViewModel : ViewModelBase
         // Only drops pending Missed post-sessions — a pending Completed one (dismissed
         // via "Review each" or simply not yet reached) is untouched, since Triage never
         // counted it and skipping it would silently discard an unsaved reflection prompt.
-        var kept = _pendingOverlays
-            .Where(o => o is not PendingPostSession postSession || postSession.PostSession.Status != SessionStatus.Missed)
-            .ToList();
+        // Missed sessions no longer exist (Gap 114) — nothing is filtered out here; the whole
+        // triage is Gap 107's to remove.
+        var kept = _pendingOverlays.ToList();
         _pendingOverlays.Clear();
         foreach (var item in kept) _pendingOverlays.Enqueue(item);
 

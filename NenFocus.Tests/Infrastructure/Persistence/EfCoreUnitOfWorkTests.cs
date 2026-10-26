@@ -63,13 +63,12 @@ public class EfCoreUnitOfWorkTests : SqliteRepositoryTestBase
     [Fact]
     public async Task CommitAsync_AggregateWithNoPendingEvents_IsNotPublished()
     {
-        // Session.Create() does not raise any domain event by itself (only Start/
-        // Complete do), so a freshly-created, not-yet-started session
-        // has zero pending events at commit time.
-        var session = Session.Create(
-            Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(30)),
-            Guid.NewGuid(), SessionOrigin.Spontaneous);
-        await Context.Sessions.AddAsync(session);
+        // A freshly-created block holds no domain event (only its transitions — cancelled,
+        // session ended, missed — raise one), so committing it publishes nothing.
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(
+            new DateTime(2026, 1, 1, 9, 0, 0, DateTimeKind.Utc),
+            new DateTime(2026, 1, 1, 10, 0, 0, DateTimeKind.Utc)));
+        await Context.Blocks.AddAsync(block);
 
         await CreateUnitOfWork().CommitAsync();
 

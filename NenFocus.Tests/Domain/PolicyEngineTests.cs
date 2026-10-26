@@ -31,16 +31,15 @@ public class PolicyEngineTests
         IReadOnlyList<string>? temporaryBlockedApps = null,
         IReadOnlyList<string>? temporaryBlockedSites = null)
     {
-        var session = Session.Create(
+        var block = FocusBlock.Spontaneous(Guid.NewGuid(), blockPresetId ?? Guid.NewGuid(),
+            TestAt.Slot(At, At.AddMinutes(30)));
+        return Session.Start(
             Guid.NewGuid(),
             new SessionGoal("Focus"),
-            new SessionDuration(TimeSpan.FromMinutes(30)),
-            blockPresetId ?? Guid.NewGuid(),
-            SessionOrigin.Spontaneous,
+            block,
+            TestAt.Utc(At),
             temporaryBlockedApps: temporaryBlockedApps?.Select(a => new BlockedApp(a)).ToList(),
             temporaryBlockedSites: temporaryBlockedSites?.Select(s => new Website(s)).ToList());
-        session.Start(TestAt.Utc(At));
-        return session;
     }
 
     private static IEnumerable<string> Names(ActivePolicySlice slice) => slice.BlockedApps.Select(a => a.ProcessName);
@@ -180,9 +179,11 @@ public class PolicyEngineTests
     public void ComputeSlice_AllowlistMode_TemporaryBlockedSiteOverridesAllowlistMembership()
     {
         var allowPreset = CreatePreset(WebsiteFilterType.Allowlist, sites: ["a.com", "temp.com"]);
-        var session = CreateActiveSession(blockPresetId: allowPreset.Id, temporaryBlockedSites: ["temp.com"]);
+        var block = CreateActiveBlock(allowPreset.Id);
+        var session = Session.Start(Guid.NewGuid(), new SessionGoal("Focus"), block, TestAt.Utc(At),
+            temporaryBlockedSites: [new Website("temp.com")]);
 
-        var slice = _engine.ComputeSlice(TestAt.Utc(At), [allowPreset], session, []);
+        var slice = _engine.ComputeSlice(TestAt.Utc(At), [allowPreset], session, [block]);
 
         Blocks(slice, "a.com").Should().BeFalse();
         Blocks(slice, "temp.com").Should().BeTrue();
@@ -344,16 +345,12 @@ public class PolicyEngineTests
     // A planned session that started 26 minutes before `At`, with a 25-30 minute break
     // slot — so `At` itself falls inside the break (Gap 63: a break is read off the
     // schedule against the clock, never a status the session is put into).
-    private static Session StartPlannedSessionInsideBreakAt(FocusBlock block, Guid presetId, bool keepBlockingDuringBreaks = false)
-    {
-        var session = Session.Create(
-            Guid.NewGuid(), new SessionGoal("Focus"), new SessionDuration(TimeSpan.FromHours(1)),
-            presetId, SessionOrigin.Planned, originatingBlockId: block.Id);
-        session.Start(TestAt.Utc(At.AddMinutes(-26)), block.Scheduled, new BreakSchedule([
-            new SessionBreak(BreakKind.ShortBreak, TimeSpan.FromMinutes(25), TimeSpan.FromMinutes(30))]),
+    private static Session StartPlannedSessionInsideBreakAt(FocusBlock block, bool keepBlockingDuringBreaks = false)
+        => Session.Start(
+            Guid.NewGuid(), new SessionGoal("Focus"), block, TestAt.Utc(At.AddMinutes(-26)),
+            breakSchedule: new BreakSchedule([
+                new SessionBreak(BreakKind.ShortBreak, TimeSpan.FromMinutes(25), TimeSpan.FromMinutes(30))]),
             keepBlockingDuringBreaks: keepBlockingDuringBreaks);
-        return session;
-    }
 
     [Fact]
     public void ComputeSlice_PlannedSessionInBreakSlot_PresetExcludedFromBlockedApps()
@@ -361,7 +358,7 @@ public class PolicyEngineTests
         // By default a break lifts the session's own preset (and its originating block's).
         var preset = CreatePreset(WebsiteFilterType.Blocklist, apps: ["chrome.exe"]);
         var block = FocusBlock.Create(Guid.NewGuid(), preset.Id,TestAt.Slot(At.AddMinutes(-26), At.AddHours(1)));
-        var session = StartPlannedSessionInsideBreakAt(block, preset.Id);
+        var session = StartPlannedSessionInsideBreakAt(block);
 
         var slice = _engine.ComputeSlice(TestAt.Utc(At), [preset], session, [block]);
 
@@ -373,7 +370,7 @@ public class PolicyEngineTests
     {
         var preset = CreatePreset(WebsiteFilterType.Blocklist, apps: ["chrome.exe"]);
         var block = FocusBlock.Create(Guid.NewGuid(), preset.Id,TestAt.Slot(At.AddMinutes(-26), At.AddHours(1)));
-        var session = StartPlannedSessionInsideBreakAt(block, preset.Id);
+        var session = StartPlannedSessionInsideBreakAt(block);
 
         var slice = _engine.ComputeSlice(TestAt.Utc(At.AddMinutes(5)), [preset], session, [block]);
 
@@ -386,7 +383,7 @@ public class PolicyEngineTests
         // Gap 64: the session carries its contract's rule — PolicyEngine needs no contract.
         var preset = CreatePreset(WebsiteFilterType.Blocklist, apps: ["chrome.exe"]);
         var block = FocusBlock.Create(Guid.NewGuid(), preset.Id,TestAt.Slot(At.AddMinutes(-26), At.AddHours(1)));
-        var session = StartPlannedSessionInsideBreakAt(block, preset.Id, keepBlockingDuringBreaks: true);
+        var session = StartPlannedSessionInsideBreakAt(block, keepBlockingDuringBreaks: true);
 
         var slice = _engine.ComputeSlice(TestAt.Utc(At), [preset], session, [block]);
 
@@ -403,7 +400,7 @@ public class PolicyEngineTests
         var backgroundPreset = CreatePreset(WebsiteFilterType.Blocklist, apps: ["spotify.exe"], type: BlockPresetType.Background);
         var focusBlock = FocusBlock.Create(Guid.NewGuid(), focusPreset.Id,TestAt.Slot(At.AddMinutes(-26), At.AddHours(1)));
         var backgroundBlock = BackgroundBlock.Create(Guid.NewGuid(), backgroundPreset.Id,TestAt.Slot(At, At.AddHours(1)));
-        var session = StartPlannedSessionInsideBreakAt(focusBlock, focusPreset.Id);
+        var session = StartPlannedSessionInsideBreakAt(focusBlock);
 
         var slice = _engine.ComputeSlice(TestAt.Utc(At), [focusPreset, backgroundPreset], session, [focusBlock, backgroundBlock]);
 

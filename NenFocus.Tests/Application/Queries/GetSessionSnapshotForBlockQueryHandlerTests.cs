@@ -29,14 +29,8 @@ public class GetSessionSnapshotForBlockQueryHandlerTests
 
     private static Session CreateCompletedSession(Guid originatingBlockId, string goal = "Finish report", string? reflection = null)
     {
-        var session = Session.Create(
-            Guid.NewGuid(),
-            new SessionGoal(goal),
-            SessionDuration.FromHoursAndMinutes(1, 0),
-            Guid.NewGuid(),
-            SessionOrigin.Planned,
-            originatingBlockId);
-        session.Start(At.Utc(Start));
+        var block = FocusBlock.Create(originatingBlockId, Guid.NewGuid(), At.Slot(Start, End));
+        var session = Session.Start(Guid.NewGuid(), new SessionGoal(goal), block, At.Utc(Start));
         session.Complete(At.Utc(End), null);
         if (reflection is not null) session.SetReflection(reflection);
         return session;

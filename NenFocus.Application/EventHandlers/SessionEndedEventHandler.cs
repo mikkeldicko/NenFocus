@@ -2,6 +2,7 @@ using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.Notifications;
 using NenFocus.Domain.Entities;
+using NenFocus.Domain.Enums;
 using NenFocus.Domain.Events;
 
 namespace NenFocus.Application.EventHandlers;
@@ -53,22 +54,21 @@ public sealed class SessionEndedEventHandler : IDomainEventHandler<SessionEndedE
         // enforced after the session ends (Gap 62).
         await _synchronizer.SyncAsync(_clock.Now, cancellationToken);
 
-        // The session owns a planned block's ending: the block never announces it
+        // The session owns its block's ending: the block never announces it
         // (FocusBlock.AnnouncesOwnEnd), so this is the one toast for that moment.
         var session = await _sessions.GetByIdAsync(domainEvent.SessionId, cancellationToken);
-        var block = session?.OriginatingBlockId is { } blockId
-            ? await _blocks.GetByIdAsync(blockId, cancellationToken)
-            : null;
+        var block = session is null
+            ? null
+            : await _blocks.GetByIdAsync(session.OriginatingBlockId, cancellationToken) as FocusBlock;
         var preset = block is null ? null : await _presets.GetByIdAsync(block.BlockPresetId, cancellationToken);
         var blockName = block?.DisplayName(preset?.Name ?? "");
 
-        await _notifier.NotifyAsync(new SessionCompleted(block is not null, blockName), cancellationToken);
+        await _notifier.NotifyAsync(new SessionCompleted(block?.BookingType ?? FocusBlockBookingType.Spontaneous, blockName), cancellationToken);
 
         // The one path to the Post-Session screen, whoever ended it — you or the clock (Gap 89
         // Slice A). Built from what was saved, after the commit (Gap 110).
         if (session is null) return;
         var attempts = await _attempts.GetForSessionAsync(session.Id, cancellationToken);
-        var sessionPreset = await _presets.GetByIdAsync(session.BlockPresetId, cancellationToken);
-        _recaps.NotifyPostSessionsReady([PostSessionDto.From(session, block as FocusBlock, sessionPreset?.Name ?? string.Empty, attempts)]);
+        _recaps.NotifyPostSessionsReady([PostSessionDto.From(session, block, preset?.Name ?? string.Empty, attempts)]);
     }
 }

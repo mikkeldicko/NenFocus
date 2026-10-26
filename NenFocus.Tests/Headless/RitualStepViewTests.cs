@@ -61,7 +61,7 @@ public class RitualStepViewTests
     {
         var queries = new FakeQueryDispatcher()
             .Answer<GetAllBlockPresetsQuery, IReadOnlyList<BlockPresetDto>>(_ => [DeepWork, AllowlistOnly]);
-        var vm = new RenPageViewModel(queries, SessionOrigin.Spontaneous, null, () => { }, () => { });
+        var vm = new RenPageViewModel(queries, FocusBlockBookingType.Spontaneous, null, () => { }, () => { });
         var view = new RenPageView { DataContext = vm };
         var window = Show(view);
 
@@ -84,7 +84,7 @@ public class RitualStepViewTests
     {
         var queries = new FakeQueryDispatcher()
             .Answer<GetAllBlockPresetsQuery, IReadOnlyList<BlockPresetDto>>(_ => [AllowlistOnly]);
-        var vm = new RenPageViewModel(queries, SessionOrigin.Spontaneous, null, () => { }, () => { });
+        var vm = new RenPageViewModel(queries, FocusBlockBookingType.Spontaneous, null, () => { }, () => { });
         var view = new RenPageView { DataContext = vm };
         var window = Show(view);
 
@@ -98,7 +98,7 @@ public class RitualStepViewTests
     [AvaloniaFact]
     public void Ren_Planned_ShowsOnlyTheLockedPresetAndAddsAnExtraSite()
     {
-        var vm = new RenPageViewModel(new FakeQueryDispatcher(), SessionOrigin.Planned, DeepWork, () => { }, () => { });
+        var vm = new RenPageViewModel(new FakeQueryDispatcher(), FocusBlockBookingType.Planned, DeepWork, () => { }, () => { });
         var view = new RenPageView { DataContext = vm };
         var window = Show(view);
 

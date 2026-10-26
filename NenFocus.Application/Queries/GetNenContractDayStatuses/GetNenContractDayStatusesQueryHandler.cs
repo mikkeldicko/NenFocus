@@ -33,7 +33,7 @@ public sealed class GetNenContractDayStatusesQueryHandler
         // Its own blocks, and the sessions on its days — the contract decides which of those count.
         var blocks = await _blocks.GetForContractAsync(contract.Id, ct);
         var sessions = await _sessions.GetHistoryAsync(
-            _clock.TimeZone.SlotCovering(contract.StartDate, contract.EndDate), presetId: null, ct);
+            _clock.TimeZone.SlotCovering(contract.StartDate, contract.EndDate), ct);
 
         return contract.DayStatuses(blocks, sessions, _clock.Now, _clock.TimeZone);
     }

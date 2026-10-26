@@ -7,17 +7,17 @@ public sealed class GetActiveSessionQueryHandler
     : IQueryHandler<GetActiveSessionQuery, SessionDto?>
 {
     private readonly ISessionRepository _sessions;
+    private readonly IBlockRepository _blocks;
     private readonly IBlockPresetRepository _presets;
-    private readonly ISystemClock _clock;
 
     public GetActiveSessionQueryHandler(
         ISessionRepository sessions,
-        IBlockPresetRepository presets,
-        ISystemClock clock)
+        IBlockRepository blocks,
+        IBlockPresetRepository presets)
     {
         _sessions = sessions;
+        _blocks = blocks;
         _presets = presets;
-        _clock = clock;
     }
 
     public async Task<SessionDto?> HandleAsync(
@@ -27,7 +27,9 @@ public sealed class GetActiveSessionQueryHandler
         var session = await _sessions.GetActiveAsync(cancellationToken);
         if (session is null) return null;
 
-        var preset = await _presets.GetByIdAsync(session.BlockPresetId, cancellationToken);
+        // The session's preset lives on its block (Gap 114, D1) — the session stores no copy.
+        var block = await _blocks.GetByIdAsync(session.OriginatingBlockId, cancellationToken);
+        var preset = block is null ? null : await _presets.GetByIdAsync(block.BlockPresetId, cancellationToken);
 
         // The one builder of SessionDto: IActiveSessionState refreshes from this query at
         // startup and after a session starts or ends, so nothing else maps a running session
@@ -37,12 +39,8 @@ public sealed class GetActiveSessionQueryHandler
             Id = session.Id,
             Goal = session.Goal.Value,
             PresetName = preset?.Name ?? "Unknown",
-            BlockPresetId = session.BlockPresetId,
-            DurationMinutes = (int)session.Duration.Value.TotalMinutes,
             Status = session.Status,
-            Origin = session.Origin,
             OriginatingBlockId = session.OriginatingBlockId,
-            EndedAt = session.EndedAt,
             Timeline = session.Timeline,
             BreakPresetName = session.BreakPresetName
         };

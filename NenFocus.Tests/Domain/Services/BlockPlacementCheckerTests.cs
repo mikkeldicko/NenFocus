@@ -24,10 +24,9 @@ public class BlockPlacementCheckerTests
 
     private static Session RunningSession(double fromHour, double toHour)
     {
-        var session = Session.Create(Guid.NewGuid(), new SessionGoal("Focus"),
-            new SessionDuration(TimeSpan.FromHours(toHour - fromHour)), Guid.NewGuid(), SessionOrigin.Spontaneous);
-        session.Start(At.Utc(Day.AddHours(fromHour)));
-        return session;
+        var block = FocusBlock.Spontaneous(Guid.NewGuid(), Guid.NewGuid(),
+            At.Slot(Day.AddHours(fromHour), Day.AddHours(toHour)));
+        return Session.Start(Guid.NewGuid(), new SessionGoal("Focus"), block, At.Utc(Day.AddHours(fromHour)));
     }
 
     private PlacementVerdict CheckFree(TimeSlot slot, Block[]? blocks = null, Session? running = null) =>

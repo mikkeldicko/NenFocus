@@ -37,7 +37,6 @@ public class ValidatorWordingRuleTests
         "NenFocus.Application/UseCases/NenContracts/Edit/EditNenContractValidator.cs has 7",
         "NenFocus.Application/UseCases/NenContracts/Seal/SealNenContractValidator.cs has 5",
         "NenFocus.Application/UseCases/Planner/CreateBlock/CreateBlockValidator.cs has 4",
-        "NenFocus.Application/UseCases/Sessions/MarkFocusBlockMissed/MarkFocusBlockMissedValidator.cs has 4",
         "NenFocus.Application/UseCases/Sessions/StartSession/StartSessionValidator.cs has 4",
     ];
 

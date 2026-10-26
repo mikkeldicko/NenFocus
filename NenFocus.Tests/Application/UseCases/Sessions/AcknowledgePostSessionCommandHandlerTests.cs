@@ -15,25 +15,16 @@ public class AcknowledgePostSessionCommandHandlerTests : UseCaseTestBase
 
     private static Session Spontaneous()
     {
-        var session = Session.Create(Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(30)),
-            Guid.NewGuid(), SessionOrigin.Spontaneous);
-        session.Start(At.Utc(Now.AddMinutes(-30)));
-        return session;
-    }
-
-    private static Session Missed()
-    {
-        var session = Session.Create(Guid.NewGuid(), new SessionGoal("(missed — no goal set)"), new SessionDuration(TimeSpan.FromMinutes(30)),
-            Guid.NewGuid(), SessionOrigin.Planned, originatingBlockId: Guid.NewGuid());
-        session.Miss(new TimeSlot(At.Utc(Now.AddHours(-2)), At.Utc(Now.AddHours(-2).AddMinutes(30))));
-        return session;
+        return Session.Start(Guid.NewGuid(), new SessionGoal("Goal"),
+            FocusBlock.Spontaneous(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Now.AddMinutes(-30), Now)),
+            At.Utc(Now.AddMinutes(-30)));
     }
 
     private Task<AcknowledgePostSessionResult> AcknowledgeAsync(Guid sessionId) =>
         RunAsync(new AcknowledgePostSessionCommand { SessionId = sessionId });
 
     private async Task<Moment?> StoredAcknowledgementAsync(Session session) =>
-        (await FindAsync<Session>(session.Id))!.PostSessionAcknowledgedAt;
+        (await FindAsync<Session>(session.Id))!.Reflection.AcknowledgedAt;
 
     [Fact]
     public async Task SessionNotFound_Fails()
@@ -48,18 +39,6 @@ public class AcknowledgePostSessionCommandHandlerTests : UseCaseTestBase
     {
         var session = Spontaneous();
         session.Complete(At.Utc(Now), null);
-        await SeedAsync(session);
-
-        var result = await AcknowledgeAsync(session.Id);
-
-        result.Success.Should().BeTrue(result.ErrorMessage);
-        (await StoredAcknowledgementAsync(session)).Should().Be(At.Utc(Now));
-    }
-
-    [Fact]
-    public async Task AMissedSession_IsStampedAcknowledged()
-    {
-        var session = Missed();
         await SeedAsync(session);
 
         var result = await AcknowledgeAsync(session.Id);

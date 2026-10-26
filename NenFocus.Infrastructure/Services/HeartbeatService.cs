@@ -27,7 +27,6 @@ public sealed class HeartbeatService : BackgroundService
 {
     private readonly ICommandDispatcher _commands;
     private readonly IServiceScopeFactory _scopeFactory;
-    private readonly IRecapRelay _recaps;
     private readonly IRitualPrompt _ritualPrompt;
     private readonly IEnforcementSynchronizer _synchronizer;
     private readonly ISystemClock _clock;
@@ -46,7 +45,6 @@ public sealed class HeartbeatService : BackgroundService
     public HeartbeatService(
         ICommandDispatcher commands,
         IServiceScopeFactory scopeFactory,
-        IRecapRelay recaps,
         IRitualPrompt ritualPrompt,
         IEnforcementSynchronizer synchronizer,
         IActiveSessionMonitor monitor,
@@ -55,7 +53,6 @@ public sealed class HeartbeatService : BackgroundService
     {
         _commands = commands;
         _scopeFactory = scopeFactory;
-        _recaps = recaps;
         _ritualPrompt = ritualPrompt;
         _synchronizer = synchronizer;
         _clock = clock;
@@ -96,13 +93,8 @@ public sealed class HeartbeatService : BackgroundService
         await RunStepAsync("auto-end session", () =>
             _commands.DispatchAsync(new AutoEndSessionCommand { AsOf = now }, ct));
 
-        await RunStepAsync("sweep missed blocks", async () =>
-        {
-            var swept = await _commands.DispatchAsync(new SweepMissedFocusBlocksCommand { AsOf = now }, ct);
-            // Relayed here, not by an event handler: live triage needs the sweep's whole batch at
-            // once — Gap 107 moves it (exception listed in SideEffectRuleTests).
-            _recaps.NotifyPostSessionsReady(swept.MissedSessions);
-        });
+        await RunStepAsync("sweep missed blocks", () =>
+            _commands.DispatchAsync(new SweepMissedFocusBlocksCommand { AsOf = now }, ct));
 
         // A contract it completes owes its recap: NenContractEndedEventHandler shows it after the save.
         await RunStepAsync("sweep contract lifecycles", () =>

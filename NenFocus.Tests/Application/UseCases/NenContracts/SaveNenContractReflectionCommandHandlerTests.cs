@@ -48,6 +48,6 @@ public class SaveNenContractReflectionCommandHandlerTests : UseCaseTestBase
         var result = await RunAsync(new SaveNenContractReflectionCommand { ContractId = contract.Id, Reflection = "  Went well  " });
 
         result.Success.Should().BeTrue(result.ErrorMessage);
-        (await FindAsync<NenContract>(contract.Id))!.Reflection.Should().Be("Went well");
+        (await FindAsync<NenContract>(contract.Id))!.Reflection.Text.Should().Be("Went well");
     }
 }

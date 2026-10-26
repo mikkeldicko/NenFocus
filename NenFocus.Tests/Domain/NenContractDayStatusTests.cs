@@ -149,28 +149,6 @@ public class NenContractDayStatusTests
     }
 
     [Fact]
-    public void ASpontaneousSessionOnAContractPreset_CountsAsCompleted_OthersDoNot()
-    {
-        // Today's rule, until Gap 67 makes such sessions Bonus.
-        var contract = Contract(plan: new Dictionary<DateOnly, double> { [Monday] = 2 });
-        var presetId = Guid.NewGuid();
-        var committed = Committed(contract, Slot(Monday, 10, 12), presetId);
-        Session Spontaneous(Guid preset, DateOnly day)
-        {
-            var session = Session.Create(Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromHours(1)),
-                preset, SessionOrigin.Spontaneous);
-            session.Start(At.Utc(day.ToDateTime(new TimeOnly(15, 0))));
-            session.Complete(At.Utc(day.ToDateTime(new TimeOnly(15, 30))), null);
-            return session;
-        }
-
-        var statuses = Statuses(contract, [committed],
-            [Spontaneous(presetId, Monday), Spontaneous(Guid.NewGuid(), Monday), Spontaneous(presetId, Monday.AddDays(-1))]);
-
-        On(statuses, Monday).CompletedHours.Should().Be(0.5);
-    }
-
-    [Fact]
     public void PercentMet_IsCompletedOverTarget_AndNoneOnARestDay()
     {
         var contract = Contract(plan: new Dictionary<DateOnly, double> { [Monday] = 2 });

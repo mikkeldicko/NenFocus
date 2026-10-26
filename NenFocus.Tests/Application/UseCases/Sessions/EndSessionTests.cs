@@ -22,17 +22,11 @@ public class EndSessionTests : UseCaseTestBase
     private Task<EndSessionResult> EndAsync(Guid sessionId) =>
         RunAsync(new EndSessionCommand { SessionId = sessionId });
 
-    private static Session ActiveSession(Guid? originatingBlockId = null, Guid? presetId = null)
+    private static (FocusBlock Block, Session Session) ActiveSession(Guid? presetId = null)
     {
-        var session = Session.Create(
-            Guid.NewGuid(),
-            new SessionGoal("Deep work"),
-            new SessionDuration(TimeSpan.FromMinutes(30)),
-            presetId ?? SeededFocusPresetId,
-            originatingBlockId is null ? SessionOrigin.Spontaneous : SessionOrigin.Planned,
-            originatingBlockId: originatingBlockId);
-        session.Start(At.Utc(Now.AddMinutes(-10)));
-        return session;
+        var startedAt = At.Utc(Now.AddMinutes(-10));
+        var block = FocusBlock.Spontaneous(Guid.NewGuid(), presetId ?? SeededFocusPresetId, At.Slot(Now.AddMinutes(-10), Now.AddMinutes(20)));
+        return (block, Session.Start(Guid.NewGuid(), new SessionGoal("Deep work"), block, startedAt));
     }
 
     /// <summary>Ends it and returns the Post-Session screen relayed for it — only after the commit, by
@@ -59,22 +53,9 @@ public class EndSessionTests : UseCaseTestBase
     }
 
     [Fact]
-    public async Task ASessionNotStarted_IsRefused()
-    {
-        var session = Session.Create(Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(30)),
-            SeededFocusPresetId, SessionOrigin.Spontaneous);
-        await SeedAsync(session);
-
-        var result = await EndAsync(session.Id);
-
-        result.Success.Should().BeFalse();
-        (await FindAsync<Session>(session.Id))!.Status.Should().Be(SessionStatus.NotStarted);
-    }
-
-    [Fact]
     public async Task AnAlreadyCompletedSession_IsRefused()
     {
-        var session = ActiveSession();
+        var (_, session) = ActiveSession();
         session.Complete(At.Utc(Now.AddMinutes(-5)), null);
         await SeedAsync(session);
 
@@ -92,7 +73,7 @@ public class EndSessionTests : UseCaseTestBase
     public async Task EndingBeforeItStarted_IsRefused_AndChangesNothing()
     {
         // Only the debug clock, pushed back behind the start, gets here (Gap 89 Slice C).
-        var session = ActiveSession(); // started at Now − 10 min
+        var (_, session) = ActiveSession(); // started at Now − 10 min
         await SeedAsync(session);
         Clock.SetNow(Now.AddMinutes(-15));
 
@@ -109,8 +90,8 @@ public class EndSessionTests : UseCaseTestBase
     [Fact]
     public async Task ARunningSession_IsStoredCompleted_AndSummarised()
     {
-        var session = ActiveSession(presetId: await FocusPresetAsync("Deep Work"));
-        await SeedAsync(session);
+        var (block, session) = ActiveSession(presetId: await FocusPresetAsync("Deep Work"));
+        await SeedAsync(block, session);
 
         var shown = await EndedAsync(session);
 
@@ -125,9 +106,10 @@ public class EndSessionTests : UseCaseTestBase
     public async Task EndedDuringABreakSlot_StoresTheBreakCutShort()
     {
         // Started 27 minutes ago with a 25–30 break: ending now falls mid-break.
-        var session = Session.Create(Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(60)),
-            SeededFocusPresetId, SessionOrigin.Spontaneous);
-        session.Start(At.Utc(Now.AddMinutes(-27)), breakSchedule: new BreakTimer(25, 5, 4, 15).ScheduleFor(TimeSpan.FromMinutes(60)),
+        var session = Session.Start(Guid.NewGuid(), new SessionGoal("Goal"),
+            FocusBlock.Spontaneous(Guid.NewGuid(), SeededFocusPresetId, At.Slot(Now.AddMinutes(-27), Now.AddMinutes(33))),
+            At.Utc(Now.AddMinutes(-27)),
+            breakSchedule: new BreakTimer(25, 5, 4, 15).ScheduleFor(TimeSpan.FromMinutes(60)),
             breakPresetName: "Classic");
         await SeedAsync(session);
 
@@ -142,9 +124,9 @@ public class EndSessionTests : UseCaseTestBase
     {
         // Regression (Gap 63): a 30-minute session whose end was only noticed 10 minutes late
         // (sleep, a restart, a clock jump) used to record 40 minutes.
-        var session = Session.Create(Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(30)),
-            SeededFocusPresetId, SessionOrigin.Spontaneous);
-        session.Start(At.Utc(Now.AddMinutes(-40)));
+        var session = Session.Start(Guid.NewGuid(), new SessionGoal("Goal"),
+            FocusBlock.Spontaneous(Guid.NewGuid(), SeededFocusPresetId, At.Slot(Now.AddMinutes(-40), Now.AddMinutes(-10))),
+            At.Utc(Now.AddMinutes(-40)));
         await SeedAsync(session);
 
         var shown = await EndedAsync(session);
@@ -156,8 +138,8 @@ public class EndSessionTests : UseCaseTestBase
     [Fact]
     public async Task BlockedAttempts_AreGroupedByResourceAndType()
     {
-        var session = ActiveSession();
-        await SeedAsync(session,
+        var (block, session) = ActiveSession();
+        await SeedAsync(block, session,
             BlockedAttempt.ForApp(Guid.NewGuid(), session.Id, new BlockedApp("chrome"), At.Utc(Now.AddMinutes(-9))),
             BlockedAttempt.ForApp(Guid.NewGuid(), session.Id, new BlockedApp("chrome"), At.Utc(Now.AddMinutes(-5))),
             BlockedAttempt.ForWebsite(Guid.NewGuid(), session.Id, new Website("facebook.com"), At.Utc(Now.AddMinutes(-3))));
@@ -172,8 +154,8 @@ public class EndSessionTests : UseCaseTestBase
     [Fact]
     public async Task AnUnknownPreset_GivesABlankPresetName()
     {
-        var session = ActiveSession(presetId: Guid.NewGuid());
-        await SeedAsync(session);
+        var (block, session) = ActiveSession(presetId: Guid.NewGuid());
+        await SeedAsync(block, session);
 
         var shown = await EndedAsync(session);
 
@@ -185,8 +167,7 @@ public class EndSessionTests : UseCaseTestBase
     private async Task<(FocusBlock Block, Session Session)> PlannedAsync(DateTime blockEnd)
     {
         var block = FocusBlock.Create(Guid.NewGuid(), SeededFocusPresetId, At.Slot(Now.AddMinutes(-10), blockEnd));
-        block.MarkRitualCompleted(At.Utc(Now.AddMinutes(-10)));
-        var session = ActiveSession(block.Id);
+        var session = Session.Start(Guid.NewGuid(), new SessionGoal("Deep work"), block, At.Utc(Now.AddMinutes(-10)));
         await SeedAsync(block, session);
         return (block, session);
     }
@@ -222,20 +203,17 @@ public class EndSessionTests : UseCaseTestBase
     // A planned block runs blockStart..blockEnd; the Ritual completes some minutes after
     // blockStart, which is when the session starts.
 
-    private async Task<Session> PlannedSessionAsync(DateTime blockStart, DateTime blockEnd, DateTime ritualCompletedAt, TimeSpan duration)
+    private async Task<Session> PlannedSessionAsync(DateTime blockStart, DateTime blockEnd, DateTime ritualCompletedAt)
     {
         var block = FocusBlock.Create(Guid.NewGuid(), SeededFocusPresetId, At.Slot(blockStart, blockEnd));
-        block.MarkRitualCompleted(At.Utc(ritualCompletedAt));
-        var session = Session.Create(Guid.NewGuid(), new SessionGoal("Deep work"), new SessionDuration(duration),
-            SeededFocusPresetId, SessionOrigin.Planned, originatingBlockId: block.Id);
-        session.Start(At.Utc(ritualCompletedAt), At.PlannedWindowEnding(blockEnd));
+        var session = Session.Start(Guid.NewGuid(), new SessionGoal("Deep work"), block, At.Utc(ritualCompletedAt));
         await SeedAsync(block, session);
         return session;
     }
 
     /// <summary>A one-hour block ending now, its Ritual done <paramref name="ritualDelay"/> after it started.</summary>
     private Task<Session> PlannedSessionEndingNowAsync(TimeSpan ritualDelay) =>
-        PlannedSessionAsync(Now.AddHours(-1), Now, Now.AddHours(-1) + ritualDelay, TimeSpan.FromHours(1) - ritualDelay);
+        PlannedSessionAsync(Now.AddHours(-1), Now, Now.AddHours(-1) + ritualDelay);
 
     [Theory]
     [InlineData(2)] // within the 5-minute grace period
@@ -262,9 +240,9 @@ public class EndSessionTests : UseCaseTestBase
     [Fact]
     public async Task ASpontaneousSession_NeverGetsGraceCredit()
     {
-        // No block, so no window to be graced against.
-        var session = ActiveSession(); // started 10 minutes ago
-        await SeedAsync(session);
+        // A walk-in block starts when its session does, so there is no grace window to credit.
+        var (block, session) = ActiveSession(); // started 10 minutes ago
+        await SeedAsync(block, session);
 
         var shown = await EndedAsync(session);
 
@@ -278,7 +256,7 @@ public class EndSessionTests : UseCaseTestBase
         // at the block's own length, which is also what Start called "Planned".
         var blockStart = Now.AddMinutes(-1);
         var blockEnd = Now.AddMinutes(1);
-        var session = await PlannedSessionAsync(blockStart, blockEnd, ritualCompletedAt: Now, duration: blockEnd - blockStart);
+        var session = await PlannedSessionAsync(blockStart, blockEnd, ritualCompletedAt: Now);
         Clock.SetNow(blockEnd); // runs to its natural end
 
         var shown = await EndedAsync(session);
@@ -291,9 +269,9 @@ public class EndSessionTests : UseCaseTestBase
     public async Task ASubMinuteSession_CreditsZero()
     {
         // Credit is whole minutes; a 45-second session honestly credits none.
-        var session = Session.Create(Guid.NewGuid(), new SessionGoal("Quick check"), new SessionDuration(TimeSpan.FromMinutes(1)),
-            SeededFocusPresetId, SessionOrigin.Spontaneous);
-        session.Start(At.Utc(Now.AddSeconds(-45)));
+        var session = Session.Start(Guid.NewGuid(), new SessionGoal("Quick check"),
+            FocusBlock.Spontaneous(Guid.NewGuid(), SeededFocusPresetId, At.Slot(Now.AddSeconds(-45), Now.AddSeconds(15))),
+            At.Utc(Now.AddSeconds(-45)));
         await SeedAsync(session);
 
         var shown = await EndedAsync(session);

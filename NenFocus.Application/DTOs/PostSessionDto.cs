@@ -44,7 +44,7 @@ public sealed record PostSessionDto
         Goal = session.Goal.Value,
         PresetName = presetName,
         Recorded = session.Recorded ?? throw new ArgumentException("Only an ended session has a Post-Session screen.", nameof(session)),
-        PlannedDurationMinutes = session.Duration.Value.TotalMinutes,
+        PlannedDurationMinutes = originatingBlock?.Scheduled.Length.TotalMinutes ?? 0,
         ActualDurationMinutes = session.CountedTime(originatingBlock).TotalMinutes,
         BreaksTaken = session.BreaksTaken,
         BlockedAppAttempts = CountByResource(attempts, BlockedAttemptType.App),

@@ -117,11 +117,12 @@ public abstract class Block : AggregateRoot
         PresetType != BlockPresetType.Focus ? ChangeVerdict.Refused(ChangeOutcome.SplitNotOffered) : CheckOwnChange(asOf);
 
     /// <summary>
-    /// A running block can't be deleted until it ends. Before it starts and after it has ended
-    /// the block itself has no objection — a contract's block is then the contract's to refuse.
+    /// A block that has started can't be deleted — running or ended, its story is recorded
+    /// (Gap 114, D5). A future block has no objection of its own; a contract's block is then
+    /// the contract's to refuse.
     /// </summary>
     public ChangeVerdict CheckOwnDelete(Moment asOf) =>
-        HasStarted(asOf) && !HasEnded(asOf) ? ChangeVerdict.Refused(ChangeOutcome.BlockIsRunning) : ChangeVerdict.Allowed;
+        HasStarted(asOf) ? ChangeVerdict.Refused(ChangeOutcome.BlockHasStarted) : ChangeVerdict.Allowed;
 
     /// <summary>
     /// Where this block's reserved time ends, as of <paramref name="asOf"/> — the boundary
@@ -227,11 +228,14 @@ public abstract class Block : AggregateRoot
         Membership = null;
     }
 
-    public void MarkCancelled(Moment cancelledAt)
+    public virtual void MarkCancelled(Moment cancelledAt)
     {
         if (CancelledAt.HasValue)
             throw new InvalidOperationException(
                 "This block has already been marked cancelled.");
+        if (HasEnded(cancelledAt))
+            throw new InvalidOperationException(
+                "An ended block can't be cancelled — its story is already recorded (Gap 114, D5).");
 
         CancelledAt = cancelledAt;
         Raise(new BlockCancelledEvent(Id, cancelledAt));

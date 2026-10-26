@@ -15,10 +15,10 @@ public interface ISessionRepository
     /// <summary>
     /// Sessions that started inside <paramref name="startedWithin"/>, newest first. For "these
     /// days", the caller asks <c>UserTimeZone.SlotCovering</c> — the repository only knows moments.
+    /// A session's preset is its block's (Gap 114, D1), so no preset filter is offered here.
     /// </summary>
     Task<IReadOnlyList<Session>> GetHistoryAsync(
         TimeSlot startedWithin,
-        Guid? presetId = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -30,10 +30,9 @@ public interface ISessionRepository
     Task<Session?> GetByOriginatingBlockIdAsync(Guid focusBlockId, CancellationToken ct = default);
 
     /// <summary>
-    /// Returns every Completed or Missed session whose post-session screen has
-    /// never been dismissed (PostSessionAcknowledgedAt is null), ordered by
-    /// EndedAt ascending — oldest first, so pending post-sessions can be replayed
-    /// to the user in the order they actually happened.
+    /// Returns every Completed session whose post-session screen has never been dismissed
+    /// (Reflection.AcknowledgedAt is null), ordered by EndedAt ascending — oldest first, so
+    /// pending post-sessions can be replayed to the user in the order they happened.
     /// </summary>
     Task<IReadOnlyList<Session>> GetUnacknowledgedPostSessionsAsync(CancellationToken ct = default);
 

@@ -29,20 +29,17 @@ public sealed class SessionRepository : ISessionRepository
 
     public async Task<IReadOnlyList<Session>> GetHistoryAsync(
         TimeSlot startedWithin,
-        Guid? presetId = null,
         CancellationToken cancellationToken = default)
     {
         // "Started inside the slot" is the Domain's own filter, so the SQL can't drift from
         // TimeSlot.Contains; which days the slot covers is the caller's, through UserTimeZone
-        // (Gap 97 — this used to read its dates as UTC days).
+        // (Gap 97 — this used to read its dates as UTC days). StartedAt is Domain-only, so it's
+        // reached by name.
         var query = _context.Sessions
-            .Where(SlotQuery.OnMoment<Session>(s => s.StartedAt, TimeSlot.Filters.Contains(startedWithin)));
-
-        if (presetId.HasValue)
-            query = query.Where(s => s.BlockPresetId == presetId.Value);
+            .Where(SlotQuery.OnMoment<Session>(s => EF.Property<Moment?>(s, "StartedAt"), TimeSlot.Filters.Contains(startedWithin)));
 
         return await query
-            .OrderByDescending(s => s.StartedAt)
+            .OrderByDescending(s => EF.Property<Moment?>(s, "StartedAt"))
             .ToListAsync(cancellationToken);
     }
 
@@ -56,9 +53,9 @@ public sealed class SessionRepository : ISessionRepository
     {
         return await _context.Sessions
             .Where(s =>
-                (s.Status == SessionStatus.Completed || s.Status == SessionStatus.Missed) &&
-                s.PostSessionAcknowledgedAt == null)
-            .OrderBy(s => s.EndedAt)
+                s.Status == SessionStatus.Completed &&
+                s.Reflection.AcknowledgedAt == null)
+            .OrderBy(s => EF.Property<Moment?>(s, "EndedAt"))
             .ToListAsync(ct);
     }
 

@@ -69,15 +69,20 @@ public class HeartbeatServiceTests : IAsyncDisposable
     /// <summary>A 30-minute spontaneous session started <paramref name="startedMinutesAgo"/> minutes before Now.</summary>
     private async Task<Guid> SeedRunningSessionAsync(int startedMinutesAgo)
     {
-        var session = Session.Create(Guid.NewGuid(), new SessionGoal("Deep work"), new SessionDuration(TimeSpan.FromMinutes(30)),
-            Guid.NewGuid(), SessionOrigin.Spontaneous);
-        session.Start(At.Utc(Now.AddMinutes(-startedMinutesAgo)));
+        var session = Session.Start(Guid.NewGuid(), new SessionGoal("Deep work"),
+            FocusBlock.Spontaneous(Guid.NewGuid(), Guid.NewGuid(),
+                At.Slot(Now.AddMinutes(-startedMinutesAgo), Now.AddMinutes(-startedMinutesAgo + 30))),
+            At.Utc(Now.AddMinutes(-startedMinutesAgo)));
         await SeedAsync(sp => sp.GetRequiredService<ISessionRepository>().Add(session));
         return session.Id;
     }
 
-    private Task SeedMissedFocusBlockAsync() => SeedAsync(sp => sp.GetRequiredService<IBlockRepository>()
-        .Add(FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Now.AddHours(-3), Now.AddHours(-2).AddMinutes(-30)))));
+    private async Task<Guid> SeedMissedFocusBlockAsync()
+    {
+        var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Now.AddHours(-3), Now.AddHours(-2).AddMinutes(-30)));
+        await SeedAsync(sp => sp.GetRequiredService<IBlockRepository>().Add(block));
+        return block.Id;
+    }
 
     private static NenContract Contract(DateOnly start, DateOnly end, DateOnly sealedOn) => TestContracts.Seal(
         id: Guid.NewGuid(), name: "Focused Week", goal: new NenContractGoal("Ship it"), strictnessRule: StrictnessRule.Locked,
@@ -94,6 +99,12 @@ public class HeartbeatServiceTests : IAsyncDisposable
         return (await scope.ServiceProvider.GetRequiredService<ISessionRepository>().GetByIdAsync(sessionId))!.Status;
     }
 
+    private async Task<FocusBlock> StoredBlockAsync(Guid blockId)
+    {
+        using var scope = _provider.CreateScope();
+        return (FocusBlock)(await scope.ServiceProvider.GetRequiredService<IBlockRepository>().GetByIdAsync(blockId))!;
+    }
+
     // ── The tick ─────────────────────────────────────────────────────────────
 
     [Fact]
@@ -102,7 +113,7 @@ public class HeartbeatServiceTests : IAsyncDisposable
         // Everything happened while the app was closed: a session ran out, a block was missed, a
         // contract ended. One tick resolves all three, in the order the Shell shows them at startup.
         await SeedRunningSessionAsync(startedMinutesAgo: 120);
-        await SeedMissedFocusBlockAsync();
+        var missedBlockId = await SeedMissedFocusBlockAsync();
         await SeedContractAsync(Contract(Today.AddDays(-10), Today.AddDays(-1), sealedOn: Today.AddDays(-10)));
 
         var happened = new List<string>();
@@ -115,12 +126,14 @@ public class HeartbeatServiceTests : IAsyncDisposable
         await Heartbeat.TickAsync(CancellationToken.None);
 
         var ended = happened.IndexOf("post-session Completed");
-        var missed = happened.IndexOf("post-session Missed");
         var recap = happened.IndexOf("contract recap");
         ended.Should().BeGreaterThanOrEqualTo(0, string.Join(", ", happened));
-        missed.Should().BeGreaterThan(ended, "missed blocks come after the auto-end");
-        recap.Should().BeGreaterThan(missed, "contracts come after missed blocks, so a recap reads the tick's missed sessions");
+        recap.Should().BeGreaterThan(ended, "contracts come after sessions end");
         happened.LastIndexOf("sync").Should().BeGreaterThan(recap, "enforcement syncs after every state change in the tick");
+
+        // The missed sweep is silent now — a miss is the block's own outcome, read later by its
+        // recap (Gap 114 phase 3). The block is frozen Missed by the sweep's own step.
+        (await StoredBlockAsync(missedBlockId)).Outcome(At.Utc(Now)).Should().Be(FocusBlockOutcome.Missed);
     }
 
     [Fact]

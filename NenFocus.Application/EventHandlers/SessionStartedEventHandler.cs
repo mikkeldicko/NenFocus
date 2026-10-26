@@ -1,5 +1,7 @@
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.Notifications;
+using NenFocus.Domain.Entities;
+using NenFocus.Domain.Enums;
 using NenFocus.Domain.Events;
 
 namespace NenFocus.Application.EventHandlers;
@@ -42,15 +44,15 @@ public sealed class SessionStartedEventHandler : IDomainEventHandler<SessionStar
 
         await _synchronizer.SyncAsync(_clock.Now, cancellationToken);
 
-        // A planned session is named after its block — the block itself stays quiet about
-        // this moment (its Started toast already fired when it activated).
+        // Every session is named after its block (Gap 114, D1) — the block itself stays quiet
+        // about this moment (its Started toast already fired when it activated).
         var session = await _sessions.GetByIdAsync(domainEvent.SessionId, cancellationToken);
-        var block = session?.OriginatingBlockId is { } blockId
-            ? await _blocks.GetByIdAsync(blockId, cancellationToken)
-            : null;
+        var block = session is null
+            ? null
+            : await _blocks.GetByIdAsync(session.OriginatingBlockId, cancellationToken) as FocusBlock;
         var preset = block is null ? null : await _presets.GetByIdAsync(block.BlockPresetId, cancellationToken);
         var blockName = block?.DisplayName(preset?.Name ?? "");
 
-        await _notifier.NotifyAsync(new SessionStarted(block is not null, blockName), cancellationToken);
+        await _notifier.NotifyAsync(new SessionStarted(block?.BookingType ?? FocusBlockBookingType.Spontaneous, blockName), cancellationToken);
     }
 }

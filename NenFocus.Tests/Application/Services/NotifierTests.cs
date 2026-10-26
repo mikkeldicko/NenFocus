@@ -48,23 +48,23 @@ public class NotifierTests
 
     [Fact]
     public Task SessionStarted_Planned() => ShowsAsync(
-        new SessionStarted(true, "Thesis"), "Nen session started", "\"Thesis\" is on. Stay locked in.");
+        new SessionStarted(FocusBlockBookingType.Planned, "Thesis"), "Nen session started", "\"Thesis\" is on. Stay locked in.");
 
     [Fact]
     public Task SessionStarted_Spontaneous() => ShowsAsync(
-        new SessionStarted(false, null), "Nen session started", "Focus session is now active. Stay locked in.");
+        new SessionStarted(FocusBlockBookingType.Spontaneous, null), "Nen session started", "Focus session is now active. Stay locked in.");
 
     [Fact]
     public Task SessionCompleted_Planned() => ShowsAsync(
-        new SessionCompleted(true, "Thesis"), "Session complete", "\"Thesis\" complete. Great work.");
+        new SessionCompleted(FocusBlockBookingType.Planned, "Thesis"), "Session complete", "\"Thesis\" complete. Great work.");
 
     [Fact]
     public Task SessionCompleted_PlannedUntitled() => ShowsAsync(
-        new SessionCompleted(true, null), "Session complete", "Your Focus block complete. Great work.");
+        new SessionCompleted(FocusBlockBookingType.Planned, null), "Session complete", "Your Focus block complete. Great work.");
 
     [Fact]
     public Task SessionCompleted_Spontaneous() => ShowsAsync(
-        new SessionCompleted(false, null), "Session complete", "Great work. Your focus session has ended.");
+        new SessionCompleted(FocusBlockBookingType.Spontaneous, null), "Session complete", "Great work. Your focus session has ended.");
 
     [Fact]
     public Task BreakStarted_Short() => ShowsAsync(

@@ -29,7 +29,7 @@ public class GetNenContractCompletionReadinessQueryHandlerTests
         _clock.SetTimeZoneOffset(TimeSpan.Zero);
         _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<Block>)[]);
-        _sessions.GetHistoryAsync(Arg.Any<TimeSlot>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>()).Returns((IReadOnlyList<Session>)[]);
+        _sessions.GetHistoryAsync(Arg.Any<TimeSlot>(), Arg.Any<CancellationToken>()).Returns((IReadOnlyList<Session>)[]);
         _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns((Session?)null);
     }
 
@@ -208,8 +208,8 @@ public class GetNenContractCompletionReadinessQueryHandlerTests
         // the contract's own blocks.
         _contracts.GetByIdAsync(ContractId, Arg.Any<CancellationToken>()).Returns(ActiveContract(committedHours: 4));
         StubCompleted(4);
-        var session = Session.Create(Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(30)), Guid.NewGuid(), SessionOrigin.Spontaneous);
-        session.Start(At.Utc(Now.AddMinutes(-10)));
+        var block = FocusBlock.Spontaneous(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Now.AddMinutes(-10), Now.AddMinutes(20)));
+        var session = Session.Start(Guid.NewGuid(), new SessionGoal("Goal"), block, At.Utc(Now.AddMinutes(-10)));
         _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns(session);
 
         var result = await CreateHandler().HandleAsync(new GetNenContractCompletionReadinessQuery(ContractId));

@@ -41,7 +41,7 @@ NenFocus.Tests/
 ├── Infrastructure/
 │   ├── Persistence/
 │   │   ├── SqliteRepositoryTestBase.cs   ← shared base: real SQLite via an in-memory connection, not a fake/InMemory provider
-│   │   ├── Repositories/                 ← BlockPresetRepositoryTests.cs, SessionRepositoryTests.cs, NenContractRepositoryTests.cs, PlannedBlockRepositoryTests.cs
+│   │   ├── Repositories/                 ← BlockPresetRepositoryTests.cs, SessionRepositoryTests.cs, NenContractRepositoryTests.cs, BlockRepositoryTests.cs
 │   │   └── EfCoreUnitOfWorkTests.cs
 │   ├── Services/               ← InProcessDomainEventPublisherTests.cs, etc.
 │   └── CompositionRootTests.cs ← confirms every handler/service resolves from DI with no missing registrations
@@ -134,12 +134,12 @@ await SeedAsync(contract, block);
 var presetId = await FocusPresetAsync("Deep Work");   // a preset whose name the test checks
 
 // Act: one command through the real dispatcher — validation, handler, transaction, events
-var result = await RunAsync(new DeletePlannedBlockCommand { BlockId = block.Id });
+var result = await RunAsync(new DeleteBlockCommand { BlockId = block.Id });
 
 // Assert: the answer, and what is stored now
 result.Success.Should().BeFalse();
 result.ErrorMessage.Should().Be("This block is running and cannot be deleted until it ends."); // the first validation error
-(await FindAsync<PlannedBlock>(block.Id)).Should().NotBeNull();                                 // a refusal stores nothing
+(await FindAsync<Block>(block.Id)).Should().NotBeNull();                                 // a refusal stores nothing
 
 // An app-wide service as the app has it, e.g. to see what the Shell is told
 Resolve<IRecapRelay>();

@@ -66,9 +66,9 @@ public class CheckNenContractCancellableQueryHandlerTests
     public async Task HandleAsync_WhileASessionRuns_IsNotAllowed()
     {
         var contract = ContractInEffect(allowCancellation: true);
-        var session = Session.Create(Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(30)),
-            Guid.NewGuid(), SessionOrigin.Spontaneous);
-        session.Start(At.Utc(StartDate.ToDateTime(new TimeOnly(9, 0))));
+        var start = StartDate.ToDateTime(new TimeOnly(9, 0));
+        var block = FocusBlock.Spontaneous(Guid.NewGuid(), Guid.NewGuid(), At.Slot(start, start.AddMinutes(30)));
+        var session = Session.Start(Guid.NewGuid(), new SessionGoal("Goal"), block, At.Utc(start));
         _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns(session);
 
         (await Ask(contract.Id))!.Outcome.Should().Be(ContractActionOutcome.SessionIsRunning);

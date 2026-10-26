@@ -164,10 +164,11 @@ public class BreakNenContractCommandHandlerTests : UseCaseTestBase
         // Gap 95: no contract ends while Focus time is being worked.
         var contract = CancellableContract();
         var currentBlock = Member(contract, Now.AddHours(-1), Now.AddHours(1));
-        var session = Session.Create(Guid.NewGuid(), new SessionGoal("Focus"), new SessionDuration(TimeSpan.FromMinutes(30)),
-            Guid.NewGuid(), sessionOfTheContractsBlock ? SessionOrigin.Planned : SessionOrigin.Spontaneous,
-            originatingBlockId: sessionOfTheContractsBlock ? currentBlock.Id : null);
-        session.Start(At.Utc(Now.AddMinutes(-10)));
+        var session = sessionOfTheContractsBlock
+            ? Session.Start(Guid.NewGuid(), new SessionGoal("Focus"), currentBlock, At.Utc(Now.AddMinutes(-10)))
+            : Session.Start(Guid.NewGuid(), new SessionGoal("Focus"),
+                FocusBlock.Spontaneous(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Now.AddMinutes(-10), Now.AddMinutes(20))),
+                At.Utc(Now.AddMinutes(-10)));
         var statusBefore = contract.Status;
         await SeedAsync(contract, currentBlock, session);
         var shown = RecapsShown();

@@ -60,9 +60,10 @@ public class StartSessionTests : UseCaseTestBase
     {
         var session = await StartedAsync(SpontaneousCommand());
 
-        session.Origin.Should().Be(SessionOrigin.Spontaneous);
         session.Status.Should().Be(SessionStatus.Active);
         session.StartedAt.Should().Be(At.Utc(Now));
+        var block = (FocusBlock)(await FindAsync<Block>(session.OriginatingBlockId))!;
+        block.BookingType.Should().Be(FocusBlockBookingType.Spontaneous);
     }
 
     // ── A session's own extra apps and sites (Gap 112) ────────────────────────
@@ -98,13 +99,13 @@ public class StartSessionTests : UseCaseTestBase
     }
 
     [Fact]
-    public async Task AFocusBlockStartingWithinTheDuration_IsRefused_SayingWhen()
+    public async Task AFocusBlockStartingWithinTheDuration_IsRefused()
     {
         await SeedAsync(Block(Now.AddMinutes(10), Now.AddHours(1)));
 
         var result = await ShouldBeRefused(SpontaneousCommand());
 
-        result.ErrorMessage.Should().Contain("10 minutes");
+        result.ErrorMessage.Should().Contain("already exists in this time window");
     }
 
     [Fact]
@@ -112,14 +113,14 @@ public class StartSessionTests : UseCaseTestBase
     {
         // One session at a time is "Focus time never overlaps" (Gap 92, C+): the running session
         // holds its time, and a session starting now always lands inside it.
-        var running = Session.Create(Guid.NewGuid(), new SessionGoal("Already focusing"),
-            new SessionDuration(TimeSpan.FromHours(1)), SeededFocusPresetId, SessionOrigin.Spontaneous);
-        running.Start(At.Utc(Now.AddMinutes(-10)));
+        var running = Session.Start(Guid.NewGuid(), new SessionGoal("Already focusing"),
+            FocusBlock.Spontaneous(Guid.NewGuid(), SeededFocusPresetId, At.Slot(Now.AddMinutes(-10), Now.AddMinutes(50))),
+            At.Utc(Now.AddMinutes(-10)));
         await SeedAsync(running);
 
         var result = await ShouldBeRefused(SpontaneousCommand());
 
-        result.ErrorMessage.Should().Contain("already running");
+        result.ErrorMessage.Should().Contain("already exists in this time window");
     }
 
     [Fact]
@@ -227,9 +228,10 @@ public class StartSessionTests : UseCaseTestBase
 
         var session = await StartedAsync(PlannedCommand(block));
 
-        session.Origin.Should().Be(SessionOrigin.Planned);
         session.OriginatingBlockId.Should().Be(block.Id);
-        (await StoredBlock(block)).Outcome(At.Utc(Now)).Should().Be(FocusBlockOutcome.CompletedOnTime); // a minute in: within grace
+        var stored = await StoredBlock(block);
+        stored.BookingType.Should().Be(FocusBlockBookingType.Planned);
+        stored.Outcome(At.Utc(Now)).Should().Be(FocusBlockOutcome.CompletedOnTime); // a minute in: within grace
     }
 
     [Fact]
@@ -254,7 +256,7 @@ public class StartSessionTests : UseCaseTestBase
 
         var session = await StartedAsync(PlannedCommand(block) with { DurationMinutes = 45 }); // stale: neither 60 nor 58
 
-        session.Duration.Value.Should().Be(TimeSpan.FromMinutes(60));
+        (await StoredBlock(block)).Scheduled.Length.Should().Be(TimeSpan.FromMinutes(60));
     }
 
     [Fact]
@@ -266,7 +268,7 @@ public class StartSessionTests : UseCaseTestBase
 
         var session = await StartedAsync(PlannedCommand(block));
 
-        session.Duration.Value.Should().Be(TimeSpan.FromMinutes(2));
+        (await StoredBlock(block)).Scheduled.Length.Should().Be(TimeSpan.FromMinutes(2));
     }
 
     [Fact]

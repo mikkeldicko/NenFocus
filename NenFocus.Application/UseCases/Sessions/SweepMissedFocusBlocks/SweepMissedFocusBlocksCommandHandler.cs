@@ -1,6 +1,5 @@
-using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
-using NenFocus.Application.UseCases.Sessions.MarkFocusBlockMissed;
+using NenFocus.Domain.Entities;
 
 namespace NenFocus.Application.UseCases.Sessions.SweepMissedFocusBlocks;
 
@@ -8,32 +7,24 @@ public sealed class SweepMissedFocusBlocksCommandHandler
     : ICommandHandler<SweepMissedFocusBlocksCommand, SweepMissedFocusBlocksResult>
 {
     private readonly IBlockRepository _blocks;
-    private readonly ICommandHandler<MarkFocusBlockMissedCommand, MarkFocusBlockMissedResult> _markMissed;
 
-    public SweepMissedFocusBlocksCommandHandler(
-        IBlockRepository blocks,
-        ICommandHandler<MarkFocusBlockMissedCommand, MarkFocusBlockMissedResult> markMissed)
+    public SweepMissedFocusBlocksCommandHandler(IBlockRepository blocks)
     {
         _blocks = blocks;
-        _markMissed = markMissed;
     }
 
     public async Task<SweepMissedFocusBlocksResult> HandleAsync(
         SweepMissedFocusBlocksCommand command,
         CancellationToken ct = default)
     {
+        // A miss is the block's own outcome now (Gap 114, D5): the sweep only stamps each
+        // unresolved block, and its own guard refuses one already frozen. The Post-Session recap
+        // for a miss reads the block (Gap 114 phase 3), so nothing is relayed from here.
         var unresolved = await _blocks.GetUnresolvedFocusBlocksAsync(command.AsOf, ct);
 
-        var missedSessions = new List<PostSessionDto>();
         foreach (var block in unresolved.OrderBy(b => b.Scheduled))
-        {
-            var result = await _markMissed.HandleAsync(
-                new MarkFocusBlockMissedCommand { FocusBlockId = block.Id }, ct);
+            block.MarkMissed(command.AsOf);
 
-            if (result.Success && result.PostSession is not null)
-                missedSessions.Add(result.PostSession);
-        }
-
-        return new SweepMissedFocusBlocksResult { MissedSessions = missedSessions };
+        return new SweepMissedFocusBlocksResult();
     }
 }

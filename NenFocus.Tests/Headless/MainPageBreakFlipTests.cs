@@ -33,9 +33,9 @@ public class MainPageBreakFlipTests
         clock.SetNow(Start.AddMinutes(24).AddSeconds(50));
 
         // Classic over one hour: work 0–25, break 25–30, work 30–60.
-        var session = Session.Create(Guid.NewGuid(), new SessionGoal("Thesis"),
-            new SessionDuration(TimeSpan.FromHours(1)), Guid.NewGuid(), SessionOrigin.Spontaneous);
-        session.Start(At.Utc(Start), breakSchedule: new BreakTimer(25, 5, 4, 15).ScheduleFor(TimeSpan.FromHours(1)),
+        var session = Session.Start(Guid.NewGuid(), new SessionGoal("Thesis"),
+            FocusBlock.Spontaneous(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Start, Start.AddHours(1))),
+            At.Utc(Start), breakSchedule: new BreakTimer(25, 5, 4, 15).ScheduleFor(TimeSpan.FromHours(1)),
             breakPresetName: "Classic");
         var sessionState = Substitute.For<IActiveSessionState>();
         sessionState.ActiveSession.Returns(new SessionDto

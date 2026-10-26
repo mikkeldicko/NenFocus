@@ -43,6 +43,24 @@ public class CqrsRuleTests
         KnownExceptions.Check(violations, []);
     }
 
+    /// <summary>
+    /// A command never dispatches another command (Gap 114, S2): the missed sweep held
+    /// MarkFocusBlockMissedCommandHandler, so that command's validation and transaction ran nested
+    /// inside the sweep's, and the two never shared one unit of work. A reaction to what a command
+    /// did goes in an event handler, which runs after the commit (Gap 110).
+    /// </summary>
+    [Fact]
+    public void CommandHandlersDoNotHoldCommandHandlers()
+    {
+        var violations = typeof(Notifier).Assembly.GetTypes()
+            .Where(t => t.Name.EndsWith("CommandHandler", StringComparison.Ordinal))
+            .SelectMany(t => TypeUse.TypesUsedBy(t)
+                .Where(u => u.IsGenericType && u.GetGenericTypeDefinition() == typeof(ICommandHandler<,>))
+                .Select(u => $"{t.Name} → {u.GetGenericArguments()[0].Name}"));
+
+        KnownExceptions.Check(violations, []);
+    }
+
     // EF's own save, on anything.
     private static readonly Regex SaveCall = new(@"\.\s*(SaveChangesAsync|CommitAsync)\s*\(");
     // A field declared with a repository type in the same file — the repositories' writes are Add

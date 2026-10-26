@@ -108,9 +108,9 @@ public class SessionTimelineTests
     {
         foreach (var keepsBlocking in new[] { false, true })
         {
-            var session = Session.Create(Guid.NewGuid(), new SessionGoal("Focus"),
-                new SessionDuration(TimeSpan.FromMinutes(120)), Guid.NewGuid(), SessionOrigin.Spontaneous);
-            session.Start(At.Utc(Start), breakSchedule: TwoBreaks, keepBlockingDuringBreaks: keepsBlocking);
+            var block = FocusBlock.Spontaneous(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Start, Start.AddMinutes(120)));
+            var session = Session.Start(Guid.NewGuid(), new SessionGoal("Focus"), block, At.Utc(Start),
+                breakSchedule: TwoBreaks, keepBlockingDuringBreaks: keepsBlocking);
 
             for (var minute = 0; minute <= 120; minute++)
             {

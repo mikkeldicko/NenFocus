@@ -1,4 +1,3 @@
-using NenFocus.Domain.Enums;
 using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Domain.Entities;
@@ -52,21 +51,9 @@ public partial class NenContract
             .OfType<TimeSlot>()
             .ToList();
 
-        // …and, until Gap 67 makes them Bonus, spontaneous sessions on one of those blocks'
-        // presets that started on one of the contract's days.
-        var presets = focusBlocks.Where(b => b.CountsTowardFloor).Select(b => b.BlockPresetId).ToHashSet();
-        var firstDay = days[0];
-        var lastDay = days[^1];
-        foreach (var session in sessions)
-        {
-            if (session.Origin != SessionOrigin.Spontaneous || !presets.Contains(session.BlockPresetId)) continue;
-            if (session.StartedAt is not { } startedAt) continue;
-            var startDay = timeZone.DateOf(startedAt);
-            if (startDay < firstDay || startDay > lastDay) continue;
-            if (session.GetElapsedTime(asOf) is { } elapsed && elapsed > TimeSpan.Zero)
-                worked.Add(new TimeSlot(startedAt, startedAt + elapsed));
-        }
-
+        // Spontaneous sessions are no longer counted by date here (Gap 114, phase 1): they become
+        // walk-in Bonus blocks, whose credit is read off the block. The `sessions` parameter is now
+        // unused and is removed with Gap 67's half in phase 2.
         var completed = timeZone.HoursPerDay(worked);
 
         // Bonus blocks earn hours of their own, never toward the target.

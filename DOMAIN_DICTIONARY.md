@@ -8,7 +8,7 @@ This file is the canonical reference for every domain concept in NenFocus. It ex
 
 | Term | One-line definition |
 |------|---------------------|
-| **Session** | A bounded focus period; lifecycle `NotStarted → Active → Completed` — one continuous run, punctuated by the breaks in its `BreakSchedule` (a break is never a status) |
+| **Session** | A bounded focus period; lifecycle `Active → Completed` — one continuous run, punctuated by the breaks in its `BreakSchedule` (a break is never a status) |
 | **Ritual** | The four-step wizard (Ten → Zetsu → Ren → Hatsu) that creates a Session |
 | **Block Preset** | A reusable template of blocked apps + website filter type; typed as Focus or Background at creation |
 | **Planned Block** | Abstract base for `FocusBlock` and `BackgroundBlock`; carries `Scheduled` (a `TimeSlot`), `BlockPresetId`, `Membership` (its contract and role, or none), `IsActive()`, `HasStarted()`, `ReservedSlot()` |
@@ -18,18 +18,18 @@ This file is the canonical reference for every domain concept in NenFocus. It ex
 | **PolicyEngine** | Stateless Domain service (`NenFocus.Domain/Services/`) that computes `ActivePolicySlice` from raw aggregates; sole owner of all merge rules |
 | **Enforcement Synchronizer** | `IEnforcementSynchronizer.SyncAsync(at)` — makes the OS's actual blocking match what `PolicyEngine` says right now; the only thing that turns a Policy Slice into an apply/remove call (Gap 62) |
 | **Awaiting Ritual** | A Focus Block that is active, not cancelled, and whose Ritual isn't done — `FocusBlock.IsAwaitingRitual(at)`; the Ritual is prompted for it only if no session is running (Gap 62) |
-| **Spontaneous Session** | A Session created by completing the Ritual manually from the Main Page; no Block entity exists; `Origin = Spontaneous` |
-| **Planned Session** | A Session created via the Ritual triggered by a scheduled Focus Block; `Origin = Planned` |
-| **SessionOrigin** | Enum (`Spontaneous` \| `Planned`) that tags every Session with how it was initiated |
+| **Spontaneous Session** | A Session created by completing the Ritual manually from the Main Page, on a walk-in `FocusBlock` (`BookingType = Spontaneous`) |
+| **Planned Session** | A Session created via the Ritual triggered by a scheduled Focus Block; `BookingType = Planned` |
+| **FocusBlockBookingType** | Enum (`Planned` \| `Spontaneous`) — how a Focus block was booked (FHIR's `appointmentType`); a Spontaneous block is a walk-in, created already arrived, never booked ahead (Gap 114, D2) |
 | **BreakTimerPreset** | A saved, named `BreakTimer` (Classic, Deep Work, Flow ship as ordinary seeded rows, freely editable/deletable) — its own aggregate root, authored on the Settings page (not yet built). Just one quick way to produce a session's `BreakSchedule`; the session never references it, only snapshots its name |
 | **BreakTimer** | Value object: a work/break rhythm — `WorkMinutes`, `ShortBreakMinutes`, `CyclesBeforeLongBreak`, `LongBreakMinutes`. `ScheduleFor(runLength)` lays it over a session to produce a `BreakSchedule` |
 | **BreakSchedule** | Value object owned by `Session`: its break slots as offsets from `StartedAt` — the single source of truth for "is it a break right now." Set at Start; a break that has started never changes; trimmed at Complete, so the same list is the history record (Gap 63) |
 | **SessionBreak** | One slot in a `BreakSchedule`: `Kind` (`ShortBreak` \| `LongBreak`), `Start`, `End` (offsets) |
 | **BreakTransition** | A break boundary (`Started` \| `Ended`) a running session crossed — reported by `Session.BreakTransitionsBetween(from, to)`, acted on by `IBreakTransitionResponder`; not a domain event, since nothing about the session changes |
-| **BlockMarker** | A point on a planned block's timeline (`StartingSoon` \| `Started` \| `Ended`) the clock passed — reported by `PlannedBlock.MarkersPassedBetween(from, to)`, announced by `IBlockMarkerNotifier` via `INotifier`; not a domain event, and not a "transition" (StartingSoon changes nothing) (Gap 84) |
+| **BlockMarker** | A point on a planned block's timeline (`StartingSoon` \| `Started` \| `Ended`) the clock passed — reported by `Block.MarkersPassedBetween(from, to)`, announced by `IBlockMarkerNotifier` via `INotifier`; not a domain event, and not a "transition" (StartingSoon changes nothing) (Gap 84) |
 | **Moment** | A point in time, always UTC (`Domain/ValueObjects/Moment.cs`); no calendar members — which day or hour needs `UserTimeZone`. Only storage and `SystemClock` turn it into a `DateTime` (architecture test). Every stored timestamp, `ISystemClock.Now` and DTO times are `Moment`s (Gap 88) |
 | **UserTimeZone** | The user's time zone and its DST rules; the one place a `Moment` becomes a calendar time and back (`ToCalendarTime`, `ToMoment`, `DateOf`, `SplitByDay`, `HoursPerDay(slots)` — hours of the given slots per local day, Gap 92 — and `SlotCovering(days)` — the real time calendar days cover, which repositories are handed instead of dates, Gap 97). Reached as `ISystemClock.TimeZone` (Gap 88) |
-| **WholeMinutes** | Value object: an amount of time in whole minutes — the unit focus is counted in (credit, deficits, redemption coverage, a planned block's length). A fraction can't be built; the only ways in from a `TimeSpan` are `RoundDown` (credit — the one rounding in focus accounting) and `TryExact`. Every planned block (Focus and Background) is a whole number of minutes long (`PlannedBlock.Length`). An amount, not a place on the calendar — that is `TimeSlot` (Gap 92) |
+| **WholeMinutes** | Value object: an amount of time in whole minutes — the unit focus is counted in (credit, deficits, redemption coverage, a planned block's length). A fraction can't be built; the only ways in from a `TimeSpan` are `RoundDown` (credit — the one rounding in focus accounting) and `TryExact`. Every planned block (Focus and Background) is a whole number of minutes long (`Block.Length`). An amount, not a place on the calendar — that is `TimeSlot` (Gap 92) |
 | **SessionTimeline** | Value object: a started session's run, breaks and keep-blocking rule (`Session.Timeline`, worked out, never stored). `ReadingAt(at)` → `TimelineReading` (time left, progress, current break and its time left, breaks taken, blocking lifted) is the one answer to "where is the session now" — `Session`'s break questions, `PolicyEngine` (through them) and the Main page all read it; `Marks` place the breaks on the progress bar. Carried on `SessionDto` (Gap 92) |
 | **TimeSlot** | Value object: a span of two `Moment`s, half-open `[Start, End)`, end after start by construction; `Start`/`End` are Domain-only (`internal`). Answers `Overlaps`, `Contains`, `HasStarted`/`HasEnded`, `Length`, `SinceStart`/`RemainingAt`/`ProgressAt`, `Covering(start, WholeMinutes)` (exactly that long); `TimeSlot.Filters` are the same rules as SQL for repositories. Held by blocks (`Scheduled`) and sessions (Gap 88) |
 | **BlockPlacementChecker** | Domain service: the one answer to "may a block go here?" — `Check(slot, type, membership, contractsInEffect, blocks, running, now, timeZone)` (`running`: the one running session or none, Gap 92) asks, in order, not in the past → allowed by the governing contract → free for Focus (`CheckFree`: no Focus block's or running session's reserved time). Which contract governs: a member block's own, whatever its role (Gap 106); otherwise the one whose planned period the slot touches (`GoverningContract`). Returns a `PlacementVerdict` (`PlacementOutcome` `Allowed`/`InThePast`/`OutsideContractHours`/`TimeTaken`, the slot in the way, and the governing contract when allowed). Asked by Create/Update (via `GetBlockPlacementVerdictQuery`), Split, Seal and Edit; worded once in `BlockPlacementVerdictDto.From` (Gaps 88, 97) |
@@ -37,16 +37,16 @@ This file is the canonical reference for every domain concept in NenFocus. It ex
 | **Contract Rules** | Value object (`ContractRules`): every contract setting that carries no dates — strictness, a fixed daily floor (whole hours 1–24, or none — refused otherwise, Gap 92), allow cancellation, keep blocking during breaks, redemption placement, and whether Bonus blocks follow the strictness. A `ContractPreset` and a sealed `NenContract` each hold their own copy. It works out the daily floor rule and the movement range; what needs the calendar stays on the contract (Gap 93) |
 | **BlockChangeChecker** | Domain service: the one answer to "may this block be changed or deleted?" — `CheckReschedule`, `CheckSplit`, `CheckDelete` return a `ChangeVerdict` (allowed, or the first reason not), `AllowancesFor` the ready-made flags (`BlockChangeAllowances`) the block DTO carries. It asks the block's own lock, then its contract, and holds no rule itself; a plain block moved where any contract in effect governs is `WouldJoinContract` (Gap 106). Asked by the Update, Split and Delete validators before placement; worded once in `BlockChangeVerdictDto.From` (Gap 93) |
 | **Bound block** | A block its contract holds to what was sealed: Committed and Redemption always; Bonus only when the contract's rules say Bonus blocks follow the strictness (off by default). A bound block moves as far as the strictness allows, keeps its preset, can be split (not under Lockdown) and is never deleted. `NenContract.Binds` (Gap 93) |
-| **Started-block lock** | A block that has started (`PlannedBlock.HasStarted`) can't be moved, resized, split or edited, and can't be deleted until it has ended; it ends early only through End Early or by breaking its contract (Gap 88 phase 0) |
+| **Started-block lock** | A block that has started (`Block.HasStarted`) can't be moved, resized, split or edited, and can't be deleted until it has ended; it ends early only through End Early or by breaking its contract (Gap 88 phase 0) |
 | **Blocked Attempt** | An append-only fact recording a user's attempt to access a blocked app or site during a Session; a repeat of the same thing within 2 s is the same attempt (`BlockedAttempt.IsRepeatOf`, Gap 112) |
 | **Website** | A site as a bare domain (`youtube.com`) — the one definition the presets, the slice, the hosts file and the extension share; covers its subdomains. Allowed or blocked is which list it's in. Its app twin is `BlockedApp` (a process name; never a critical Windows process) (Gap 112) |
-| **Nen Contract** | A sealed, time-bound commitment over a contiguous date range that governs allowed changes to the Focus/Background blocks within it; own aggregate root, does not own `PlannedBlock`s |
+| **Nen Contract** | A sealed, time-bound commitment over a contiguous date range that governs allowed changes to the Focus/Background blocks within it; own aggregate root, does not own `Block`s |
 | **Seal** | The act of finalising a Nen Contract; the only way a `NenContract` comes into existence — there is no persisted draft state in the domain |
 | **Strictness Rule** | Enum (`Locked` \| `DailyFlexibility` \| `PeriodTimeBudget`) — how far a block its contract binds may move: nowhere, within its own day, anywhere in the contract. Asked in one place, `ContractRules.MovementRange` (Gap 93) |
 | **Daily Floor** | The minimum Focus hours a day must be *planned* with in a Nen Contract — a planning minimum, checked at Seal and on every change to a Committed block, never what decides "met" (Gap 95). Focus-only |
 | **Change Window** | *Not built.* The idea of limiting *when* a contract's existing blocks may be changed (a daily window with a use limit, or e.g. "change the coming week on Sunday"). Parked as Open Gap 109; the unused `ChangeWindow` type was deleted in Gap 92 |
 | **Day Met** | A Nen Contract day is "met" if its completed Focus hours reach what it owes: its Committed blocks' planned hours plus what the redemptions on it cover (`NenContract.DayStatuses`, Gap 95). Owing nothing is a rest day. A missed or late block does not fail the day directly; it only costs hours that must be made up |
-| **FocusBlockOutcome** | Enum (`CompletedOnTime` \| `StartedLate` \| `Missed` \| `EndedEarly`) classifying how a single Focus block resolved; a per-block display concept, separate from the day verdict |
+| **FocusBlockOutcome** | Enum (`CompletedOnTime` \| `StartedLate` \| `Missed` \| `EndedEarly` \| `Cancelled`) classifying how a single Focus block resolved; a per-block display concept, separate from the day verdict |
 | **Broken** | A Nen Contract the user cancelled before its end date. Only possible when it was sealed with Allow Cancellation on and no session is running (`NenContract.CheckBreak`; the Planner hides Cancel otherwise) |
 | **Work Hours** | A daily time-of-day window defining where Focus/Background blocks may physically exist on the calendar; blocks cannot be placed, moved, or resized outside it. Distinct from Change Window (which gates *when edits are allowed*, not *where blocks can be*) |
 | **Contract Day** | One day of a Nen Contract: its local window (Work Hours, or the whole day) and its floor (none = rest day). A contract is an unbroken run of them; `StartsAt`/`EndsAt` are read off the first and last day (Gap 65) |
@@ -83,15 +83,15 @@ NenFocus has five pages accessible via the sidebar:
 
 ## Session
 
-**Definition:** A bounded period of intentional focus, created by the user through the Ritual and enforced by the system — or, since the Missed Session amendment, a planned focus *attempt* that may have succeeded or been missed. A Session is now "a focus attempt, which may have succeeded or been missed," not only "a focus period that ran."
+**Definition:** A bounded period of intentional focus — the run (the "visit") inside its Focus block (the "booking", Gap 114). Every Session belongs to a block: a planned one against the scheduled Focus block, a spontaneous one against a walk-in block booked at start.
 
-**Lifecycle:** `NotStarted → Active → Completed`, with a second terminal branch `NotStarted → Missed` reachable only by a Planned session whose originating Focus Block's window closed before the Ritual completed.
+**Lifecycle:** `Active → Completed` — a Session is born Active (the run has begun; there is no "not started" session).
 
 **Ubiquitous language rules:**
 - A Session is *started*, not *created* or *opened*.
 - A Session is *completed* or *auto-ended*, not *closed* or *finished*.
 - A Session cannot be paused. It is *on break* only while the clock is inside one of its break slots — it is never *put* on break.
-- A Session is *missed*, never *failed* or *expired* — "missed" is the only vocabulary for a Planned session whose window closed unfulfilled.
+- A miss is the *block's* outcome (`FocusBlockOutcome.Missed`), never a session status — a block whose window closed with no Ritual has no session at all.
 
 **Break behaviour:** A session's breaks are decided when it starts and stored as its `BreakSchedule` (Gap 63); during a break slot a break countdown replaces the session timer on the Main Page while the session itself keeps running. There are no break buttons — ending or skipping a break is parked in Open Gap P. "No timer" means an empty schedule. What a break does to blocking is the session's own answer, `Session.LiftsBlockingAt(at)`: inside a break slot, unless the session keeps blocking during breaks (copied at Start from its contract, Gap 64).
 
@@ -101,17 +101,16 @@ NenFocus has five pages accessible via the sidebar:
 
 | Layer | Artifact | Role |
 |-------|----------|------|
-| Domain | `Session` entity (`Entities/Session.cs`) | Owns all state transitions via `Start(startedAt, scheduledEnd?, breakSchedule?, breakPresetName?, keepBlockingDuringBreaks)`, `Complete(endedAt, originatingBlock)`, `Miss()`; carries `Origin (SessionOrigin)` and `OriginatingBlockId (Guid?)`. Break questions: `IsOnBreakAt(at)`, `LiftsBlockingAt(at)` (in a break slot and not `KeepBlockingDuringBreaks`, Gap 64), `CurrentBreakAt(at)`, `BreakTransitionsBetween(from, to)`, `BreaksTakenBy(at)` / `BreaksTaken`. `RunLength(startedAt, scheduledEnd?)` is the one definition of how long it will run; `CountedTime(originatingBlock)` the one definition of how long an ended session counted for — its block's credit when planned, else the whole minutes it ran (Gap 95). `IsDueForAutoEnd(at)`: its time is up and nothing has ended it. `Complete` is the one ending, whether you end it or the clock does: caps `EndedAt` at `EndAt`, trims the schedule (Gap 63) and stamps a planned session's block with that same end (`FocusBlock.MarkSessionEnded` is internal — Gaps 86, 89). An ended session always spans time: `CanEndAt(at)` — started, and the capped end falls after the start — is what End early asks and `Complete` enforces. `Recorded` is the span its record covers (its run, or its block's window if missed; null until ended), what `PostSessionDto` carries — not `Timeline`, the planned run (Gap 89 Slice C). |
-| Domain | `SessionStatus` enum | Valid states: `NotStarted`, `Active`, `Completed`, `Missed` |
-| Domain | `SessionOrigin` enum | Valid values: `Spontaneous`, `Planned`; tags every Session with how it was initiated |
-| Domain | `SessionGoal`, `SessionDuration` value objects, `BreakSchedule`, `BreakPresetName (string?)` | Immutable configuration; `SessionDuration` is 1 minute to `FocusBlock.MaxLength` (12 h). `StartSessionValidator` holds only a spontaneous session's chosen length to it — a planned one is its block's, already capped (Gap 89 Slice B, A1); the schedule and preset-name snapshot are set at Start (see Break Timer Preset & Break Schedule below) |
+| Domain | `Session` entity (`Entities/Session.cs`) | The run (the "visit"), created already-Active by the one static factory `Start(id, goal, block, startedAt, temporaryBlockedApps?, temporaryBlockedSites?, breakSchedule?, breakPresetName?, keepBlockingDuringBreaks)` — `block` (a required `FocusBlock`) supplies the run's end and is stamped with the arrival here, the one writer (Gap 114, D6); `Complete(endedAt, originatingBlock)` is the one ending. Carries `OriginatingBlockId (Guid)`, required. Break questions: `IsOnBreakAt(at)`, `LiftsBlockingAt(at)` (in a break slot and not `KeepBlockingDuringBreaks`, Gap 64), `CurrentBreakAt(at)`, `BreakTransitionsBetween(from, to)`, `BreaksTakenBy(at)` / `BreaksTaken`. `CountedTime(originatingBlock)` is the one definition of how long an ended session counted for — its block's credit (Gap 95). `IsDueForAutoEnd(at)`: its time is up and nothing has ended it. `Complete` is the one ending, whether you end it or the clock does: caps `EndedAt` at `EndAt`, trims the schedule (Gap 63) and stamps its block with that same end (`FocusBlock.MarkSessionEnded` is internal — Gaps 86, 89, 114). An ended session always spans time: `CanEndAt(at)` — started, and the capped end falls after the start — is what End early asks and `Complete` enforces. `Recorded` is the span its record covers (its run; null until ended), what `PostSessionDto` carries — not `Timeline`, the planned run (Gap 89 Slice C). The run's `StartedAt`/`EndAt`/`EndedAt` are `internal` (Gap 89 leftover 2). |
+| Domain | `SessionStatus` enum | Valid states: `Active`, `Completed` |
+| Domain | `SessionGoal`, `BreakSchedule`, `BreakPresetName (string?)` | Immutable configuration. `StartSessionValidator` holds only a spontaneous session's chosen length (1 minute to `FocusBlock.MaxLength`, 12 h) — a planned one is its block's, already capped (Gap 89 Slice B, A1); the schedule and preset-name snapshot are set at Start (see Break Timer Preset & Break Schedule below) |
 | Application | `ISessionRepository` | Persistence contract; `GetActiveAsync()` is the one door for "which session is running" (none or one — "is one running" is `is not null`, Gap 92) and the startup rehydration entry point; `GetByOriginatingBlockIdAsync()` (`is not null`) makes missed-session creation idempotent. Unique indexes back both: at most one Active session, one session per Focus block (Gap 92). `Add` only — nothing deletes a session (Gap 110; a mistaken one is Gap 114's question) |
 | Application | `IActiveSessionState` | Singleton: the app's view of the running session (`ActiveSession`, `SessionChanged`, `RefreshAsync()`). Read from the database through `GetActiveSessionQuery` — the one `SessionDto` builder — never pushed in; refreshed at startup and first in the session started/ended event handlers (Gap 92, A3) |
 | Application | `IRitualPrompt` | Singleton: which Focus block awaits its Ritual (`PendingFocusBlockId`, `Changed` — only when the answer changes — and `RefreshAsync(at)`, asking `GetFocusBlockAwaitingRitualQuery`). Nothing else: why a block stopped awaiting is not its business. The heartbeat calls it last in each tick, with the tick's one `now` (Gap 92, A3) |
 | Application | `IRecapRelay` | Interim: the post-session and post-contract relays (`PostSessionsReady`, `PostSessionAcknowledged`, `PostContractsReady` and their `Notify…`), waiting for Gap 107's owner. Post-contract recaps are raised only by `NenContractEndedEventHandler` (Gap 110) |
 | Application | `IActiveSessionMonitor` | Singleton countdown engine; owns the 1 s timer; each tick asks the session's `SessionTimeline` and pushes the one `TimelineReading` with `Tick` (also `Current`) — 2 members. Ends nothing: at zero it stops, and the heartbeat, hearing the `HasEnded` reading, auto-ends the session at once (Gap 89). Its fire-and-forget calls are wrapped in try/catch + `ILogger` (Gap 31). |
-| Application | `StartSessionCommandHandler` | Creates, starts and saves the session; its `SessionStartedEvent` is published after the commit. Pushes nothing to the UI (Gap 92, A3). Rejects starting against an originating block via `PlannedBlock.HasEnded(now)`, the one canonical "is this past" definition (Gap 32). |
-| Application | `EndSessionCommandHandler` / `AutoEndSessionCommandHandler` | You end it now (End early), or the clock ends it if `IsDueForAutoEnd(AsOf)` (`AutoEndSessionCommand { required AsOf }`, dispatched by the heartbeat every tick; no `Success` flag — nothing due is normal). Both load the originating block and ask `session.Complete(at, block)`; neither builds a screen (Gap 89). A future Strict Mode refuses yours, never the clock's. `block.End` is never overwritten (Gap 22); see `FocusBlockOutcome` below for how `SessionEndedAt` feeds classification. |
+| Application | `StartSessionCommandHandler` | Creates, starts and saves the session; its `SessionStartedEvent` is published after the commit. Pushes nothing to the UI (Gap 92, A3). Rejects starting against an originating block via `Block.HasEnded(now)`, the one canonical "is this past" definition (Gap 32). |
+| Application | `EndSessionCommandHandler` / `AutoEndSessionCommandHandler` | You end it now (End early), or the clock ends it if `IsDueForAutoEnd(AsOf)` (`AutoEndSessionCommand { required AsOf }`, dispatched by the heartbeat every tick; no `Success` flag — nothing due is normal). Both load the originating block and ask `session.Complete(at, block)`; neither builds a screen (Gap 89). A future Strict Mode refuses yours, never the clock's. `block.End` is never overwritten (Gap 22); see `FocusBlockOutcome` below for how the frozen `Result` feeds classification. |
 | Application | `SessionStartedEventHandler` | Refreshes `IActiveSessionState`, calls `IEnforcementSynchronizer.SyncAsync(now)`, reports `SessionStarted` to `INotifier` (a planned session is named after its block, Gap 84) |
 | Application | `SessionEndedEventHandler` | Refreshes `IActiveSessionState` (now none), then `SyncAsync(now)` (never "remove everything" — a still-running Background Block stays enforced, Gap 62), reports `SessionCompleted` — the one toast for a planned block's end, since the session owns it (Gap 84) — then relays the Post-Session screen, built from what was saved: the one path to it, whoever ended the session (Gap 89) |
 | Application | `IBreakTransitionResponder` / `BreakTransitionResponder` (`Services/`) | Given the break boundaries the monitor saw crossed: one `SyncAsync(at)` (`PolicyEngine` decides what the break lifts), then one `BreakStarted`/`BreakEnded` fact for the latest boundary only (Gap 63) |
@@ -120,13 +119,13 @@ NenFocus has five pages accessible via the sidebar:
 
 ---
 
-## Missed Session
+## Missed Block (was Missed Session)
 
-**Definition:** A first-class Session produced when a planned Focus Block's window closes with the Ritual never completed — a planned focus attempt frozen at "never started," reached via `NotStarted → Missed` (never through `Active`). Only a Planned session can be missed; `Session.Miss()` throws otherwise.
+**Definition:** A Focus block whose window closed with the Ritual never completed. A miss is the block's frozen outcome (`FocusBlockOutcome.Missed`), not a session — the block ran nothing, so it has no session at all (Gap 114, D5). The sweep (`SweepMissedFocusBlocksCommand`, every heartbeat tick) stamps each unresolved block `MarkMissed(asOf)`; the block's own `Reflection` holds the miss note and its acknowledgement.
 
-**Key facts:** inherits its originating block's preset, duration and scheduled window (`StartedAt`/`EndedAt`); `GetElapsedTime` is zero by construction; the originating `FocusBlock` is untouched; creation is idempotent; the one home for "missed" is `SweepMissedFocusBlocksCommand` (every heartbeat tick, the first before the window opens — Gap 89). A Missed and a Completed-but-undismissed session are the same "resolved, not yet acknowledged" case — `Session.PostSessionAcknowledgedAt` marks it seen, `GetUnacknowledgedPostSessionsQuery` finds what's pending.
+**Key facts:** the block's outcome, work slot and credit are frozen once (`Result`); creation is idempotent — the sweep's `MarkMissed` re-asks `IsUnresolved`, which is false once frozen; the originating block is the record, never a session.
 
-**Full write-up (sweep/triage/Shell behaviour and the technical mapping):** `TECHNICAL_SPEC_INFRA.md` → Missed Session.
+**Full write-up (sweep/triage/Shell behaviour and the technical mapping):** `TECHNICAL_SPEC_INFRA.md` → Missed Session (to be refreshed for the block shape).
 
 ---
 
@@ -187,7 +186,7 @@ NenFocus has five pages accessible via the sidebar:
 | Domain | `WebsiteFilterType` enum | `Blocklist` or `Allowlist` |
 | Application | `IBlockPresetRepository` | A collection (Gap 110): `Add`, `Remove(preset)` and reads; the command's commit saves changes |
 | Application | `CreateBlockPresetCommandHandler`, `UpdateBlockPresetCommandHandler`, etc. | One handler per mutation |
-| Application | `CheckBlockPresetLockedQuery` | Gathers what `IsLockedAt` needs — the running session, `IPlannedBlockRepository.GetUsingPresetAsync` (a superset; the blocks decide) and every contract in effect's open deficits — at one "now", and asks the preset. Asked by both preset validators: Delete refuses when locked (one reason — Design Review Rule 5); Update, when locked, asks `AllowsChangeWhileLocked` (Gap 89 Slice D). |
+| Application | `CheckBlockPresetLockedQuery` | Gathers what `IsLockedAt` needs — the running session, `IBlockRepository.GetUsingPresetAsync` (a superset; the blocks decide) and every contract in effect's open deficits — at one "now", and asks the preset. Asked by both preset validators: Delete refuses when locked (one reason — Design Review Rule 5); Update, when locked, asks `AllowsChangeWhileLocked` (Gap 89 Slice D). |
 | UI | `BlockPresetPageViewModel` | Full CRUD UI; file picker for app selection; type filter |
 
 ---
@@ -231,7 +230,7 @@ NenFocus has five pages accessible via the sidebar:
 - **Websites:** if *any* active preset uses `Allowlist` mode → default-deny, allowed = intersection of all allowlists minus any blocklist entries. Otherwise → block the union of all blocklisted sites. Includes `TemporaryBlockedSites` from the active `Session` entity.
 - **Usage Ceilings *(not yet built)*:** an exhausted ceiling will add its site/app to the blocked set; a hard block already covering it wins and no usage accrues — Gap 69 (A).
 - An `ActivePolicySlice` is considered "empty" only in `Blocklist` mode with no blocked apps or sites. It is *never* empty in `Allowlist` mode.
-- **"Active" is re-checked precisely inside `ComputeSlice` itself:** `ComputeActivePolicySliceQueryHandler` over-fetches blocks with a ±1-second buffer around `at` (SQLite datetime-comparison slop), so `PolicyEngine` filters through `PlannedBlock.IsActive(at)` as the final authority (Gap 21, third addendum). `IsActive` is `atTime >= Start && atTime < EffectiveEnd(atTime)`, not raw `End` — a block whose session ended early stops being active when it actually ended (see `MODULE_STANDARDS.md` → Application Handler Forbidden Zone).
+- **"Active" is re-checked precisely inside `ComputeSlice` itself:** `ComputeActivePolicySliceQueryHandler` over-fetches blocks with a ±1-second buffer around `at` (SQLite datetime-comparison slop), so `PolicyEngine` filters through `Block.IsActive(at)` as the final authority (Gap 21, third addendum). `IsActive` is `atTime >= Start && atTime < EffectiveEnd(atTime)`, not raw `End` — a block whose session ended early stops being active when it actually ended (see `MODULE_STANDARDS.md` → Application Handler Forbidden Zone).
 
 **Overlap rules:**
 - Multiple Background Blocks can overlap freely. The net enforcement is the union of all their presets.
@@ -253,7 +252,7 @@ NenFocus has five pages accessible via the sidebar:
 
 ## PolicyEngine
 
-**Definition:** The sole Domain service responsible for computing the `ActivePolicySlice`. It is a stateless, synchronous function: given a point in time, `BlockPreset` aggregates, the running `Session` (if any) and `PlannedBlock`s, it returns the complete enforcement state for that moment.
+**Definition:** The sole Domain service responsible for computing the `ActivePolicySlice`. It is a stateless, synchronous function: given a point in time, `BlockPreset` aggregates, the running `Session` (if any) and `Block`s, it returns the complete enforcement state for that moment.
 
 **Why it is a Domain Service (not an Application service):** Policy merge logic — the rules for unioning blocked apps, resolving allowlist/blocklist precedence, and deciding what a break lifts — is domain logic. It expresses invariants of the domain ("an allowlist preset beats a blocklist preset", "a session whose contract keeps blocking during breaks stays blocked through them") that must be consistent wherever policy is computed. Placing this logic in a Domain service makes it unit-testable without a database and reachable by any future consumer (e.g., a Planner "preview" query).
 
@@ -264,23 +263,23 @@ public ActivePolicySlice ComputeSlice(
     Moment at,
     IEnumerable<BlockPreset> presets,
     Session? running,             // at most one runs (Gap 92)
-    IEnumerable<PlannedBlock> blocks);
+    IEnumerable<Block> blocks);
 ```
 
 **Technical mapping:**
 
 | Layer | Artifact | Role |
 |-------|----------|------|
-| Domain | `PolicyEngine` (`Services/PolicyEngine.cs`) | Sealed class, no interface (Gap 111); all merge rules live here. Filters `blocks` through `PlannedBlock.IsActive(at)` (`EffectiveEnd`-based) — the caller's fetch may be loose/buffered; `PolicyEngine` is the precise final word on "is this block active right now" (Gap 21). Derives `activePresets` from the active blocks'/sessions' own `BlockPresetId`s rather than trusting the caller's preset list (Gap 60). Resolves what a break lifts by asking each session `LiftsBlockingAt(at)` — the session already carries its contract's keep-blocking rule, so `PolicyEngine` takes no contracts (Gap 64). Only the specific session on break and its originating block lose their preset's contribution; a co-occurring Background Block is untouched. |
+| Domain | `PolicyEngine` (`Services/PolicyEngine.cs`) | Sealed class, no interface (Gap 111); all merge rules live here. Filters `blocks` through `Block.IsActive(at)` (`EffectiveEnd`-based) — the caller's fetch may be loose/buffered; `PolicyEngine` is the precise final word on "is this block active right now" (Gap 21). Derives `activePresets` from the active blocks'/sessions' own `BlockPresetId`s rather than trusting the caller's preset list (Gap 60). Resolves what a break lifts by asking each session `LiftsBlockingAt(at)` — the session already carries its contract's keep-blocking rule, so `PolicyEngine` takes no contracts (Gap 64). Only the specific session on break and its originating block lose their preset's contribution; a co-occurring Background Block is untouched. |
 | Application | `DependencyInjection.cs` | Registers `PolicyEngine` as itself (`AddScoped`, in `NenFocus.Application`'s `DependencyInjection.cs` — stateless, so singleton would also be safe), like every Domain service |
 
 ---
 
 ## Planned Block
 
-**Definition:** The abstract base class for all calendar-scheduled enforcement entries. A `PlannedBlock` has a `Scheduled` time slot (`TimeSlot`, UTC moments), a `BlockPresetId`, and an optional `Title`. It is never instantiated directly — only its two concrete subtypes (`FocusBlock` and `BackgroundBlock`) are created. The C# class type encodes the block preset type; there is no stored `BlockPresetType` column.
+**Definition:** The abstract base class for all calendar-scheduled enforcement entries. A `Block` has a `Scheduled` time slot (`TimeSlot`, UTC moments), a `BlockPresetId`, and an optional `Title`. It is never instantiated directly — only its two concrete subtypes (`FocusBlock` and `BackgroundBlock`) are created. The C# class type encodes the block preset type; there is no stored `BlockPresetType` column.
 
-**Domain behaviour:** `PlannedBlock` carries these domain methods, used by both subtypes and the query layer:
+**Domain behaviour:** `Block` carries these domain methods, used by both subtypes and the query layer:
 - `IsActive(Moment at)` — returns `true` if `at` falls within `[Start, EffectiveEnd(at))`.
 - `EffectiveEnd(Moment asOf)` — the one rule for how much of the window the block really occupies; every reason it shrinks lives here. Base: cancellation (ends at the cancel moment; empty if cancelled before `Start`). `FocusBlock` adds session-ended-early and missed; the earliest reason wins. `IsActive`, overlap checks and markers never check `CancelledAt` themselves (Gap 85).
 - `HasStarted(Moment asOf)` — asks `Scheduled`; once true the block is locked: no edit or split, no delete until it has ended (Gap 88 phase 0).
@@ -288,20 +287,20 @@ public ActivePolicySlice ComputeSlice(
 - `ReservedSlot(asOf)` — the Focus time it really takes (up to `EffectiveEnd`), what `BlockPlacementChecker` compares; `OverlapsWith(other)` stays for the Seal batch's own check only — placement never calls it (Gap 88).
 - `MarkersPassedBetween(from, to)` — the markers the clock passed in (from, to]: `StartingSoon` (`UpcomingWarningLead`, 5 min, before `Start`), `Started`/`Ended` (`IsActive` flipped — the definition enforcement uses). `Ended` only if the block owns its ending: a `FocusBlock` whose Ritual was completed does not — its session announces it (Gap 84).
 
-**Why it exists:** `IPlannedBlockRepository` returns `IReadOnlyList<PlannedBlock>` so that the enforcement pipeline can work with all scheduled blocks polymorphically without knowing their concrete type. Enforcement treats Focus and Background blocks alike; the only place the subtype matters for triggering is the Ritual, where `GetFocusBlockAwaitingRitualQueryHandler` asks only `FocusBlock`s — the distinction is made exactly once, in the one place that needs it.
+**Why it exists:** `IBlockRepository` returns `IReadOnlyList<Block>` so that the enforcement pipeline can work with all scheduled blocks polymorphically without knowing their concrete type. Enforcement treats Focus and Background blocks alike; the only place the subtype matters for triggering is the Ritual, where `GetFocusBlockAwaitingRitualQueryHandler` asks only `FocusBlock`s — the distinction is made exactly once, in the one place that needs it.
 
 **Technical mapping:**
 
 | Layer | Artifact | Role |
 |-------|----------|------|
-| Domain | `PlannedBlock` abstract class (`Entities/PlannedBlock.cs`) | Base for `FocusBlock` and `BackgroundBlock`; exposes `IsActive()`, `OverlapsWith()`, `MarkersPassedBetween()`, `Membership` with `Leave()` (released by its contract — Gaps 97, 93; no move changes membership, `PlaceUnder` deleted in Gap 106), its own lock `CheckOwnChange` / `CheckOwnSplit` / `CheckOwnDelete` (Gap 93), `PresetType` (read off the subtype) and `DisplayName(presetName)` (title, else preset name — the one definition of a block's name, Gap 84) |
-| Application | `IPlannedBlockRepository` | Returns `IReadOnlyList<PlannedBlock>` (overlap checks, active-state queries); callers cast to concrete type when subtype behaviour is needed |
+| Domain | `Block` abstract class (`Entities/Block.cs`) | Base for `FocusBlock` and `BackgroundBlock`; exposes `IsActive()`, `OverlapsWith()`, `MarkersPassedBetween()`, `Membership` with `Leave()` (released by its contract — Gaps 97, 93; no move changes membership, `PlaceUnder` deleted in Gap 106), its own lock `CheckOwnChange` / `CheckOwnSplit` / `CheckOwnDelete` (Gap 93; `CheckOwnDelete` refuses any started block, Gap 114 D5 amd 3) and `MarkCancelled` (refuses an ended block; a Focus block also freezes `Cancelled`), `PresetType` (read off the subtype) and `DisplayName(presetName)` (title, else preset name — the one definition of a block's name, Gap 84) |
+| Application | `IBlockRepository` | Returns `IReadOnlyList<Block>` (overlap checks, active-state queries); callers cast to concrete type when subtype behaviour is needed |
 
 ---
 
 ## Focus Block
 
-**Definition:** A planned calendar entry that does two things simultaneously at its designated start time: (1) enforcement activates immediately — the block preset's rules are applied before the user has done anything, and (2) the user is pushed to the Nen Ritual page to consciously start the session. The session created via the Ritual is the *Planned Session* associated with this block. Critically, enforcement is already in place from the designated time regardless of whether the user completes the Ritual immediately. If the user never completes the Ritual, the block's session is missed (see Missed Session). Enforcement still expires at the block's scheduled end time whether the Ritual was completed or not.
+**Definition:** A planned calendar entry that does two things simultaneously at its designated start time: (1) enforcement activates immediately — the block preset's rules are applied before the user has done anything, and (2) the user is pushed to the Nen Ritual page to consciously start the session. The session created via the Ritual is the *Planned Session* associated with this block. Critically, enforcement is already in place from the designated time regardless of whether the user completes the Ritual immediately. If the user never completes the Ritual, the block is missed (see Missed Block) — there is no session. Enforcement still expires at the block's scheduled end time whether the Ritual was completed or not.
 
 **Must use a Focus-type Block Preset.** Only presets created with the Focus type are available when scheduling a Focus Block in the Planner or selecting a preset during the Ren step.
 
@@ -324,10 +323,10 @@ public ActivePolicySlice ComputeSlice(
 
 | Layer | Artifact | Role |
 |-------|----------|------|
-| Domain | `FocusBlock` entity (`Entities/FocusBlock.cs`) | Extends `PlannedBlock`; inherits `Id`, `BlockPresetId`, `Scheduled`, `Title?`; own fields: `RitualCompletedAt?`, `SessionEndedAt?` — Domain-only stamps (Gap 95): outside the Domain they are read only through the block's answers (`Outcome`, `StartedLate`, `EndedEarly`, `WorkSlot`, `CreditedSlot`, `IsFinal`), and repositories filter on them through `FocusBlock.Filters`; block preset type derived from C# class (no stored column). `IsAwaitingRitual(at)` — active, not cancelled, Ritual not done — is the one definition of "should this block prompt the Ritual" (Gap 62). `IsCommitted` / `IsRedemption` / `IsBonus` / `CountsTowardFloor` (its stored role in its contract; only a Redemption block may hold a receipt with entries — Gaps 97, 106), `Receipt`, `SplitInto(firstId, first, secondId, second)` (both pieces keep the membership, the receipt divided, nothing shortened — Gap 106) and `IsUnresolved(asOf)` (window closed, Ritual never done, not cancelled — the missed sweep's rule; the repository's SQL mirrors it, checked by a parity test) name two facts callers used to spell out |
+| Domain | `FocusBlock` entity (`Entities/FocusBlock.cs`) | Extends `Block`; inherits `Id`, `BlockPresetId`, `Scheduled`, `Title?`; own fields: `RitualCompletedAt?` (the arrival — internal, written only by `Session.Start`, Gap 114 D6), `BookingType` (`FocusBlockBookingType`), `Result` (the frozen `FocusBlockResult`, null while open), `Reflection` (a missed block's note). The answers (`Outcome`, `StartedLate`, `EndedEarly`, `WorkSlot`, `CreditedSlot`, `IsFinal`) read `Result` once frozen and derive live otherwise; `StartedLate`/`EndedEarly`/`Credit` are derived from `WorkSlot`, never stored. Block preset type derived from C# class (no stored column). `IsAwaitingRitual(at)` — active, not cancelled, Ritual not done — is the one definition of "should this block prompt the Ritual" (Gap 62). `IsCommitted` / `IsRedemption` / `IsBonus` / `CountsTowardFloor` (its stored role in its contract; only a Redemption block may hold a receipt with entries — Gaps 97, 106), `Receipt`, `SplitInto(firstId, first, secondId, second)` (both pieces keep the membership, the receipt divided, nothing shortened — Gap 106) and `IsUnresolved(asOf)` (window closed, Ritual never done, not cancelled, not yet frozen — the missed sweep's rule; the repository's SQL mirrors it, checked by a parity test) name two facts callers used to spell out. `MarkMissed(asOf)`, `MarkSessionEnded(at)` and `MarkCancelled(at)` are the final transitions that freeze `Result`. |
 | Application | `GetFocusBlockAwaitingRitualQuery` / `Handler` (`Queries/GetFocusBlockAwaitingRitual/`) | Returns the active Focus Block awaiting its Ritual, or `null` — also `null` if any session is running (checked in the database, not in-memory). What `IRitualPrompt` asks, once per heartbeat tick (Gaps 62, 92) |
 | UI | `PlannerPageViewModel` | Creates, updates, deletes Focus Blocks; drag interactions and form locking implemented |
-| UI | `ShellViewModel` | Its Ritual follows `IRitualPrompt.Changed`: opens the Ritual overlay for the block the prompt names (queued behind any pending Post-Session screens) and closes it when the prompt stops naming that block — see Missed Session (Gap 92) |
+| UI | `ShellViewModel` | Its Ritual follows `IRitualPrompt.Changed`: opens the Ritual overlay for the block the prompt names (queued behind any pending Post-Session screens) and closes it when the prompt stops naming that block — see Missed Block (Gap 92) |
 
 ---
 
@@ -360,7 +359,7 @@ public ActivePolicySlice ComputeSlice(
 
 | Layer | Artifact | Role |
 |-------|----------|------|
-| Domain | `BackgroundBlock` entity (`Entities/BackgroundBlock.cs`) | Extends `PlannedBlock`; no additional own fields; block preset type derived from C# class (no stored column). Enforced through the same slice and heartbeat as every block |
+| Domain | `BackgroundBlock` entity (`Entities/BackgroundBlock.cs`) | Extends `Block`; no additional own fields; block preset type derived from C# class (no stored column). Enforced through the same slice and heartbeat as every block |
 
 ---
 
@@ -400,11 +399,11 @@ public ActivePolicySlice ComputeSlice(
 
 ---
 
-## Spontaneous vs Planned Session (SessionOrigin)
+## Spontaneous vs Planned Session (FocusBlockBookingType)
 
 Definitions are in the Quick Reference. Rules not stated elsewhere:
 - **Spontaneous:** the user chooses preset (Focus-type only), duration and break preset; `OriginatingBlockId = null`, no block of any kind exists (Gap 114 will change this). Abandoning the Ritual before "Start Session" saves nothing — no draft, no partial session, no recovery state. It cannot start if it would overlap an upcoming Focus Block (a block at 18:00 refuses a 30-minute session at 17:45).
-- **Planned:** preset (Ren) and end time (Hatsu) are fixed by the block; only the break preset is chosen. `OriginatingBlockId` = the block's Id. A Ritual never completed produces a Missed Session (see Missed Session); enforcement runs to the block's end regardless.
+- **Planned:** preset (Ren) and end time (Hatsu) are fixed by the block; only the break preset is chosen. `OriginatingBlockId` = the block's Id. A Ritual never completed misses the block (see Missed Block); enforcement runs to the block's end regardless.
 - **Why `Origin` and not "is `OriginatingBlockId` null":** nullness read as a type is a leaky boolean; the enum stays unambiguous when more origins are added. Set at creation by `StartSessionCommandHandler`, never changed.
 
 ---

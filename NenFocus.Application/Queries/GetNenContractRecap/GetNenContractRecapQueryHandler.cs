@@ -154,7 +154,7 @@ public sealed class GetNenContractRecapQueryHandler : IQueryHandler<GetNenContra
             BonusBlockCount = bonusBlockCount,
             DailyBreakdown = dailyBreakdown,
             BestStreakDays = bestStreakDays,
-            Reflection = contract.Reflection
+            Reflection = contract.Reflection.Text
         };
     }
 }

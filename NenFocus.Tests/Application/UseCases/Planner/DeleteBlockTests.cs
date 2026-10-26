@@ -8,9 +8,9 @@ namespace NenFocus.Tests.Application.UseCases.Planner;
 
 /// <summary>
 /// Deleting a planned block, run as the app runs it: real pipeline, real SQLite (Gap 110).
-/// May it go? BlockChangeChecker.CheckDelete (Gap 93): a running block never; a contract's block
-/// only when its contract doesn't bind it and it hasn't started — everything else is part of the
-/// contract's record, even after the contract is over.
+/// May it go? BlockChangeChecker.CheckDelete (Gap 93): a started block never — running or ended, its
+/// story is recorded (Gap 114, D5); a contract's block only when its contract doesn't bind it and it
+/// hasn't started — everything else is part of the contract's record, even after the contract is over.
 /// </summary>
 public class DeleteBlockTests : UseCaseTestBase
 {
@@ -70,30 +70,30 @@ public class DeleteBlockTests : UseCaseTestBase
     }
 
     [Fact]
-    public Task AnEndedFocusBlockOutsideAnyContract_IsRemoved() =>
-        // Only contract membership protects an ended block, so this one goes from its snapshot view.
-        ShouldBeDeleted(Focus(Now.AddHours(-3), Now.AddHours(-1)));
+    public Task AnEndedFocusBlockOutsideAnyContract_IsKept() =>
+        // An ended block's story is recorded (Gap 114, D5) — even a plain one is never deleted.
+        ShouldBeKept(Focus(Now.AddHours(-3), Now.AddHours(-1)));
 
     [Fact]
-    public Task AnEndedBackgroundBlockOutsideAnyContract_IsRemoved() =>
-        ShouldBeDeleted(Background(Now.AddHours(-3), Now.AddHours(-1)));
+    public Task AnEndedBackgroundBlockOutsideAnyContract_IsKept() =>
+        ShouldBeKept(Background(Now.AddHours(-3), Now.AddHours(-1)));
 
     [Fact]
-    public async Task AMissedFocusBlockOutsideAnyContract_IsRemoved()
+    public async Task AMissedFocusBlockOutsideAnyContract_IsKept()
     {
         var block = Focus(Now.AddHours(-3), Now.AddHours(-1));
         block.Outcome(At.Utc(Now)).Should().Be(FocusBlockOutcome.Missed); // the "missed", not "completed", case
 
-        await ShouldBeDeleted(block);
+        await ShouldBeKept(block);
     }
 
     [Fact]
-    public async Task ARunningBackgroundBlock_IsKept_AndSaysItIsRunning()
+    public async Task ARunningBackgroundBlock_IsKept_AndSaysItStarted()
     {
         // Gap 88 phase 0: a started block runs to its end — it can't be deleted mid-run.
         var result = await ShouldBeKept(Background(Now.AddHours(-1), Now.AddHours(1)));
 
-        result.ErrorMessage.Should().Be("This block is running and cannot be deleted until it ends.");
+        result.ErrorMessage.Should().Be("This block has already started — it cannot be changed.");
     }
 
     [Fact]

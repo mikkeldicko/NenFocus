@@ -59,10 +59,8 @@ public partial class PostSessionViewModel : ViewModelBase
         _onDone = onDone;
 
         Goal = data.Goal;
-        HeaderLabel = data.Status == SessionStatus.Missed ? "SESSION MISSED" : "SESSION COMPLETE";
-        ReflectionPrompt = data.Status == SessionStatus.Missed
-            ? "What got in the way?"
-            : "How did the session go? What did you accomplish?";
+        HeaderLabel = "SESSION COMPLETE";
+        ReflectionPrompt = "How did the session go? What did you accomplish?";
         PresetName = data.PresetName;
         (StartedAt, EndedAt) = timeZone.ToCalendarTimes(data.Recorded);
         Duration = data.ActualDuration;

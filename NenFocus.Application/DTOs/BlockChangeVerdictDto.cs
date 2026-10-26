@@ -23,7 +23,6 @@ public sealed record BlockChangeVerdictDto
         {
             ChangeOutcome.Allowed => null,
             ChangeOutcome.BlockHasStarted => "This block has already started — it cannot be changed.",
-            ChangeOutcome.BlockIsRunning => "This block is running and cannot be deleted until it ends.",
             ChangeOutcome.ContractIsOver => "This block belongs to a finished Nen Contract and can no longer be changed.",
             ChangeOutcome.ContractBlockNeverDeleted => "Cannot delete a block that belongs to a Nen Contract.",
             ChangeOutcome.NoMovementAllowed => "This block is locked by a Lockdown contract.",

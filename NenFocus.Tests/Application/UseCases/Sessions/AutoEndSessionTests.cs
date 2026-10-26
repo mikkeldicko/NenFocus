@@ -23,17 +23,10 @@ public class AutoEndSessionTests : UseCaseTestBase
         RunAsync(new AutoEndSessionCommand { AsOf = At.Utc(asOf) });
 
     /// <summary>A 30-minute session started 10 minutes before <see cref="Now"/>, so it ends at Now + 20.</summary>
-    private static Session RunningSession(Guid? originatingBlockId = null)
+    private static Session RunningSession(FocusBlock? block = null)
     {
-        var session = Session.Create(
-            Guid.NewGuid(),
-            new SessionGoal("Deep work"),
-            new SessionDuration(TimeSpan.FromMinutes(30)),
-            SeededFocusPresetId,
-            originatingBlockId is null ? SessionOrigin.Spontaneous : SessionOrigin.Planned,
-            originatingBlockId: originatingBlockId);
-        session.Start(At.Utc(Now.AddMinutes(-10)));
-        return session;
+        block ??= FocusBlock.Spontaneous(Guid.NewGuid(), SeededFocusPresetId, At.Slot(Now.AddMinutes(-10), Now.AddMinutes(20)));
+        return Session.Start(Guid.NewGuid(), new SessionGoal("Deep work"), block, At.Utc(Now.AddMinutes(-10)));
     }
 
     [Fact]
@@ -101,8 +94,7 @@ public class AutoEndSessionTests : UseCaseTestBase
     public async Task APlannedSession_StampsItsBlock_WithTheSameEnd()
     {
         var block = FocusBlock.Create(Guid.NewGuid(), SeededFocusPresetId, At.Slot(Now.AddMinutes(-10), Now.AddMinutes(20)));
-        block.MarkRitualCompleted(At.Utc(Now.AddMinutes(-10)));
-        var session = RunningSession(block.Id);
+        var session = RunningSession(block);
         await SeedAsync(block, session);
 
         await AutoEndAsync(Now.AddMinutes(20));

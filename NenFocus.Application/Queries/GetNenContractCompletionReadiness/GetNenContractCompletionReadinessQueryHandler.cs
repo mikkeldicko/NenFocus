@@ -39,7 +39,7 @@ public sealed class GetNenContractCompletionReadinessQueryHandler
         // Every member, Bonus blocks included (Gap 97): completing must leave nothing to clean up.
         var members = await _blocks.GetForContractAsync(contract.Id, ct);
         var sessions = await _sessions.GetHistoryAsync(
-            _clock.TimeZone.SlotCovering(contract.StartDate, contract.EndDate), presetId: null, ct);
+            _clock.TimeZone.SlotCovering(contract.StartDate, contract.EndDate), ct);
         var sessionRunning = await _sessions.GetActiveAsync(ct) is not null;
 
         var verdict = contract.CheckComplete(members, sessions, sessionRunning, _clock.Now, _clock.TimeZone);

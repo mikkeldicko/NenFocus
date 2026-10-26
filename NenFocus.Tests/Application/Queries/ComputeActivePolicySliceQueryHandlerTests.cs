@@ -66,13 +66,11 @@ public class ComputeActivePolicySliceQueryHandlerTests
         var sessionPreset = PresetBlocking("reddit.com");
         var block = FocusBlock.Create(Guid.NewGuid(), blockPreset.Id, TestAt.Slot(At, At.AddHours(1)));
         var otherBlock = BackgroundBlock.Create(Guid.NewGuid(), blockPreset.Id, TestAt.Slot(At, At.AddHours(1)));
-        var session = Session.Create(
-            Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(30)),
-            sessionPreset.Id, SessionOrigin.Spontaneous);
-        session.Start(TestAt.Utc(At));
+        var sessionBlock = FocusBlock.Spontaneous(Guid.NewGuid(), sessionPreset.Id, TestAt.Slot(At, At.AddMinutes(30)));
+        var session = Session.Start(Guid.NewGuid(), new SessionGoal("Goal"), sessionBlock, TestAt.Utc(At));
 
         _blocks.GetForRangeAsync(Arg.Any<TimeSlot>(), Arg.Any<CancellationToken>())
-            .Returns((IReadOnlyList<Block>)[block, otherBlock]);
+            .Returns((IReadOnlyList<Block>)[block, otherBlock, sessionBlock]);
         _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns(session);
 
         var result = await Compute();

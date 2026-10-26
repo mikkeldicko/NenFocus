@@ -26,14 +26,12 @@ public class GetUnacknowledgedPostSessionsQueryHandlerTests
     private GetUnacknowledgedPostSessionsQueryHandler CreateHandler()
         => new(_sessions, _presets, _blocks, _attempts);
 
-    private static Session CreateCompletedSpontaneousSession(DateTime endedAt, TimeSpan elapsed)
+    private static (Session Session, FocusBlock Block) CreateCompletedSpontaneousSession(DateTime endedAt, TimeSpan elapsed)
     {
-        var session = Session.Create(
-            Guid.NewGuid(), new SessionGoal("Deep work"), new SessionDuration(elapsed),
-            Guid.NewGuid(), SessionOrigin.Spontaneous);
-        session.Start(At.Utc(endedAt - elapsed));
+        var block = FocusBlock.Spontaneous(Guid.NewGuid(), Guid.NewGuid(), At.Slot(endedAt - elapsed, endedAt));
+        var session = Session.Start(Guid.NewGuid(), new SessionGoal("Deep work"), block, At.Utc(endedAt - elapsed));
         session.Complete(At.Utc(endedAt), null);
-        return session;
+        return (session, block);
     }
 
     [Fact]
@@ -50,11 +48,12 @@ public class GetUnacknowledgedPostSessionsQueryHandlerTests
     [Fact]
     public async Task HandleAsync_CompletedSpontaneousSession_BuildsDtoWithActualElapsedMinutes()
     {
-        var session = CreateCompletedSpontaneousSession(Now, TimeSpan.FromMinutes(10));
+        var (session, block) = CreateCompletedSpontaneousSession(Now, TimeSpan.FromMinutes(10));
         _sessions.GetUnacknowledgedPostSessionsAsync(Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<Session>)[session]);
-        _presets.GetByIdAsync(session.BlockPresetId, Arg.Any<CancellationToken>())
-            .Returns(BlockPreset.Create(session.BlockPresetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
+        _blocks.GetByIdAsync(block.Id, Arg.Any<CancellationToken>()).Returns(block);
+        _presets.GetByIdAsync(block.BlockPresetId, Arg.Any<CancellationToken>())
+            .Returns(BlockPreset.Create(block.BlockPresetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Now)));
 
         var result = await CreateHandler().HandleAsync(new GetUnacknowledgedPostSessionsQuery());
 
@@ -66,24 +65,6 @@ public class GetUnacknowledgedPostSessionsQueryHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_MissedSession_ActualDurationIsZero()
-    {
-        var blockId = Guid.NewGuid();
-        var scheduledStart = Now.AddHours(-2);
-        var session = Session.Create(
-            Guid.NewGuid(), new SessionGoal("(missed — no goal set)"), new SessionDuration(TimeSpan.FromMinutes(30)),
-            Guid.NewGuid(), SessionOrigin.Planned, originatingBlockId: blockId);
-        session.Miss(new TimeSlot(At.Utc(scheduledStart), At.Utc(scheduledStart.AddMinutes(30))));
-        _sessions.GetUnacknowledgedPostSessionsAsync(Arg.Any<CancellationToken>())
-            .Returns((IReadOnlyList<Session>)[session]);
-
-        var result = await CreateHandler().HandleAsync(new GetUnacknowledgedPostSessionsQuery());
-
-        result[0].Status.Should().Be(SessionStatus.Missed);
-        result[0].ActualDurationMinutes.Should().Be(0);
-    }
-
-    [Fact]
     public async Task HandleAsync_CompletedPlannedSession_AppliesGracePeriodCreditFromOriginatingBlock()
     {
         var blockId = Guid.NewGuid();
@@ -91,14 +72,11 @@ public class GetUnacknowledgedPostSessionsQueryHandlerTests
         var blockEnd = Now;
         var ritualCompletedAt = blockStart.AddMinutes(3); // within 5-minute grace
 
-        var block = FocusBlock.Create(blockId, Guid.NewGuid(),At.Slot(blockStart, blockEnd));
-        block.MarkRitualCompleted(At.Utc(ritualCompletedAt));
+        var block = FocusBlock.Create(blockId, Guid.NewGuid(), At.Slot(blockStart, blockEnd));
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns(block);
 
-        var session = Session.Create(
-            Guid.NewGuid(), new SessionGoal("Deep work"), new SessionDuration(blockEnd - blockStart),
-            Guid.NewGuid(), SessionOrigin.Planned, originatingBlockId: blockId);
-        session.Start(At.Utc(ritualCompletedAt), At.PlannedWindowEnding(blockEnd));
+        var session = Session.Start(
+            Guid.NewGuid(), new SessionGoal("Deep work"), block, At.Utc(ritualCompletedAt));
         session.Complete(At.Utc(blockEnd), null);
         _sessions.GetUnacknowledgedPostSessionsAsync(Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<Session>)[session]);
@@ -112,10 +90,8 @@ public class GetUnacknowledgedPostSessionsQueryHandlerTests
     public async Task HandleAsync_OriginatingBlockNoLongerExists_FallsBackToActualElapsed()
     {
         var blockId = Guid.NewGuid();
-        var session = Session.Create(
-            Guid.NewGuid(), new SessionGoal("Deep work"), new SessionDuration(TimeSpan.FromMinutes(30)),
-            Guid.NewGuid(), SessionOrigin.Planned, originatingBlockId: blockId);
-        session.Start(At.Utc(Now.AddMinutes(-10)));
+        var block = FocusBlock.Create(blockId, Guid.NewGuid(), At.Slot(Now.AddMinutes(-10), Now.AddMinutes(20)));
+        var session = Session.Start(Guid.NewGuid(), new SessionGoal("Deep work"), block, At.Utc(Now.AddMinutes(-10)));
         session.Complete(At.Utc(Now), null);
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns((Block?)null);
         _sessions.GetUnacknowledgedPostSessionsAsync(Arg.Any<CancellationToken>())
@@ -129,7 +105,7 @@ public class GetUnacknowledgedPostSessionsQueryHandlerTests
     [Fact]
     public async Task HandleAsync_GroupsBlockedAttemptsByResourceAndType()
     {
-        var session = CreateCompletedSpontaneousSession(Now, TimeSpan.FromMinutes(10));
+        var (session, _) = CreateCompletedSpontaneousSession(Now, TimeSpan.FromMinutes(10));
         _sessions.GetUnacknowledgedPostSessionsAsync(Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<Session>)[session]);
         _attempts.GetForSessionAsync(session.Id, Arg.Any<CancellationToken>()).Returns(
@@ -149,8 +125,8 @@ public class GetUnacknowledgedPostSessionsQueryHandlerTests
     [Fact]
     public async Task HandleAsync_MultipleSessions_PreservesRepositoryOrdering()
     {
-        var earlier = CreateCompletedSpontaneousSession(Now.AddHours(-2), TimeSpan.FromMinutes(5));
-        var later = CreateCompletedSpontaneousSession(Now, TimeSpan.FromMinutes(5));
+        var earlier = CreateCompletedSpontaneousSession(Now.AddHours(-2), TimeSpan.FromMinutes(5)).Session;
+        var later = CreateCompletedSpontaneousSession(Now, TimeSpan.FromMinutes(5)).Session;
         _sessions.GetUnacknowledgedPostSessionsAsync(Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<Session>)[earlier, later]);
 

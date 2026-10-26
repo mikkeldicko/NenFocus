@@ -44,10 +44,9 @@ public class DeleteBlockPresetTests : UseCaseTestBase
     public async Task InUseByTheRunningSession_IsRefused_AndKept()
     {
         var preset = Preset();
-        var session = Session.Create(Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(30)),
-            preset.Id, SessionOrigin.Spontaneous);
-        session.Start(At.Utc(Now.AddMinutes(-5)));
-        await SeedAsync(preset, session);
+        var block = FocusBlock.Spontaneous(Guid.NewGuid(), preset.Id, At.Slot(Now.AddMinutes(-5), Now.AddMinutes(25)));
+        var session = Session.Start(Guid.NewGuid(), new SessionGoal("Goal"), block, At.Utc(Now.AddMinutes(-5)));
+        await SeedAsync(preset, block, session);
 
         var result = await DeleteAsync(preset.Id);
 

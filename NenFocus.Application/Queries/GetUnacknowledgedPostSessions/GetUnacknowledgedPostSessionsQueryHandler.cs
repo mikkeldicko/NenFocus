@@ -44,13 +44,12 @@ public sealed class GetUnacknowledgedPostSessionsQueryHandler
         Dictionary<Guid, string> presetNames,
         CancellationToken ct)
     {
-        var presetName = await ResolvePresetNameAsync(session.BlockPresetId, presetNames, ct);
+        var originatingBlock = await _blocks.GetByIdAsync(session.OriginatingBlockId, ct) as FocusBlock;
+        var presetName = originatingBlock is null
+            ? string.Empty
+            : await ResolvePresetNameAsync(originatingBlock.BlockPresetId, presetNames, ct);
 
         var attempts = await _attempts.GetForSessionAsync(session.Id, ct);
-        var originatingBlock = session.OriginatingBlockId is { } blockId
-            ? await _blocks.GetByIdAsync(blockId, ct) as FocusBlock
-            : null;
-
         return PostSessionDto.From(session, originatingBlock, presetName, attempts);
     }
 

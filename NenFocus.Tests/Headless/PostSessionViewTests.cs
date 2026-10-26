@@ -43,15 +43,6 @@ public class PostSessionViewTests
     }
 
     [AvaloniaFact]
-    public void Missed_WearsTheMissedCopy()
-    {
-        var view = new PostSessionView { DataContext = new PostSessionViewModel(Session(SessionStatus.Missed), Substitute.For<ICommandDispatcher>(), () => { }, At.UtcZone) };
-        Show(view);
-
-        VisibleTexts(view).Should().Contain(["SESSION MISSED", "What got in the way?"]).And.NotContain("SESSION COMPLETE");
-    }
-
-    [AvaloniaFact]
     public async Task TypedReflectionIsSavedWhenDoneIsClicked()
     {
         var data = Session(SessionStatus.Completed);

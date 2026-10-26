@@ -50,7 +50,6 @@ public class TestDoubleRuleTests
         "NenFocus.Tests/Application/Queries/GetUnacknowledgedPostContractsQueryHandlerTests.cs",
         "NenFocus.Tests/Application/Queries/GetUnacknowledgedPostSessionsQueryHandlerTests.cs",
         "NenFocus.Tests/Application/Services/BlockMarkerNotifierTests.cs",
-        "NenFocus.Tests/Application/UseCases/Sessions/MarkFocusBlockMissedValidatorTests.cs",
         "NenFocus.Tests/Application/UseCases/Sessions/StartSessionValidatorTests.cs",
         "NenFocus.Tests/Application/UseCases/Sessions/SweepMissedFocusBlocksCommandHandlerTests.cs",
     ];

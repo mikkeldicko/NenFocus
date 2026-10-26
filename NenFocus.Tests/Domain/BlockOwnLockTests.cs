@@ -6,8 +6,8 @@ namespace NenFocus.Tests.Domain;
 
 /// <summary>
 /// Gap 93: what a block itself allows, from its own schedule and the clock — in a contract or
-/// not. Not started: change and delete. Running: nothing. Ended: no change; deleting an ended
-/// block is the contract's to refuse, if it has one.
+/// not. Not started: change and delete. Started (running or ended): nothing — an ended block's
+/// story is recorded, so it is never deleted (Gap 114, D5).
 /// </summary>
 public class BlockOwnLockTests
 {
@@ -29,10 +29,10 @@ public class BlockOwnLockTests
 
     [Theory]
     [InlineData(-1, ChangeOutcome.Allowed)]        // not started
-    [InlineData(0, ChangeOutcome.BlockIsRunning)]
-    [InlineData(119, ChangeOutcome.BlockIsRunning)]
-    [InlineData(120, ChangeOutcome.Allowed)]       // ended — at exactly its end
-    public void CheckOwnDelete_IsRefusedOnlyWhileItRuns(int minutesAfterStart, ChangeOutcome expected)
+    [InlineData(0, ChangeOutcome.BlockHasStarted)] // at its start
+    [InlineData(119, ChangeOutcome.BlockHasStarted)] // running
+    [InlineData(120, ChangeOutcome.BlockHasStarted)] // ended — its story is recorded (Gap 114, D5)
+    public void CheckOwnDelete_IsRefusedOnceItStarts(int minutesAfterStart, ChangeOutcome expected)
     {
         Focus().CheckOwnDelete(At.Utc(Start.AddMinutes(minutesAfterStart))).Outcome.Should().Be(expected);
     }

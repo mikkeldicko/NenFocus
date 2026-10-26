@@ -179,7 +179,7 @@ These converters are approved. Reuse before creating new ones. **This list must 
 **Ghost overlay:** A `Border` added directly to the Canvas (`#B8922A`, 90% opacity, `IsHitTestVisible = false`). Shows a live time label (`HH:mm – HH:mm`) that snaps to 15-minute increments. The create ghost (`#B8922A`, 70% opacity) persists after drag release until the form closes or a rebuild fires.
 
 **Lock rules:**
-- `IsTileFullyLocked` — the block's `Allowances` say it can't be rescheduled (`PlannedBlockDto.Allowances.CanReschedule`, from `BlockChangeChecker` — it has started, or its contract binds it and allows no movement; Gap 93): no move, no resize of either edge. Draft tiles are never locked. A started block runs to its end — it ends early only through End Early or by breaking its contract (Gap 88 phase 0; replaced the old "bottom-resize allowed once started, GCal behaviour").
+- `IsTileFullyLocked` — the block's `Allowances` say it can't be rescheduled (`BlockDto.Allowances.CanReschedule`, from `BlockChangeChecker` — it has started, or its contract binds it and allows no movement; Gap 93): no move, no resize of either edge. Draft tiles are never locked. A started block runs to its end — it ends early only through End Early or by breaking its contract (Gap 88 phase 0; replaced the old "bottom-resize allowed once started, GCal behaviour").
 
 **Drag error banner:** Red `DragError` banner at row 1 of the planner grid, bound to `PlannerPageViewModel.DragError`. Surfaces overlap rejections and lock violations.
 
@@ -202,17 +202,17 @@ These converters are approved. Reuse before creating new ones. **This list must 
 
 **Split dialog:** each piece has a start and an end time. A date field per piece shows only when `Allowances.SplitPiecesMayChangeDay` is set (a bound block under Period Study); otherwise both pieces stay on the block's own day.
 
-**Block Snapshot — read-only view for a done block (Gap 28):** clicking a **done** block opens a separate read-only overlay, not the edit form. "Done" is the block's own answer, `PlannedBlockDto.IsFinal` (`PlannedBlock.IsFinal`: ended; for a Focus block, its session ended or it was missed — Gap 89 Slice B, A3). The running session's own block opens nothing (checked first, via `ActiveSession?.OriginatingBlockId`, read from the database since Gap 92; whether it should open a read-only view instead is Gap 79/114's).
+**Block Snapshot — read-only view for a done block (Gap 28):** clicking a **done** block opens a separate read-only overlay, not the edit form. "Done" is the block's own answer, `BlockDto.IsFinal` (`Block.IsFinal`: ended; for a Focus block, its session ended or it was missed — Gap 89 Slice B, A3). The running session's own block opens nothing (checked first, via `ActiveSession?.OriginatingBlockId`, read from the database since Gap 92; whether it should open a read-only view instead is Gap 79/114's).
 
 - **Focus block with a session** (`GetSessionSnapshotForBlockQuery` returns one): type/outcome/redemption badges, date, time range, duration, Zetsu goal, reflection (placeholder when blank — a valid outcome, not an error), an expandable list of blocked attempts, and — for a redemption block — which missed blocks it covered and how much.
-- **No session** (a missed Focus block, or any Background block): type, preset, date, scheduled time range, duration only. Cancelled blocks never appear as tiles (`GetPlannedBlocksForDayQueryHandler` filters them out).
+- **No session** (a missed Focus block, or any Background block): type, preset, date, scheduled time range, duration only. Cancelled blocks never appear as tiles (`GetBlocksForDayQueryHandler` filters them out).
 - **Delete** shows only when the block's `Allowances.CanDelete` says so (see Deletion above) — never for a contract's block that has run.
 
 **Technical mapping (Block Snapshot):**
 
 | Layer | Artifact | Role |
 |---|---|---|
-| Application | `GetSessionSnapshotForBlockQuery`/`Handler` → `SessionSnapshotDto` (`Queries/GetSessionSnapshotForBlock/`, `DTOs/`) | Given a `PlannedBlockId`, returns `null` when no Session exists, otherwise `{ Goal, Reflection, Attempts, RedemptionCoverage }` — pure composition of `ISessionRepository.GetByOriginatingBlockIdAsync`, `IBlockedAttemptRepository.GetForSessionAsync`, and the block's own `RedemptionEntries`. No new persistence. |
+| Application | `GetSessionSnapshotForBlockQuery`/`Handler` → `SessionSnapshotDto` (`Queries/GetSessionSnapshotForBlock/`, `DTOs/`) | Given a `BlockId`, returns `null` when no Session exists, otherwise `{ Goal, Reflection, Attempts, RedemptionCoverage }` — pure composition of `ISessionRepository.GetByOriginatingBlockIdAsync`, `IBlockedAttemptRepository.GetForSessionAsync`, and the block's own `RedemptionEntries`. No new persistence. |
 | UI | `PlannerPageViewModel.ShowSnapshotAsync`/`IsSnapshotVisible`/`SnapshotBlock`/`SnapshotSession` | Opened from `EditBlockAsync`'s "done" branch. `CanDeleteSnapshotBlock`/`HasSnapshotSession`/`ShowSnapshotNoSessionMessage` are boolean combinations of already-loaded state, same shape as `CanDeleteFromForm`. |
 | UI | `PlannerPageView.axaml` snapshot overlay | A separate `Border` overlay, not the reused edit-form modal — badges via `FocusBlockOutcomeToLabelConverter`/`FocusBlockOutcomeToBrushConverter`/`BlockPresetTypeToLabelConverter`, an `Expander` for the blocked-attempts list. |
 

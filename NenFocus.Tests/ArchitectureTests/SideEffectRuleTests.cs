@@ -59,8 +59,6 @@ public class SideEffectRuleTests
 
     private static readonly string[] RelayExceptions =
     [
-        // The missed-blocks sweep's batch: live triage needs every missed screen at once. → Gap 107.
-        "NenFocus.Infrastructure/Services/HeartbeatService.cs",
         // "Acknowledged" when the screen closes, not after the save. → Gap 107.
         "NenFocus/ViewModels/Shell/ShellViewModel.cs",
     ];

@@ -233,13 +233,6 @@ namespace NenFocus.Infrastructure.Migrations
                     b.Property<DateOnly>("OriginalEndDate")
                         .HasColumnType("TEXT");
 
-                    b.Property<DateTime?>("PostContractAcknowledgedAt")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Reflection")
-                        .HasMaxLength(2000)
-                        .HasColumnType("TEXT");
-
                     b.Property<DateOnly>("StartDate")
                         .HasColumnType("TEXT");
 
@@ -262,16 +255,9 @@ namespace NenFocus.Infrastructure.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("TEXT");
 
-                    b.Property<Guid>("BlockPresetId")
-                        .HasColumnType("TEXT");
-
                     b.Property<string>("BreakPresetName")
                         .HasMaxLength(100)
                         .HasColumnType("TEXT");
-
-                    b.Property<long>("Duration")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("DurationMinutes");
 
                     b.Property<DateTime?>("EndAt")
                         .HasColumnType("TEXT");
@@ -289,18 +275,7 @@ namespace NenFocus.Infrastructure.Migrations
                         .HasColumnType("INTEGER")
                         .HasDefaultValue(false);
 
-                    b.Property<string>("Origin")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<Guid?>("OriginatingBlockId")
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime?>("PostSessionAcknowledgedAt")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Reflection")
-                        .HasMaxLength(2000)
+                    b.Property<Guid>("OriginatingBlockId")
                         .HasColumnType("TEXT");
 
                     b.Property<DateTime?>("StartedAt")
@@ -350,6 +325,11 @@ namespace NenFocus.Infrastructure.Migrations
                 {
                     b.HasBaseType("NenFocus.Domain.Entities.Block");
 
+                    b.Property<string>("BookingType")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("BookingType");
+
                     b.Property<string>("Receipt")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -360,14 +340,32 @@ namespace NenFocus.Infrastructure.Migrations
                     b.Property<DateTime?>("RitualCompletedAt")
                         .HasColumnType("TEXT");
 
-                    b.Property<DateTime?>("SessionEndedAt")
-                        .HasColumnType("TEXT");
-
                     b.HasDiscriminator().HasValue("Focus");
                 });
 
             modelBuilder.Entity("NenFocus.Domain.Entities.Block", b =>
                 {
+                    b.OwnsOne("NenFocus.Domain.ValueObjects.TimeSlot", "Scheduled", b1 =>
+                        {
+                            b1.Property<Guid>("BlockId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<DateTime>("End")
+                                .HasColumnType("TEXT")
+                                .HasColumnName("End");
+
+                            b1.Property<DateTime>("Start")
+                                .HasColumnType("TEXT")
+                                .HasColumnName("Start");
+
+                            b1.HasKey("BlockId");
+
+                            b1.ToTable("Blocks");
+
+                            b1.WithOwner()
+                                .HasForeignKey("BlockId");
+                        });
+
                     b.OwnsOne("NenFocus.Domain.ValueObjects.ContractMembership", "Membership", b1 =>
                         {
                             b1.Property<Guid>("BlockId")
@@ -381,27 +379,6 @@ namespace NenFocus.Infrastructure.Migrations
                                 .IsRequired()
                                 .HasColumnType("TEXT")
                                 .HasColumnName("ContractRole");
-
-                            b1.HasKey("BlockId");
-
-                            b1.ToTable("Blocks");
-
-                            b1.WithOwner()
-                                .HasForeignKey("BlockId");
-                        });
-
-                    b.OwnsOne("NenFocus.Domain.ValueObjects.TimeSlot", "Scheduled", b1 =>
-                        {
-                            b1.Property<Guid>("BlockId")
-                                .HasColumnType("TEXT");
-
-                            b1.Property<DateTime>("End")
-                                .HasColumnType("TEXT")
-                                .HasColumnName("End");
-
-                            b1.Property<DateTime>("Start")
-                                .HasColumnType("TEXT")
-                                .HasColumnName("Start");
 
                             b1.HasKey("BlockId");
 
@@ -720,6 +697,28 @@ namespace NenFocus.Infrastructure.Migrations
 
             modelBuilder.Entity("NenFocus.Domain.Entities.NenContract", b =>
                 {
+                    b.OwnsOne("NenFocus.Domain.ValueObjects.Reflection", "Reflection", b1 =>
+                        {
+                            b1.Property<Guid>("NenContractId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<DateTime?>("AcknowledgedAt")
+                                .HasColumnType("TEXT")
+                                .HasColumnName("PostContractAcknowledgedAt");
+
+                            b1.Property<string>("Text")
+                                .HasMaxLength(2000)
+                                .HasColumnType("TEXT")
+                                .HasColumnName("Reflection");
+
+                            b1.HasKey("NenContractId");
+
+                            b1.ToTable("NenContracts");
+
+                            b1.WithOwner()
+                                .HasForeignKey("NenContractId");
+                        });
+
                     b.OwnsOne("NenFocus.Domain.ValueObjects.ContractRules", "Rules", b1 =>
                         {
                             b1.Property<Guid>("NenContractId")
@@ -763,12 +762,37 @@ namespace NenFocus.Infrastructure.Migrations
                                 .HasForeignKey("NenContractId");
                         });
 
+                    b.Navigation("Reflection")
+                        .IsRequired();
+
                     b.Navigation("Rules")
                         .IsRequired();
                 });
 
             modelBuilder.Entity("NenFocus.Domain.Entities.Session", b =>
                 {
+                    b.OwnsOne("NenFocus.Domain.ValueObjects.Reflection", "Reflection", b1 =>
+                        {
+                            b1.Property<Guid>("SessionId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<DateTime?>("AcknowledgedAt")
+                                .HasColumnType("TEXT")
+                                .HasColumnName("PostSessionAcknowledgedAt");
+
+                            b1.Property<string>("Text")
+                                .HasMaxLength(2000)
+                                .HasColumnType("TEXT")
+                                .HasColumnName("Reflection");
+
+                            b1.HasKey("SessionId");
+
+                            b1.ToTable("Sessions");
+
+                            b1.WithOwner()
+                                .HasForeignKey("SessionId");
+                        });
+
                     b.OwnsMany("NenFocus.Domain.ValueObjects.SessionBreak", "_breaks", b1 =>
                         {
                             b1.Property<int>("Id")
@@ -798,7 +822,81 @@ namespace NenFocus.Infrastructure.Migrations
                                 .HasForeignKey("SessionId");
                         });
 
+                    b.Navigation("Reflection")
+                        .IsRequired();
+
                     b.Navigation("_breaks");
+                });
+
+            modelBuilder.Entity("NenFocus.Domain.Entities.FocusBlock", b =>
+                {
+                    b.OwnsOne("NenFocus.Domain.ValueObjects.Reflection", "Reflection", b1 =>
+                        {
+                            b1.Property<Guid>("FocusBlockId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<DateTime?>("AcknowledgedAt")
+                                .HasColumnType("TEXT")
+                                .HasColumnName("PostSessionAcknowledgedAt");
+
+                            b1.Property<string>("Text")
+                                .HasMaxLength(2000)
+                                .HasColumnType("TEXT")
+                                .HasColumnName("Reflection");
+
+                            b1.HasKey("FocusBlockId");
+
+                            b1.ToTable("Blocks");
+
+                            b1.WithOwner()
+                                .HasForeignKey("FocusBlockId");
+                        });
+
+                    b.OwnsOne("NenFocus.Domain.ValueObjects.FocusBlockResult", "Result", b1 =>
+                        {
+                            b1.Property<Guid>("FocusBlockId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<string>("Outcome")
+                                .IsRequired()
+                                .HasColumnType("TEXT")
+                                .HasColumnName("ResultOutcome");
+
+                            b1.HasKey("FocusBlockId");
+
+                            b1.ToTable("Blocks");
+
+                            b1.WithOwner()
+                                .HasForeignKey("FocusBlockId");
+
+                            b1.OwnsOne("NenFocus.Domain.ValueObjects.TimeSlot", "WorkSlot", b2 =>
+                                {
+                                    b2.Property<Guid>("FocusBlockResultFocusBlockId")
+                                        .HasColumnType("TEXT");
+
+                                    b2.Property<DateTime>("End")
+                                        .HasColumnType("TEXT")
+                                        .HasColumnName("ResultWorkEnd");
+
+                                    b2.Property<DateTime>("Start")
+                                        .HasColumnType("TEXT")
+                                        .HasColumnName("ResultWorkStart");
+
+                                    b2.HasKey("FocusBlockResultFocusBlockId");
+
+                                    b2.ToTable("Blocks");
+
+                                    b2.WithOwner()
+                                        .HasForeignKey("FocusBlockResultFocusBlockId");
+                                });
+
+                            b1.Navigation("WorkSlot");
+                        });
+
+                    b.Navigation("Reflection")
+                        .IsRequired();
+
+                    b.Navigation("Result");
                 });
 #pragma warning restore 612, 618
         }

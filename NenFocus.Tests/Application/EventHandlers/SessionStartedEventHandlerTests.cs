@@ -27,9 +27,8 @@ public class SessionStartedEventHandlerTests
 
     private Session GivenSession(FocusBlock? block = null)
     {
-        var session = Session.Create(
-            Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromHours(1)), Guid.NewGuid(),
-            block is null ? SessionOrigin.Spontaneous : SessionOrigin.Planned, block?.Id);
+        var ownedBlock = block ?? FocusBlock.Spontaneous(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Now, Now.AddHours(1)));
+        var session = Session.Start(Guid.NewGuid(), new SessionGoal("Goal"), ownedBlock, At.Utc(Now));
         _sessions.GetByIdAsync(session.Id, Arg.Any<CancellationToken>()).Returns(session);
         if (block is not null)
         {
@@ -69,7 +68,7 @@ public class SessionStartedEventHandlerTests
     {
         await CreateHandler().HandleAsync(StartedEvent(GivenSession()));
 
-        await _notifier.Received(1).NotifyAsync(new SessionStarted(false, null), Arg.Any<CancellationToken>());
+        await _notifier.Received(1).NotifyAsync(new SessionStarted(FocusBlockBookingType.Spontaneous, null), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -79,7 +78,7 @@ public class SessionStartedEventHandlerTests
 
         await CreateHandler().HandleAsync(StartedEvent(GivenSession(block)));
 
-        await _notifier.Received(1).NotifyAsync(new SessionStarted(true, "Thesis"), Arg.Any<CancellationToken>());
+        await _notifier.Received(1).NotifyAsync(new SessionStarted(FocusBlockBookingType.Planned, "Thesis"), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -89,6 +88,6 @@ public class SessionStartedEventHandlerTests
 
         await CreateHandler().HandleAsync(StartedEvent(GivenSession(block)));
 
-        await _notifier.Received(1).NotifyAsync(new SessionStarted(true, "Deep Work"), Arg.Any<CancellationToken>());
+        await _notifier.Received(1).NotifyAsync(new SessionStarted(FocusBlockBookingType.Planned, "Deep Work"), Arg.Any<CancellationToken>());
     }
 }

@@ -25,7 +25,9 @@ public sealed class BlockPlacementChecker
         IEnumerable<NenContract> contractsInEffect,
         IEnumerable<Block> blocks, Session? running, Moment asOf, UserTimeZone timeZone)
     {
-        if (slot.HasStarted(asOf))
+        // "In the past" is strictly before now: a block starting exactly at asOf (a walk-in) is now,
+        // not past. A future block's start is strictly later and passes.
+        if (slot.Start < asOf)
             return PlacementVerdict.Refused(PlacementOutcome.InThePast);
 
         var contracts = contractsInEffect.Where(c => c.IsInEffect).ToList();

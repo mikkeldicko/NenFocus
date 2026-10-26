@@ -430,30 +430,34 @@ public class BlockTests
     }
 
     [Fact]
-    public void EffectiveEnd_CancelledAfterItEnded_IsTheScheduledEnd()
+    public void MarkCancelled_AfterTheBlockEnded_Throws()
     {
-        // Never later than End: repositories narrow with "End > now" on that promise (Gap 113, S11).
+        // A block whose window has closed is history — it can no longer be cancelled (Gap 114, D5).
         var block = CreateBackgroundBlock();
-        block.MarkCancelled(At.Utc(End.AddHours(1)));
 
-        block.EffectiveEnd(At.Utc(End.AddHours(2))).Should().Be(At.Utc(End));
+        var act = () => block.MarkCancelled(At.Utc(End.AddHours(1)));
+
+        act.Should().Throw<InvalidOperationException>();
     }
 
     [Fact]
-    public void EffectiveEnd_FocusBlock_EarliestReasonWins()
+    public void EffectiveEnd_FocusBlock_SessionEndedEarly_ShrinksToThatEnd()
     {
-        var endedFirst = CreateFocusBlock();
-        endedFirst.MarkRitualCompleted(At.Utc(Start));
-        endedFirst.MarkSessionEnded(At.Utc(Start.AddMinutes(20)));
-        endedFirst.MarkCancelled(At.Utc(Start.AddMinutes(40)));
+        var block = CreateFocusBlock();
+        block.MarkRitualCompleted(At.Utc(Start));
+        block.MarkSessionEnded(At.Utc(Start.AddMinutes(20)));
 
-        var cancelledFirst = CreateFocusBlock();
-        cancelledFirst.MarkRitualCompleted(At.Utc(Start));
-        cancelledFirst.MarkCancelled(At.Utc(Start.AddMinutes(20)));
-        cancelledFirst.MarkSessionEnded(At.Utc(Start.AddMinutes(40)));
+        block.EffectiveEnd(At.Utc(End)).Should().Be(At.Utc(Start.AddMinutes(20)));
+    }
 
-        endedFirst.EffectiveEnd(At.Utc(End)).Should().Be(At.Utc(Start.AddMinutes(20)));
-        cancelledFirst.EffectiveEnd(At.Utc(End)).Should().Be(At.Utc(Start.AddMinutes(20)));
+    [Fact]
+    public void EffectiveEnd_FocusBlock_CancelledMidRun_ShrinksToTheCancelMoment()
+    {
+        var block = CreateFocusBlock();
+        block.MarkRitualCompleted(At.Utc(Start));
+        block.MarkCancelled(At.Utc(Start.AddMinutes(20)));
+
+        block.EffectiveEnd(At.Utc(End)).Should().Be(At.Utc(Start.AddMinutes(20)));
     }
 
     [Fact]
@@ -770,7 +774,7 @@ public class BlockTests
     public void FocusBlock_MarkCancelled_SetsTimestamp()
     {
         var block = CreateFocusBlock();
-        var cancelledAt = DateTime.UtcNow;
+        var cancelledAt = Start.AddMinutes(30);
 
         block.MarkCancelled(At.Utc(cancelledAt));
 
@@ -781,9 +785,9 @@ public class BlockTests
     public void FocusBlock_MarkCancelled_Twice_Throws()
     {
         var block = CreateFocusBlock();
-        block.MarkCancelled(At.Utc(DateTime.UtcNow));
+        block.MarkCancelled(At.Utc(Start.AddMinutes(30)));
 
-        var act = () => block.MarkCancelled(At.Utc(DateTime.UtcNow));
+        var act = () => block.MarkCancelled(At.Utc(Start.AddMinutes(40)));
 
         act.Should().Throw<InvalidOperationException>();
     }
@@ -792,7 +796,7 @@ public class BlockTests
     public void FocusBlock_MarkCancelled_RaisesBlockCancelledEvent()
     {
         var block = CreateFocusBlock();
-        var cancelledAt = DateTime.UtcNow;
+        var cancelledAt = Start.AddMinutes(30);
 
         block.MarkCancelled(At.Utc(cancelledAt));
 
@@ -812,7 +816,7 @@ public class BlockTests
     public void BackgroundBlock_MarkCancelled_SetsTimestamp()
     {
         var block = CreateBackgroundBlock();
-        var cancelledAt = DateTime.UtcNow;
+        var cancelledAt = Start.AddMinutes(30);
 
         block.MarkCancelled(At.Utc(cancelledAt));
 
@@ -823,9 +827,9 @@ public class BlockTests
     public void BackgroundBlock_MarkCancelled_Twice_Throws()
     {
         var block = CreateBackgroundBlock();
-        block.MarkCancelled(At.Utc(DateTime.UtcNow));
+        block.MarkCancelled(At.Utc(Start.AddMinutes(30)));
 
-        var act = () => block.MarkCancelled(At.Utc(DateTime.UtcNow));
+        var act = () => block.MarkCancelled(At.Utc(Start.AddMinutes(40)));
 
         act.Should().Throw<InvalidOperationException>();
     }
@@ -834,7 +838,7 @@ public class BlockTests
     public void BackgroundBlock_MarkCancelled_RaisesBlockCancelledEvent()
     {
         var block = CreateBackgroundBlock();
-        var cancelledAt = DateTime.UtcNow;
+        var cancelledAt = Start.AddMinutes(30);
 
         block.MarkCancelled(At.Utc(cancelledAt));
 

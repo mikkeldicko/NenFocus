@@ -114,9 +114,13 @@ public class NenContractDeficitsTests
     [Fact]
     public void StartedLateSessionRanPastTheBlocksEnd_OwesWhatWasntCredited()
     {
-        // 40 late, ran 150 from there: credit stops at the block's end (80 of 120).
-        Deficits(Worked(Committed(Now.AddHours(-3), Now.AddHours(-1)), 40, 190))
-            .Should().ContainSingle().Which.Remaining.Should().Be(WholeMinutes.Of(40));
+        // 40 late, ran 150 from there: credit stops at the block's end (80 of 120) — Session.Complete
+        // caps the end at the block's end (Gap 114, D6), so the block's frozen work never runs past it.
+        var block = Committed(Now.AddHours(-3), Now.AddHours(-1));
+        var session = Session.Start(Guid.NewGuid(), new SessionGoal("Goal"), block, At.Utc(Now.AddHours(-3).AddMinutes(40)));
+        session.Complete(At.Utc(Now.AddHours(-3).AddMinutes(190)), block);
+
+        Deficits(block).Should().ContainSingle().Which.Remaining.Should().Be(WholeMinutes.Of(40));
     }
 
     [Fact]

@@ -16,11 +16,11 @@ public sealed record BlockStarted(BlockPresetType Type, string? Name) : NenNotif
 /// <summary>Only for a block that owns its own ending — see Block.MarkersPassedBetween.</summary>
 public sealed record BlockEnded(BlockPresetType Type, string? Name) : NenNotification;
 
-/// <summary>BlockName is a planned session's block name (Block.DisplayName); null when spontaneous.</summary>
-public sealed record SessionStarted(bool IsPlanned, string? BlockName) : NenNotification;
+/// <summary>BlockName is the session's block name (Block.DisplayName); BookingType says whether it was planned or spontaneous.</summary>
+public sealed record SessionStarted(FocusBlockBookingType BookingType, string? BlockName) : NenNotification;
 
-/// <summary>BlockName is a planned session's block name (Block.DisplayName); null when spontaneous.</summary>
-public sealed record SessionCompleted(bool IsPlanned, string? BlockName) : NenNotification;
+/// <summary>BlockName is the session's block name (Block.DisplayName); BookingType says whether it was planned or spontaneous.</summary>
+public sealed record SessionCompleted(FocusBlockBookingType BookingType, string? BlockName) : NenNotification;
 
 public sealed record BreakStarted(BreakKind Kind, bool KeepsBlocking) : NenNotification;
 

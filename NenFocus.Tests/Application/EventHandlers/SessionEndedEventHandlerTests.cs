@@ -30,11 +30,9 @@ public class SessionEndedEventHandlerTests
 
     private Session GivenSession(FocusBlock? block = null)
     {
-        var session = Session.Create(
-            Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromHours(1)), Guid.NewGuid(),
-            block is null ? SessionOrigin.Spontaneous : SessionOrigin.Planned, block?.Id);
+        var ownedBlock = block ?? FocusBlock.Spontaneous(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Now.AddHours(-1), Now));
         // The event follows an end, so the session has a start and an end, as stored.
-        session.Start(At.Utc(Now.AddHours(-1)));
+        var session = Session.Start(Guid.NewGuid(), new SessionGoal("Goal"), ownedBlock, At.Utc(Now.AddHours(-1)));
         session.Complete(At.Utc(Now), null);
         _sessions.GetByIdAsync(session.Id, Arg.Any<CancellationToken>()).Returns(session);
         if (block is not null)
@@ -55,7 +53,7 @@ public class SessionEndedEventHandlerTests
 
         await _sessionState.Received(1).RefreshAsync(Arg.Any<CancellationToken>());
         await _synchronizer.Received(1).SyncAsync(At.Utc(Now), Arg.Any<CancellationToken>());
-        await _notifier.Received(1).NotifyAsync(new SessionCompleted(false, null), Arg.Any<CancellationToken>());
+        await _notifier.Received(1).NotifyAsync(new SessionCompleted(FocusBlockBookingType.Spontaneous, null), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -66,7 +64,7 @@ public class SessionEndedEventHandlerTests
 
         await CreateHandler().HandleAsync(new SessionEndedEvent(GivenSession(block).Id, At.Utc(Now)));
 
-        await _notifier.Received(1).NotifyAsync(new SessionCompleted(true, "Thesis"), Arg.Any<CancellationToken>());
+        await _notifier.Received(1).NotifyAsync(new SessionCompleted(FocusBlockBookingType.Planned, "Thesis"), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -76,7 +74,7 @@ public class SessionEndedEventHandlerTests
 
         await CreateHandler().HandleAsync(new SessionEndedEvent(GivenSession(block).Id, At.Utc(Now)));
 
-        await _notifier.Received(1).NotifyAsync(new SessionCompleted(true, "Deep Work"), Arg.Any<CancellationToken>());
+        await _notifier.Received(1).NotifyAsync(new SessionCompleted(FocusBlockBookingType.Planned, "Deep Work"), Arg.Any<CancellationToken>());
     }
 
     [Fact]

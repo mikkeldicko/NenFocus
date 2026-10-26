@@ -95,14 +95,9 @@ public partial class NenContract : AggregateRoot
     /// </summary>
     public double CommittedFocusHours { get; private set; }
 
-    /// <summary>User's own words on how this contract went — set via the Post-Contract
-    /// recap screen, mirrors Session.Reflection exactly.</summary>
-    public string? Reflection { get; private set; }
-
-    /// <summary>Stamped when the user dismisses the Post-Contract recap screen, regardless
-    /// of whether they wrote a reflection — mirrors Session.PostSessionAcknowledgedAt's
-    /// idiom exactly, including the "blank is a valid, deliberate outcome" reasoning.</summary>
-    public Moment? PostContractAcknowledgedAt { get; private set; }
+    /// <summary>The contract's own words on how it went, and whether the recap was dismissed — the
+    /// same <see cref="Reflection"/> value object Session and a missed block hold (Gap 114, D3).</summary>
+    public Reflection Reflection { get; private set; } = new Reflection(null);
 
     private NenContract() { } // EF Core
 
@@ -276,9 +271,7 @@ public partial class NenContract : AggregateRoot
             throw new InvalidOperationException(
                 "Reflection can only be set on a completed or broken contract.");
 
-        Reflection = string.IsNullOrWhiteSpace(reflection)
-            ? null
-            : reflection.Trim();
+        Reflection = this.Reflection.WithText(reflection);
     }
 
     public void MarkPostContractAcknowledged(Moment acknowledgedAt)
@@ -287,7 +280,7 @@ public partial class NenContract : AggregateRoot
             throw new InvalidOperationException(
                 "Post-contract can only be acknowledged for a completed or broken contract.");
 
-        PostContractAcknowledgedAt = acknowledgedAt;
+        Reflection = this.Reflection.Acknowledged(acknowledgedAt);
     }
 
     /// <summary>

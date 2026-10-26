@@ -38,8 +38,8 @@ public partial class RenPageViewModel : ViewModelBase
     private readonly Action _onContinue;
     private readonly Action _onBack;
 
-    public SessionOrigin Mode { get; }
-    public bool IsPlannedMode => Mode == SessionOrigin.Planned;
+    public FocusBlockBookingType Mode { get; }
+    public bool IsPlannedMode => Mode == FocusBlockBookingType.Planned;
 
     // Spontaneous mode: list of selectable preset cards.
     public ObservableCollection<RenPresetCardViewModel> Presets { get; } = new();
@@ -85,7 +85,7 @@ public partial class RenPageViewModel : ViewModelBase
 
     public RenPageViewModel(
         IQueryDispatcher queryDispatcher,
-        SessionOrigin mode,
+        FocusBlockBookingType mode,
         BlockPresetDto? lockedPreset,
         Action onContinue,
         Action onBack)
@@ -95,7 +95,7 @@ public partial class RenPageViewModel : ViewModelBase
         _onContinue = onContinue;
         _onBack = onBack;
 
-        if (mode == SessionOrigin.Planned && lockedPreset is not null)
+        if (mode == FocusBlockBookingType.Planned && lockedPreset is not null)
         {
             LockedPresetCard = new RenPresetCardViewModel(lockedPreset);
             IsLoading = false;

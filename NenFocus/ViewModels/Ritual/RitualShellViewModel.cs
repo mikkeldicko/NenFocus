@@ -60,7 +60,7 @@ public partial class RitualShellViewModel : ViewModelBase
     private readonly Guid? _originatingBlockId;
     private readonly BlockPresetDto? _lockedPreset;
     private readonly FocusBlockSchedule? _lockedSchedule;
-    private readonly SessionOrigin _mode;
+    private readonly FocusBlockBookingType _mode;
 
     private string _goal = string.Empty;
     private Guid? _selectedPresetId;
@@ -86,7 +86,7 @@ public partial class RitualShellViewModel : ViewModelBase
         _originatingBlockId = originatingBlockId;
         _lockedPreset = lockedPreset;
         _lockedSchedule = lockedSchedule;
-        _mode = lockedPreset is not null ? SessionOrigin.Planned : SessionOrigin.Spontaneous;
+        _mode = lockedPreset is not null ? FocusBlockBookingType.Planned : FocusBlockBookingType.Spontaneous;
         _onComplete = onComplete;
         _onCancel = onCancel;
 
@@ -114,7 +114,7 @@ public partial class RitualShellViewModel : ViewModelBase
         StepIndex = 0;
         _currentBackAction = _onCancel;
         // Planned rituals are mandatory — hide the back/cancel button on Ten.
-        IsBackVisible = _mode != SessionOrigin.Planned;
+        IsBackVisible = _mode != FocusBlockBookingType.Planned;
         _zetsuVm = null;
         CurrentStep = new TenPageViewModel(
             onContinue: NavigateToZetsu,
@@ -150,9 +150,9 @@ public partial class RitualShellViewModel : ViewModelBase
 
     private void NavigateToHatsu()
     {
-        if (_renVm is not null && _mode == SessionOrigin.Spontaneous)
+        if (_renVm is not null && _mode == FocusBlockBookingType.Spontaneous)
             _selectedPresetId = _renVm.SelectedPreset?.Id;
-        else if (_mode == SessionOrigin.Planned)
+        else if (_mode == FocusBlockBookingType.Planned)
             _selectedPresetId = _lockedPreset?.Id;
 
         StepIndex = 3;
@@ -171,6 +171,6 @@ public partial class RitualShellViewModel : ViewModelBase
             },
             onSessionStarted: _onComplete,
             onBack: NavigateToRen,
-            plannedSchedule: _mode == SessionOrigin.Planned ? _lockedSchedule : null);
+            plannedSchedule: _mode == FocusBlockBookingType.Planned ? _lockedSchedule : null);
     }
 }

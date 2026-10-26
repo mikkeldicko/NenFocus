@@ -196,8 +196,8 @@ public class ChangeTrackingRoundTripTests : SqliteRepositoryTestBase
 
         var reloaded = await ReloadAsync(ContractById(contract.Id));
         reloaded.Status.Should().Be(NenContractStatus.Completed);
-        reloaded.Reflection.Should().Be("Went well");
-        reloaded.PostContractAcknowledgedAt.Should().Be(At.Utc(Day.AddDays(7).AddHours(1)));
+        reloaded.Reflection.Text.Should().Be("Went well");
+        reloaded.Reflection.AcknowledgedAt.Should().Be(At.Utc(Day.AddDays(7).AddHours(1)));
     }
 
     // ── Planned blocks: the owned slot, membership, stamps ─────────────────────────────
@@ -263,14 +263,14 @@ public class ChangeTrackingRoundTripTests : SqliteRepositoryTestBase
 
     private static Session RunningSessionWithBreaks()
     {
-        var session = Session.Create(Guid.NewGuid(), new SessionGoal("Focus"),
-            new SessionDuration(TimeSpan.FromHours(2)), Guid.NewGuid(), SessionOrigin.Spontaneous);
-        session.Start(At.Utc(Day.AddHours(9)), breakSchedule: new BreakSchedule([
-            new SessionBreak(BreakKind.ShortBreak, TimeSpan.FromMinutes(25), TimeSpan.FromMinutes(30)),
-            new SessionBreak(BreakKind.ShortBreak, TimeSpan.FromMinutes(55), TimeSpan.FromMinutes(60)),
-            new SessionBreak(BreakKind.LongBreak, TimeSpan.FromMinutes(85), TimeSpan.FromMinutes(100))]),
+        return Session.Start(Guid.NewGuid(), new SessionGoal("Focus"),
+            FocusBlock.Spontaneous(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Day.AddHours(9), Day.AddHours(11))),
+            At.Utc(Day.AddHours(9)),
+            breakSchedule: new BreakSchedule([
+                new SessionBreak(BreakKind.ShortBreak, TimeSpan.FromMinutes(25), TimeSpan.FromMinutes(30)),
+                new SessionBreak(BreakKind.ShortBreak, TimeSpan.FromMinutes(55), TimeSpan.FromMinutes(60)),
+                new SessionBreak(BreakKind.LongBreak, TimeSpan.FromMinutes(85), TimeSpan.FromMinutes(100))]),
             breakPresetName: "Classic");
-        return session;
     }
 
     private static Func<NenFocusDbContext, Task<Session?>> SessionById(Guid id) =>
@@ -304,8 +304,8 @@ public class ChangeTrackingRoundTripTests : SqliteRepositoryTestBase
         });
 
         var reloaded = await ReloadAsync(SessionById(session.Id));
-        reloaded.Reflection.Should().Be("Good one");
-        reloaded.PostSessionAcknowledgedAt.Should().Be(At.Utc(Day.AddHours(11).AddMinutes(1)));
+        reloaded.Reflection.Text.Should().Be("Good one");
+        reloaded.Reflection.AcknowledgedAt.Should().Be(At.Utc(Day.AddHours(11).AddMinutes(1)));
         reloaded.BreakSchedule.Breaks.Should().HaveCount(3);
     }
 

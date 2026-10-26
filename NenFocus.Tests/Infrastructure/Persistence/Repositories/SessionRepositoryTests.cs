@@ -15,11 +15,10 @@ public class SessionRepositoryTests : SqliteRepositoryTestBase
 
     private static Session CreateSession(Guid? presetId = null, DateTime? startedAt = null)
     {
-        var session = Session.Create(
-            Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(30)),
-            presetId ?? Guid.NewGuid(), SessionOrigin.Spontaneous);
-        session.Start(At.Utc(startedAt ?? DateTime.UtcNow));
-        return session;
+        var startedAtUtc = startedAt ?? DateTime.UtcNow;
+        var block = FocusBlock.Spontaneous(Guid.NewGuid(), presetId ?? Guid.NewGuid(),
+            At.Slot(startedAtUtc, startedAtUtc.AddMinutes(30)));
+        return Session.Start(Guid.NewGuid(), new SessionGoal("Goal"), block, At.Utc(startedAtUtc));
     }
 
     /// <summary>A session that ran and ended — history. Only one session may run at a time (Gap 92).</summary>
@@ -60,11 +59,11 @@ public class SessionRepositoryTests : SqliteRepositoryTestBase
     [Fact]
     public async Task Add_BreakScheduleAndLabel_RoundTripThroughTheDatabase()
     {
-        var session = Session.Create(
-            Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(120)),
-            Guid.NewGuid(), SessionOrigin.Spontaneous);
+        var startedAt = new DateTime(2026, 1, 1, 17, 0, 0, DateTimeKind.Utc);
         var schedule = new BreakTimer(25, 5, 4, 15).ScheduleFor(TimeSpan.FromMinutes(120));
-        session.Start(At.Utc(new DateTime(2026, 1, 1, 17, 0, 0, DateTimeKind.Utc)), breakSchedule: schedule, breakPresetName: "Classic");
+        var session = Session.Start(Guid.NewGuid(), new SessionGoal("Goal"),
+            FocusBlock.Spontaneous(Guid.NewGuid(), Guid.NewGuid(), At.Slot(startedAt, startedAt.AddMinutes(120))),
+            At.Utc(startedAt), breakSchedule: schedule, breakPresetName: "Classic");
         CreateRepository().Add(session);
         await Context.SaveChangesAsync();
 
@@ -79,10 +78,9 @@ public class SessionRepositoryTests : SqliteRepositoryTestBase
     public async Task CommitAfterComplete_TrimsSchedule_StoredBreaksAreReplacedNotAppended()
     {
         var startedAt = new DateTime(2026, 1, 1, 17, 0, 0, DateTimeKind.Utc);
-        var session = Session.Create(
-            Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(120)),
-            Guid.NewGuid(), SessionOrigin.Spontaneous);
-        session.Start(At.Utc(startedAt), breakSchedule: new BreakTimer(25, 5, 4, 15).ScheduleFor(TimeSpan.FromMinutes(120)));
+        var session = Session.Start(Guid.NewGuid(), new SessionGoal("Goal"),
+            FocusBlock.Spontaneous(Guid.NewGuid(), Guid.NewGuid(), At.Slot(startedAt, startedAt.AddMinutes(120))),
+            At.Utc(startedAt), breakSchedule: new BreakTimer(25, 5, 4, 15).ScheduleFor(TimeSpan.FromMinutes(120)));
         CreateRepository().Add(session);
         await Context.SaveChangesAsync();
 
@@ -166,39 +164,19 @@ public class SessionRepositoryTests : SqliteRepositoryTestBase
     }
 
     [Fact]
-    public async Task GetHistoryAsync_IsHalfOpen_AndLeavesOutASessionThatNeverStarted()
+    public async Task GetHistoryAsync_IsHalfOpenOnStartedAt()
     {
         var slot = At.Slot(new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc), new DateTime(2026, 1, 16, 0, 0, 0, DateTimeKind.Utc));
         var repo = CreateRepository();
         var atStart = PastSession(startedAt: new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc));
         var atEnd = PastSession(startedAt: new DateTime(2026, 1, 16, 0, 0, 0, DateTimeKind.Utc));
-        var neverStarted = Session.Create(
-            Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(30)), Guid.NewGuid(), SessionOrigin.Spontaneous);
         repo.Add(atStart);
         repo.Add(atEnd);
-        repo.Add(neverStarted);
         await Context.SaveChangesAsync();
 
         var result = await Fresh().GetHistoryAsync(slot);
 
         result.Should().ContainSingle(s => s.Id == atStart.Id);
-    }
-
-    [Fact]
-    public async Task GetHistoryAsync_FiltersByPresetIdWhenProvided()
-    {
-        var presetId = Guid.NewGuid();
-        var repo = CreateRepository();
-        var matching = PastSession(presetId, new DateTime(2026, 1, 15, 10, 0, 0, DateTimeKind.Utc));
-        var other = PastSession(Guid.NewGuid(), new DateTime(2026, 1, 16, 10, 0, 0, DateTimeKind.Utc));
-        repo.Add(matching);
-        repo.Add(other);
-        await Context.SaveChangesAsync();
-
-        var result = await Fresh().GetHistoryAsync(
-            At.UtcZone.SlotCovering(new DateOnly(2026, 1, 1), new DateOnly(2026, 1, 31)), presetId);
-
-        result.Should().ContainSingle(s => s.Id == matching.Id);
     }
 
     [Fact]
@@ -225,15 +203,11 @@ public class SessionRepositoryTests : SqliteRepositoryTestBase
     }
 
     [Fact]
-    public async Task GetByOriginatingBlockIdAsync_MissedSessionReferencesBlock_ReturnsIt()
+    public async Task GetByOriginatingBlockIdAsync_SessionReferencesBlock_ReturnsIt()
     {
         var blockId = Guid.NewGuid();
         var repo = CreateRepository();
-        var session = Session.Create(
-            Guid.NewGuid(), new SessionGoal("(missed — no goal set)"), new SessionDuration(TimeSpan.FromMinutes(30)),
-            Guid.NewGuid(), SessionOrigin.Planned, originatingBlockId: blockId);
-        var scheduledStart = DateTime.UtcNow.AddHours(-1);
-        session.Miss(new TimeSlot(At.Utc(scheduledStart), At.Utc(scheduledStart.AddMinutes(30))));
+        var session = TestSessions.For(blockId);
         repo.Add(session);
         await Context.SaveChangesAsync();
 
@@ -262,9 +236,8 @@ public class SessionRepositoryTests : SqliteRepositoryTestBase
         var blockId = Guid.NewGuid();
         Session ForTheBlock()
         {
-            var session = Session.Create(Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(30)),
-                Guid.NewGuid(), SessionOrigin.Planned, originatingBlockId: blockId);
-            session.Miss(new TimeSlot(At.Utc(new DateTime(2026, 1, 1, 9, 0, 0)), At.Utc(new DateTime(2026, 1, 1, 9, 30, 0))));
+            var session = TestSessions.For(blockId);
+            session.Complete(At.Utc(new DateTime(2026, 1, 1, 8, 30, 0, DateTimeKind.Utc)), null);
             return session;
         }
 

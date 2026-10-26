@@ -48,7 +48,7 @@ public class AcknowledgePostContractCommandHandlerTests : UseCaseTestBase
         var result = await AcknowledgeAsync(contract.Id);
 
         result.Success.Should().BeTrue(result.ErrorMessage);
-        (await FindAsync<NenContract>(contract.Id))!.PostContractAcknowledgedAt.Should().Be(At.Utc(Now));
+        (await FindAsync<NenContract>(contract.Id))!.Reflection.AcknowledgedAt.Should().Be(At.Utc(Now));
     }
 
     [Fact]
@@ -60,6 +60,6 @@ public class AcknowledgePostContractCommandHandlerTests : UseCaseTestBase
         var result = await AcknowledgeAsync(contract.Id);
 
         result.Success.Should().BeFalse();
-        (await FindAsync<NenContract>(contract.Id))!.PostContractAcknowledgedAt.Should().BeNull();
+        (await FindAsync<NenContract>(contract.Id))!.Reflection.AcknowledgedAt.Should().BeNull();
     }
 }

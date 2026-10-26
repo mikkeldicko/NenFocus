@@ -38,13 +38,13 @@ public sealed class Notifier : INotifier
                 ? $"{BlockName(f.Type, f.Name)} ended without a session."
                 : $"{BlockName(f.Type, f.Name)} has ended. Blocking is off."),
 
-        SessionStarted { IsPlanned: true } f => (
+        SessionStarted { BookingType: FocusBlockBookingType.Planned } f => (
             "Nen session started",
             $"{BlockName(BlockPresetType.Focus, f.BlockName)} is on. Stay locked in."),
 
         SessionStarted => ("Nen session started", "Focus session is now active. Stay locked in."),
 
-        SessionCompleted { IsPlanned: true } f => (
+        SessionCompleted { BookingType: FocusBlockBookingType.Planned } f => (
             "Session complete",
             $"{BlockName(BlockPresetType.Focus, f.BlockName)} complete. Great work."),
 

@@ -31,8 +31,9 @@ public sealed class ComputeActivePolicySliceQueryHandler
         var blocks = await _blocks.GetForRangeAsync(new TimeSlot(query.At - TimeSpan.FromSeconds(1), query.At + TimeSpan.FromSeconds(1)), ct);
         var running = await _sessions.GetActiveAsync(ct);
 
+        // Every active block's preset is fetched — the running session's own block is among them
+        // (Gap 114, D1), so no preset is sourced from the session directly.
         var presetIds = blocks.Select(b => b.BlockPresetId)
-            .Append(running?.BlockPresetId ?? Guid.Empty)
             .Where(id => id != Guid.Empty)
             .Distinct();
 

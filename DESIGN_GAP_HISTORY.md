@@ -2682,3 +2682,26 @@ Each was probed red by applying the surviving change by hand, then reverted; R1 
 **Confirmed via** the full suite (1,937 tests at Slice D) and the architect's manual checks in `THINGS_TO_TEST_IN_APP.md` → Gap 89 Slices A and B: all passed 2026-10-26 — the app opens as quickly as before on the real database, today's badge counts up within a minute, a time field's list opens on five rows around its time, a wrong time says so on save, buttons, error boxes and labels look alike everywhere, Hatsu's 0–12 h chips fit one row, and a draft tile drags. Checks deleted from the list.
 
 **Principle demonstrated:** an audit's findings are only half the work; each fix kept turning up the next copy of the same rule — the length of a session in five places, "is this preset locked" in three, "how long did it count" in a query nobody ran. Reading the code at every step, not the plan, is what found them.
+
+## Gap 114 — Walk-in Blocks: Every Session Belongs to a Block *(closed, 2026-10-26)*
+
+**Raised** 2026-10-08, from two questions about the missed sweep; grew into "where a focus period's record lives."
+
+**The gap:** a Session was both the plan and the run. A spontaneous session had no block; a missed session was a `Session.Missed` — a "visit that never happened" — with a placeholder goal, zero elapsed time and a fabricated window (S4). The sweep built that session in a handler that itself dispatched `MarkFocusBlockMissed` (a use case calling a use case, S2), re-checking `IsUnresolved` three more times (S3). A past block read its stamps live, so `Outcome` ignored cancellation (a cancelled never-started block read Missed once its time passed).
+
+**The shape — FHIR Appointment/Encounter:** the block is the booking (slot, preset, contract role, outcome, credit); the session is the visit (goal, breaks, extras, attempts, the run's reflection). Interrogated 2026-10-26 into D1–D10: origin lives on the block (`FocusBlockBookingType` Planned/Spontaneous, D2); a missed block holds its own reflection (D3); the block's result is frozen once final (D5); the session owns the run's times and `Session.Start` is the arrival's only writer (D6); no undo-a-mistaken-session (D7); a spontaneous block inside a contract is Bonus and inherits its keep-blocking rule (D8).
+
+**Built** (one commit per phase, each verified before the next): phase 0 renamed `PlannedBlock` → `Block`; phase 1 the Domain — booking type, `Reflection`, the frozen `FocusBlockResult(Outcome, WorkSlot?)` with `StartedLate`/`EndedEarly`/`Credit` derived, `SessionStatus { Active, Completed }`, a single `Session.Start` factory, `MarkMissed`; phase 2 the use cases and Planner — StartSession books a walk-in block through `BlockPlacementChecker.Check`, the sweep stamps blocks, `MarkFocusBlockMissed` deleted, notifications carry the booking type; phase 4 the migration, dictionary, architecture tests and Stryker.
+
+**One source of truth:** `Session.Duration` and `Session.BlockPresetId` turned out to be live copies of `block.Scheduled.Length` and `block.BlockPresetId` — deleted, read off the block; `RunLength`/`EndOfRun` went with them. The frozen record stores the verdict and the worked span, and derives the pure arithmetic (flags, credit), FHIR-style: store the fact and the verdict, derive the rest.
+
+**Rejected:** one unified "create a block" path (each creation path decides a different thing for a different owner); storing all five derived fields in the frozen record (the FHIR analogy says store `Outcome` + `WorkSlot` and derive); `FocusBlockResult` as a positional record (EF can't bind an owned navigation in a constructor — found by the round-trip tests).
+
+**Guard (step 5):** yes.
+- Compiler: `OriginatingBlockId` required, no `Missed` status, the arrival and the run's times `internal`.
+- Test, red on the pre-fix sweep: **`CqrsRuleTests.CommandHandlersDoNotHoldCommandHandlers`** — recorded in `MODULE_STANDARDS.md`.
+- Exception lists shrunk: `TestDoubleRuleTests` and `ValidatorWordingRuleTests` (the `MarkFocusBlockMissed` validator deleted), `SideEffectRuleTests` (the heartbeat no longer relays the sweep's batch).
+
+**Stryker** (changed Domain files): *see below — run at close-out.*
+
+**Principle demonstrated:** the booking/visit split, and that a redundant stored field is the same smell whether it holds a length or a preset id — the block owns the slot and the preset, the session owns the run.

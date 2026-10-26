@@ -20,8 +20,8 @@ public sealed class AcknowledgePostSessionCommandHandler
         var session = await _sessions.GetByIdAsync(command.SessionId, ct);
         if (session == null) return AcknowledgePostSessionResult.Fail("Session not found.");
 
-        if (session.Status != SessionStatus.Completed && session.Status != SessionStatus.Missed)
-            return AcknowledgePostSessionResult.Fail("Post-session can only be acknowledged for a completed or missed session.");
+        if (session.Status != SessionStatus.Completed)
+            return AcknowledgePostSessionResult.Fail("Post-session can only be acknowledged for a completed session.");
 
         session.MarkPostSessionAcknowledged(_clock.Now);
         return AcknowledgePostSessionResult.Ok();

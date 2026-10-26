@@ -15,16 +15,15 @@ public class SaveReflectionCommandHandlerTests : UseCaseTestBase
 
     private static Session Spontaneous()
     {
-        var session = Session.Create(Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(30)),
-            Guid.NewGuid(), SessionOrigin.Spontaneous);
-        session.Start(At.Utc(Now.AddMinutes(-30)));
-        return session;
+        return Session.Start(Guid.NewGuid(), new SessionGoal("Goal"),
+            FocusBlock.Spontaneous(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Now.AddMinutes(-30), Now)),
+            At.Utc(Now.AddMinutes(-30)));
     }
 
     private Task<SaveReflectionResult> ReflectAsync(Guid sessionId, string reflection) =>
         RunAsync(new SaveReflectionCommand { SessionId = sessionId, Reflection = reflection });
 
-    private async Task<string?> StoredReflectionAsync(Session session) => (await FindAsync<Session>(session.Id))!.Reflection;
+    private async Task<string?> StoredReflectionAsync(Session session) => (await FindAsync<Session>(session.Id))!.Reflection.Text;
 
     [Fact]
     public async Task SessionNotFound_Fails()
@@ -45,20 +44,6 @@ public class SaveReflectionCommandHandlerTests : UseCaseTestBase
 
         result.Success.Should().BeTrue(result.ErrorMessage);
         (await StoredReflectionAsync(session)).Should().Be("Went well");
-    }
-
-    [Fact]
-    public async Task AMissedSession_StoresTheReflection()
-    {
-        var session = Session.Create(Guid.NewGuid(), new SessionGoal("(missed — no goal set)"), new SessionDuration(TimeSpan.FromMinutes(30)),
-            Guid.NewGuid(), SessionOrigin.Planned, originatingBlockId: Guid.NewGuid());
-        session.Miss(new TimeSlot(At.Utc(Now.AddHours(-2)), At.Utc(Now.AddHours(-2).AddMinutes(30))));
-        await SeedAsync(session);
-
-        var result = await ReflectAsync(session.Id, "Got distracted");
-
-        result.Success.Should().BeTrue(result.ErrorMessage);
-        (await StoredReflectionAsync(session)).Should().Be("Got distracted");
     }
 
     [Fact]

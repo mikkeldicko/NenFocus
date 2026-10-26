@@ -47,7 +47,7 @@ public sealed class NenContractRepository : INenContractRepository
         return await _context.NenContracts
             .Where(c =>
                 (c.Status == NenContractStatus.Completed || c.Status == NenContractStatus.Broken) &&
-                c.PostContractAcknowledgedAt == null)
+                c.Reflection.AcknowledgedAt == null)
             .OrderBy(c => c.EndDate)
             .ToListAsync(cancellationToken);
     }

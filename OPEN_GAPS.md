@@ -538,7 +538,7 @@ After Gap 65, extending means appending Contract Days generated with `ContractCa
 
 \---
 
-### Gap 114 — Walk-in Blocks: Every Session Belongs to a Block (raised 2026-10-08 in a review of the missed sweep; direction agreed, not interrogated; after Gap 110, before Gap 107 and the contract box)
+### Gap 114 — Walk-in Blocks: Every Session Belongs to a Block *(closed 2026-10-26 — see `DESIGN_GAP_HISTORY.md`; the write-up below is the interrogation record it was built from)*
 
 **Why it's a gap:** started as two questions about the missed sweep and grew into where a focus period's record lives.
 

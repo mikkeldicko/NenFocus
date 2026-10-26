@@ -628,7 +628,7 @@ public class NenContractTests
 
         contract.SetReflection("  Went well  ");
 
-        contract.Reflection.Should().Be("Went well");
+        contract.Reflection.Text.Should().Be("Went well");
     }
 
     [Theory]
@@ -642,7 +642,7 @@ public class NenContractTests
 
         contract.SetReflection(blank);
 
-        contract.Reflection.Should().BeNull();
+        contract.Reflection.Text.Should().BeNull();
     }
 
     [Fact]
@@ -653,7 +653,7 @@ public class NenContractTests
 
         contract.SetReflection("Had to stop early");
 
-        contract.Reflection.Should().Be("Had to stop early");
+        contract.Reflection.Text.Should().Be("Had to stop early");
     }
 
     [Fact]
@@ -675,7 +675,7 @@ public class NenContractTests
 
         contract.MarkPostContractAcknowledged(At.Utc(acknowledgedAt));
 
-        contract.PostContractAcknowledgedAt.Should().Be(At.Utc(acknowledgedAt));
+        contract.Reflection.AcknowledgedAt.Should().Be(At.Utc(acknowledgedAt));
     }
 
     [Fact]
@@ -687,7 +687,7 @@ public class NenContractTests
 
         contract.MarkPostContractAcknowledged(At.Utc(acknowledgedAt));
 
-        contract.PostContractAcknowledgedAt.Should().Be(At.Utc(acknowledgedAt));
+        contract.Reflection.AcknowledgedAt.Should().Be(At.Utc(acknowledgedAt));
     }
 
     [Fact]
