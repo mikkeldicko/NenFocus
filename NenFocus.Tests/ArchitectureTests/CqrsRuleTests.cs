@@ -81,4 +81,33 @@ public class CqrsRuleTests
 
         KnownExceptions.Check(violations, []);
     }
+
+    /// <summary>
+    /// Every query has a caller outside its own slice and the tests (Gap 89 close-out): a query nothing
+    /// asks is code nobody runs — Slice C found GetSessionHistoryQuery that way, holding a second "how long
+    /// did it count" that disagreed with Session.CountedTime. A text scan for the query's name in the
+    /// production projects, its own folder left out.
+    /// </summary>
+    [Fact]
+    public void EveryQueryHasACaller()
+    {
+        var production = SourceCode.Files("NenFocus.Application", "NenFocus.Infrastructure", "NenFocus").ToList();
+        var queries = typeof(Notifier).Assembly.GetTypes()
+            .Where(t => !t.IsAbstract && t.GetInterfaces().Any(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IQuery<>)));
+
+        var violations = queries
+            .Where(q =>
+            {
+                var home = production.Single(f => f.Path.EndsWith($"/{q.Name}.cs", StringComparison.Ordinal)).Path;
+                var folder = home[..(home.LastIndexOf('/') + 1)];
+                var name = new Regex($@"\b{q.Name}\b");
+                return !production.Any(f => !f.Path.StartsWith(folder, StringComparison.Ordinal) && name.IsMatch(f.Code));
+            })
+            .Select(q => q.Name);
+
+        KnownExceptions.Check(violations, [
+            // Break Timer Preset CRUD was built ahead of its screen; the Settings page (Gap 83) is its caller.
+            "GetAllBreakTimerPresetsQuery",
+        ]);
+    }
 }
