@@ -123,8 +123,8 @@ public class GetNenContractForEditQueryHandlerTests
 
         result!.Blocks.Should().HaveCount(2);
         result.Blocks[0].PresetName.Should().Be("Ambient Block");
-        result.Blocks[0].IsFocus.Should().BeFalse();
+        result.Blocks[0].BlockPresetType.Should().Be(BlockPresetType.Background);
         result.Blocks[1].PresetName.Should().Be("Deep Work");
-        result.Blocks[1].IsFocus.Should().BeTrue();
+        result.Blocks[1].BlockPresetType.Should().Be(BlockPresetType.Focus);
     }
 }

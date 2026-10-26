@@ -1,3 +1,4 @@
+using NenFocus.Domain.Enums;
 using NenFocus.Domain.ValueObjects;
 namespace NenFocus.Application.DTOs;
 
@@ -11,6 +12,6 @@ public sealed record NenContractEditBlockDto
     public Guid PresetId { get; init; }
     public string PresetName { get; init; } = string.Empty;
     public TimeSlot Slot { get; init; } = null!;
-    public bool IsFocus { get; init; }
+    public BlockPresetType BlockPresetType { get; init; }
     public string? Title { get; init; }
 }

@@ -33,7 +33,7 @@ public class ContractEditRoundTripTests : SqliteRepositoryTestBase
         var blocks = Enumerable.Range(0, 5)
             .Select(i => Start.AddDays(i))
             .Where(d => d != restDay)
-            .Select(d => new NenContractBlockSpec(Guid.NewGuid(), At.Slot(d.ToDateTime(new TimeOnly(10, 0)), d.ToDateTime(new TimeOnly(12, 0))), IsFocus: true))
+            .Select(d => new NenContractBlockSpec(Guid.NewGuid(), At.Slot(d.ToDateTime(new TimeOnly(10, 0)), d.ToDateTime(new TimeOnly(12, 0))), BlockPresetType.Focus))
             .ToList();
 
         var blockRepo = new BlockRepository(Context);

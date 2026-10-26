@@ -14,7 +14,7 @@ namespace NenFocus.Domain.Services;
 public sealed class ContractBlockBatchPreparer
 {
     public ContractBlockBatchPreparation Prepare(
-        IReadOnlyList<(Guid PresetId, TimeSlot Slot, bool IsFocus, string? Title)> specs,
+        IReadOnlyList<(Guid PresetId, TimeSlot Slot, BlockPresetType Type, string? Title)> specs,
         Guid? contractId,
         UserTimeZone timeZone)
     {
@@ -22,7 +22,7 @@ public sealed class ContractBlockBatchPreparer
         var membership = contractId is { } id ? new ContractMembership(id, ContractRole.Committed) : null;
 
         var blocks = specs
-            .Select(spec => spec.IsFocus
+            .Select(spec => spec.Type == BlockPresetType.Focus
                 ? (Block)FocusBlock.Create(Guid.NewGuid(), spec.PresetId, spec.Slot, spec.Title, membership)
                 : BackgroundBlock.Create(Guid.NewGuid(), spec.PresetId, spec.Slot, spec.Title, membership))
             .ToList();

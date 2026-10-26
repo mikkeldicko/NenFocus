@@ -20,7 +20,7 @@ public class SealNenContractTests : UseCaseTestBase
     public SealNenContractTests() => Clock.SetNow(Now);
 
     private static NenContractBlockSpec Focus(DateTime start, DateTime end) =>
-        new(SeededFocusPresetId, At.Slot(start, end), IsFocus: true);
+        new(SeededFocusPresetId, At.Slot(start, end), BlockPresetType.Focus);
 
     private static NenContractBlockSpec Focus(int day, int fromHour, int toHour) =>
         Focus(new DateTime(2026, 1, day, fromHour, 0, 0), new DateTime(2026, 1, day, toHour, 0, 0));
@@ -281,7 +281,7 @@ public class SealNenContractTests : UseCaseTestBase
 
     [Fact]
     public async Task AnUnknownBlockPreset_IsRefused() =>
-        await RefusedAsync(Command(blocks: [new NenContractBlockSpec(Guid.NewGuid(), At.Slot(new DateTime(2026, 1, 1, 9, 0, 0), new DateTime(2026, 1, 1, 10, 0, 0)), IsFocus: true)]));
+        await RefusedAsync(Command(blocks: [new NenContractBlockSpec(Guid.NewGuid(), At.Slot(new DateTime(2026, 1, 1, 9, 0, 0), new DateTime(2026, 1, 1, 10, 0, 0)), BlockPresetType.Focus)]));
 
     [Fact]
     public async Task DatesOverlappingAnotherContract_AreRefused()

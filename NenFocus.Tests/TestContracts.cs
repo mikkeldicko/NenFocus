@@ -18,7 +18,7 @@ internal static class TestContracts
     /// <summary>What a drafted, sealed block carries.</summary>
     public static ContractMembership Committed(Guid contractId) =>
         new ContractBlockBatchPreparer()
-            .Prepare([(Guid.NewGuid(), At.Slot(Day, Day.AddHours(1)), true, null)], contractId, At.UtcZone)
+            .Prepare([(Guid.NewGuid(), At.Slot(Day, Day.AddHours(1)), BlockPresetType.Focus, null)], contractId, At.UtcZone)
             .Blocks[0].Membership!;
 
     /// <summary>What a block placed to cover a deficit carries.</summary>

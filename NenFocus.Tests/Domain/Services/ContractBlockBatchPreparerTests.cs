@@ -36,7 +36,7 @@ public class ContractBlockBatchPreparerTests
         var start = new DateTime(2026, 1, 1, 9, 0, 0);
         var end = new DateTime(2026, 1, 1, 11, 0, 0);
 
-        var result = _preparer.Prepare([(PresetId, At.Slot(start, end), true, "Deep Work")], ContractId, UtcZone);
+        var result = _preparer.Prepare([(PresetId, At.Slot(start, end), BlockPresetType.Focus, "Deep Work")], ContractId, UtcZone);
 
         result.Success.Should().BeTrue();
         result.Blocks.Should().ContainSingle().Which.Should().BeOfType<FocusBlock>();
@@ -51,7 +51,7 @@ public class ContractBlockBatchPreparerTests
         var start = new DateTime(2026, 1, 1, 9, 0, 0);
         var end = new DateTime(2026, 1, 1, 11, 0, 0);
 
-        var result = _preparer.Prepare([(PresetId, At.Slot(start, end), false, null)], ContractId, UtcZone);
+        var result = _preparer.Prepare([(PresetId, At.Slot(start, end), BlockPresetType.Background, null)], ContractId, UtcZone);
 
         result.Success.Should().BeTrue();
         result.Blocks.Should().ContainSingle().Which.Should().BeOfType<BackgroundBlock>();
@@ -64,7 +64,7 @@ public class ContractBlockBatchPreparerTests
         var start = new DateTime(2026, 1, 1, 9, 0, 0);
         var end = new DateTime(2026, 1, 1, 11, 0, 0);
 
-        var result = _preparer.Prepare([(PresetId, At.Slot(start, end), true, null)], contractId: null, UtcZone);
+        var result = _preparer.Prepare([(PresetId, At.Slot(start, end), BlockPresetType.Focus, null)], contractId: null, UtcZone);
 
         result.Blocks[0].Membership.Should().BeNull();
     }
@@ -72,8 +72,8 @@ public class ContractBlockBatchPreparerTests
     [Fact]
     public void Prepare_OverlappingFocusSpecs_Fails()
     {
-        var first = (PresetId, At.Slot(new DateTime(2026, 1, 1, 9, 0, 0), new DateTime(2026, 1, 1, 11, 0, 0)), true, (string?)null);
-        var overlapping = (PresetId, At.Slot(new DateTime(2026, 1, 1, 10, 0, 0), new DateTime(2026, 1, 1, 12, 0, 0)), true, (string?)null);
+        var first = (PresetId, At.Slot(new DateTime(2026, 1, 1, 9, 0, 0), new DateTime(2026, 1, 1, 11, 0, 0)), BlockPresetType.Focus, (string?)null);
+        var overlapping = (PresetId, At.Slot(new DateTime(2026, 1, 1, 10, 0, 0), new DateTime(2026, 1, 1, 12, 0, 0)), BlockPresetType.Focus, (string?)null);
 
         var result = _preparer.Prepare([first, overlapping], ContractId, UtcZone);
 
@@ -84,8 +84,8 @@ public class ContractBlockBatchPreparerTests
     [Fact]
     public void Prepare_NonOverlappingFocusSpecs_Succeeds()
     {
-        var first = (PresetId, At.Slot(new DateTime(2026, 1, 1, 9, 0, 0), new DateTime(2026, 1, 1, 10, 0, 0)), true, (string?)null);
-        var second = (PresetId, At.Slot(new DateTime(2026, 1, 1, 11, 0, 0), new DateTime(2026, 1, 1, 12, 0, 0)), true, (string?)null);
+        var first = (PresetId, At.Slot(new DateTime(2026, 1, 1, 9, 0, 0), new DateTime(2026, 1, 1, 10, 0, 0)), BlockPresetType.Focus, (string?)null);
+        var second = (PresetId, At.Slot(new DateTime(2026, 1, 1, 11, 0, 0), new DateTime(2026, 1, 1, 12, 0, 0)), BlockPresetType.Focus, (string?)null);
 
         var result = _preparer.Prepare([first, second], ContractId, UtcZone);
 
@@ -97,8 +97,8 @@ public class ContractBlockBatchPreparerTests
     public void Prepare_FocusAndBackgroundOverlapping_DoesNotFail()
     {
         // Only Focus+Focus overlap is a violation — Background blocks are unconstrained.
-        var focus = (PresetId, At.Slot(new DateTime(2026, 1, 1, 9, 0, 0), new DateTime(2026, 1, 1, 11, 0, 0)), true, (string?)null);
-        var background = (PresetId, At.Slot(new DateTime(2026, 1, 1, 9, 0, 0), new DateTime(2026, 1, 1, 11, 0, 0)), false, (string?)null);
+        var focus = (PresetId, At.Slot(new DateTime(2026, 1, 1, 9, 0, 0), new DateTime(2026, 1, 1, 11, 0, 0)), BlockPresetType.Focus, (string?)null);
+        var background = (PresetId, At.Slot(new DateTime(2026, 1, 1, 9, 0, 0), new DateTime(2026, 1, 1, 11, 0, 0)), BlockPresetType.Background, (string?)null);
 
         var result = _preparer.Prepare([focus, background], ContractId, UtcZone);
 
@@ -109,8 +109,8 @@ public class ContractBlockBatchPreparerTests
     public void Prepare_FocusSpecs_ComputesPlannedFocusHoursByDayFromFocusOnly()
     {
         var day = new DateOnly(2026, 1, 1);
-        var focus = (PresetId, At.Slot(new DateTime(2026, 1, 1, 9, 0, 0), new DateTime(2026, 1, 1, 11, 0, 0)), true, (string?)null);
-        var background = (PresetId, At.Slot(new DateTime(2026, 1, 1, 12, 0, 0), new DateTime(2026, 1, 1, 15, 0, 0)), false, (string?)null);
+        var focus = (PresetId, At.Slot(new DateTime(2026, 1, 1, 9, 0, 0), new DateTime(2026, 1, 1, 11, 0, 0)), BlockPresetType.Focus, (string?)null);
+        var background = (PresetId, At.Slot(new DateTime(2026, 1, 1, 12, 0, 0), new DateTime(2026, 1, 1, 15, 0, 0)), BlockPresetType.Background, (string?)null);
 
         var result = _preparer.Prepare([focus, background], ContractId, UtcZone);
 
@@ -123,7 +123,7 @@ public class ContractBlockBatchPreparerTests
         // Gap 88 phase 4 bug fix: Seal/Edit used to count planned hours per UTC day. In
         // Copenhagen, 00:30–01:30 on 2 Jan is 23:30–00:30 UTC — it must count on 2 Jan only.
         var copenhagen = new UserTimeZone(TimeZoneInfo.FindSystemTimeZoneById("Europe/Copenhagen"));
-        var focus = (PresetId, At.Slot(new DateTime(2026, 1, 1, 23, 30, 0, DateTimeKind.Utc), new DateTime(2026, 1, 2, 0, 30, 0, DateTimeKind.Utc)), true, (string?)null);
+        var focus = (PresetId, At.Slot(new DateTime(2026, 1, 1, 23, 30, 0, DateTimeKind.Utc), new DateTime(2026, 1, 2, 0, 30, 0, DateTimeKind.Utc)), BlockPresetType.Focus, (string?)null);
 
         var result = _preparer.Prepare([focus], ContractId, copenhagen);
 

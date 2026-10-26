@@ -56,7 +56,7 @@ public sealed class GetNenContractForEditQueryHandler
                 PresetId = b.BlockPresetId,
                 PresetName = presetNames.GetValueOrDefault(b.BlockPresetId, "Unknown"),
                 Slot = b.Scheduled,
-                IsFocus = b is FocusBlock,
+                BlockPresetType = b.PresetType,
                 Title = b.Title
             })
             .ToList();

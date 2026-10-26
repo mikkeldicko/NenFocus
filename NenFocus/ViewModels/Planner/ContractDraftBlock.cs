@@ -1,4 +1,5 @@
 using System;
+using NenFocus.Domain.Enums;
 using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.ViewModels.Planner;
@@ -13,4 +14,4 @@ public sealed record ContractDraftBlock(
     Guid PresetId,
     string PresetName,
     TimeSlot Slot,
-    bool IsFocus);
+    BlockPresetType BlockPresetType);

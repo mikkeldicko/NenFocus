@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using NenFocus.Application.DTOs;
+using NenFocus.Domain.Enums;
 
 namespace NenFocus.ViewModels.Planner;
 
@@ -22,9 +23,9 @@ internal static class PlannerEndTimeOptions
 
     /// <param name="maximum">The longest the block may be, offered itself when it isn't a step —
     /// a Cover Deficit tile stops at the debt (Gap 106, decision 19).</param>
-    internal static IReadOnlyList<TimeSpan> GenerateOffsets(bool isFocus, TimeSpan? maximum = null)
+    internal static IReadOnlyList<TimeSpan> GenerateOffsets(BlockPresetType type, TimeSpan? maximum = null)
     {
-        var maxDuration = isFocus ? PlanningLimits.FocusBlockMaxLength : JustUnderOneDay;
+        var maxDuration = type == BlockPresetType.Focus ? PlanningLimits.FocusBlockMaxLength : JustUnderOneDay;
         if (maximum is { } cap && cap < maxDuration) maxDuration = cap;
         var offsets = new List<TimeSpan>();
 

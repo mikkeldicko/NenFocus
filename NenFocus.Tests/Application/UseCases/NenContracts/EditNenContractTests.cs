@@ -36,7 +36,7 @@ public class EditNenContractTests : UseCaseTestBase
     private static TimeSlot On(int day, int fromHour, int toHour) =>
         At.Slot(StartDate.AddDays(day).ToDateTime(new TimeOnly(fromHour, 0)), StartDate.AddDays(day).ToDateTime(new TimeOnly(toHour, 0)));
 
-    private static NenContractBlockSpec Focus(int day, int fromHour, int toHour) => new(SeededFocusPresetId, On(day, fromHour, toHour), IsFocus: true);
+    private static NenContractBlockSpec Focus(int day, int fromHour, int toHour) => new(SeededFocusPresetId, On(day, fromHour, toHour), BlockPresetType.Focus);
 
     private static EditNenContractCommand Command(Guid contractId, params NenContractBlockSpec[] blocks) => new()
     {
@@ -257,7 +257,7 @@ public class EditNenContractTests : UseCaseTestBase
         var contract = ScheduledContract();
         await SeedAsync(contract);
 
-        await RefusedAndUnchangedAsync(contract, Command(contract.Id, new NenContractBlockSpec(Guid.NewGuid(), On(0, 9, 10), IsFocus: true)));
+        await RefusedAndUnchangedAsync(contract, Command(contract.Id, new NenContractBlockSpec(Guid.NewGuid(), On(0, 9, 10), BlockPresetType.Focus)));
     }
 
     [Fact]

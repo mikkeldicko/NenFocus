@@ -57,7 +57,7 @@ public sealed class EditNenContractCommandHandler : ICommandHandler<EditNenContr
         var contractId = command.ContractId;
 
         var preparation = _batchPreparer.Prepare(
-            command.Blocks.Select(spec => (spec.PresetId, spec.Slot, spec.IsFocus, spec.Title)).ToList(),
+            command.Blocks.Select(spec => (spec.PresetId, spec.Slot, spec.BlockPresetType, spec.Title)).ToList(),
             contractId,
             _clock.TimeZone);
 

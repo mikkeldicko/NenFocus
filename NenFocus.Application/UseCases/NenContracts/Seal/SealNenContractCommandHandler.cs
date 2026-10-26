@@ -37,7 +37,7 @@ public sealed class SealNenContractCommandHandler : ICommandHandler<SealNenContr
         var contractId = Guid.NewGuid();
 
         var preparation = _batchPreparer.Prepare(
-            command.Blocks.Select(spec => (spec.PresetId, spec.Slot, spec.IsFocus, spec.Title)).ToList(),
+            command.Blocks.Select(spec => (spec.PresetId, spec.Slot, spec.BlockPresetType, spec.Title)).ToList(),
             contractId,
             _clock.TimeZone);
 

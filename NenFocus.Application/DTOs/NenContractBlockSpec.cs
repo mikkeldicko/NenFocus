@@ -1,3 +1,4 @@
+using NenFocus.Domain.Enums;
 using NenFocus.Domain.ValueObjects;
 namespace NenFocus.Application.DTOs;
 
@@ -10,5 +11,5 @@ namespace NenFocus.Application.DTOs;
 public sealed record NenContractBlockSpec(
     Guid PresetId,
     TimeSlot Slot,
-    bool IsFocus,
+    BlockPresetType BlockPresetType,
     string? Title = null);

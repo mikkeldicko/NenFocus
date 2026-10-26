@@ -163,7 +163,10 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     // represents a live user edit.
     private bool _isPopulatingFormTimes;
 
-    [ObservableProperty] private bool _isFocusBlock = true;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsFocusBlock))] private BlockPresetType _formBlockType = BlockPresetType.Focus;
+
+    /// <summary>For the type pills' highlight — worked out from <see cref="FormBlockType"/>, never stored.</summary>
+    public bool IsFocusBlock => FormBlockType == BlockPresetType.Focus;
     [ObservableProperty] private BlockPresetDto? _selectedPreset;
 
     // What may be done to the saved block the form is editing — the block DTO's Allowances,
@@ -526,7 +529,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(CanChangePreset));
         OnPropertyChanged(nameof(ShowTypeToggle));
 
-        IsFocusBlock = true; // redemption is Focus-only
+        FormBlockType = BlockPresetType.Focus; // redemption is Focus-only
         SelectedPreset = AvailablePresets.FirstOrDefault(p => p.Id == option.PresetId);
 
         var (localStart, localEnd) = _clock.TimeZone.ToCalendarTimes(option.Suggested);
@@ -804,13 +807,12 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
     private void RefreshAvailablePresets()
     {
-        var requiredType = IsFocusBlock ? BlockPresetType.Focus : BlockPresetType.Background;
-        AvailablePresets.Clear();
-        foreach (var p in _allPresets.Where(p => p.PresetType == requiredType))
+                AvailablePresets.Clear();
+        foreach (var p in _allPresets.Where(p => p.PresetType == FormBlockType))
             AvailablePresets.Add(p);
     }
 
-    partial void OnIsFocusBlockChanged(bool value)
+    partial void OnFormBlockTypeChanged(BlockPresetType value)
     {
         RefreshAvailablePresets();
         SelectedPreset = AvailablePresets.FirstOrDefault();
@@ -854,7 +856,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     /// </summary>
     private void RegenerateEndTimeOptions() =>
         EndTimeOptions = FormStartTime is { } start
-            ? EndChoices(start, PlannerEndTimeOptions.GenerateOffsets(IsFocusBlock, _redemptionMaximum), sameDayOnly: IsDraftingContract)
+            ? EndChoices(start, PlannerEndTimeOptions.GenerateOffsets(FormBlockType, _redemptionMaximum), sameDayOnly: IsDraftingContract)
             : [];
 
     /// <summary>
@@ -863,7 +865,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     /// resulting pieces stay on the same day as the original block, unconditionally.
     /// </summary>
     private IReadOnlyList<TimeSpan> SplitEndChoices(TimeSpan? start) =>
-        start is { } s ? EndChoices(s, PlannerEndTimeOptions.GenerateOffsets(IsFocusBlock), sameDayOnly: true) : [];
+        start is { } s ? EndChoices(s, PlannerEndTimeOptions.GenerateOffsets(FormBlockType), sameDayOnly: true) : [];
 
     /// <summary>Each offset from Start as an End time of day — stopping at midnight when the block must stay on its day.</summary>
     private static IReadOnlyList<TimeSpan> EndChoices(TimeSpan start, IReadOnlyList<TimeSpan> offsets, bool sameDayOnly)
@@ -1043,7 +1045,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
             FormDate = new DateTimeOffset(draftBlockDate, TimeSpan.Zero);
 
             SetFormTimes(draftLocalStart.TimeOfDay, draftLocalEnd.TimeOfDay);
-            IsFocusBlock = draft.IsFocus;
+            FormBlockType = draft.BlockPresetType;
             SelectedPreset = AvailablePresets.FirstOrDefault(p => p.Id == draft.PresetId)
                               ?? AvailablePresets.FirstOrDefault();
             IsFormVisible = true;
@@ -1074,7 +1076,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         FormDate = new DateTimeOffset(blockDate, TimeSpan.Zero);
 
         SetFormTimes(localStart.TimeOfDay, localEnd.TimeOfDay);
-        IsFocusBlock = dto.BlockPresetType == BlockPresetType.Focus;
+        FormBlockType = dto.BlockPresetType;
         SelectedPreset = AvailablePresets.FirstOrDefault(p => p.Id == dto.PresetId)
                           ?? AvailablePresets.FirstOrDefault();
         IsFormVisible = true;
@@ -1149,7 +1151,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     private void ResetForm()
     {
         FormError = null;
-        IsFocusBlock = true;
+        FormBlockType = BlockPresetType.Focus;
         SelectedPreset = null;
         _isCreatingRedemption = false;
         _redemptionContractId = null;
@@ -1158,8 +1160,8 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(ShowTypeToggle));
     }
 
-    [RelayCommand] private void SetFocusBlock() => IsFocusBlock = true;
-    [RelayCommand] private void SetBackgroundBlock() => IsFocusBlock = false;
+    [RelayCommand] private void SetFocusBlock() => FormBlockType = BlockPresetType.Focus;
+    [RelayCommand] private void SetBackgroundBlock() => FormBlockType = BlockPresetType.Background;
 
     [RelayCommand]
     private async Task SaveAsync()
@@ -1183,7 +1185,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         var slot = ResolveFormRangeSlot(startTime, endTime);
         if (slot is null) { FormError = "End time must be after start time."; return; }
 
-        var blockPresetType = IsFocusBlock ? BlockPresetType.Focus : BlockPresetType.Background;
+        var blockPresetType = FormBlockType;
 
         if (_isCreatingRedemption && _redemptionContractId is { } contractId)
         {
@@ -1255,8 +1257,8 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         var localStart = dayDate.Add(startTime);
         var localEnd = dayDate.Add(endTime);
 
-        bool isFocus = IsFocusBlock;
-        var placementError = ValidateDraftPlacement(localStart, localEnd, isFocus);
+        var blockType = FormBlockType;
+        var placementError = ValidateDraftPlacement(localStart, localEnd, blockType);
         if (placementError is not null) { FormError = placementError; return false; }
 
         var slot = TimeSlot.TryCreate(_clock.TimeZone.ToMoment(localStart), _clock.TimeZone.ToMoment(localEnd));
@@ -1269,11 +1271,11 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         {
             var idx = _draftBlocks.FindIndex(d => d.Id == _editingBlockId.Value);
             if (idx >= 0)
-                _draftBlocks[idx] = new ContractDraftBlock(_editingBlockId.Value, SelectedPreset.Id, SelectedPreset.Name, slot, isFocus);
+                _draftBlocks[idx] = new ContractDraftBlock(_editingBlockId.Value, SelectedPreset.Id, SelectedPreset.Name, slot, blockType);
         }
         else
         {
-            _draftBlocks.Add(new ContractDraftBlock(Guid.NewGuid(), SelectedPreset.Id, SelectedPreset.Name, slot, isFocus));
+            _draftBlocks.Add(new ContractDraftBlock(Guid.NewGuid(), SelectedPreset.Id, SelectedPreset.Name, slot, blockType));
         }
 
         RebuildDraftTilesInPlace();
@@ -1483,7 +1485,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         if (draftIndex >= 0)
         {
             var placementError = ValidateDraftPlacement(
-                result.NewLocalStart, result.NewLocalEnd, _draftBlocks[draftIndex].IsFocus);
+                result.NewLocalStart, result.NewLocalEnd, _draftBlocks[draftIndex].BlockPresetType);
             if (placementError is not null)
             {
                 // No rebuild needed: _draftBlocks is untouched, and the code-behind's
@@ -1594,7 +1596,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
             foreach (var block in _editingContractPayload.Blocks)
             {
                 _draftBlocks.Add(new ContractDraftBlock(
-                    Guid.NewGuid(), block.PresetId, block.PresetName, block.Slot, block.IsFocus));
+                    Guid.NewGuid(), block.PresetId, block.PresetName, block.Slot, block.BlockPresetType));
             }
         }
 
@@ -1623,9 +1625,8 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
             var position = PlannerLayout.GetTilePosition(localStart, localEnd, visibleStart, visibleEnd, HourRowHeight);
             if (position is null) continue;
 
-            var blockPresetType = draft.IsFocus ? BlockPresetType.Focus : BlockPresetType.Background;
             Tiles.Add(BlockTileViewModel.ForDraft(
-                draft.Id, draft.PresetName, blockPresetType, localStart, localEnd, dayIndex, position.Value.Top, position.Value.Height));
+                draft.Id, draft.PresetName, draft.BlockPresetType, localStart, localEnd, dayIndex, position.Value.Top, position.Value.Height));
         }
     }
 
@@ -1646,7 +1647,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     // the identical rule — no NenContract exists yet during drafting to delegate to directly,
     // but the wizard's flat Default-only window (no per-day exceptions in the UI) is enough
     // to reconstruct it locally. Focus-only: Background blocks are never Work-Hours constrained.
-    private string? ValidateDraftPlacement(DateTime localStart, DateTime localEnd, bool isFocus)
+    private string? ValidateDraftPlacement(DateTime localStart, DateTime localEnd, BlockPresetType blockType)
     {
         if (localStart <= LocalNow)
             return "Blocks cannot start in the past.";
@@ -1658,7 +1659,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
             if (startDate < _draftRules.StartDate || endDate > _draftRules.EndDate)
                 return $"Blocks must be placed within the contract's date range ({DateRangeToLabelConverter.FormatRangeShort(_draftRules.StartDate, _draftRules.EndDate)}).";
 
-            if (isFocus && _draftRules.WorkHoursStart is { } workHoursStart && _draftRules.WorkHoursEnd is { } workHoursEnd)
+            if (blockType == BlockPresetType.Focus && _draftRules.WorkHoursStart is { } workHoursStart && _draftRules.WorkHoursEnd is { } workHoursEnd)
             {
                 var workHours = new WorkHours(workHoursStart, workHoursEnd);
                 if (!workHours.ContainsRange(localStart, localEnd))
@@ -1674,7 +1675,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         if (_draftRules is null) { DayFloorByDate = new(); return; }
 
         var focusRanges = _draftBlocks
-            .Where(d => d.IsFocus)
+            .Where(d => d.BlockPresetType == BlockPresetType.Focus)
             .Select(d => d.Slot)
             .ToList();
 
@@ -1711,7 +1712,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         try
         {
             var blocks = _draftBlocks
-                .Select(d => new NenContractBlockSpec(d.PresetId, d.Slot, d.IsFocus))
+                .Select(d => new NenContractBlockSpec(d.PresetId, d.Slot, d.BlockPresetType))
                 .ToList();
 
             bool success;
