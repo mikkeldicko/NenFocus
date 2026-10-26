@@ -94,13 +94,61 @@ What a ViewModel may and may not hold or do (dispatchers only, no handlers, no t
 
 ## Time Display Formatting
 
-ViewModels expose raw values and Views format them with converters — the rule and the list of approved converters are `MODULE_STANDARDS.md` → No String Formatting and Converter Catalogue. The session screen's formats:
+ViewModels expose raw values and Views format them with converters — the rule and the list of approved converters are `MODULE_STANDARDS.md` → No String Formatting and the Converter Catalogue below. The session screen's formats:
 
 | Display | Binding | ConverterParameter |
 |---------|---------|-------------------|
 | Session countdown (`hh:mm:ss`) | `SessionTimeRemaining` | _(none, default)_ |
 | Break countdown (`mm:ss`) | `BreakTimeRemaining` | `mm\:ss` |
 | Session time during break | `SessionTimeRemaining` | _(none)_ + `StringFormat='Session: {0}'` |
+
+---
+
+## Converter Catalogue (moved from `MODULE_STANDARDS.md` 2026-10-26)
+
+These converters are approved. Reuse before creating new ones. **This list must match the code** — `ConverterCatalogueTests` fails when a converter is missing here or listed but gone (added 2026-09-29, Gap 98). **Registration is per-view, not centralized** (corrected 2026-08-18 — this table previously claimed all converters are "registered in `MainPageView.axaml`"; in practice only `TimeSpanConverter`/`DateTimeConverter` still are, and every converter added since (Planner, Nen Contract wizard) is registered as a resource in whichever `.axaml` view actually uses it, e.g. `ContractWizardView.axaml`, `RitualShellView.axaml`, `PlannerPageView.axaml`).
+
+| Converter | Key | Input → Output | Format Parameter |
+|-----------|-----|----------------|-----------------|
+| `TimeSpanToStringConverter` | `TimeSpanConverter` | `TimeSpan` → `string` | Optional format string, default `hh\:mm\:ss`. Automatically escapes unescaped `:` in the format string before falling back to the default — never throws in a binding. |
+| `DurationToStringConverter` | _(inline)_ | `TimeSpan` → `string` | None. Produces human-readable "Xh Ym" (e.g. "2h 30m"), "Xm" (e.g. "45m"), or — under a minute — "Ns" (e.g. "45s", never a bare "0m") for display in the post-session summary. Use instead of `TimeSpanToStringConverter` when the compact human-readable form is needed rather than a clock format. |
+| `TimeSpanToHumanReadableConverter` | `Instance` | `TimeSpan` → `string` | None. Spells out a duration in words ("5 minutes", "1 hour", "1h 30m") for prose contexts — e.g. the Ritual's late-to-block notice — where `DurationToStringConverter`'s compact "5m" form reads fine in a stat chip but not mid-sentence. |
+| `DateTimeToStringConverter` | `DateTimeConverter` | `DateTime` or `DateOnly` → `string` | Optional format string, default `h:mm tt` (e.g. `MMM d` for a calendar day). |
+| `DateTimeToUpperStringConverter` | `DateTimeUpperConverter` | `DateTime` → uppercase `string` | Optional format string, default `ddd`. Result is `.ToUpperInvariant()`. Use for day-name headers. |
+| `BoolToDotFillConverter` | _(inline)_ | `bool` → brush | — |
+| `BoolToOpacityConverter` | _(inline)_ | `bool` → opacity | — |
+| `BoolToChevronConverter` | `Instance` | `bool` → `string` | None. `true` → "▾", `false` → "▸" (expand/collapse chevron). |
+| `DayFloorStatusToBrushConverter` | `Instance` | `DayFloorPreviewViewModel?` → brush | None. Planner day-header floor badge background. Rest → gray; today/past met → dark green; today unmet → amber (day isn't over, not a real miss yet); past unmet → dark red (a real miss). **A sealed contract's future day (any strictness rule, since 2026-08-19) always renders blue via `ShowSimplifiedFuture`** — provably safe by construction (Seal/Edit's own invariant plus post-seal floor-protection guards) — the raw future-met/future-unmet blue/light-red branch is only ever reached during live drafting, where a future day genuinely can be under-floor as actionable feedback. |
+| `DayFloorStatusToForegroundConverter` | `Instance` | `DayFloorPreviewViewModel?` → brush | None. Pairs with `DayFloorStatusToBrushConverter` — white text on every saturated background (today/past, and a future-met blue, including the simplified badge above, since 2026-08-19), dark `#1A1A2E` text on the light rest tint and the pale future-unmet pink (drafting only). |
+| `CountToBoolConverter` | _(inline)_ | `int` → `bool` | — |
+| `CountToVisibilityConverter` | _(inline)_ | `int` → visibility | — |
+| `StringEqualConverter` | _(inline)_ | `string` → `bool` | Comparison value |
+| `IntEqualConverter` | _(inline)_ | `int` → `bool` | Comparison value |
+| `StringToVisibilityConverter` | `IsNonEmpty` | `string` → `bool` | None. `true` when non-null/non-empty. |
+| `WeekRangeToStringConverter` | _(inline)_ | `DateTime` (week start) → `string` | None. Formats a week as "MMM d – d, yyyy" (or "MMM d – MMM d, yyyy" across month boundaries) for the Planner's week header. |
+| `BlockPresetTypeToColorConverter` | `Instance` | `BlockPresetType` → brush | None. Background color for a Planner tile — distinct Focus/Background fill. |
+| `BlockPresetTypeToForegroundConverter` | `Instance` | `BlockPresetType` → brush | None. Companion foreground color to `BlockPresetTypeToColorConverter`. |
+| `BlockPresetTypeToLabelConverter` | `Instance` | `BlockPresetType` → `string` | None. "Focus" / "Background". |
+| `StrictnessRuleToLabelConverter` | `Instance` | `StrictnessRule` → `string` | None. "Lockdown" / "Daily Flex" / "Period Study". |
+| `RedemptionPlacementPolicyToLabelConverter` | `Instance` | `RedemptionPlacementPolicy` → `string` | None. "Anywhere in the contract" / "Current day only". |
+| `FocusBlockOutcomeToLabelConverter` | `Instance` | `FocusBlockOutcome` → `string` | None. "MISSED" / "STARTED LATE" / "ENDED EARLY" / "COMPLETED ON TIME". |
+| `FocusBlockOutcomeToBrushConverter` | `Instance` | `FocusBlockOutcome` → brush | None. Missed red, late/early amber, on time green, else neutral grey — mirrors the Planner tile colours (`UI_UX_STANDARDS.md`). |
+| `EnumEqualConverter` | `Instance` | any enum (nullable) → `bool` | Enum member name. `true` when `value.ToString()` equals it — one converter for every enum-driven visibility. |
+| `DayFloorStatusHasBonusConverter` | `Instance` | `DayFloorPreviewViewModel?` → `bool` | None. Whether the Bonus pill shows; bound to the whole status so a null (no contract) is `false`, same null-safety as `DayFloorStatusToBrushConverter`. |
+| `DailyFloorToLabelConverter` | `Instance` | `double?` (hours) → `string` | None. "1.5h / day", or "Derived from scheduled blocks" when null. |
+| `HoursToStringConverter` | `Instance` | `double` (hours) → `string` | None. "2.5h" — one decimal-hours figure (day badges, bonus pill). Also `FormatHours(hours)`, for converters that word a sentence. |
+| `DayFloorStatusToLabelConverter` | `Instance` | `DayFloorPreviewViewModel?` → `string` | None. A day badge's text: "Rest", "2.5h", or "2h / 3h" when the comparison is the point; which numbers is the status's own (`ShowSimplifiedFuture`, `IsContractFloorMode`). Null → empty (Gap 89 Slice B). |
+| `DayFloorStatusToBonusLabelConverter` | `Instance` | `DayFloorPreviewViewModel?` → `string` | None. The Bonus pill's "+1.5h bonus"; null → empty (Gap 89 Slice B). |
+| `ContractRangeToBannerConverter` | `Instance` | `NenContractRangeViewDto?` → `string` | None. The Planner's contract banner: "Contract: Name — Day 2/7 — 3.5h / 10h completed — 1h 30m deficit — 45 min bonus", deficit and bonus only when above zero (Gap 89 Slice B). |
+| `DateListToLabelConverter` | `Instance` | `IEnumerable<DateOnly>` → `string` | None. "Mar 5, Mar 12" (as the rest-day chips show them), "None" when empty — the wizard summary's rest days (Gap 89 Slice B). |
+| `DateRangeToLabelConverter` | `Instance` | `DateOnly`, `DateOnly` → `string` (`MultiBinding`) | None. "Jan 1, 2026 – Jan 31, 2026". `FormatRangeShort` stays only for `ValidateDraftPlacement` (→ Gap 68). |
+| `WorkHoursRangeToLabelConverter` | `Instance` | `TimeOnly?`, `TimeOnly?` → `string` (`MultiBinding`) | None. "09:00 – 17:00", "No constraint" when either is missing. `FormatKnownWindow12Hour` stays only for `ValidateDraftPlacement` (→ Gap 68). |
+| `MinutesToStringConverter` | `Instance` | `WholeMinutes`/`double`/`int` (minutes) → `string` | None. "1h 30m" / "1h" / "30 min" — never a pointless "0m". Also `FormatMinutes(minutes)`. |
+| `DurationLabelConverter` | `DurationLabelConverter` | `TimeSpan` → `string` | None. Parenthesized End-dropdown suffix: "(30 mins)", "(1 hr)", "(1.5 hrs)". A sibling of `DurationToStringConverter`, not a change to it (that one is shared with Post-Session). |
+| `TimeOfDayToStringConverter` | `Instance` | `TimeSpan?` ↔ `string` (two-way) | None. "10:30", "24:00" for the end of the day; back: a time, or null for anything that isn't one (no day part — "93" is not 93 days). The one place time-of-day text is made or read (Gap 89 Slice B); `Format`/`TryParse` serve the `TimeOfDayBox` control. |
+| `PercentageToLabelConverter` | `Instance` | `double?` (fraction) → `string` | None. "50%" / "133%" (uncapped), "Rest" when null. |
+
+**Static `Format…` helpers** (`HoursToStringConverter.FormatHours`, `MinutesToStringConverter.FormatMinutes`) are for converters that word a whole sentence (`ContractRangeToBannerConverter`, the day-badge converters) — no ViewModel calls one (`NoViewModelFormatsValues`, whose one entry is `ValidateDraftPlacement` → Gap 68). A start-and-end value is a two-input converter in a `MultiBinding` (`DateRangeToLabelConverter`, `WorkHoursRangeToLabelConverter`), not a static helper a ViewModel calls (Gap 89 Slice B; `NamingRuleTests` counts `IMultiValueConverter` as a converter).
 
 ---
 

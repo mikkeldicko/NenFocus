@@ -2,38 +2,33 @@
 
 **This is the Constitution. Read this at the start of every session.**
 
-For detailed vocabulary, see `DOMAIN\\\_DICTIONARY.md`.
-For implementation details and build state, see `TECHNICAL\\\_SPEC\\\_INFRA.md`.
-For UI rules and ViewModel contracts, see `UI\\\_UX\\\_STANDARDS.md`.
-For module and layer guardrails, see `MODULE\\\_STANDARDS.md`.
-For TDD workflow and test patterns, see `TESTING\\\_GUIDE.md`.
-For historical record of closed design gaps, see `DESIGN\\\_GAP\\\_HISTORY.md`.
+What each other document holds: `CLAUDE.md` → Authoritative documents.
 
-\---
+---
 
 ## High-Level Development Strategy
 
-### 1\. Strategic Design \& The Design Gap
+### 1. Strategic Design & The Design Gap
 
 **Principle:** Bridge the Design Gap before writing any new features.
 
 Before implementing anything, ask as many questions as necessary to reach a shared design concept and understand the full dependency tree. Do not write implementation code until the design is agreed upon. This means: contract first, implementation second.
 
-### 2\. Ubiquitous Language (DDD)
+### 2. Ubiquitous Language (DDD)
 
 **Principle:** Use a shared vocabulary to eliminate communication overhead.
 
-Always refer to the terms defined in `DOMAIN\\\_DICTIONARY.md` (Ritual, Session, Enforcement, Policy Slice, Focus Block, Background Block, SessionOrigin, Quest, Deep Module, etc.). If a new concept needs to be introduced, define and name it together before writing any code.
+Always refer to the terms defined in `DOMAIN_DICTIONARY.md` (Ritual, Session, Enforcement, Policy Slice, Focus Block, Background Block, SessionOrigin, Quest, Deep Module, etc.). If a new concept needs to be introduced, define and name it together before writing any code.
 
 **Product invariant:** A manual enforcement session cannot exist without a completed Ritual. This is a product invariant enforced by design, not by validation code. The full Nen Ritual (Ten → Zetsu → Ren → Hatsu) is the only path to creating a Spontaneous Session. Abandoning the Ritual at any point produces no saved record anywhere.
 
-### 3\. TDD — Headlight Management
+### 3. TDD — Headlight Management
 
 **Principle:** Never outrun the headlights.
 
 Take small, deliberate steps. When possible, follow a TDD workflow: write a failing test, make it pass, then refactor. Avoid generating large blocks of unverified code. Each increment must be provably correct before the next one begins.
 
-### 4\. Deep Modules — Cognitive Load Management
+### 4. Deep Modules — Cognitive Load Management
 
 **Principle:** Complexity must be hidden behind simple interfaces.
 
@@ -43,7 +38,7 @@ Aim for Deep Modules — classes and services that deliver significant functiona
 * **Services** are gray boxes: the human architect should be able to understand and compose them from their interface alone, without reading the implementation.
 * When a ViewModel grows beyond "display data + dispatch commands," that is a signal to extract a new service.
 
-\---
+---
 
 ## What This App Is
 
@@ -51,7 +46,7 @@ NenFocus is a Windows desktop focus tool built with Avalonia (.NET 9). It combin
 
 The name and ritual terminology (Ten, Zetsu, Ren, Hatsu) are inspired by the concept of "Nen" from Hunter × Hunter — each ritual step has a thematic purpose that maps to the session setup flow.
 
-\---
+---
 
 ## Architecture
 
@@ -84,22 +79,7 @@ Dependencies only flow inward: UI → Application ← Infrastructure → Domain.
 * **Vertical Slice Architecture**: Every use case lives in its own feature folder (e.g., `UseCases/Sessions/StartSession/`) containing exactly four files: `Command`, `CommandHandler`, `Result`, `Validator`. Validators are auto-registered via `AddValidatorsFromAssembly`.
 * **Enforcement pipeline**: `HeartbeatService` (the one heartbeat, 5s interval, one `now` per tick — Gap 89), the session event handlers and `BreakTransitionResponder` (break boundaries, reported by `ActiveSessionMonitor`) → `IEnforcementSynchronizer` (sole caller that turns policy into an apply/remove) → `ComputeActivePolicySliceQueryHandler` / `PolicyEngine` (what should be blocked) → `WindowsEnforcementService` (kills processes, rewrites hosts file, exposes local HTTP API).
 
-\---
-
-## Project Structure
-
-```
-📄 ARCHITECT\\\_GOVERNANCE.md    ← Constitution (this file)
-📄 DOMAIN\\\_DICTIONARY.md       ← Ubiquitous language + technical mappings
-📄 MODULE\\\_STANDARDS.md        ← Layer rules, ViewModel Forbidden Zone, naming conventions
-📄 TECHNICAL\\\_SPEC\\\_INFRA.md    ← Build state, enforcement details, dev notes
-📄 TESTING\\\_GUIDE.md           ← TDD workflow, NSubstitute patterns, test inventory
-📄 UI\\\_UX\\\_STANDARDS.md         ← Colours, layout, ViewLocator, time formatting
-📄 OPEN\\\_GAPS.md              ← Full write-ups of open, deferred gaps (read on demand)
-📄 DESIGN\\\_GAP\\\_HISTORY.md      ← Record of closed design gaps (reference only)
-📁 NenFocusExtension/          ← Browser extension (JS/MV3), own folder, not part of the .NET solution
-
-
+---
 
 ## The Design Gap Protocol
 
@@ -155,7 +135,7 @@ Before any gap is closed — every gap, not only the Architecture box — ask: *
 
 Why: written rules alone didn't stop drift; every rule a gap makes true but leaves unguarded can quietly come back. How-to: `TESTING_GUIDE.md` → Architecture Tests.
 
-\---
+---
 
 ## Open Gaps
 
@@ -207,9 +187,9 @@ Grouped into six boxes, worked top to bottom (agreed 2026-09-28; architecture bo
 3. **Gap 76 (K) — Enforcement Has No Life Independent of the GUI Process** (Windows Service split; first step since 2026-09-29: close to tray and refuse Quit while enforcing — "always active like other blockers") — interrogated 2026-09-07; not yet built.
 4. **Gap 77 (O) — Cross-Platform Suite: iOS App, Multi-Device Sync, "Hardcore iOS Lockdown"** — raised 2026-09-27; not interrogated.
 
-Next free number: **121** (120 raised 2026-10-26 during Gap 89 Slice D; 119 raised 2026-10-25 during Gap 89 Slice B; 118 built directly 2026-10-14; 116 and 117 raised 2026-10-13 during Gap 112; 115 raised 2026-10-08 during Gap 110; 114 raised 2026-10-08; 112 and 113 raised 2026-10-08; 111 built directly 2026-10-08; 109 and 110 raised 2026-10-07; 107 and 108 raised 2026-10-01; 105 and 106 raised 2026-09-30; 84–87 used 2026-09-28 by fixes built directly; 88–89 raised as open gaps the same day; 90–93, 95, 97, 98, 99, 100, 101, 102 and 103 raised 2026-09-29; 94, 96 and 104 fixes built directly the same day; 91 dropped the same day — the one-source questions are investigated one by one as their own gaps instead; 90 and 99 folded into 88 the same day — their write-ups live under Gap 88 in `DESIGN_GAP_HISTORY.md` since it closed 2026-10-01, so older references to them still resolve).
+Next free number: **121**. Which gap took which number and when is recorded in each gap's own entry.
 
-\---
+---
 
 ## Minor Cleanups
 

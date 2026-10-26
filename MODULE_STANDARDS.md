@@ -143,11 +143,7 @@ A handler must not read an entity's raw fields (`Start`, `End`, `RitualCompleted
 
 > **Rule:** The moment a second call site needs the same fact about an entity, that fact must already be a named method on the entity — never re-derived a second time from primitives, even if the second derivation "looks the same."
 >
-> **Why this is a hard rule, not a style preference:** in one session (2026-08-21), this exact anti-pattern produced four separate live bugs, each shipped, tested, and working *until a second caller needed the same fact and quietly computed it differently*:
-> - `PlannedBlock.IsActive` compared against raw `End`; `EffectiveEnd` (a few lines away, on the same entity) already had the right answer for "is this window still actually reserved." `PolicyEngine` used the wrong one, and a block that ended its session early kept blocking a genuinely new block from ever triggering its Ritual. Fixed by routing `IsActive` through `EffectiveEnd` — one definition, not two.
-> - `GetNenContractDeficitsQueryHandler` decided "is this block a deficit source" via two separate inline `continue` guards instead of one question — see `DESIGN_GAP_HISTORY.md` Gap 29, fixed by `FocusBlock.CanContributeOwnDeficit(outcome)`.
-> - `UpdateBlockPresetValidator` computed "is this edit at least as strict" via a blanket superset check on raw `Websites`/`BlockedApps` collections, inverted for one preset type nobody had a test for — see Gap 30, fixed by `BlockPreset.IsAtLeastAsStrict(...)`.
-> - `GetNenContractDeficitsQueryHandler`'s "how much is already covered" sum, called from three different places (display, create-attribution, edit-attribution) with three subtly different needs, let a block being edited count its own stale, pre-edit contribution as coverage from someone else — collapsing its own new entry toward zero on every edit.
+> **Why this is a hard rule, not a style preference:** in one session (2026-08-21) this anti-pattern produced four live bugs, each working *until a second caller needed the same fact and computed it differently* (`IsActive` vs `EffectiveEnd`, deficit sources, preset strictness, covered-so-far) — `DESIGN_GAP_HISTORY.md` Gaps 21, 29, 30, 32.
 >
 > **Smell to watch for while reviewing any new Application handler:** a `.Where(...)`, `if`, or arithmetic expression built from more than one raw entity field, especially one that resembles logic that already exists — even loosely — somewhere else in the codebase. Grep for the fields involved before writing the expression.
 >
@@ -159,7 +155,7 @@ A handler must not convert a fractional `double` (minutes, hours, or any unit de
 
 > **Rule:** Before converting a fractional quantity into a timestamp a later "did this fully satisfy X" check depends on, round it up to whatever grain that timestamp is meaningful at (a whole minute, for anything a person perceives at minute granularity). Never persist the raw fraction and lean on a downstream tolerance to absorb the loss — a tolerance can't tell "tick-rounding noise" apart from "genuinely short by a hair."
 >
-> **Why this is a hard rule, not a style preference:** (2026-08-22, `DESIGN_GAP_HISTORY.md` Gap 33) `GetSuggestedRedemptionPlacementsQueryHandler` sized a Cover-Deficit redemption tile to a fractional deficit (`31.896581196666666` minutes, from an `EndedEarly` session timestamped to the millisecond) and passed it straight to `AddMinutes`. The round-trip lost ~1.7e-9 minutes, so `GetNenContractDeficitsQueryHandler`'s "is this fully covered" check could never resolve to exactly zero — the Cover Deficit button stayed lit forever even though the tile visibly, functionally closed the gap. This is a **regression** of a guarantee `DESIGN_GAP_HISTORY.md` Gap 25 Addendum 1 already established ("round up so accepting the suggestion can only meet-or-exceed the deficit, never fall short") — it was silently dropped when Gap 26 rewrote the same mechanism the next day, and nobody noticed until live testing surfaced it. A documented rule is not a permanent guarantee against a later rewrite; only a regression test is.
+> **Why this is a hard rule, not a style preference:** a redemption tile sized to a fractional deficit lost ~1e-9 minutes in `AddMinutes`, so "fully covered" never reached zero and Cover Deficit stayed lit forever — a regression of a round-up guarantee a later rewrite silently dropped (`DESIGN_GAP_HISTORY.md` Gaps 25, 26, 33). A documented rule is not a permanent guarantee against a later rewrite; only a regression test is.
 >
 > **Smell to watch for:** any `.AddMinutes(x)`/`.AddSeconds(x)`/`.AddTicks(x)` where `x` is a `double` computed from subtraction, division, or `Sum(...)` — not a whole-number literal or an `int`-backed field — especially when the resulting timestamp gets persisted and something else later re-derives a number from it to compare against an "at least this much" threshold.
 >
@@ -236,7 +232,7 @@ A ViewModel must not hold a constructor-injected `IQueryHandler<,>`/`ICommandHan
 
 > **Rule:** ViewModels take `IQueryDispatcher`/`ICommandDispatcher` (`Application/Interfaces/`) instead, and call `QueryAsync(query)`/`DispatchAsync(command)`. Never construct a ViewModel with an `IQueryHandler<,>`/`ICommandHandler<,>` parameter.
 >
-> **Why:** `App.axaml.cs` resolves the whole ViewModel tree from the DI root, with no scope. A directly-injected handler's repository dependencies are Scoped, and since nothing in this app's `Host.CreateDefaultBuilder` call ever enables `ValidateScopes` (only on in the `"Development"` environment), that resolution silently succeeds instead of throwing — meaning every directly-injected handler on a long-lived ViewModel ends up sharing one `DbContext` for the app's entire runtime. Two overlapping operations against it (a poll timer, an event-triggered refresh, a user action) throw an EF Core concurrency exception that vanishes silently, since ViewModel call sites are fire-and-forget via `Dispatcher.UIThread.Post`. `IQueryDispatcher`/`ICommandDispatcher` give every dispatch its own fresh DI scope internally, closing this for good.
+> **Why:** `App.axaml.cs` resolves the ViewModel tree from the DI root with `ValidateScopes` off, so a directly-injected handler silently shares one `DbContext` for the app's lifetime; overlapping operations then throw EF concurrency exceptions that vanish in fire-and-forget calls (Gap 40). The dispatchers give every dispatch its own scope.
 >
 > **Canonical example:** `PlannerPageViewModel` used to take 18 individually-injected handlers; it now takes exactly `IQueryDispatcher queryDispatcher, ICommandDispatcher commandDispatcher`.
 >
@@ -268,51 +264,9 @@ Every new service has its public contract written and reviewed before any implem
 
 ---
 
-## Converter Catalogue
+## Converters
 
-These converters are approved. Reuse before creating new ones. **This list must match the code** — `ConverterCatalogueTests` fails when a converter is missing here or listed but gone (added 2026-09-29, Gap 98). **Registration is per-view, not centralized** (corrected 2026-08-18 — this table previously claimed all converters are "registered in `MainPageView.axaml`"; in practice only `TimeSpanConverter`/`DateTimeConverter` still are, and every converter added since (Planner, Nen Contract wizard) is registered as a resource in whichever `.axaml` view actually uses it, e.g. `ContractWizardView.axaml`, `RitualShellView.axaml`, `PlannerPageView.axaml`).
-
-| Converter | Key | Input → Output | Format Parameter |
-|-----------|-----|----------------|-----------------|
-| `TimeSpanToStringConverter` | `TimeSpanConverter` | `TimeSpan` → `string` | Optional format string, default `hh\:mm\:ss`. Automatically escapes unescaped `:` in the format string before falling back to the default — never throws in a binding. |
-| `DurationToStringConverter` | _(inline)_ | `TimeSpan` → `string` | None. Produces human-readable "Xh Ym" (e.g. "2h 30m"), "Xm" (e.g. "45m"), or — under a minute — "Ns" (e.g. "45s", never a bare "0m") for display in the post-session summary. Use instead of `TimeSpanToStringConverter` when the compact human-readable form is needed rather than a clock format. |
-| `TimeSpanToHumanReadableConverter` | `Instance` | `TimeSpan` → `string` | None. Spells out a duration in words ("5 minutes", "1 hour", "1h 30m") for prose contexts — e.g. the Ritual's late-to-block notice — where `DurationToStringConverter`'s compact "5m" form reads fine in a stat chip but not mid-sentence. |
-| `DateTimeToStringConverter` | `DateTimeConverter` | `DateTime` or `DateOnly` → `string` | Optional format string, default `h:mm tt` (e.g. `MMM d` for a calendar day). |
-| `DateTimeToUpperStringConverter` | `DateTimeUpperConverter` | `DateTime` → uppercase `string` | Optional format string, default `ddd`. Result is `.ToUpperInvariant()`. Use for day-name headers. |
-| `BoolToDotFillConverter` | _(inline)_ | `bool` → brush | — |
-| `BoolToOpacityConverter` | _(inline)_ | `bool` → opacity | — |
-| `BoolToChevronConverter` | `Instance` | `bool` → `string` | None. `true` → "▾", `false` → "▸" (expand/collapse chevron). |
-| `DayFloorStatusToBrushConverter` | `Instance` | `DayFloorPreviewViewModel?` → brush | None. Planner day-header floor badge background. Rest → gray; today/past met → dark green; today unmet → amber (day isn't over, not a real miss yet); past unmet → dark red (a real miss). **A sealed contract's future day (any strictness rule, since 2026-08-19) always renders blue via `ShowSimplifiedFuture`** — provably safe by construction (Seal/Edit's own invariant plus post-seal floor-protection guards) — the raw future-met/future-unmet blue/light-red branch is only ever reached during live drafting, where a future day genuinely can be under-floor as actionable feedback. |
-| `DayFloorStatusToForegroundConverter` | `Instance` | `DayFloorPreviewViewModel?` → brush | None. Pairs with `DayFloorStatusToBrushConverter` — white text on every saturated background (today/past, and a future-met blue, including the simplified badge above, since 2026-08-19), dark `#1A1A2E` text on the light rest tint and the pale future-unmet pink (drafting only). |
-| `CountToBoolConverter` | _(inline)_ | `int` → `bool` | — |
-| `CountToVisibilityConverter` | _(inline)_ | `int` → visibility | — |
-| `StringEqualConverter` | _(inline)_ | `string` → `bool` | Comparison value |
-| `IntEqualConverter` | _(inline)_ | `int` → `bool` | Comparison value |
-| `StringToVisibilityConverter` | `IsNonEmpty` | `string` → `bool` | None. `true` when non-null/non-empty. |
-| `WeekRangeToStringConverter` | _(inline)_ | `DateTime` (week start) → `string` | None. Formats a week as "MMM d – d, yyyy" (or "MMM d – MMM d, yyyy" across month boundaries) for the Planner's week header. |
-| `BlockPresetTypeToColorConverter` | `Instance` | `BlockPresetType` → brush | None. Background color for a Planner tile — distinct Focus/Background fill. |
-| `BlockPresetTypeToForegroundConverter` | `Instance` | `BlockPresetType` → brush | None. Companion foreground color to `BlockPresetTypeToColorConverter`. |
-| `BlockPresetTypeToLabelConverter` | `Instance` | `BlockPresetType` → `string` | None. "Focus" / "Background". |
-| `StrictnessRuleToLabelConverter` | `Instance` | `StrictnessRule` → `string` | None. "Lockdown" / "Daily Flex" / "Period Study". |
-| `RedemptionPlacementPolicyToLabelConverter` | `Instance` | `RedemptionPlacementPolicy` → `string` | None. "Anywhere in the contract" / "Current day only". |
-| `FocusBlockOutcomeToLabelConverter` | `Instance` | `FocusBlockOutcome` → `string` | None. "MISSED" / "STARTED LATE" / "ENDED EARLY" / "COMPLETED ON TIME". |
-| `FocusBlockOutcomeToBrushConverter` | `Instance` | `FocusBlockOutcome` → brush | None. Missed red, late/early amber, on time green, else neutral grey — mirrors the Planner tile colours (`UI_UX_STANDARDS.md`). |
-| `EnumEqualConverter` | `Instance` | any enum (nullable) → `bool` | Enum member name. `true` when `value.ToString()` equals it — one converter for every enum-driven visibility. |
-| `DayFloorStatusHasBonusConverter` | `Instance` | `DayFloorPreviewViewModel?` → `bool` | None. Whether the Bonus pill shows; bound to the whole status so a null (no contract) is `false`, same null-safety as `DayFloorStatusToBrushConverter`. |
-| `DailyFloorToLabelConverter` | `Instance` | `double?` (hours) → `string` | None. "1.5h / day", or "Derived from scheduled blocks" when null. |
-| `HoursToStringConverter` | `Instance` | `double` (hours) → `string` | None. "2.5h" — one decimal-hours figure (day badges, bonus pill). Also `FormatHours(hours)`, for converters that word a sentence. |
-| `DayFloorStatusToLabelConverter` | `Instance` | `DayFloorPreviewViewModel?` → `string` | None. A day badge's text: "Rest", "2.5h", or "2h / 3h" when the comparison is the point; which numbers is the status's own (`ShowSimplifiedFuture`, `IsContractFloorMode`). Null → empty (Gap 89 Slice B). |
-| `DayFloorStatusToBonusLabelConverter` | `Instance` | `DayFloorPreviewViewModel?` → `string` | None. The Bonus pill's "+1.5h bonus"; null → empty (Gap 89 Slice B). |
-| `ContractRangeToBannerConverter` | `Instance` | `NenContractRangeViewDto?` → `string` | None. The Planner's contract banner: "Contract: Name — Day 2/7 — 3.5h / 10h completed — 1h 30m deficit — 45 min bonus", deficit and bonus only when above zero (Gap 89 Slice B). |
-| `DateListToLabelConverter` | `Instance` | `IEnumerable<DateOnly>` → `string` | None. "Mar 5, Mar 12" (as the rest-day chips show them), "None" when empty — the wizard summary's rest days (Gap 89 Slice B). |
-| `DateRangeToLabelConverter` | `Instance` | `DateOnly`, `DateOnly` → `string` (`MultiBinding`) | None. "Jan 1, 2026 – Jan 31, 2026". `FormatRangeShort` stays only for `ValidateDraftPlacement` (→ Gap 68). |
-| `WorkHoursRangeToLabelConverter` | `Instance` | `TimeOnly?`, `TimeOnly?` → `string` (`MultiBinding`) | None. "09:00 – 17:00", "No constraint" when either is missing. `FormatKnownWindow12Hour` stays only for `ValidateDraftPlacement` (→ Gap 68). |
-| `MinutesToStringConverter` | `Instance` | `WholeMinutes`/`double`/`int` (minutes) → `string` | None. "1h 30m" / "1h" / "30 min" — never a pointless "0m". Also `FormatMinutes(minutes)`. |
-| `DurationLabelConverter` | `DurationLabelConverter` | `TimeSpan` → `string` | None. Parenthesized End-dropdown suffix: "(30 mins)", "(1 hr)", "(1.5 hrs)". A sibling of `DurationToStringConverter`, not a change to it (that one is shared with Post-Session). |
-| `TimeOfDayToStringConverter` | `Instance` | `TimeSpan?` ↔ `string` (two-way) | None. "10:30", "24:00" for the end of the day; back: a time, or null for anything that isn't one (no day part — "93" is not 93 days). The one place time-of-day text is made or read (Gap 89 Slice B); `Format`/`TryParse` serve the `TimeOfDayBox` control. |
-| `PercentageToLabelConverter` | `Instance` | `double?` (fraction) → `string` | None. "50%" / "133%" (uncapped), "Rest" when null. |
-
-**Static `Format…` helpers** (`HoursToStringConverter.FormatHours`, `MinutesToStringConverter.FormatMinutes`) are for converters that word a whole sentence (`ContractRangeToBannerConverter`, the day-badge converters) — no ViewModel calls one (`NoViewModelFormatsValues`, whose one entry is `ValidateDraftPlacement` → Gap 68). A start-and-end value is a two-input converter in a `MultiBinding` (`DateRangeToLabelConverter`, `WorkHoursRangeToLabelConverter`), not a static helper a ViewModel calls (Gap 89 Slice B; `NamingRuleTests` counts `IMultiValueConverter` as a converter).
+Reuse an approved converter before writing a new one. The list — every converter, what it maps, its parameter — is `UI_UX_STANDARDS.md` → Converter Catalogue; `ConverterCatalogueTests` fails when code and catalogue differ (moved there 2026-10-26 to keep the auto-loaded files under the size limit).
 
 ---
 
@@ -331,7 +285,7 @@ These converters are approved. Reuse before creating new ones. **This list must 
 | Value object | Noun only | `SessionGoal`, `BreakTimer` |
 | Domain service | Agent noun — names the role it plays (`-Engine`, `-Classifier`, `-Calculator`, `-Checker`, …); never `-Service`, which is reserved for Infrastructure and the Application↔UI bridges. A `sealed class` in `Domain/Services/`, no interface (Gap 111) | `PolicyEngine`, `BlockPlacementChecker`, `BlockChangeChecker` |
 | ViewModel | `<Page>ViewModel` | `MainPageViewModel`, `HatsuPageViewModel` |
-| Converter | `<Input>To<Output>Converter` for a mapping; `<What>EqualConverter` / `<Subject>Has<X>Converter` for a yes/no test (added 2026-09-29, Gap 98 — the catalogue already listed `IntEqualConverter`). Every converter is listed in the Converter Catalogue above — a test fails otherwise | `TimeSpanToStringConverter`, `StringEqualConverter` |
+| Converter | `<Input>To<Output>Converter` for a mapping; `<What>EqualConverter` / `<Subject>Has<X>Converter` for a yes/no test (added 2026-09-29, Gap 98 — the catalogue already listed `IntEqualConverter`). Every converter is listed in `UI_UX_STANDARDS.md` → Converter Catalogue — a test fails otherwise | `TimeSpanToStringConverter`, `StringEqualConverter` |
 | Control | A noun naming what it is on screen, in `Views/Controls/`; no ViewModel — a screen gives it values and content (added 2026-10-25, Gap 89 Slice B). Its look lives with it (`<Control>.axaml`). A control when structure and behaviour repeat; a shared style (`Styles/`) when only the look does — see `UI_UX_STANDARDS.md` → Shared Look | `TimeOfDayBox`, `ModalDialog` |
 
 ---
@@ -350,7 +304,7 @@ UseCases/Sessions/StartSession/
 
 No shared base classes for commands or results. No `BaseCommand`. Copy the pattern, don't abstract it.
 
-**Query slices (added 2026-09-29, Gap 98):** every query lives in `Queries/<Name>/` with exactly one `…Query.cs` and one `…QueryHandler.cs`. A result type only this query produces may sit next to them; the moment another slice uses it, it moves to `DTOs/` — one shared definition, never a second copy. The UI reading the answer doesn't count as sharing; it's the reader the type was shaped for. **Every query has a caller** outside its own slice and the tests — a query nothing asks is code nobody runs, and drifts unseen (Gap 89 close-out: `GetSessionHistoryQuery` held a second "how long did it count"; guarded by `CqrsRuleTests.EveryQueryHasACaller`, one exception — break-timer CRUD waiting for the Settings page, Gap 83). Queries only read: a query handler whose answer commands save is a business rule living in the wrong place — it belongs in the Domain (as redemption attribution moved from `ComputeRedemptionAttribution` into `NenContract.CheckRedemptionPlacement`, Gap 106). Guarded by `CqrsRuleTests.CommandHandlersDoNotHoldQueryHandlers`: no command handler holds a query handler or the query dispatcher (validators exempt; no exceptions since Gap 110 moved the recaps into an event handler).
+**Query slices (added 2026-09-29, Gap 98):** every query lives in `Queries/<Name>/` with exactly one `…Query.cs` and one `…QueryHandler.cs`. A result type only this query produces may sit next to them; the moment another slice uses it, it moves to `DTOs/` — one shared definition, never a second copy. The UI reading the answer doesn't count as sharing; it's the reader the type was shaped for. **Every query has a caller** outside its own slice and the tests — a query nothing asks is code nobody runs, and drifts unseen (Gap 89 close-out: `GetSessionHistoryQuery` held a second "how long did it count"; guarded by `CqrsRuleTests.EveryQueryHasACaller`, one exception — break-timer CRUD waiting for the Settings page, Gap 83). Queries only read: a query handler whose answer commands save is a business rule living in the wrong place — it belongs in the Domain (as redemption attribution moved from `ComputeRedemptionAttribution` into `NenContract.CheckRedemptionPlacement`, Gap 106). Command handlers hold no query handler or query dispatcher (validators exempt) — see Application above.
 
 **Validators check form and ask, never own a rule (added 2026-09-29, Gap 98):** a validator checks the input's shape (required, in range, well-formed) and asks the Domain or a repository whether the change is allowed. It never holds its own copy of a business rule — two validators with the same formula are two sources of truth (see Gap 92 V9, Gap 93).
 

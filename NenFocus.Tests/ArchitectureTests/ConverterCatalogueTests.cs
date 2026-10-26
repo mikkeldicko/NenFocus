@@ -5,7 +5,7 @@ using NenFocus.ViewModels.Shell;
 namespace NenFocus.Tests.ArchitectureTests;
 
 /// <summary>
-/// The MODULE_STANDARDS Converter Catalogue exists so a converter is reused before a second one
+/// The UI_UX_STANDARDS Converter Catalogue exists so a converter is reused before a second one
 /// is written — which only works if it lists every converter. Code and catalogue must match.
 /// </summary>
 public class ConverterCatalogueTests
@@ -14,7 +14,7 @@ public class ConverterCatalogueTests
 
     private static List<string> Catalogue()
     {
-        var standards = File.ReadAllText(Path.Combine(SourceCode.RepoRoot, "MODULE_STANDARDS.md"));
+        var standards = File.ReadAllText(Path.Combine(SourceCode.RepoRoot, "UI_UX_STANDARDS.md"));
         var start = standards.IndexOf("## Converter Catalogue", StringComparison.Ordinal);
         var end = standards.IndexOf("\n## ", start + 1, StringComparison.Ordinal);
         var section = standards[start..(end < 0 ? standards.Length : end)];
