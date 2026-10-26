@@ -4,7 +4,7 @@ namespace NenFocus.Application.Interfaces;
 
 /// <summary>
 /// CRUD persistence contract for BreakTimerPreset — mirrors IContractPresetRepository's
-/// shape exactly. No lock-check method (HasFutureBlocksForPresetAsync's equivalent):
+/// shape exactly. No lock check (BlockPreset has IsLockedAt, Gap 89 Slice D):
 /// unlike BlockPreset/ContractPreset, a BreakTimerPreset is snapshotted by value into
 /// a Session at Start, so nothing ever needs to ask "is this preset currently in use"
 /// before allowing a delete.

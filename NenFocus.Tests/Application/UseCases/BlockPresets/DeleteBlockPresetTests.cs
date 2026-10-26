@@ -66,4 +66,43 @@ public class DeleteBlockPresetTests : UseCaseTestBase
         result.Success.Should().BeFalse();
         (await FindAsync<BlockPreset>(preset.Id)).Should().NotBeNull();
     }
+
+    // ── Gap 89 Slice D: the block's own end decides, and an open deficit keeps the preset ──
+
+    [Fact]
+    public async Task UsedOnlyByABlockWhoseSessionEndedEarly_IsRemoved()
+    {
+        // 11:00–13:00, its session ended at 11:45: the block holds the preset only until then
+        // (it used to stay locked until 13:00).
+        var preset = Preset();
+        var block = TestBlocks.Worked(FocusBlock.Create(Guid.NewGuid(), preset.Id, At.Slot(Now.AddHours(-1), Now.AddHours(1))),
+            ritualAfterStart: 0, endedAfterStart: 45);
+        await SeedAsync(preset, block);
+
+        var result = await DeleteAsync(preset.Id);
+
+        result.Success.Should().BeTrue(result.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task OwedByAContractInEffect_IsRefused_AndKept()
+    {
+        // Yesterday's Committed block was missed; Cover Deficit needs this preset to pay it back.
+        var preset = Preset();
+        var today = DateOnly.FromDateTime(Now);
+        var contract = TestContracts.Seal(
+            id: Guid.NewGuid(), name: "Focused Week", goal: new NenContractGoal("Ship it"), strictnessRule: StrictnessRule.DailyFlexibility,
+            calendar: TestCalendars.For(today.AddDays(-2), today.AddDays(4), new DailyFloorRule.None()),
+            floorRule: new DailyFloorRule.None(), allowCancellation: true,
+            plannedFocusHoursByDay: new Dictionary<DateOnly, double>(),
+            sealedAt: At.Utc(Now.AddDays(-3)), timeZone: At.UtcZone);
+        var missed = FocusBlock.Create(Guid.NewGuid(), preset.Id, At.Slot(Now.AddDays(-1), Now.AddDays(-1).AddHours(1)),
+            membership: TestContracts.Committed(contract.Id));
+        await SeedAsync(preset, contract, missed);
+
+        var result = await DeleteAsync(preset.Id);
+
+        result.Success.Should().BeFalse();
+        (await FindAsync<BlockPreset>(preset.Id)).Should().NotBeNull();
+    }
 }

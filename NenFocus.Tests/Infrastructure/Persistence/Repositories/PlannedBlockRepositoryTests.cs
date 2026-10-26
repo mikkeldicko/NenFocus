@@ -90,45 +90,55 @@ public class PlannedBlockRepositoryTests : SqliteRepositoryTestBase
         (await Fresh().GetByIdAsync(block.Id)).Should().BeNull();
     }
 
+    // GetUsingPresetAsync narrows; each block decides through ReservedSlot (Gap 89 Slice D).
+
     [Fact]
-    public async Task HasFutureBlocksForPresetAsync_BlockEndingAfterCutoff_ReturnsTrue()
+    public async Task GetUsingPresetAsync_ABlockEndingAfterTheCutoff_IsReturned()
     {
         var presetId = Guid.NewGuid();
         var repo = CreateRepository();
-        repo.Add(FocusBlock.Create(Guid.NewGuid(), presetId,At.Slot(Start, End)));
+        var block = FocusBlock.Create(Guid.NewGuid(), presetId, At.Slot(Start, End));
+        repo.Add(block);
         await Context.SaveChangesAsync();
 
-        var result = await Fresh().HasFutureBlocksForPresetAsync(presetId, At.Utc(Start.AddMinutes(-1)));
+        var result = await Fresh().GetUsingPresetAsync(presetId, At.Utc(Start.AddMinutes(-1)));
 
-        result.Should().BeTrue();
+        result.Select(b => b.Id).Should().Equal(block.Id);
     }
 
     [Fact]
-    public async Task HasFutureBlocksForPresetAsync_BlockEndingBeforeCutoff_ReturnsFalse()
+    public async Task GetUsingPresetAsync_ABlockEndedByTheCutoff_IsLeftOut()
     {
         var presetId = Guid.NewGuid();
         var repo = CreateRepository();
-        repo.Add(FocusBlock.Create(Guid.NewGuid(), presetId,At.Slot(Start, End)));
+        repo.Add(FocusBlock.Create(Guid.NewGuid(), presetId, At.Slot(Start, End)));
         await Context.SaveChangesAsync();
 
-        var result = await Fresh().HasFutureBlocksForPresetAsync(presetId, At.Utc(End.AddMinutes(1)));
-
-        result.Should().BeFalse();
+        (await Fresh().GetUsingPresetAsync(presetId, At.Utc(End))).Should().BeEmpty("half-open: ended at its end");
     }
 
     [Fact]
-    public async Task HasFutureBlocksForPresetAsync_CancelledBlock_IsExcluded()
+    public async Task GetUsingPresetAsync_ACancelledBlock_IsReturned_TheBlockDecides()
     {
+        // A superset: what cancelling means is ReservedSlot's answer, not the SQL's.
         var presetId = Guid.NewGuid();
         var repo = CreateRepository();
-        var block = FocusBlock.Create(Guid.NewGuid(), presetId,At.Slot(Start, End));
+        var block = FocusBlock.Create(Guid.NewGuid(), presetId, At.Slot(Start, End));
         block.MarkCancelled(At.Utc(Start.AddMinutes(-10)));
         repo.Add(block);
         await Context.SaveChangesAsync();
 
-        var result = await Fresh().HasFutureBlocksForPresetAsync(presetId, At.Utc(Start.AddMinutes(-1)));
+        (await Fresh().GetUsingPresetAsync(presetId, At.Utc(Start.AddMinutes(-1)))).Select(b => b.Id).Should().Equal(block.Id);
+    }
 
-        result.Should().BeFalse();
+    [Fact]
+    public async Task GetUsingPresetAsync_AnotherPresetsBlock_IsLeftOut()
+    {
+        var repo = CreateRepository();
+        repo.Add(FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Start, End)));
+        await Context.SaveChangesAsync();
+
+        (await Fresh().GetUsingPresetAsync(Guid.NewGuid(), At.Utc(Start.AddMinutes(-1)))).Should().BeEmpty();
     }
 
     [Fact]

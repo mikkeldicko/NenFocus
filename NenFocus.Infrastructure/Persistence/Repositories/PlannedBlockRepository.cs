@@ -45,16 +45,17 @@ public sealed class PlannedBlockRepository : IPlannedBlockRepository
             .FirstOrDefaultAsync(b => b.Id == id, cancellationToken);
     }
 
-    public Task<bool> HasFutureBlocksForPresetAsync(
+    public async Task<IReadOnlyList<PlannedBlock>> GetUsingPresetAsync(
         Guid presetId,
         Moment after,
         CancellationToken cancellationToken = default)
     {
-        // Cancelled excluded: a broken contract's leftover block must not keep a preset
-        // locked from editing/deletion just because it still has a future End date.
-        return _context.PlannedBlocks
+        // Narrows only: EffectiveEnd is never later than the scheduled end, so this can include too
+        // many, never too few. Cancelled and ended-early blocks come back; the block decides.
+        return await _context.PlannedBlocks
             .Where(Not(OnSlot<PlannedBlock, bool>(b => b.Scheduled, TimeSlot.Filters.HasEnded(after))))
-            .AnyAsync(b => b.BlockPresetId == presetId && b.CancelledAt == null, cancellationToken);
+            .Where(b => b.BlockPresetId == presetId)
+            .ToListAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyList<FocusBlock>> GetUnresolvedFocusBlocksAsync(

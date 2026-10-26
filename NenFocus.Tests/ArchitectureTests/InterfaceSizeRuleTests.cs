@@ -26,8 +26,9 @@ public class InterfaceSizeRuleTests
         "IRecapRelay has 6",
 
         // Repositories: in DDD a collection-like door to one aggregate. Each extra query method is
-        // usually a business rule moving into SQL (e.g. HasFutureBlocksForPresetAsync, Gap 92 A6),
-        // so these are capped too — a new method is a decision, not a habit.
+        // usually a business rule moving into SQL (e.g. HasFutureBlocksForPresetAsync answered "is this
+        // preset locked" until Gap 89 Slice D replaced it with a plain read, GetUsingPresetAsync, and moved
+        // the rule onto BlockPreset), so these are capped too — a new method is a decision, not a habit.
         "IPlannedBlockRepository has 7",
         "INenContractRepository has 7",
         "ISessionRepository has 6",

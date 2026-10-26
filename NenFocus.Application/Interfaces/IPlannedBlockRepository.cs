@@ -21,10 +21,11 @@ public interface IPlannedBlockRepository
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Returns true if any planned block after <paramref name="after"/> references the given preset.
-    /// Used to guard delete/update operations.
+    /// This preset's blocks whose scheduled end is after <paramref name="after"/> — a superset (cancelled
+    /// and ended-early ones included): each block decides whether it still holds its preset, through
+    /// ReservedSlot, in BlockPreset.IsLockedAt (Gap 89 Slice D).
     /// </summary>
-    Task<bool> HasFutureBlocksForPresetAsync(
+    Task<IReadOnlyList<PlannedBlock>> GetUsingPresetAsync(
         Guid presetId,
         Moment after,
         CancellationToken cancellationToken = default);

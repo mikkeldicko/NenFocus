@@ -236,4 +236,161 @@ public class BlockPresetTests
 
         preset.IsAtLeastAsStrict(Apps(), Sites("allowed-a.com", "allowed-b.com")).Should().BeFalse();
     }
+
+    // ── Locked: in use now or later (Gap 89 Slice D) ───────────────────────────
+
+    private static readonly DateTime Now = new(2026, 10, 26, 12, 0, 0, DateTimeKind.Utc);
+    private static readonly OutstandingDeficit[] NoDeficits = [];
+
+    private static FocusBlock FocusOf(BlockPreset preset, DateTime from, DateTime to) =>
+        FocusBlock.Create(Guid.NewGuid(), preset.Id, At.Slot(from, to));
+
+    private static Session RunningSessionOf(Guid presetId)
+    {
+        var session = Session.Create(Guid.NewGuid(), new SessionGoal("Goal"), new SessionDuration(TimeSpan.FromMinutes(30)),
+            presetId, SessionOrigin.Spontaneous);
+        session.Start(At.Utc(Now.AddMinutes(-5)));
+        return session;
+    }
+
+    private static OutstandingDeficit DeficitOf(Guid presetId) =>
+        new(Guid.NewGuid(), presetId, At.Slot(Now.AddDays(-1), Now.AddDays(-1).AddHours(1)),
+            FocusBlockOutcome.Missed, WholeMinutes.Of(60), WholeMinutes.Of(60));
+
+    [Fact]
+    public void IsLockedAt_NothingUsesIt_IsFalse()
+    {
+        CreatePreset().IsLockedAt(At.Utc(Now), null, [], NoDeficits).Should().BeFalse();
+    }
+
+    [Fact]
+    public void IsLockedAt_TheRunningSessionUsesIt_IsTrue()
+    {
+        var preset = CreatePreset();
+        preset.IsLockedAt(At.Utc(Now), RunningSessionOf(preset.Id), [], NoDeficits).Should().BeTrue();
+    }
+
+    [Fact]
+    public void IsLockedAt_ARunningSessionOfAnotherPreset_IsFalse()
+    {
+        CreatePreset().IsLockedAt(At.Utc(Now), RunningSessionOf(Guid.NewGuid()), [], NoDeficits).Should().BeFalse();
+    }
+
+    [Fact]
+    public void IsLockedAt_ABlockStillToCome_IsTrue()
+    {
+        var preset = CreatePreset();
+        preset.IsLockedAt(At.Utc(Now), null, [FocusOf(preset, Now.AddDays(1), Now.AddDays(1).AddHours(1))], NoDeficits)
+            .Should().BeTrue();
+    }
+
+    [Fact]
+    public void IsLockedAt_ABlockRunningNow_IsTrue()
+    {
+        var preset = CreatePreset();
+        preset.IsLockedAt(At.Utc(Now), null, [FocusOf(preset, Now.AddMinutes(-30), Now.AddMinutes(30))], NoDeficits)
+            .Should().BeTrue();
+    }
+
+    [Fact]
+    public void IsLockedAt_ABlockThatEnded_IsFalse()
+    {
+        var preset = CreatePreset();
+        preset.IsLockedAt(At.Utc(Now), null, [FocusOf(preset, Now.AddHours(-2), Now.AddHours(-1))], NoDeficits)
+            .Should().BeFalse();
+    }
+
+    [Fact]
+    public void IsLockedAt_ABlockCancelledBeforeItStarted_IsFalse()
+    {
+        var preset = CreatePreset();
+        var block = FocusOf(preset, Now.AddDays(1), Now.AddDays(1).AddHours(1));
+        block.MarkCancelled(At.Utc(Now.AddMinutes(-1)));
+
+        preset.IsLockedAt(At.Utc(Now), null, [block], NoDeficits).Should().BeFalse("a cancelled block occupies nothing");
+    }
+
+    [Fact]
+    public void IsLockedAt_ABlockWhoseSessionEndedEarly_IsFalse_FromTheRealEnd()
+    {
+        // 11:00–13:00, its session ended at 11:45: free from then, not from 13:00 (it used to stay locked).
+        var preset = CreatePreset();
+        var block = TestBlocks.Worked(FocusOf(preset, Now.AddHours(-1), Now.AddHours(1)), ritualAfterStart: 0, endedAfterStart: 45);
+
+        preset.IsLockedAt(At.Utc(Now), null, [block], NoDeficits).Should().BeFalse();
+    }
+
+    [Fact]
+    public void IsLockedAt_AContractStillOwesTimeOfIt_IsTrue()
+    {
+        // Cover Deficit needs the preset to exist.
+        var preset = CreatePreset();
+        preset.IsLockedAt(At.Utc(Now), null, [], [DeficitOf(preset.Id)]).Should().BeTrue();
+    }
+
+    [Fact]
+    public void IsLockedAt_DeficitsOfOtherPresets_DoNotCount()
+    {
+        CreatePreset().IsLockedAt(At.Utc(Now), null, [], [DeficitOf(Guid.NewGuid())]).Should().BeFalse();
+    }
+
+    [Fact]
+    public void IsLockedAt_ABlockOfAnotherPreset_Throws()
+    {
+        var preset = CreatePreset();
+        var other = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Now.AddDays(1), Now.AddDays(1).AddHours(1)));
+
+        var act = () => preset.IsLockedAt(At.Utc(Now), null, [other], NoDeficits);
+
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
+    public void AllowsChangeWhileLocked_OnlyAddingABlockedApp_IsTrue()
+    {
+        var preset = CreatePreset();
+        preset.AddBlockedApp(new BlockedApp("chrome"));
+
+        preset.AllowsChangeWhileLocked("Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Apps("chrome", "steam"), Sites())
+            .Should().BeTrue();
+    }
+
+    [Fact]
+    public void AllowsChangeWhileLocked_TheNameAsSavedIsUnchanged_IsTrue()
+    {
+        // Rename trims, so "  Deep Work " is the same name.
+        CreatePreset().AllowsChangeWhileLocked("  Deep Work ", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Apps(), Sites())
+            .Should().BeTrue();
+    }
+
+    [Fact]
+    public void AllowsChangeWhileLocked_Renamed_IsFalse()
+    {
+        CreatePreset().AllowsChangeWhileLocked("Shallow Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Apps(), Sites())
+            .Should().BeFalse();
+    }
+
+    [Fact]
+    public void AllowsChangeWhileLocked_AnotherFilter_IsFalse()
+    {
+        CreatePreset().AllowsChangeWhileLocked("Deep Work", WebsiteFilterType.Allowlist, BlockPresetType.Focus, Apps(), Sites())
+            .Should().BeFalse();
+    }
+
+    [Fact]
+    public void AllowsChangeWhileLocked_AnotherType_IsFalse()
+    {
+        CreatePreset().AllowsChangeWhileLocked("Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Background, Apps(), Sites())
+            .Should().BeFalse();
+    }
+
+    [Fact]
+    public void AllowsChangeWhileLocked_Weaker_IsFalse()
+    {
+        var preset = CreatePreset();
+        preset.AddBlockedApp(new BlockedApp("chrome"));
+
+        preset.AllowsChangeWhileLocked("Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, Apps(), Sites())
+            .Should().BeFalse();
+    }
 }

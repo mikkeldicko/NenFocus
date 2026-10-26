@@ -33,12 +33,12 @@ public class BlockPreset : AggregateRoot
         var preset = new BlockPreset
         {
             Id = id,
-            Name = name.Trim(),
+            Name = NameAsSaved(name),
             WebsiteFilterType = websiteFilterType,
             PresetType = presetType
         };
 
-        preset.Raise(new BlockPresetCreatedEvent(id, name.Trim(), createdAt));
+        preset.Raise(new BlockPresetCreatedEvent(id, NameAsSaved(name), createdAt));
 
         return preset;
     }
@@ -51,8 +51,11 @@ public class BlockPreset : AggregateRoot
             throw new ArgumentException(
                 "Preset name cannot be empty.", nameof(newName));
 
-        Name = newName.Trim();
+        Name = NameAsSaved(newName);
     }
+
+    /// <summary>A name as the preset keeps it — the one normalisation Create, Rename and AllowsChangeWhileLocked share.</summary>
+    private static string NameAsSaved(string name) => name.Trim();
 
     public void AddBlockedApp(BlockedApp app)
     {
@@ -106,6 +109,38 @@ public class BlockPreset : AggregateRoot
             ? proposedSites.IsSubsetOf(currentSites)
             : currentSites.IsSubsetOf(proposedSites);
     }
+
+    /// <summary>
+    /// Locked at <paramref name="now"/> — it can't be deleted, and may only change as
+    /// <see cref="AllowsChangeWhileLocked"/> allows — while anything still depends on it: the running
+    /// session uses it; a block that uses it hasn't really ended (its ReservedSlot — so an early end or a
+    /// cancellation frees it); or a contract in effect still owes time of it (Cover Deficit places a new
+    /// block with it). The one rule both preset validators ask, through CheckBlockPresetLockedQuery (Gap 89
+    /// Slice D). <paramref name="blocksUsingIt"/> must be its own — another preset's block throws;
+    /// <paramref name="openDeficits"/> may be any contract's, of any preset: only its own count.
+    /// </summary>
+    public bool IsLockedAt(Moment now, Session? running, IEnumerable<PlannedBlock> blocksUsingIt,
+        IEnumerable<OutstandingDeficit> openDeficits)
+    {
+        var blocks = blocksUsingIt.ToList();
+        if (blocks.Any(b => b.BlockPresetId != Id))
+            throw new ArgumentException("A block of another preset was passed in.", nameof(blocksUsingIt));
+
+        return running?.BlockPresetId == Id
+            || blocks.Any(b => b.ReservedSlot(now) is { } reserved && !reserved.HasEnded(now))
+            || openDeficits.Any(d => d.PresetId == Id);
+    }
+
+    /// <summary>
+    /// What may change while it is locked: the name (as Rename saves it), filter and type unchanged, and
+    /// the lists at least as strict (<see cref="IsAtLeastAsStrict"/>) — a commitment can be strengthened,
+    /// never weakened, renamed or retyped (Gaps 8, 30; moved here from UpdateBlockPresetValidator, Gap 89
+    /// Slice D).
+    /// </summary>
+    public bool AllowsChangeWhileLocked(string name, WebsiteFilterType filterType, BlockPresetType presetType,
+        IReadOnlySet<BlockedApp> apps, IReadOnlySet<Website> sites) =>
+        NameAsSaved(name) == Name && filterType == WebsiteFilterType && presetType == PresetType
+        && IsAtLeastAsStrict(apps, sites);
 
     public BlockPreset Duplicate(string newName, Guid newId, Moment duplicatedAt)
     {
