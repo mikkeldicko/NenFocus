@@ -508,7 +508,7 @@
                                            FontSize="10" FontWeight="Medium" LetterSpacing="1" Foreground="White"/>
 							</Border>
 							<Border Classes="snapshotBadge" Background="#F5EDD8"
-                                    IsVisible="{Binding SnapshotBlock.ContractBadge, Converter={x:Static conv:EnumEqualConverter.Instance}, ConverterParameter=Redemption}">
+                                    IsVisible="{Binding SnapshotBlock.ContractRole, Converter={x:Static conv:EnumEqualConverter.Instance}, ConverterParameter=Redemption}">
 								<TextBlock Text="REDEMPTION" FontSize="10" FontWeight="Medium" LetterSpacing="1" Foreground="#8B7320"/>
 							</Border>
 						</StackPanel>

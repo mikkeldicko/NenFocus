@@ -7,7 +7,7 @@ namespace NenFocus.Converters;
 /// <summary>
 /// Returns true if the binding value's ToString() equals the converter parameter string.
 /// Works for any enum, including a nullable one (value is null when unset). Used to drive
-/// badge visibility off BlockContractBadge without a dedicated converter per enum.
+/// tag visibility off ContractRole without a dedicated converter per enum.
 /// </summary>
 public sealed class EnumEqualConverter : IValueConverter
 {

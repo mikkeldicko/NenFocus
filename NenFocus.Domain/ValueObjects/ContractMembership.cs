@@ -5,7 +5,8 @@ namespace NenFocus.Domain.ValueObjects;
 /// <summary>
 /// A block's membership in a Nen Contract: which contract, and how it belongs. The two always
 /// come together — a block has one membership or none (Gap 97). Only the Domain makes one (the
-/// contract, or the drafting batch), and the role is Domain-only: callers ask the questions below.
+/// contract, or the drafting batch). The role may be read — the Planner shows it as a tag — but
+/// every rule asks the questions below, never the role itself.
 /// </summary>
 public sealed record ContractMembership
 {
@@ -22,7 +23,7 @@ public sealed record ContractMembership
 
     public Guid ContractId { get; }
 
-    internal ContractRole Role { get; }
+    public ContractRole Role { get; }
 
     /// <summary>Committed and Redemption blocks count toward the contract's floor; Bonus never does.</summary>
     public bool CountsTowardFloor => Role is ContractRole.Committed or ContractRole.Redemption;

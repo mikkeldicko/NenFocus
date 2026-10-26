@@ -55,20 +55,11 @@ public sealed class GetBlocksForDayQueryHandler
             // rules live on the block alone, so the tile and every hour count can't drift.
             var shown = focusBlock?.WorkSlot() ?? b.Scheduled;
 
-            // The badge is the block's own stored role in its contract (Gap 97) — one role, so
-            // only one badge can apply. Focus only: the floor and Bonus hours only ever come
-            // from Focus blocks, so a Background block shows no badge.
+            // The tag is the block's own stored role in its contract (Gap 97). Focus only: the
+            // floor and Bonus hours only ever come from Focus blocks, so a Background block shows none.
             var bonusContract = focusBlock is { IsBonus: true }
                 ? contractsById.GetValueOrDefault(focusBlock.Membership!.ContractId)
                 : null;
-
-            var contractBadge = focusBlock is { IsRedemption: true }
-                ? BlockContractBadge.Redemption
-                : focusBlock is { IsBonus: true }
-                    ? BlockContractBadge.Bonus
-                    : focusBlock is { IsCommitted: true }
-                        ? BlockContractBadge.Committed
-                        : (BlockContractBadge?)null;
 
             return new BlockDto
             {
@@ -85,7 +76,7 @@ public sealed class GetBlocksForDayQueryHandler
                 Outcome = focusBlock?.Outcome(now),
                 StartedLate = focusBlock?.StartedLate ?? false,
                 EndedEarly = focusBlock?.EndedEarly ?? false,
-                ContractBadge = contractBadge,
+                ContractRole = focusBlock?.Membership?.Role,
                 BonusContractName = bonusContract?.Name
             };
         }).ToList();

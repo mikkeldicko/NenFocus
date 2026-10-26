@@ -50,11 +50,11 @@ public class GetBlocksForDayQueryHandlerTests
         dto.WebsiteFilterType.Should().Be(WebsiteFilterType.Allowlist);
         dto.Shown.Should().Be(At.Slot(Start, End));
         dto.IsFinal.Should().BeFalse();
-        dto.ContractBadge.Should().BeNull();
+        dto.ContractRole.Should().BeNull();
     }
 
     [Fact]
-    public async Task HandleAsync_FocusBlockWithRedemptionEntries_ContractBadgeIsRedemption()
+    public async Task HandleAsync_FocusBlockWithRedemptionEntries_ContractRoleIsRedemption()
     {
         var presetId = Guid.NewGuid();
         var block = FocusBlock.CreateWithReceipt(Guid.NewGuid(), presetId,At.Slot(Start, End),
@@ -64,7 +64,7 @@ public class GetBlocksForDayQueryHandlerTests
 
         var result = await CreateHandler().HandleAsync(new GetBlocksForDayQuery { Date = Day });
 
-        result.Should().ContainSingle().Subject.ContractBadge.Should().Be(BlockContractBadge.Redemption);
+        result.Should().ContainSingle().Subject.ContractRole.Should().Be(ContractRole.Redemption);
     }
 
     [Fact]
@@ -416,7 +416,7 @@ public class GetBlocksForDayQueryHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_BonusFocusBlock_ContractBadgeIsBonusWithContractName()
+    public async Task HandleAsync_BonusFocusBlock_ContractRoleIsBonusWithContractName()
     {
         var contractId = Guid.NewGuid();
         SetUpStudyMonth(contractId);
@@ -424,7 +424,7 @@ public class GetBlocksForDayQueryHandlerTests
         var dto = await SingleDtoAsync(
             FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Start, End), membership: TestContracts.Bonus(contractId)));
 
-        dto.ContractBadge.Should().Be(BlockContractBadge.Bonus);
+        dto.ContractRole.Should().Be(ContractRole.Bonus);
         dto.BonusContractName.Should().Be("Study Month");
     }
 
@@ -439,12 +439,12 @@ public class GetBlocksForDayQueryHandlerTests
         var dto = await SingleDtoAsync(
             BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Start, End), membership: TestContracts.Bonus(contractId)));
 
-        dto.ContractBadge.Should().BeNull();
+        dto.ContractRole.Should().BeNull();
         dto.BonusContractName.Should().BeNull();
     }
 
     [Fact]
-    public async Task HandleAsync_PlainBlock_ContractBadgeIsNull_EvenInsideAContractsDates()
+    public async Task HandleAsync_PlainBlock_ContractRoleIsNull_EvenInsideAContractsDates()
     {
         // No membership means no badge — the dates are never consulted. (A block made before
         // the contract was sealed sits inside its dates without belonging to it.)
@@ -452,12 +452,12 @@ public class GetBlocksForDayQueryHandlerTests
 
         var dto = await SingleDtoAsync(FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Start, End)));
 
-        dto.ContractBadge.Should().BeNull();
+        dto.ContractRole.Should().BeNull();
         dto.BonusContractName.Should().BeNull();
     }
 
     [Fact]
-    public async Task HandleAsync_CommittedFocusBlock_ContractBadgeIsCommitted()
+    public async Task HandleAsync_CommittedFocusBlock_ContractRoleIsCommitted()
     {
         var contractId = Guid.NewGuid();
         SetUpStudyMonth(contractId);
@@ -465,7 +465,7 @@ public class GetBlocksForDayQueryHandlerTests
         var dto = await SingleDtoAsync(
             FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Start, End), membership: TestContracts.Committed(contractId)));
 
-        dto.ContractBadge.Should().Be(BlockContractBadge.Committed);
+        dto.ContractRole.Should().Be(ContractRole.Committed);
     }
 
     [Fact]
@@ -478,11 +478,11 @@ public class GetBlocksForDayQueryHandlerTests
         var dto = await SingleDtoAsync(
             BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Start, End), membership: TestContracts.Committed(contractId)));
 
-        dto.ContractBadge.Should().BeNull();
+        dto.ContractRole.Should().BeNull();
     }
 
     [Fact]
-    public async Task HandleAsync_RedemptionBlockThatCoversNothingAnyMore_ContractBadgeIsStillRedemption()
+    public async Task HandleAsync_RedemptionBlockThatCoversNothingAnyMore_ContractRoleIsStillRedemption()
     {
         // The role is the answer, not the entries: coverage can drop to zero on an edit.
         var contractId = Guid.NewGuid();
@@ -491,11 +491,11 @@ public class GetBlocksForDayQueryHandlerTests
         var dto = await SingleDtoAsync(
             FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Start, End), membership: TestContracts.Redemption(contractId)));
 
-        dto.ContractBadge.Should().Be(BlockContractBadge.Redemption);
+        dto.ContractRole.Should().Be(ContractRole.Redemption);
     }
 
     [Fact]
-    public async Task HandleAsync_BonusBlockOfABrokenContract_ContractBadgeIsStillBonus()
+    public async Task HandleAsync_BonusBlockOfABrokenContract_ContractRoleIsStillBonus()
     {
         // A Bonus block that ran keeps its membership when its contract is broken.
         var contractId = Guid.NewGuid();
@@ -504,6 +504,6 @@ public class GetBlocksForDayQueryHandlerTests
         var dto = await SingleDtoAsync(
             FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Start, End), membership: TestContracts.Bonus(contractId)));
 
-        dto.ContractBadge.Should().Be(BlockContractBadge.Bonus);
+        dto.ContractRole.Should().Be(ContractRole.Bonus);
     }
 }

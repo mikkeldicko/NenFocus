@@ -337,9 +337,9 @@ public partial class PlannerPageView : UserControl
             return btn;
         }
 
-        switch (tile.ContractBadge)
+        switch (tile.ContractRole)
         {
-            case BlockContractBadge.Committed:
+            case ContractRole.Committed:
                 stack.Children.Add(new TextBlock
                 {
                     Text       = "COMMITTED",
@@ -351,7 +351,7 @@ public partial class PlannerPageView : UserControl
 
             // A redemption block stays in its normal outcome/preset color family — a small
             // "REDEMPTION" tag is the only distinguishing mark, no border treatment.
-            case BlockContractBadge.Redemption:
+            case ContractRole.Redemption:
                 stack.Children.Add(new TextBlock
                 {
                     Text       = "REDEMPTION",
@@ -361,7 +361,7 @@ public partial class PlannerPageView : UserControl
                 });
                 break;
 
-            case BlockContractBadge.Bonus:
+            case ContractRole.Bonus:
                 stack.Children.Add(new TextBlock
                 {
                     Text       = "BONUS",

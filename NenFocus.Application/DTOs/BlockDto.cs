@@ -57,11 +57,11 @@ public sealed record BlockDto
     /// Redemption (placed to cover another block's deficit) or Bonus (placed on the contract
     /// for any other reason — never counts toward its floor/Day-Met scoring). A block has one
     /// role, so only one applies; null is a block of no contract, or a Background block.
-    /// Drives the Planner tile's badge.
+    /// Drives the Planner tile's tag.
     /// </summary>
-    public BlockContractBadge? ContractBadge { get; init; }
+    public ContractRole? ContractRole { get; init; }
 
-    /// <summary>The covering contract's Name when ContractBadge is Bonus, otherwise null.</summary>
+    /// <summary>The covering contract's Name when ContractRole is Bonus, otherwise null.</summary>
     public string? BonusContractName { get; init; }
 
     public int DurationMinutes => (int)Shown.Length.TotalMinutes;

@@ -43,10 +43,10 @@ public partial class BlockTileViewModel : ViewModelBase
     public bool EndedEarly { get; }
 
     /// <summary>
-    /// Redemption or Bonus — mutually exclusive by construction. Null for an ordinary block
-    /// (committed or unrelated to any contract). Drives the tile's badge.
+    /// The Focus block's role in its contract — Committed, Redemption or Bonus. Null for a block
+    /// of no contract, or a Background block. Drives the tile's tag.
     /// </summary>
-    public BlockContractBadge? ContractBadge { get; }
+    public ContractRole? ContractRole { get; }
 
     /// <param name="localStart">Where the tile starts on the user's clock — computed by the Planner
     /// through the user's time zone (Gap 88), never read off the DTO's moments.</param>
@@ -64,7 +64,7 @@ public partial class BlockTileViewModel : ViewModelBase
         Outcome = dto.Outcome;
         StartedLate = dto.StartedLate;
         EndedEarly = dto.EndedEarly;
-        ContractBadge = dto.ContractBadge;
+        ContractRole = dto.ContractRole;
     }
 
     /// <summary>A contract draft's tile — not saved, so it has no block DTO, no outcome and no

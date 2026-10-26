@@ -22,6 +22,6 @@ public class BlockTileViewModelTests
         tile.Outcome.Should().BeNull();
         tile.StartedLate.Should().BeFalse();
         tile.EndedEarly.Should().BeFalse();
-        tile.ContractBadge.Should().BeNull();
+        tile.ContractRole.Should().BeNull();
     }
 }
