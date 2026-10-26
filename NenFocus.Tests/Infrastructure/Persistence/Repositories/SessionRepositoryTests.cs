@@ -50,7 +50,7 @@ public class SessionRepositoryTests : SqliteRepositoryTestBase
         repo.Add(session);
         await Context.SaveChangesAsync();
 
-        session.Complete(At.Utc(DateTime.UtcNow), null);
+        session.Complete(At.Utc(DateTime.UtcNow.AddMinutes(10)), null);
         await Context.SaveChangesAsync();
 
         var reloaded = await Fresh().GetByIdAsync(session.Id);
@@ -122,7 +122,7 @@ public class SessionRepositoryTests : SqliteRepositoryTestBase
     {
         var repo = CreateRepository();
         var session = CreateSession();
-        session.Complete(At.Utc(DateTime.UtcNow), null);
+        session.Complete(At.Utc(DateTime.UtcNow.AddMinutes(10)), null);
         repo.Add(session);
         await Context.SaveChangesAsync();
 

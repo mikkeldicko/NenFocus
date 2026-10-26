@@ -64,8 +64,7 @@ public partial class PostSessionViewModel : ViewModelBase
             ? "What got in the way?"
             : "How did the session go? What did you accomplish?";
         PresetName = data.PresetName;
-        StartedAt = timeZone.ToCalendarTime(data.StartedAt);
-        EndedAt = timeZone.ToCalendarTime(data.EndedAt);
+        (StartedAt, EndedAt) = timeZone.ToCalendarTimes(data.Recorded);
         Duration = data.ActualDuration;
         PlannedDuration = data.PlannedDuration;
         BreaksTaken = data.BreaksTaken;

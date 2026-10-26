@@ -164,13 +164,33 @@ public class Session : AggregateRoot
     public int BreaksTaken => EndedAt is { } endedAt ? BreaksTakenBy(endedAt) : 0;
 
     /// <summary>
+    /// The time this session's record covers: its run once completed, its block's window once missed;
+    /// null while it hasn't ended. Not its Timeline, which is the planned run (to EndAt). Worked out from
+    /// the stored fields, never stored itself (Gap 89 Slice C, F7).
+    /// </summary>
+    public TimeSlot? Recorded =>
+        StartedAt is { } startedAt && EndedAt is { } endedAt ? new TimeSlot(startedAt, endedAt) : null;
+
+    /// <summary>
+    /// Whether it may end at <paramref name="at"/>: it has started, and its end there — capped at EndAt,
+    /// as Complete records it — falls after its start. An ended session always spans some time. The one
+    /// rule End early asks and Complete enforces, so the check and the saved end can't differ.
+    /// </summary>
+    public bool CanEndAt(Moment at) => StartedAt is { } startedAt && CappedEnd(at) > startedAt;
+
+    /// <summary>The end Complete records for <paramref name="endedAt"/>: never later than EndAt — a session can
+    /// never run longer than planned, however late its end is noticed (sleep, a restart, a skipped clock).</summary>
+    private Moment CappedEnd(Moment endedAt) => EndAt is { } plannedEnd && endedAt > plannedEnd ? plannedEnd : endedAt;
+
+    /// <summary>
     /// Ends the session — the one ending, whether you ended it or its time ran out (Gap 89
     /// Slice A). The recorded end is capped at EndAt: a session can never run longer than
     /// planned, however late its end is noticed (sleep, a restart, a skipped clock). The break
     /// schedule is trimmed to what actually happened by then, and a planned session's block is
     /// stamped with that same end, always, early or on time (Gap 86). The block is asked first,
     /// so a stamp it refuses leaves the session running. A planned session whose block is gone
-    /// ends without one; the block passed must be its own.
+    /// ends without one; the block passed must be its own. It must end after it started
+    /// (<see cref="CanEndAt"/>, Gap 89 Slice C) — callers ask that first; this throw is the last guard.
     /// </summary>
     public void Complete(Moment endedAt, FocusBlock? originatingBlock)
     {
@@ -179,8 +199,10 @@ public class Session : AggregateRoot
                 "Session is already completed.");
         if (originatingBlock is not null && originatingBlock.Id != OriginatingBlockId)
             throw new ArgumentException("This block is not the one this session was started for.", nameof(originatingBlock));
+        if (!CanEndAt(endedAt))
+            throw new InvalidOperationException("A session can't end before it started.");
 
-        var actualEnd = EndAt is { } plannedEnd && endedAt > plannedEnd ? plannedEnd : endedAt;
+        var actualEnd = CappedEnd(endedAt);
 
         originatingBlock?.MarkSessionEnded(actualEnd);
 

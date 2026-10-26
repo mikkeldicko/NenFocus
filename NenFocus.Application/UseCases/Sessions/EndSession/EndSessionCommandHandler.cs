@@ -32,6 +32,11 @@ public sealed class EndSessionCommandHandler
         if (session.Status != SessionStatus.Active)
             return EndSessionResult.Fail("Session is not currently active.");
 
+        // One "now" for the check and the end, so the two can't differ (Gap 89 Slice C).
+        var now = _clock.Now;
+        if (!session.CanEndAt(now))
+            return EndSessionResult.EndsBeforeStart();
+
         var originatingFocusBlock = session.OriginatingBlockId is { } blockId
             ? await _plannedBlocks.GetByIdAsync(blockId, ct) as FocusBlock
             : null;
@@ -39,7 +44,7 @@ public sealed class EndSessionCommandHandler
         // The one ending (Gap 89 Slice A): capped at the planned end, and the block stamped with
         // that same end (Gaps 63, 86). Its Post-Session screen follows from SessionEndedEventHandler,
         // after the commit.
-        session.Complete(_clock.Now, originatingFocusBlock);
+        session.Complete(now, originatingFocusBlock);
 
         return EndSessionResult.Ok();
     }

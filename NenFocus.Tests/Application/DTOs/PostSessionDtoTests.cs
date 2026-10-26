@@ -38,8 +38,7 @@ public class PostSessionDtoTests
         dto.Status.Should().Be(SessionStatus.Completed);
         dto.Goal.Should().Be("Write tests");
         dto.PresetName.Should().Be("Deep Work");
-        dto.StartedAt.Should().Be(At.Utc(Start));
-        dto.EndedAt.Should().Be(At.Utc(Start.AddMinutes(40)));
+        dto.Recorded.Should().Be(At.Slot(Start, Start.AddMinutes(40)));
         dto.PlannedDurationMinutes.Should().Be(60);
         dto.ActualDurationMinutes.Should().Be(40);
         dto.BlockedWebsiteAttempts.Should().BeEquivalentTo(new Dictionary<string, int> { ["youtube.com"] = 2 });

@@ -88,6 +88,22 @@ public class EndSessionTests : UseCaseTestBase
         shown.Should().BeEmpty("a refused end saves nothing, so no screen follows");
     }
 
+    [Fact]
+    public async Task EndingBeforeItStarted_IsRefused_AndChangesNothing()
+    {
+        // Only the debug clock, pushed back behind the start, gets here (Gap 89 Slice C).
+        var session = ActiveSession(); // started at Now − 10 min
+        await SeedAsync(session);
+        Clock.SetNow(Now.AddMinutes(-15));
+
+        var result = await EndAsync(session.Id);
+
+        result.Should().Be(EndSessionResult.EndsBeforeStart());
+        var stored = (await FindAsync<Session>(session.Id))!;
+        stored.Status.Should().Be(SessionStatus.Active);
+        stored.EndedAt.Should().BeNull();
+    }
+
     // ── What gets stored ─────────────────────────────────────────────────────
 
     [Fact]

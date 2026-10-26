@@ -50,8 +50,7 @@ public class MarkFocusBlockMissedCommandHandlerTests : UseCaseTestBase
 
         result.PostSession!.Status.Should().Be(SessionStatus.Missed);
         result.PostSession.PresetName.Should().Be("Deep Work");
-        result.PostSession.StartedAt.Should().Be(At.Utc(Start));
-        result.PostSession.EndedAt.Should().Be(At.Utc(End));
+        result.PostSession.Recorded.Should().Be(At.Slot(Start, End));
         result.PostSession.PlannedDurationMinutes.Should().Be(60);
         result.PostSession.ActualDurationMinutes.Should().Be(0);
         result.PostSession.BreaksTaken.Should().Be(0);

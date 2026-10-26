@@ -330,9 +330,9 @@ public class SessionTests
     {
         var session = CreateSpontaneousSession();
         session.Start(At.Utc(DateTime.UtcNow));
-        session.Complete(At.Utc(DateTime.UtcNow), null);
+        session.Complete(At.Utc(DateTime.UtcNow.AddMinutes(10)), null);
 
-        var act = () => session.Complete(At.Utc(DateTime.UtcNow), null);
+        var act = () => session.Complete(At.Utc(DateTime.UtcNow.AddMinutes(10)), null);
 
         act.Should().Throw<InvalidOperationException>();
     }
@@ -342,7 +342,7 @@ public class SessionTests
     {
         var session = CreateSpontaneousSession();
         session.Start(At.Utc(DateTime.UtcNow));
-        session.Complete(At.Utc(DateTime.UtcNow), null);
+        session.Complete(At.Utc(DateTime.UtcNow.AddMinutes(10)), null);
 
         session.SetReflection("  Went well  ");
 
@@ -357,7 +357,7 @@ public class SessionTests
     {
         var session = CreateSpontaneousSession();
         session.Start(At.Utc(DateTime.UtcNow));
-        session.Complete(At.Utc(DateTime.UtcNow), null);
+        session.Complete(At.Utc(DateTime.UtcNow.AddMinutes(10)), null);
 
         session.SetReflection(blank);
 
@@ -393,7 +393,7 @@ public class SessionTests
     {
         var session = CreateSpontaneousSession();
         session.Start(At.Utc(DateTime.UtcNow));
-        session.Complete(At.Utc(DateTime.UtcNow), null);
+        session.Complete(At.Utc(DateTime.UtcNow.AddMinutes(10)), null);
         var acknowledgedAt = DateTime.UtcNow;
 
         session.MarkPostSessionAcknowledged(At.Utc(acknowledgedAt));
@@ -749,6 +749,92 @@ public class SessionTests
         act.Should().Throw<InvalidOperationException>();
         session.Status.Should().Be(SessionStatus.Active);
         session.EndedAt.Should().BeNull();
+    }
+
+    // ── An ended session spans real time; Recorded is that span (Gap 89 Slice C, F7) ──
+
+    [Fact]
+    public void CanEndAt_AfterItsStart_IsTrue()
+    {
+        StartedTwoHourSession(BreakSchedule.None).CanEndAt(At.Utc(T0.AddMinutes(1))).Should().BeTrue();
+    }
+
+    [Fact]
+    public void CanEndAt_PastItsPlannedEnd_IsTrue_SinceTheEndIsCappedThere()
+    {
+        StartedTwoHourSession(BreakSchedule.None).CanEndAt(At.Utc(T0.AddDays(1))).Should().BeTrue();
+    }
+
+    [Fact]
+    public void CanEndAt_ItsStartInstant_IsFalse()
+    {
+        StartedTwoHourSession(BreakSchedule.None).CanEndAt(At.Utc(T0)).Should().BeFalse("it would have spanned no time");
+    }
+
+    [Fact]
+    public void CanEndAt_BeforeItsStart_IsFalse()
+    {
+        // Only the debug clock, pushed back behind the start, can ask this.
+        StartedTwoHourSession(BreakSchedule.None).CanEndAt(At.Utc(T0.AddMinutes(-5))).Should().BeFalse();
+    }
+
+    [Fact]
+    public void CanEndAt_BeforeItHasStarted_IsFalse()
+    {
+        CreateSpontaneousSession().CanEndAt(At.Utc(T0)).Should().BeFalse();
+    }
+
+    [Fact]
+    public void Complete_AtItsStartOrBefore_Throws_AndChangesNothing()
+    {
+        var block = BlockOf2Hours();
+        var session = CreatePlannedSession(block.Id);
+        session.Start(At.Utc(BlockStart), block.Scheduled);
+        block.MarkRitualCompleted(At.Utc(BlockStart));
+
+        var atStart = () => session.Complete(At.Utc(BlockStart), block);
+        var before = () => session.Complete(At.Utc(BlockStart.AddMinutes(-5)), block);
+
+        atStart.Should().Throw<InvalidOperationException>();
+        before.Should().Throw<InvalidOperationException>();
+        session.Status.Should().Be(SessionStatus.Active);
+        session.EndedAt.Should().BeNull();
+        block.IsFinal(At.Utc(BlockStart.AddMinutes(30))).Should().BeFalse("the block was not stamped");
+    }
+
+    [Fact]
+    public void Recorded_BeforeItHasEnded_IsNull()
+    {
+        CreateSpontaneousSession().Recorded.Should().BeNull();
+        StartedTwoHourSession(BreakSchedule.None).Recorded.Should().BeNull("it is still running");
+    }
+
+    [Fact]
+    public void Recorded_Completed_IsItsStartToItsRecordedEnd()
+    {
+        var session = StartedTwoHourSession(BreakSchedule.None);
+        session.Complete(At.Utc(T0.AddMinutes(40)), null);
+
+        session.Recorded.Should().Be(At.Slot(T0, T0.AddMinutes(40)));
+    }
+
+    [Fact]
+    public void Recorded_CompletedLate_EndsAtThePlannedEnd()
+    {
+        var session = StartedTwoHourSession(BreakSchedule.None);
+        session.Complete(At.Utc(T0.AddDays(1)), null);
+
+        session.Recorded.Should().Be(At.Slot(T0, T0.AddHours(2)));
+    }
+
+    [Fact]
+    public void Recorded_Missed_IsItsBlocksWindow()
+    {
+        var session = CreatePlannedSession(Guid.NewGuid());
+        var window = At.Slot(T0, T0.AddHours(1));
+        session.Miss(window);
+
+        session.Recorded.Should().Be(window);
     }
 
     [Fact]

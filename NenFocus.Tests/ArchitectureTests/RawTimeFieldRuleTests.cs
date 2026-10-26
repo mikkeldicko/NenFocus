@@ -7,12 +7,13 @@ namespace NenFocus.Tests.ArchitectureTests;
 /// the Domain is a business question answered a second time ("has it started", "do they overlap",
 /// "how long") — MODULE_STANDARDS → Application Handler Forbidden Zone, and the ViewModel's No Math.
 ///
-/// Blocks and sessions hold a TimeSlot whose Start/End are internal (Gap 88, folding in Gap 90), so the
-/// compiler already stops this on entities. It can't on DTOs: they carry public Moments
-/// (SessionDto.StartedAt/EndAt, EndedAt, …) and Moment has public &lt; and −. Kept for that reason
-/// (Gap 88 last step, 2026-09-30 — it caught ActiveSessionMonitor's own `EndAt - StartedAt` that day).
-/// → Gap 89 area 4 turns the session DTOs' Moment pairs into a TimeSlot, leaving this test only
-/// single moments to watch. A text scan: each entry carries a reason; entries are "File has N", so a
+/// Blocks hold a TimeSlot whose Start/End are internal (Gap 88, folding in Gap 90), so the compiler
+/// already stops this on blocks. It can't on sessions — Session.StartedAt/EndAt/EndedAt are public
+/// Moments, and Moment has public &lt; and − — nor on DTOs' single moments (SessionDto.EndedAt,
+/// SessionSnapshotDto.OccurredAt). Kept for that reason (Gap 88 last step, 2026-09-30 — it caught
+/// ActiveSessionMonitor's own `EndAt - StartedAt` that day). No DTO carries a pair any more: the
+/// session DTOs' pairs became a TimeSlot (SessionDto via its Timeline in Gap 92, PostSessionDto.Recorded
+/// in Gap 89 Slice C). A text scan: each entry carries a reason; entries are "File has N", so a
 /// new comparison in an already-listed file is caught too. Repositories and the DbContext are left out:
 /// SQL narrows through TimeSlot.Filters, and parity tests guard any copy of a rule.
 /// </summary>

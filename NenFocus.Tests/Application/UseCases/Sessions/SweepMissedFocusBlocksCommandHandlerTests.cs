@@ -39,8 +39,8 @@ public class SweepMissedFocusBlocksCommandHandlerTests
         _blocks.GetUnresolvedFocusBlocksAsync(At.Utc(Now), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<FocusBlock>)[later, earlier]);
 
-        var earlierPostSession = new PostSessionDto { SessionId = Guid.NewGuid() };
-        var laterPostSession = new PostSessionDto { SessionId = Guid.NewGuid() };
+        var earlierPostSession = new PostSessionDto { SessionId = Guid.NewGuid(), Recorded = At.Slot(new DateTime(2026, 9, 29, 8, 0, 0, DateTimeKind.Utc), new DateTime(2026, 9, 29, 8, 25, 0, DateTimeKind.Utc)) };
+        var laterPostSession = new PostSessionDto { SessionId = Guid.NewGuid(), Recorded = At.Slot(new DateTime(2026, 9, 29, 8, 0, 0, DateTimeKind.Utc), new DateTime(2026, 9, 29, 8, 25, 0, DateTimeKind.Utc)) };
         _markMissed.HandleAsync(
                 Arg.Is<MarkFocusBlockMissedCommand>(c => c.FocusBlockId == earlier.Id),
                 Arg.Any<CancellationToken>())
@@ -77,7 +77,7 @@ public class SweepMissedFocusBlocksCommandHandlerTests
         _blocks.GetUnresolvedFocusBlocksAsync(At.Utc(Now), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<FocusBlock>)[failing, succeeding]);
 
-        var postSession = new PostSessionDto { SessionId = Guid.NewGuid() };
+        var postSession = new PostSessionDto { SessionId = Guid.NewGuid(), Recorded = At.Slot(new DateTime(2026, 9, 29, 8, 0, 0, DateTimeKind.Utc), new DateTime(2026, 9, 29, 8, 25, 0, DateTimeKind.Utc)) };
         _markMissed.HandleAsync(
                 Arg.Is<MarkFocusBlockMissedCommand>(c => c.FocusBlockId == failing.Id),
                 Arg.Any<CancellationToken>())

@@ -10,8 +10,9 @@ public sealed record PostSessionDto
     public SessionStatus Status { get; init; }
     public string Goal { get; init; } = string.Empty;
     public string PresetName { get; init; } = string.Empty;
-    public Moment StartedAt { get; init; }
-    public Moment EndedAt { get; init; }
+    /// <summary>The time the session's record covers — its run, or its block's window if missed
+    /// (Session.Recorded). One span, not two moments, so nothing outside the Domain can subtract them (F7).</summary>
+    public required TimeSlot Recorded { get; init; }
     // double, not int: a session under a minute (or a grace-period credit that isn't a
     // round number) must not get truncated to a whole minute before it ever reaches the
     // TimeSpan below — DurationToStringConverter needs the real sub-minute value to show
@@ -42,8 +43,7 @@ public sealed record PostSessionDto
         Status = session.Status,
         Goal = session.Goal.Value,
         PresetName = presetName,
-        StartedAt = session.StartedAt!.Value,
-        EndedAt = session.EndedAt!.Value,
+        Recorded = session.Recorded ?? throw new ArgumentException("Only an ended session has a Post-Session screen.", nameof(session)),
         PlannedDurationMinutes = session.Duration.Value.TotalMinutes,
         ActualDurationMinutes = session.CountedTime(originatingBlock).TotalMinutes,
         BreaksTaken = session.BreaksTaken,
