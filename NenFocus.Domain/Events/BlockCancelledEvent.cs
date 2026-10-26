@@ -2,13 +2,13 @@ using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Domain.Events;
 
-public class PlannedBlockCancelledEvent : DomainEvent
+public class BlockCancelledEvent : DomainEvent
 {
-    public Guid PlannedBlockId { get; }
+    public Guid BlockId { get; }
 
-    public PlannedBlockCancelledEvent(Guid plannedBlockId, Moment occurredAt)
+    public BlockCancelledEvent(Guid blockId, Moment occurredAt)
         : base(occurredAt)
     {
-        PlannedBlockId = plannedBlockId;
+        BlockId = blockId;
     }
 }

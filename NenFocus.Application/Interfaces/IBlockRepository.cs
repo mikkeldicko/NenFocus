@@ -3,20 +3,20 @@ using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Application.Interfaces;
 
-public interface IPlannedBlockRepository
+public interface IBlockRepository
 {
     /// <summary>
     /// Returns all non-cancelled planned blocks whose scheduled slot overlaps <paramref name="range"/>, by start.
     /// For "the blocks on these days", the caller asks <c>UserTimeZone.SlotCovering</c> for the range.
     /// </summary>
-    Task<IReadOnlyList<PlannedBlock>> GetForRangeAsync(
+    Task<IReadOnlyList<Block>> GetForRangeAsync(
         TimeSlot range,
         CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Returns a single planned block by Id, or null if not found.
     /// </summary>
-    Task<PlannedBlock?> GetByIdAsync(
+    Task<Block?> GetByIdAsync(
         Guid id,
         CancellationToken cancellationToken = default);
 
@@ -25,7 +25,7 @@ public interface IPlannedBlockRepository
     /// and ended-early ones included): each block decides whether it still holds its preset, through
     /// ReservedSlot, in BlockPreset.IsLockedAt (Gap 89 Slice D).
     /// </summary>
-    Task<IReadOnlyList<PlannedBlock>> GetUsingPresetAsync(
+    Task<IReadOnlyList<Block>> GetUsingPresetAsync(
         Guid presetId,
         Moment after,
         CancellationToken cancellationToken = default);
@@ -42,13 +42,13 @@ public interface IPlannedBlockRepository
     /// <summary>
     /// Returns all planned blocks linked to the given Nen Contract.
     /// </summary>
-    Task<IReadOnlyList<PlannedBlock>> GetForContractAsync(
+    Task<IReadOnlyList<Block>> GetForContractAsync(
         Guid contractId,
         CancellationToken cancellationToken = default);
 
     /// <summary>Adds a new planned block; it is saved when the command commits (Gap 110).</summary>
-    void Add(PlannedBlock block);
+    void Add(Block block);
 
     /// <summary>Removes a loaded planned block; saved when the command commits. Ask first whether it may go.</summary>
-    void Remove(PlannedBlock block);
+    void Remove(Block block);
 }

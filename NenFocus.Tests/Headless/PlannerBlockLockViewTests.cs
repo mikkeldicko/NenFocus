@@ -3,10 +3,10 @@ using FluentAssertions;
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.GetAllBlockPresets;
-using NenFocus.Application.Queries.GetPlannedBlocksForDay;
-using NenFocus.Application.UseCases.Planner.DeletePlannedBlock;
-using NenFocus.Application.UseCases.Planner.SplitPlannedBlock;
-using NenFocus.Application.UseCases.Planner.UpdatePlannedBlock;
+using NenFocus.Application.Queries.GetBlocksForDay;
+using NenFocus.Application.UseCases.Planner.DeleteBlock;
+using NenFocus.Application.UseCases.Planner.SplitBlock;
+using NenFocus.Application.UseCases.Planner.UpdateBlock;
 using NenFocus.Domain.Enums;
 using NenFocus.Domain.ValueObjects;
 using NSubstitute;
@@ -88,9 +88,9 @@ public class PlannerBlockLockViewTests
             SplitPiecesMayChangeDay = true
         });
         var commands = Substitute.For<ICommandDispatcher>();
-        SplitPlannedBlockCommand? sent = null;
-        commands.DispatchAsync(Arg.Do<SplitPlannedBlockCommand>(c => sent = c), Arg.Any<CancellationToken>())
-            .Returns(SplitPlannedBlockResult.Ok(Guid.NewGuid(), Guid.NewGuid()));
+        SplitBlockCommand? sent = null;
+        commands.DispatchAsync(Arg.Do<SplitBlockCommand>(c => sent = c), Arg.Any<CancellationToken>())
+            .Returns(SplitBlockResult.Ok(Guid.NewGuid(), Guid.NewGuid()));
         var vm = CreatePlanner(block, commands);
         Show(new PlannerPageView { DataContext = vm });
 
@@ -126,8 +126,8 @@ public class PlannerBlockLockViewTests
         // toggle, and Save is one Update — never a Delete followed by a Create.
         var block = Block(new BlockChangeAllowances(CanReschedule: true, CanChangePreset: true, CanSplit: false, CanDelete: true));
         var commands = Substitute.For<ICommandDispatcher>();
-        commands.DispatchAsync(Arg.Any<UpdatePlannedBlockCommand>(), Arg.Any<CancellationToken>())
-            .Returns(UpdatePlannedBlockResult.Ok());
+        commands.DispatchAsync(Arg.Any<UpdateBlockCommand>(), Arg.Any<CancellationToken>())
+            .Returns(UpdateBlockResult.Ok());
         var vm = CreatePlanner(block, commands, presets:
         [
             new BlockPresetDto { Id = block.PresetId, Name = block.PresetName, PresetType = BlockPresetType.Focus }
@@ -138,11 +138,11 @@ public class PlannerBlockLockViewTests
         vm.ShowTypeToggle.Should().BeFalse();
         await vm.SaveCommand.ExecuteAsync(null);
 
-        await commands.Received(1).DispatchAsync(Arg.Is<UpdatePlannedBlockCommand>(c => c.BlockId == block.Id), Arg.Any<CancellationToken>());
-        await commands.DidNotReceive().DispatchAsync(Arg.Any<DeletePlannedBlockCommand>(), Arg.Any<CancellationToken>());
+        await commands.Received(1).DispatchAsync(Arg.Is<UpdateBlockCommand>(c => c.BlockId == block.Id), Arg.Any<CancellationToken>());
+        await commands.DidNotReceive().DispatchAsync(Arg.Any<DeleteBlockCommand>(), Arg.Any<CancellationToken>());
     }
 
-    private static PlannedBlockDto Block(BlockChangeAllowances allowances) => new()
+    private static BlockDto Block(BlockChangeAllowances allowances) => new()
     {
         Id = Guid.NewGuid(),
         PresetId = Guid.NewGuid(),
@@ -152,10 +152,10 @@ public class PlannerBlockLockViewTests
         Allowances = allowances,
     };
 
-    private static PlannerPageViewModel CreatePlanner(PlannedBlockDto block, ICommandDispatcher? commands = null, IReadOnlyList<BlockPresetDto>? presets = null)
+    private static PlannerPageViewModel CreatePlanner(BlockDto block, ICommandDispatcher? commands = null, IReadOnlyList<BlockPresetDto>? presets = null)
     {
         var queries = new FakeQueryDispatcher()
-            .Answer<GetPlannedBlocksForDayQuery, IReadOnlyList<PlannedBlockDto>>(q => q.Date == Today ? [block] : [])
+            .Answer<GetBlocksForDayQuery, IReadOnlyList<BlockDto>>(q => q.Date == Today ? [block] : [])
             .Answer<GetAllBlockPresetsQuery, IReadOnlyList<BlockPresetDto>>(_ => presets ?? []);
         var clock = Substitute.For<IDisplayClock>();
         var systemClock = TestClock.Create();

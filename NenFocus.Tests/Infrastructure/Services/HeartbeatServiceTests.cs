@@ -76,7 +76,7 @@ public class HeartbeatServiceTests : IAsyncDisposable
         return session.Id;
     }
 
-    private Task SeedMissedFocusBlockAsync() => SeedAsync(sp => sp.GetRequiredService<IPlannedBlockRepository>()
+    private Task SeedMissedFocusBlockAsync() => SeedAsync(sp => sp.GetRequiredService<IBlockRepository>()
         .Add(FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Now.AddHours(-3), Now.AddHours(-2).AddMinutes(-30)))));
 
     private static NenContract Contract(DateOnly start, DateOnly end, DateOnly sealedOn) => TestContracts.Seal(

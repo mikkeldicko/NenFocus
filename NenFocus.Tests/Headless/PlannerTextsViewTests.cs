@@ -8,8 +8,8 @@ using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.GetAllBlockPresets;
 using NenFocus.Application.Queries.GetNenContractsForDateRange;
-using NenFocus.Application.Queries.GetPlannedBlocksForDay;
-using NenFocus.Application.UseCases.Planner.CreatePlannedBlock;
+using NenFocus.Application.Queries.GetBlocksForDay;
+using NenFocus.Application.UseCases.Planner.CreateBlock;
 using NenFocus.Domain.Enums;
 using NenFocus.Domain.ValueObjects;
 using NenFocus.ViewModels.Planner;
@@ -39,14 +39,14 @@ public class PlannerTextsViewTests
     public async Task Split_FourFieldsPrefill_EndRowsShowLengths_AndANewStartKeepsThePiecesLength()
     {
         // A bound block that may be split: 10:00–11:00 on Tuesday.
-        var block = new PlannedBlockDto
+        var block = new BlockDto
         {
             Id = Guid.NewGuid(), PresetId = Guid.NewGuid(), PresetName = "Deep Work", BlockPresetType = BlockPresetType.Focus,
             Shown = At.Slot(new DateTime(2026, 9, 29, 10, 0, 0, DateTimeKind.Utc), new DateTime(2026, 9, 29, 11, 0, 0, DateTimeKind.Utc)),
             Allowances = new BlockChangeAllowances(CanReschedule: true, CanChangePreset: false, CanSplit: true, CanDelete: false),
         };
         var queries = new FakeQueryDispatcher()
-            .Answer<GetPlannedBlocksForDayQuery, IReadOnlyList<PlannedBlockDto>>(q => q.Date == Tuesday ? [block] : []);
+            .Answer<GetBlocksForDayQuery, IReadOnlyList<BlockDto>>(q => q.Date == Tuesday ? [block] : []);
         var vm = Planner(queries);
         var view = new PlannerPageView { DataContext = vm };
         var window = Show(view);
@@ -143,8 +143,8 @@ public class PlannerTextsViewTests
     {
         const string refusal = "This time overlaps another Focus block.";
         var commands = Substitute.For<ICommandDispatcher>();
-        commands.DispatchAsync(Arg.Any<CreatePlannedBlockCommand>(), Arg.Any<CancellationToken>())
-            .Returns(CreatePlannedBlockResult.Fail(refusal));
+        commands.DispatchAsync(Arg.Any<CreateBlockCommand>(), Arg.Any<CancellationToken>())
+            .Returns(CreateBlockResult.Fail(refusal));
         var vm = Planner(WithPreset(new FakeQueryDispatcher()), commands);
         var view = new PlannerPageView { DataContext = vm };
         var window = Show(view);

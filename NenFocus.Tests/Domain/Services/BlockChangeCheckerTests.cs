@@ -10,7 +10,7 @@ namespace NenFocus.Tests.Domain.Services;
 /// Gap 93: the one answer to "may this block be changed or deleted". The checker holds no rule —
 /// it asks the block, then the block's contract, first refusal wins — so these tests are about
 /// the order, what is handed to the contract, and the flags. The rules themselves are tested on
-/// PlannedBlock and NenContract. Monday 5 to Wednesday 7 January 2026, Work Hours 09:00–17:00, UTC.
+/// Block and NenContract. Monday 5 to Wednesday 7 January 2026, Work Hours 09:00–17:00, UTC.
 /// </summary>
 public class BlockChangeCheckerTests
 {
@@ -47,8 +47,8 @@ public class BlockChangeCheckerTests
     private static FocusBlock Bonus(NenContract contract, TimeSlot slot) =>
         FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), slot, membership: contract.MembershipForPlacedBlock());
 
-    private static ChangeVerdict Reschedule(PlannedBlock block, TimeSlot newSlot, NenContract? contract,
-        IEnumerable<PlannedBlock>? contractBlocks = null, bool presetChanges = false, Moment? asOf = null,
+    private static ChangeVerdict Reschedule(Block block, TimeSlot newSlot, NenContract? contract,
+        IEnumerable<Block>? contractBlocks = null, bool presetChanges = false, Moment? asOf = null,
         IEnumerable<NenContract>? contractsInEffect = null) =>
         Checker.CheckReschedule(block, newSlot, presetChanges, contract, contractBlocks ?? [block],
             contractsInEffect ?? (contract is null ? [] : [contract]), asOf ?? BeforeItAll, At.UtcZone);
@@ -286,8 +286,8 @@ public class BlockChangeCheckerTests
 
     // ── Split ────────────────────────────────────────────────────────────────
 
-    private static ChangeVerdict Split(PlannedBlock block, TimeSlot first, TimeSlot second, NenContract? contract,
-        IEnumerable<PlannedBlock>? contractBlocks = null) =>
+    private static ChangeVerdict Split(Block block, TimeSlot first, TimeSlot second, NenContract? contract,
+        IEnumerable<Block>? contractBlocks = null) =>
         Checker.CheckSplit(block, first, second, contract, contractBlocks ?? [block], BeforeItAll, At.UtcZone);
 
     [Fact]

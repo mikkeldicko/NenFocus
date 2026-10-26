@@ -8,14 +8,14 @@ namespace NenFocus.Application.Queries.GetBlockPlacementVerdict;
 public sealed class GetBlockPlacementVerdictQueryHandler
     : IQueryHandler<GetBlockPlacementVerdictQuery, BlockPlacementVerdictDto>
 {
-    private readonly IPlannedBlockRepository _blocks;
+    private readonly IBlockRepository _blocks;
     private readonly ISessionRepository _sessions;
     private readonly INenContractRepository _contracts;
     private readonly BlockPlacementChecker _checker;
     private readonly ISystemClock _clock;
 
     public GetBlockPlacementVerdictQueryHandler(
-        IPlannedBlockRepository blocks,
+        IBlockRepository blocks,
         ISessionRepository sessions,
         INenContractRepository contracts,
         BlockPlacementChecker checker,

@@ -9,16 +9,16 @@ namespace NenFocus.Application.Services;
 /// <summary>
 /// Turns each block's own "which of my markers did the clock just pass" answer into a
 /// notification fact — no rule of its own. The fetch is deliberately loose (anything that
-/// could have crossed); PlannedBlock.MarkersPassedBetween is the final word, as IsActive is
+/// could have crossed); Block.MarkersPassedBetween is the final word, as IsActive is
 /// for PolicyEngine.
 /// </summary>
 public sealed class BlockMarkerNotifier : IBlockMarkerNotifier
 {
-    private readonly IPlannedBlockRepository _blocks;
+    private readonly IBlockRepository _blocks;
     private readonly IBlockPresetRepository _presets;
     private readonly INotifier _notifier;
 
-    public BlockMarkerNotifier(IPlannedBlockRepository blocks, IBlockPresetRepository presets, INotifier notifier)
+    public BlockMarkerNotifier(IBlockRepository blocks, IBlockPresetRepository presets, INotifier notifier)
     {
         _blocks = blocks;
         _presets = presets;
@@ -29,7 +29,7 @@ public sealed class BlockMarkerNotifier : IBlockMarkerNotifier
     {
         if (to <= from) return;
 
-        var candidates = await _blocks.GetForRangeAsync(new TimeSlot(from, to + PlannedBlock.UpcomingWarningLead), ct);
+        var candidates = await _blocks.GetForRangeAsync(new TimeSlot(from, to + Block.UpcomingWarningLead), ct);
 
         var crossed = candidates
             .SelectMany(block => block.MarkersPassedBetween(from, to).Select(t => (Block: block, Marker: t)))

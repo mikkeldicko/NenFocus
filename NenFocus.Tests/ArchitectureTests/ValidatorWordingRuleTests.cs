@@ -20,9 +20,9 @@ public class ValidatorWordingRuleTests
     [
         // → Gap 100: what Gap 93 left in the permission validators — input shape only (required
         // ids, a split's pieces), their rules now come from BlockChangeChecker as typed reasons.
-        "NenFocus.Application/UseCases/Planner/DeletePlannedBlock/DeletePlannedBlockValidator.cs has 1",
-        "NenFocus.Application/UseCases/Planner/SplitPlannedBlock/SplitPlannedBlockValidator.cs has 7",
-        "NenFocus.Application/UseCases/Planner/UpdatePlannedBlock/UpdatePlannedBlockValidator.cs has 4",
+        "NenFocus.Application/UseCases/Planner/DeleteBlock/DeleteBlockValidator.cs has 1",
+        "NenFocus.Application/UseCases/Planner/SplitBlock/SplitBlockValidator.cs has 7",
+        "NenFocus.Application/UseCases/Planner/UpdateBlock/UpdateBlockValidator.cs has 4",
 
         // → Gap 100 step R1: every remaining sentence into Refusals.resx.
         "NenFocus.Application/UseCases/BlockPresets/CreateBlockPreset/CreateBlockPresetValidator.cs has 2",
@@ -36,7 +36,7 @@ public class ValidatorWordingRuleTests
         "NenFocus.Application/UseCases/NenContracts/Delete/DeleteNenContractValidator.cs has 1",
         "NenFocus.Application/UseCases/NenContracts/Edit/EditNenContractValidator.cs has 7",
         "NenFocus.Application/UseCases/NenContracts/Seal/SealNenContractValidator.cs has 5",
-        "NenFocus.Application/UseCases/Planner/CreatePlannedBlock/CreatePlannedBlockValidator.cs has 4",
+        "NenFocus.Application/UseCases/Planner/CreateBlock/CreateBlockValidator.cs has 4",
         "NenFocus.Application/UseCases/Sessions/MarkFocusBlockMissed/MarkFocusBlockMissedValidator.cs has 4",
         "NenFocus.Application/UseCases/Sessions/StartSession/StartSessionValidator.cs has 4",
     ];

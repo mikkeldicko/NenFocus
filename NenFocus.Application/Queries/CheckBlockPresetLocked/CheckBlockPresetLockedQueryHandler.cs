@@ -7,14 +7,14 @@ public sealed class CheckBlockPresetLockedQueryHandler : IQueryHandler<CheckBloc
 {
     private readonly IBlockPresetRepository _presets;
     private readonly ISessionRepository _sessions;
-    private readonly IPlannedBlockRepository _blocks;
+    private readonly IBlockRepository _blocks;
     private readonly INenContractRepository _contracts;
     private readonly ISystemClock _clock;
 
     public CheckBlockPresetLockedQueryHandler(
         IBlockPresetRepository presets,
         ISessionRepository sessions,
-        IPlannedBlockRepository blocks,
+        IBlockRepository blocks,
         INenContractRepository contracts,
         ISystemClock clock)
     {

@@ -52,9 +52,9 @@ public class EditNenContractTests : UseCaseTestBase
 
     private async Task<NenContract> StoredAsync(NenContract contract) => (await FindAsync<NenContract>(contract.Id))!;
 
-    private Task<IReadOnlyList<PlannedBlock>> MembersAsync(Guid contractId) =>
-        ReadAsync<IReadOnlyList<PlannedBlock>>(async context =>
-            await new NenFocus.Infrastructure.Persistence.Repositories.PlannedBlockRepository(context).GetForContractAsync(contractId));
+    private Task<IReadOnlyList<Block>> MembersAsync(Guid contractId) =>
+        ReadAsync<IReadOnlyList<Block>>(async context =>
+            await new NenFocus.Infrastructure.Persistence.Repositories.BlockRepository(context).GetForContractAsync(contractId));
 
     // ── A valid edit ───────────────────────────────────────────────────────────────────
 
@@ -71,8 +71,8 @@ public class EditNenContractTests : UseCaseTestBase
         result.Success.Should().BeTrue(result.ErrorMessage);
         result.ContractId.Should().Be(contract.Id);
         (await StoredAsync(contract)).Name.Should().Be("Renamed Contract");
-        (await FindAsync<PlannedBlock>(oldFocus.Id)).Should().BeNull();
-        (await FindAsync<PlannedBlock>(oldBackground.Id)).Should().BeNull();
+        (await FindAsync<Block>(oldFocus.Id)).Should().BeNull();
+        (await FindAsync<Block>(oldBackground.Id)).Should().BeNull();
         var members = await MembersAsync(contract.Id);
         members.Should().ContainSingle().Which.Scheduled.Should().Be(On(1, 9, 10));
         members[0].Membership.Should().Be(TestContracts.Committed(contract.Id));
@@ -188,7 +188,7 @@ public class EditNenContractTests : UseCaseTestBase
         await SeedAsync(contract, ownOld, plain);
 
         await RefusedAndUnchangedAsync(contract, Command(contract.Id, Focus(0, 9, 10)));
-        (await FindAsync<PlannedBlock>(ownOld.Id)).Should().NotBeNull();
+        (await FindAsync<Block>(ownOld.Id)).Should().NotBeNull();
     }
 
     [Fact]

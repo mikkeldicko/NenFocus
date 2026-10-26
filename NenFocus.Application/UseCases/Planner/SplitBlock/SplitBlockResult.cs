@@ -1,17 +1,17 @@
 using NenFocus.Application.Interfaces;
 
-namespace NenFocus.Application.UseCases.Planner.SplitPlannedBlock;
+namespace NenFocus.Application.UseCases.Planner.SplitBlock;
 
-public sealed record SplitPlannedBlockResult : ICommandResult<SplitPlannedBlockResult>
+public sealed record SplitBlockResult : ICommandResult<SplitBlockResult>
 {
     public bool Success { get; init; }
     public string? ErrorMessage { get; init; }
     public Guid? FirstBlockId { get; init; }
     public Guid? SecondBlockId { get; init; }
 
-    public static SplitPlannedBlockResult Ok(Guid firstBlockId, Guid secondBlockId) =>
+    public static SplitBlockResult Ok(Guid firstBlockId, Guid secondBlockId) =>
         new() { Success = true, FirstBlockId = firstBlockId, SecondBlockId = secondBlockId };
 
-    public static SplitPlannedBlockResult Fail(string message) =>
+    public static SplitBlockResult Fail(string message) =>
         new() { Success = false, ErrorMessage = message };
 }

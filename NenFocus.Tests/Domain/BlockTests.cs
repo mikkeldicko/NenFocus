@@ -6,7 +6,7 @@ using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Tests.Domain;
 
-public class PlannedBlockTests
+public class BlockTests
 {
     private static readonly DateTime Start = new(2026, 1, 1, 10, 0, 0, DateTimeKind.Utc);
     private static readonly DateTime End = new(2026, 1, 1, 11, 0, 0, DateTimeKind.Utc);
@@ -318,7 +318,7 @@ public class PlannedBlockTests
 
     // Block 10:00–11:00; warning moment = Start − 5 min = 09:55.
 
-    private static IEnumerable<BlockMarkerKind> Kinds(PlannedBlock block, DateTime from, DateTime to)
+    private static IEnumerable<BlockMarkerKind> Kinds(Block block, DateTime from, DateTime to)
         => block.MarkersPassedBetween(At.Utc(from), At.Utc(to)).Select(t => t.Kind);
 
     [Fact]
@@ -789,7 +789,7 @@ public class PlannedBlockTests
     }
 
     [Fact]
-    public void FocusBlock_MarkCancelled_RaisesPlannedBlockCancelledEvent()
+    public void FocusBlock_MarkCancelled_RaisesBlockCancelledEvent()
     {
         var block = CreateFocusBlock();
         var cancelledAt = DateTime.UtcNow;
@@ -797,9 +797,9 @@ public class PlannedBlockTests
         block.MarkCancelled(At.Utc(cancelledAt));
 
         block.DomainEvents.Should().ContainSingle()
-            .Which.Should().BeOfType<PlannedBlockCancelledEvent>()
-            .Which.Should().Match<PlannedBlockCancelledEvent>(e =>
-                e.PlannedBlockId == block.Id && e.OccurredAt == At.Utc(cancelledAt));
+            .Which.Should().BeOfType<BlockCancelledEvent>()
+            .Which.Should().Match<BlockCancelledEvent>(e =>
+                e.BlockId == block.Id && e.OccurredAt == At.Utc(cancelledAt));
     }
 
     [Fact]
@@ -831,7 +831,7 @@ public class PlannedBlockTests
     }
 
     [Fact]
-    public void BackgroundBlock_MarkCancelled_RaisesPlannedBlockCancelledEvent()
+    public void BackgroundBlock_MarkCancelled_RaisesBlockCancelledEvent()
     {
         var block = CreateBackgroundBlock();
         var cancelledAt = DateTime.UtcNow;
@@ -839,7 +839,7 @@ public class PlannedBlockTests
         block.MarkCancelled(At.Utc(cancelledAt));
 
         block.DomainEvents.Should().ContainSingle()
-            .Which.Should().BeOfType<PlannedBlockCancelledEvent>();
+            .Which.Should().BeOfType<BlockCancelledEvent>();
     }
 
     // ── A planned block is whole minutes long (Gap 92, V10) ──

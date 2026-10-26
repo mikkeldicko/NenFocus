@@ -10,7 +10,7 @@ namespace NenFocus.Application.UseCases.NenContracts.Seal;
 public sealed class SealNenContractCommandHandler : ICommandHandler<SealNenContractCommand, SealNenContractResult>
 {
     private readonly INenContractRepository _contracts;
-    private readonly IPlannedBlockRepository _blocks;
+    private readonly IBlockRepository _blocks;
     private readonly ContractBlockBatchPreparer _batchPreparer;
     private readonly ISessionRepository _sessions;
     private readonly BlockPlacementChecker _placement;
@@ -18,7 +18,7 @@ public sealed class SealNenContractCommandHandler : ICommandHandler<SealNenContr
 
     public SealNenContractCommandHandler(
         INenContractRepository contracts,
-        IPlannedBlockRepository blocks,
+        IBlockRepository blocks,
         ContractBlockBatchPreparer batchPreparer,
         ISessionRepository sessions,
         BlockPlacementChecker placement,

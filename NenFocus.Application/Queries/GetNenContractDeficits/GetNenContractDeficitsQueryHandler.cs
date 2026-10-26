@@ -8,11 +8,11 @@ public sealed class GetNenContractDeficitsQueryHandler
     : IQueryHandler<GetNenContractDeficitsQuery, IReadOnlyList<FocusBlockDeficitDto>>
 {
     private readonly INenContractRepository _contracts;
-    private readonly IPlannedBlockRepository _blocks;
+    private readonly IBlockRepository _blocks;
     private readonly ISystemClock _clock;
 
     public GetNenContractDeficitsQueryHandler(
-        INenContractRepository contracts, IPlannedBlockRepository blocks, ISystemClock clock)
+        INenContractRepository contracts, IBlockRepository blocks, ISystemClock clock)
     {
         _contracts = contracts;
         _blocks = blocks;

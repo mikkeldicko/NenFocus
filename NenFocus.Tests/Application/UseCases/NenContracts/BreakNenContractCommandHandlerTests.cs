@@ -117,9 +117,9 @@ public class BreakNenContractCommandHandlerTests : UseCaseTestBase
 
         await BreakAsync(contract.Id);
 
-        (await FindAsync<PlannedBlock>(pastBlock.Id))!.CancelledAt.Should().BeNull();
-        (await FindAsync<PlannedBlock>(currentBlock.Id))!.CancelledAt.Should().Be(At.Utc(Now));
-        (await FindAsync<PlannedBlock>(futureBlock.Id))!.CancelledAt.Should().Be(At.Utc(Now));
+        (await FindAsync<Block>(pastBlock.Id))!.CancelledAt.Should().BeNull();
+        (await FindAsync<Block>(currentBlock.Id))!.CancelledAt.Should().Be(At.Utc(Now));
+        (await FindAsync<Block>(futureBlock.Id))!.CancelledAt.Should().Be(At.Utc(Now));
     }
 
     [Fact]
@@ -134,7 +134,7 @@ public class BreakNenContractCommandHandlerTests : UseCaseTestBase
 
         await BreakAsync(contract.Id);
 
-        (await FindAsync<PlannedBlock>(endedEarly.Id))!.CancelledAt.Should().BeNull();
+        (await FindAsync<Block>(endedEarly.Id))!.CancelledAt.Should().BeNull();
     }
 
     [Fact]
@@ -148,10 +148,10 @@ public class BreakNenContractCommandHandlerTests : UseCaseTestBase
 
         await BreakAsync(contract.Id);
 
-        var upcoming = await FindAsync<PlannedBlock>(upcomingBonus.Id);
+        var upcoming = await FindAsync<Block>(upcomingBonus.Id);
         upcoming!.Membership.Should().BeNull();
         upcoming.CancelledAt.Should().BeNull();
-        var running = await FindAsync<PlannedBlock>(runningBonus.Id);
+        var running = await FindAsync<Block>(runningBonus.Id);
         running!.Membership.Should().Be(TestContracts.Bonus(contract.Id));
         running.CancelledAt.Should().BeNull();
     }
@@ -177,7 +177,7 @@ public class BreakNenContractCommandHandlerTests : UseCaseTestBase
         result.Success.Should().BeFalse();
         result.ErrorMessage.Should().Contain("session is running");
         (await FindAsync<NenContract>(contract.Id))!.Status.Should().Be(statusBefore);
-        (await FindAsync<PlannedBlock>(currentBlock.Id))!.CancelledAt.Should().BeNull();
+        (await FindAsync<Block>(currentBlock.Id))!.CancelledAt.Should().BeNull();
         (await FindAsync<Session>(session.Id))!.Status.Should().Be(SessionStatus.Active);
         shown.Should().BeEmpty("a refused break owes no recap");
     }

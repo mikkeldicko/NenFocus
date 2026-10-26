@@ -8,13 +8,13 @@ namespace NenFocus.Application.Queries.ComputeActivePolicySlice;
 public sealed class ComputeActivePolicySliceQueryHandler
     : IQueryHandler<ComputeActivePolicySliceQuery, ActivePolicySlice>
 {
-    private readonly IPlannedBlockRepository _blocks;
+    private readonly IBlockRepository _blocks;
     private readonly IBlockPresetRepository _presets;
     private readonly ISessionRepository _sessions;
     private readonly PolicyEngine _policyEngine;
 
     public ComputeActivePolicySliceQueryHandler(
-        IPlannedBlockRepository blocks,
+        IBlockRepository blocks,
         IBlockPresetRepository presets,
         ISessionRepository sessions,
         PolicyEngine policyEngine)

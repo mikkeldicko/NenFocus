@@ -13,7 +13,7 @@ public class SweepMissedFocusBlocksCommandHandlerTests
 {
     private static readonly DateTime Now = new(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
 
-    private readonly IPlannedBlockRepository _blocks = Substitute.For<IPlannedBlockRepository>();
+    private readonly IBlockRepository _blocks = Substitute.For<IBlockRepository>();
     private readonly ICommandHandler<MarkFocusBlockMissedCommand, MarkFocusBlockMissedResult> _markMissed =
         Substitute.For<ICommandHandler<MarkFocusBlockMissedCommand, MarkFocusBlockMissedResult>>();
 

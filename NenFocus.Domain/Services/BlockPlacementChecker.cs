@@ -23,7 +23,7 @@ public sealed class BlockPlacementChecker
     /// </summary>
     public PlacementVerdict Check(TimeSlot slot, BlockPresetType type, ContractMembership? membership,
         IEnumerable<NenContract> contractsInEffect,
-        IEnumerable<PlannedBlock> blocks, Session? running, Moment asOf, UserTimeZone timeZone)
+        IEnumerable<Block> blocks, Session? running, Moment asOf, UserTimeZone timeZone)
     {
         if (slot.HasStarted(asOf))
             return PlacementVerdict.Refused(PlacementOutcome.InThePast);
@@ -55,12 +55,12 @@ public sealed class BlockPlacementChecker
 
     /// <summary>
     /// Is this time free for Focus? Allowed, or TimeTaken with the first Focus time in the way
-    /// (earliest first): a Focus block's <see cref="PlannedBlock.ReservedSlot"/> as of
+    /// (earliest first): a Focus block's <see cref="Block.ReservedSlot"/> as of
     /// <paramref name="asOf"/>, or a running session's <see cref="Session.ReservedSlot"/>.
     /// Background blocks never clash. <paramref name="blocks"/> are the calendar as it will be, <paramref name="running"/> the session
     /// running now (at most one, Gap 92) — leave out a block that is being moved or replaced.
     /// </summary>
-    public PlacementVerdict CheckFree(TimeSlot slot, IEnumerable<PlannedBlock> blocks, Session? running, Moment asOf)
+    public PlacementVerdict CheckFree(TimeSlot slot, IEnumerable<Block> blocks, Session? running, Moment asOf)
     {
         var focusTime = blocks.OfType<FocusBlock>().Select(b => b.ReservedSlot(asOf))
             .Append(running?.ReservedSlot);

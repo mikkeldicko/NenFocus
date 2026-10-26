@@ -1,9 +1,9 @@
 using NenFocus.Application.Interfaces;
 using NenFocus.Domain.ValueObjects;
 
-namespace NenFocus.Application.UseCases.Planner.SplitPlannedBlock;
+namespace NenFocus.Application.UseCases.Planner.SplitBlock;
 
-public sealed record SplitPlannedBlockCommand : ICommand<SplitPlannedBlockResult>
+public sealed record SplitBlockCommand : ICommand<SplitBlockResult>
 {
     public Guid OriginalBlockId { get; init; }
     public required TimeSlot First { get; init; }

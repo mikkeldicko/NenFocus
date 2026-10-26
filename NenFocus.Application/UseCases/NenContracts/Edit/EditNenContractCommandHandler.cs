@@ -22,7 +22,7 @@ namespace NenFocus.Application.UseCases.NenContracts.Edit;
 public sealed class EditNenContractCommandHandler : ICommandHandler<EditNenContractCommand, EditNenContractResult>
 {
     private readonly INenContractRepository _contracts;
-    private readonly IPlannedBlockRepository _blocks;
+    private readonly IBlockRepository _blocks;
     private readonly ContractBlockBatchPreparer _batchPreparer;
     private readonly ISessionRepository _sessions;
     private readonly BlockPlacementChecker _placement;
@@ -30,7 +30,7 @@ public sealed class EditNenContractCommandHandler : ICommandHandler<EditNenContr
 
     public EditNenContractCommandHandler(
         INenContractRepository contracts,
-        IPlannedBlockRepository blocks,
+        IBlockRepository blocks,
         ContractBlockBatchPreparer batchPreparer,
         ISessionRepository sessions,
         BlockPlacementChecker placement,

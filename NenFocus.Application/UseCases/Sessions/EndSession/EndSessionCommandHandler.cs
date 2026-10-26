@@ -8,16 +8,16 @@ public sealed class EndSessionCommandHandler
     : ICommandHandler<EndSessionCommand, EndSessionResult>
 {
     private readonly ISessionRepository _sessions;
-    private readonly IPlannedBlockRepository _plannedBlocks;
+    private readonly IBlockRepository _blocks;
     private readonly ISystemClock _clock;
 
     public EndSessionCommandHandler(
         ISessionRepository sessions,
-        IPlannedBlockRepository plannedBlocks,
+        IBlockRepository blocks,
         ISystemClock clock)
     {
         _sessions = sessions;
-        _plannedBlocks = plannedBlocks;
+        _blocks = blocks;
         _clock = clock;
     }
 
@@ -38,7 +38,7 @@ public sealed class EndSessionCommandHandler
             return EndSessionResult.EndsBeforeStart();
 
         var originatingFocusBlock = session.OriginatingBlockId is { } blockId
-            ? await _plannedBlocks.GetByIdAsync(blockId, ct) as FocusBlock
+            ? await _blocks.GetByIdAsync(blockId, ct) as FocusBlock
             : null;
 
         // The one ending (Gap 89 Slice A): capped at the planned end, and the block stamped with

@@ -1,6 +1,6 @@
 using FluentAssertions;
 using NenFocus.Application.DTOs;
-using NenFocus.Application.UseCases.Planner.UpdatePlannedBlock;
+using NenFocus.Application.UseCases.Planner.UpdateBlock;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
 using NenFocus.Domain.Services;
@@ -15,20 +15,20 @@ namespace NenFocus.Tests.Application.UseCases.Planner;
 /// GetBlockPlacementVerdictQueryHandlerTests. A move never changes membership, and a redemption
 /// block keeps its receipt (Gap 106).
 /// </summary>
-public class UpdatePlannedBlockTests : UseCaseTestBase
+public class UpdateBlockTests : UseCaseTestBase
 {
     private static readonly DateTime Now = new(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
 
-    public UpdatePlannedBlockTests() => Clock.SetNow(Now);
+    public UpdateBlockTests() => Clock.SetNow(Now);
 
-    private static UpdatePlannedBlockCommand Command(PlannedBlock block, DateTime from, DateTime to, Guid? presetId = null) => new()
+    private static UpdateBlockCommand Command(Block block, DateTime from, DateTime to, Guid? presetId = null) => new()
     {
         BlockId = block.Id,
         PresetId = presetId ?? block.BlockPresetId,
         Slot = At.Slot(from, to)
     };
 
-    private Task<UpdatePlannedBlockResult> UpdateAsync(UpdatePlannedBlockCommand command) => RunAsync(command);
+    private Task<UpdateBlockResult> UpdateAsync(UpdateBlockCommand command) => RunAsync(command);
 
     private static FocusBlock Focus(DateTime from, DateTime to, ContractMembership? membership = null) =>
         FocusBlock.Create(Guid.NewGuid(), SeededFocusPresetId, At.Slot(from, to), membership: membership);
@@ -36,9 +36,9 @@ public class UpdatePlannedBlockTests : UseCaseTestBase
     private static BackgroundBlock Background(DateTime from, DateTime to) =>
         BackgroundBlock.Create(Guid.NewGuid(), SeededBackgroundPresetId, At.Slot(from, to));
 
-    private async Task<PlannedBlock> Stored(PlannedBlock block) => (await FindAsync<PlannedBlock>(block.Id))!;
+    private async Task<Block> Stored(Block block) => (await FindAsync<Block>(block.Id))!;
 
-    private async Task ShouldBeAllowed(UpdatePlannedBlockCommand command)
+    private async Task ShouldBeAllowed(UpdateBlockCommand command)
     {
         var result = await UpdateAsync(command);
 
@@ -46,7 +46,7 @@ public class UpdatePlannedBlockTests : UseCaseTestBase
     }
 
     /// <summary>Refused, and the stored block is as it was.</summary>
-    private async Task<UpdatePlannedBlockResult> ShouldBeRefused(PlannedBlock block, UpdatePlannedBlockCommand command, string? message = null)
+    private async Task<UpdateBlockResult> ShouldBeRefused(Block block, UpdateBlockCommand command, string? message = null)
     {
         var before = block.Scheduled;
         var presetBefore = block.BlockPresetId;

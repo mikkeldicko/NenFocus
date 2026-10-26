@@ -19,14 +19,14 @@ public class ComputeActivePolicySliceQueryHandlerTests
 {
     private static readonly DateTime At = new(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
 
-    private readonly IPlannedBlockRepository _blocks = Substitute.For<IPlannedBlockRepository>();
+    private readonly IBlockRepository _blocks = Substitute.For<IBlockRepository>();
     private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
     private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
 
     public ComputeActivePolicySliceQueryHandlerTests()
     {
         _blocks.GetForRangeAsync(Arg.Any<TimeSlot>(), Arg.Any<CancellationToken>())
-            .Returns((IReadOnlyList<PlannedBlock>)[]);
+            .Returns((IReadOnlyList<Block>)[]);
         _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns((Session?)null);
     }
 
@@ -72,7 +72,7 @@ public class ComputeActivePolicySliceQueryHandlerTests
         session.Start(TestAt.Utc(At));
 
         _blocks.GetForRangeAsync(Arg.Any<TimeSlot>(), Arg.Any<CancellationToken>())
-            .Returns((IReadOnlyList<PlannedBlock>)[block, otherBlock]);
+            .Returns((IReadOnlyList<Block>)[block, otherBlock]);
         _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns(session);
 
         var result = await Compute();
@@ -86,13 +86,13 @@ public class ComputeActivePolicySliceQueryHandlerTests
     public async Task HandleAsync_CancelledBlock_BlocksNothing()
     {
         // The handler doesn't filter cancelled blocks: a cancelled block's own IsActive says no
-        // (PlannedBlock.EffectiveEnd), and PolicyEngine asks it.
+        // (Block.EffectiveEnd), and PolicyEngine asks it.
         var preset = PresetBlocking("youtube.com");
         var cancelledBlock = FocusBlock.Create(Guid.NewGuid(), preset.Id, TestAt.Slot(At, At.AddHours(1)));
         cancelledBlock.MarkCancelled(TestAt.Utc(At));
 
         _blocks.GetForRangeAsync(Arg.Any<TimeSlot>(), Arg.Any<CancellationToken>())
-            .Returns((IReadOnlyList<PlannedBlock>)[cancelledBlock]);
+            .Returns((IReadOnlyList<Block>)[cancelledBlock]);
 
         var result = await Compute();
 
@@ -105,7 +105,7 @@ public class ComputeActivePolicySliceQueryHandlerTests
         var presetId = Guid.NewGuid();
         var block = FocusBlock.Create(Guid.NewGuid(), presetId, TestAt.Slot(At, At.AddHours(1)));
         _blocks.GetForRangeAsync(Arg.Any<TimeSlot>(), Arg.Any<CancellationToken>())
-            .Returns((IReadOnlyList<PlannedBlock>)[block]);
+            .Returns((IReadOnlyList<Block>)[block]);
         _presets.GetByIdAsync(presetId, Arg.Any<CancellationToken>()).Returns((BlockPreset?)null);
 
         var result = await Compute();

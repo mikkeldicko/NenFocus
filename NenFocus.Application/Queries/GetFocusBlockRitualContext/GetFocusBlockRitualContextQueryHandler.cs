@@ -8,13 +8,13 @@ namespace NenFocus.Application.Queries.GetFocusBlockRitualContext;
 public sealed class GetFocusBlockRitualContextQueryHandler
     : IQueryHandler<GetFocusBlockRitualContextQuery, FocusBlockRitualContext?>
 {
-    private readonly IPlannedBlockRepository _blocks;
+    private readonly IBlockRepository _blocks;
     private readonly IBlockPresetRepository _presets;
     private readonly ISessionRepository _sessions;
     private readonly ISystemClock _clock;
 
     public GetFocusBlockRitualContextQueryHandler(
-        IPlannedBlockRepository blocks,
+        IBlockRepository blocks,
         IBlockPresetRepository presets,
         ISessionRepository sessions,
         ISystemClock clock)

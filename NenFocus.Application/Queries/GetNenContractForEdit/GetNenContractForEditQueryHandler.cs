@@ -9,12 +9,12 @@ public sealed class GetNenContractForEditQueryHandler
     : IQueryHandler<GetNenContractForEditQuery, NenContractEditDto?>
 {
     private readonly INenContractRepository _contracts;
-    private readonly IPlannedBlockRepository _blocks;
+    private readonly IBlockRepository _blocks;
     private readonly IBlockPresetRepository _presets;
 
     public GetNenContractForEditQueryHandler(
         INenContractRepository contracts,
-        IPlannedBlockRepository blocks,
+        IBlockRepository blocks,
         IBlockPresetRepository presets)
     {
         _contracts = contracts;

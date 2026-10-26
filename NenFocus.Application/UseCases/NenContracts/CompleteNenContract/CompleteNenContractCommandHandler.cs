@@ -7,13 +7,13 @@ public sealed class CompleteNenContractCommandHandler
     : ICommandHandler<CompleteNenContractCommand, CompleteNenContractResult>
 {
     private readonly INenContractRepository _contracts;
-    private readonly IPlannedBlockRepository _blocks;
+    private readonly IBlockRepository _blocks;
     private readonly ISessionRepository _sessions;
     private readonly ISystemClock _clock;
 
     public CompleteNenContractCommandHandler(
         INenContractRepository contracts,
-        IPlannedBlockRepository blocks,
+        IBlockRepository blocks,
         ISessionRepository sessions,
         ISystemClock clock)
     {

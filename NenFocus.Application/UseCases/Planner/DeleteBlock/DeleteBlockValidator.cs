@@ -3,12 +3,12 @@ using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Domain.Services;
 
-namespace NenFocus.Application.UseCases.Planner.DeletePlannedBlock;
+namespace NenFocus.Application.UseCases.Planner.DeleteBlock;
 
-public sealed class DeletePlannedBlockValidator : AbstractValidator<DeletePlannedBlockCommand>
+public sealed class DeleteBlockValidator : AbstractValidator<DeleteBlockCommand>
 {
-    public DeletePlannedBlockValidator(
-        IPlannedBlockRepository blocks,
+    public DeleteBlockValidator(
+        IBlockRepository blocks,
         INenContractRepository contracts,
         ISystemClock clock,
         BlockChangeChecker changes)
@@ -33,7 +33,7 @@ public sealed class DeletePlannedBlockValidator : AbstractValidator<DeletePlanne
 
                 var verdict = changes.CheckDelete(block, contract, clock.Now);
                 if (!verdict.IsAllowed)
-                    context.AddFailure(nameof(DeletePlannedBlockCommand.BlockId), BlockChangeVerdictDto.From(verdict).Message);
+                    context.AddFailure(nameof(DeleteBlockCommand.BlockId), BlockChangeVerdictDto.From(verdict).Message);
             });
     }
 }

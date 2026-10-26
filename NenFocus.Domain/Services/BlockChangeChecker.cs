@@ -15,7 +15,7 @@ namespace NenFocus.Domain.Services;
 public sealed class BlockChangeChecker
 {
     /// <summary>What may be done to the block at all — for a screen deciding what to offer.</summary>
-    public BlockChangeAllowances AllowancesFor(PlannedBlock block, NenContract? contract, Moment asOf)
+    public BlockChangeAllowances AllowancesFor(Block block, NenContract? contract, Moment asOf)
     {
         var mayChange = block.CheckOwnChange(asOf).IsAllowed;
         var isMember = block.Membership is not null;
@@ -40,8 +40,8 @@ public sealed class BlockChangeChecker
     /// A plain block may not move where any of <paramref name="contractsInEffect"/> governs — a drag
     /// never changes membership (Gap 106); a member ignores the list. A list, so no caller picks the contract.
     /// </summary>
-    public ChangeVerdict CheckReschedule(PlannedBlock block, TimeSlot newSlot, bool presetChanges,
-        NenContract? contract, IEnumerable<PlannedBlock> contractBlocks, IEnumerable<NenContract> contractsInEffect,
+    public ChangeVerdict CheckReschedule(Block block, TimeSlot newSlot, bool presetChanges,
+        NenContract? contract, IEnumerable<Block> contractBlocks, IEnumerable<NenContract> contractsInEffect,
         Moment asOf, UserTimeZone timeZone)
     {
         if (block.CheckOwnChange(asOf) is { IsAllowed: false } locked)
@@ -76,8 +76,8 @@ public sealed class BlockChangeChecker
     /// May the block be replaced by <paramref name="first"/> and <paramref name="second"/>? Each
     /// half is held to the same movement rule as a move, and the floor must be met with both in place.
     /// </summary>
-    public ChangeVerdict CheckSplit(PlannedBlock block, TimeSlot first, TimeSlot second,
-        NenContract? contract, IEnumerable<PlannedBlock> contractBlocks, Moment asOf, UserTimeZone timeZone)
+    public ChangeVerdict CheckSplit(Block block, TimeSlot first, TimeSlot second,
+        NenContract? contract, IEnumerable<Block> contractBlocks, Moment asOf, UserTimeZone timeZone)
     {
         if (block.CheckOwnSplit(asOf) is { IsAllowed: false } notSplittable)
             return notSplittable;
@@ -101,7 +101,7 @@ public sealed class BlockChangeChecker
     }
 
     /// <summary>May the block be deleted?</summary>
-    public ChangeVerdict CheckDelete(PlannedBlock block, NenContract? contract, Moment asOf)
+    public ChangeVerdict CheckDelete(Block block, NenContract? contract, Moment asOf)
     {
         if (block.CheckOwnDelete(asOf) is { IsAllowed: false } running)
             return running;
@@ -118,8 +118,8 @@ public sealed class BlockChangeChecker
     /// it, and the plan after the change is every other Committed Focus block as it stands, plus
     /// where this one goes. A Redemption block pays for a missed block, never for a shrunk one.
     /// </summary>
-    private ChangeVerdict CheckFloor(PlannedBlock block, IReadOnlyList<TimeSlot> replacement,
-        NenContract contract, IEnumerable<PlannedBlock> contractBlocks, UserTimeZone timeZone)
+    private ChangeVerdict CheckFloor(Block block, IReadOnlyList<TimeSlot> replacement,
+        NenContract contract, IEnumerable<Block> contractBlocks, UserTimeZone timeZone)
     {
         if (block is not FocusBlock { IsCommitted: true })
             return ChangeVerdict.Allowed;

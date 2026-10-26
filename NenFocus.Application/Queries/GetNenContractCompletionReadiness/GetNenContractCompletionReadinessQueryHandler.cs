@@ -13,13 +13,13 @@ public sealed class GetNenContractCompletionReadinessQueryHandler
     : IQueryHandler<GetNenContractCompletionReadinessQuery, NenContractCompletionReadinessDto>
 {
     private readonly INenContractRepository _contracts;
-    private readonly IPlannedBlockRepository _blocks;
+    private readonly IBlockRepository _blocks;
     private readonly ISessionRepository _sessions;
     private readonly ISystemClock _clock;
 
     public GetNenContractCompletionReadinessQueryHandler(
         INenContractRepository contracts,
-        IPlannedBlockRepository blocks,
+        IBlockRepository blocks,
         ISessionRepository sessions,
         ISystemClock clock)
     {

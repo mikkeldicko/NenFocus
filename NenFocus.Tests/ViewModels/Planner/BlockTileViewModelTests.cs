@@ -4,14 +4,14 @@ using NenFocus.ViewModels.Planner;
 
 namespace NenFocus.Tests.ViewModels.Planner;
 
-public class PlannedBlockTileViewModelTests
+public class BlockTileViewModelTests
 {
     [Fact]
     public void ForDraft_IsADraftWithNothingThatOnlyASavedBlockHas()
     {
         // A draft isn't saved: no outcome, no late/early marks, no contract badge (Gap 89 Slice B).
         var id = Guid.NewGuid();
-        var tile = PlannedBlockTileViewModel.ForDraft(
+        var tile = BlockTileViewModel.ForDraft(
             id, "Deep work", BlockPresetType.Focus,
             new DateTime(2026, 10, 26, 9, 0, 0), new DateTime(2026, 10, 26, 10, 0, 0), columnIndex: 0, top: 504, height: 56);
 

@@ -198,7 +198,7 @@ public class EndSessionTests : UseCaseTestBase
 
         await EndedAsync(session);
 
-        var stored = (FocusBlock)(await FindAsync<PlannedBlock>(block.Id))!;
+        var stored = (FocusBlock)(await FindAsync<Block>(block.Id))!;
         stored.EndedEarly.Should().BeTrue();
         stored.WorkSlot().Should().Be(At.Slot(Now.AddMinutes(-10), Now)); // stamped at the session's end
         stored.Scheduled.Should().Be(At.Slot(Now.AddMinutes(-10), Now.AddHours(1))); // schedule kept, not overwritten
@@ -212,7 +212,7 @@ public class EndSessionTests : UseCaseTestBase
 
         await EndedAsync(session);
 
-        var stored = (FocusBlock)(await FindAsync<PlannedBlock>(block.Id))!;
+        var stored = (FocusBlock)(await FindAsync<Block>(block.Id))!;
         stored.IsFinal(At.Utc(Now)).Should().BeTrue(); // a block with a Ritual is final only once its session ended
         stored.EndedEarly.Should().BeFalse();
         stored.Scheduled.Should().Be(At.Slot(Now.AddMinutes(-10), Now));

@@ -36,7 +36,7 @@ internal static class At
 
     /// <summary>
     /// The slot's start as a Moment, read through the UTC zone — the tests' way to reach a
-    /// block's scheduled endpoint now that PlannedBlock.Start/End are gone (a slot's own
+    /// block's scheduled endpoint now that Block.Start/End are gone (a slot's own
     /// Start/End are Domain-only, Gap 88).
     /// </summary>
     public static Moment Start(TimeSlot slot) => Utc(UtcZone.ToCalendarTimes(slot).Start);

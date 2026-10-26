@@ -73,8 +73,8 @@ public class SealNenContractTests : UseCaseTestBase
     {
         var contract = await SealAsync(Command(blocks: [Focus(1, 9, 11)]));
 
-        var members = await ReadAsync<IReadOnlyList<PlannedBlock>>(async context =>
-            await new PlannedBlockRepository(context).GetForContractAsync(contract.Id));
+        var members = await ReadAsync<IReadOnlyList<Block>>(async context =>
+            await new BlockRepository(context).GetForContractAsync(contract.Id));
         members.Should().ContainSingle().Which.Membership.Should().Be(TestContracts.Committed(contract.Id));
     }
 

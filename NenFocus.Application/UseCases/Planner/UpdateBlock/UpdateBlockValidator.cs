@@ -7,15 +7,15 @@ using NenFocus.Domain.Enums;
 using NenFocus.Domain.Services;
 using NenFocus.Domain.ValueObjects;
 
-namespace NenFocus.Application.UseCases.Planner.UpdatePlannedBlock;
+namespace NenFocus.Application.UseCases.Planner.UpdateBlock;
 
-public sealed class UpdatePlannedBlockValidator : AbstractValidator<UpdatePlannedBlockCommand>
+public sealed class UpdateBlockValidator : AbstractValidator<UpdateBlockCommand>
 {
-    private readonly IPlannedBlockRepository _blocks;
+    private readonly IBlockRepository _blocks;
     private readonly ISystemClock _clock;
 
-    public UpdatePlannedBlockValidator(
-        IPlannedBlockRepository blocks,
+    public UpdateBlockValidator(
+        IBlockRepository blocks,
         IBlockPresetRepository presets,
         INenContractRepository contracts,
         ISystemClock clock,
@@ -70,7 +70,7 @@ public sealed class UpdatePlannedBlockValidator : AbstractValidator<UpdatePlanne
                 if (block is null) return;
 
                 NenContract? contract = null;
-                IReadOnlyList<PlannedBlock> contractBlocks = [];
+                IReadOnlyList<Block> contractBlocks = [];
                 if (block.Membership is { } membership)
                 {
                     contract = await contracts.GetByIdAsync(membership.ContractId, ct);
@@ -82,8 +82,8 @@ public sealed class UpdatePlannedBlockValidator : AbstractValidator<UpdatePlanne
                 if (!change.IsAllowed)
                 {
                     var property = change.Outcome == ChangeOutcome.PresetFixed
-                        ? nameof(UpdatePlannedBlockCommand.PresetId)
-                        : nameof(UpdatePlannedBlockCommand.Slot);
+                        ? nameof(UpdateBlockCommand.PresetId)
+                        : nameof(UpdateBlockCommand.Slot);
                     context.AddFailure(property, BlockChangeVerdictDto.From(change).Message);
                     return;
                 }
@@ -92,7 +92,7 @@ public sealed class UpdatePlannedBlockValidator : AbstractValidator<UpdatePlanne
                     new GetBlockPlacementVerdictQuery(command.Slot, block.PresetType, command.PresetId, ExistingBlockId: command.BlockId),
                     ct);
                 if (verdict.Outcome != PlacementOutcome.Allowed && verdict.Message is not null)
-                    context.AddFailure(nameof(UpdatePlannedBlockCommand.Slot), verdict.Message);
+                    context.AddFailure(nameof(UpdateBlockCommand.Slot), verdict.Message);
             });
     }
 }

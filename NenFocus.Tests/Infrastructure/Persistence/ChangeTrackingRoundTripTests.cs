@@ -204,11 +204,11 @@ public class ChangeTrackingRoundTripTests : SqliteRepositoryTestBase
 
     private static TimeSlot SlotAt(int hour, int hours = 1) => At.Slot(Day.AddHours(hour), Day.AddHours(hour + hours));
 
-    private static Func<NenFocusDbContext, Task<PlannedBlock?>> BlockById(Guid id) =>
-        ctx => new PlannedBlockRepository(ctx).GetByIdAsync(id);
+    private static Func<NenFocusDbContext, Task<Block?>> BlockById(Guid id) =>
+        ctx => new BlockRepository(ctx).GetByIdAsync(id);
 
     [Fact]
-    public async Task PlannedBlock_RescheduleAndNewPreset_AreSavedByTheCommit()
+    public async Task Block_RescheduleAndNewPreset_AreSavedByTheCommit()
     {
         var block = FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), SlotAt(10));
         await SeedAsync(block);
@@ -226,7 +226,7 @@ public class ChangeTrackingRoundTripTests : SqliteRepositoryTestBase
     }
 
     [Fact]
-    public async Task PlannedBlock_LeavingItsContract_AndCancelling_AreSavedByTheCommit()
+    public async Task Block_LeavingItsContract_AndCancelling_AreSavedByTheCommit()
     {
         var block = BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(), SlotAt(10), membership: TestContracts.Bonus(Guid.NewGuid()));
         await SeedAsync(block);
@@ -334,7 +334,7 @@ public class ChangeTrackingRoundTripTests : SqliteRepositoryTestBase
         await using (var scope = CreateFreshContext())
         {
             var contracts = new NenContractRepository(scope);
-            var blocks = new PlannedBlockRepository(scope);
+            var blocks = new BlockRepository(scope);
             foreach (var b in await blocks.GetForContractAsync(original.Id))
                 blocks.Remove(b);
             contracts.Remove((await contracts.GetByIdAsync(original.Id))!);
@@ -347,6 +347,6 @@ public class ChangeTrackingRoundTripTests : SqliteRepositoryTestBase
         reloaded.Name.Should().Be("Edited");
         reloaded.EndDate.Should().Be(DateOnly.FromDateTime(Day).AddDays(3));
         await using var fresh = CreateFreshContext();
-        (await new PlannedBlockRepository(fresh).GetForContractAsync(original.Id)).Select(b => b.Id).Should().Equal(newBlock.Id);
+        (await new BlockRepository(fresh).GetForContractAsync(original.Id)).Select(b => b.Id).Should().Equal(newBlock.Id);
     }
 }

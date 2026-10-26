@@ -36,7 +36,7 @@ public class NenContractRedemptionPlacementTests
         FocusBlock.Create(Guid.NewGuid(), presetId ?? PresetId, At.Slot(start, start.AddMinutes(minutes)),
             membership: TestContracts.Committed(contract.Id));
 
-    private static RedemptionVerdict Check(NenContract contract, TimeSlot slot, IEnumerable<PlannedBlock> blocks,
+    private static RedemptionVerdict Check(NenContract contract, TimeSlot slot, IEnumerable<Block> blocks,
         DateTime? now = null, UserTimeZone? timeZone = null) =>
         contract.CheckRedemptionPlacement(PresetId, slot, blocks, At.Utc(now ?? Now), timeZone ?? At.UtcZone);
 

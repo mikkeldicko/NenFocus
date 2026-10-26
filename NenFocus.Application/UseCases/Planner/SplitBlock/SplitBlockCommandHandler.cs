@@ -1,23 +1,23 @@
 using NenFocus.Application.Interfaces;
 using NenFocus.Domain.Entities;
 
-namespace NenFocus.Application.UseCases.Planner.SplitPlannedBlock;
+namespace NenFocus.Application.UseCases.Planner.SplitBlock;
 
-public sealed class SplitPlannedBlockCommandHandler : ICommandHandler<SplitPlannedBlockCommand, SplitPlannedBlockResult>
+public sealed class SplitBlockCommandHandler : ICommandHandler<SplitBlockCommand, SplitBlockResult>
 {
-    private readonly IPlannedBlockRepository _blocks;
+    private readonly IBlockRepository _blocks;
 
-    public SplitPlannedBlockCommandHandler(IPlannedBlockRepository blocks)
+    public SplitBlockCommandHandler(IBlockRepository blocks)
     {
         _blocks = blocks;
     }
 
-    public async Task<SplitPlannedBlockResult> HandleAsync(SplitPlannedBlockCommand command, CancellationToken cancellationToken = default)
+    public async Task<SplitBlockResult> HandleAsync(SplitBlockCommand command, CancellationToken cancellationToken = default)
     {
         // Only a Focus block a contract binds can be split; the validator refuses anything else
         // (a Background block: SplitNotOffered).
         if (await _blocks.GetByIdAsync(command.OriginalBlockId, cancellationToken) is not FocusBlock original)
-            return SplitPlannedBlockResult.Fail($"Planned block '{command.OriginalBlockId}' not found.");
+            return SplitBlockResult.Fail($"Planned block '{command.OriginalBlockId}' not found.");
 
         // The block divides itself: both pieces keep its membership, and its receipt is divided in
         // time order — never recalculated, no piece shortened (Gap 106).
@@ -27,6 +27,6 @@ public sealed class SplitPlannedBlockCommandHandler : ICommandHandler<SplitPlann
         _blocks.Add(first);
         _blocks.Add(second);
 
-        return SplitPlannedBlockResult.Ok(first.Id, second.Id);
+        return SplitBlockResult.Ok(first.Id, second.Id);
     }
 }

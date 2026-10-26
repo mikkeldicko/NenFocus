@@ -4,7 +4,7 @@ using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Domain.Entities;
 
-public sealed class FocusBlock : PlannedBlock
+public sealed class FocusBlock : Block
 {
     /// <summary>
     /// A Focus block cannot exceed this many hours — Background blocks have no such
@@ -62,7 +62,7 @@ public sealed class FocusBlock : PlannedBlock
 
     /// <summary>
     /// Window closed, Ritual never completed, not cancelled — what the missed-block sweep looks
-    /// for. <c>IPlannedBlockRepository.GetUnresolvedFocusBlocksAsync</c> asks the same rule in SQL
+    /// for. <c>IBlockRepository.GetUnresolvedFocusBlocksAsync</c> asks the same rule in SQL
     /// through <see cref="TimeSlot.Filters.HasEnded"/> and <see cref="Filters.NoRitualAndNotCancelled"/>;
     /// a repository test checks the two agree.
     /// </summary>

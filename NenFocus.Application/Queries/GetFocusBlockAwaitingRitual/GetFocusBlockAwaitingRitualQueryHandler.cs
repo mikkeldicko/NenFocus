@@ -7,11 +7,11 @@ namespace NenFocus.Application.Queries.GetFocusBlockAwaitingRitual;
 public sealed class GetFocusBlockAwaitingRitualQueryHandler
     : IQueryHandler<GetFocusBlockAwaitingRitualQuery, Guid?>
 {
-    private readonly IPlannedBlockRepository _blocks;
+    private readonly IBlockRepository _blocks;
     private readonly ISessionRepository _sessions;
 
     public GetFocusBlockAwaitingRitualQueryHandler(
-        IPlannedBlockRepository blocks,
+        IBlockRepository blocks,
         ISessionRepository sessions)
     {
         _blocks = blocks;

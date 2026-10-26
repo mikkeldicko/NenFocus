@@ -20,7 +20,7 @@ public class GetBlockPlacementVerdictQueryHandlerTests
     private static readonly DateTime Start = Now.AddHours(2); // 14:00
     private static readonly DateTime End = Now.AddHours(3);   // 15:00
 
-    private readonly IPlannedBlockRepository _blocks = Substitute.For<IPlannedBlockRepository>();
+    private readonly IBlockRepository _blocks = Substitute.For<IBlockRepository>();
     private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
     private readonly INenContractRepository _contracts = Substitute.For<INenContractRepository>();
     private readonly ISystemClock _clock = TestClock.Create();
@@ -29,7 +29,7 @@ public class GetBlockPlacementVerdictQueryHandlerTests
     {
         _clock.SetNow(Now);
         _clock.SetTimeZoneOffset(TimeSpan.Zero);
-        _blocks.GetForRangeAsync(Arg.Any<TimeSlot>(), Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[]);
+        _blocks.GetForRangeAsync(Arg.Any<TimeSlot>(), Arg.Any<CancellationToken>()).Returns((IReadOnlyList<Block>)[]);
         _sessions.GetActiveAsync(Arg.Any<CancellationToken>()).Returns((Session?)null);
     }
 
@@ -84,7 +84,7 @@ public class GetBlockPlacementVerdictQueryHandlerTests
     public async Task HandleAsync_OverlapsAnotherFocusBlock_IsTimeTaken()
     {
         _blocks.GetForRangeAsync(At.Slot(Start, End), Arg.Any<CancellationToken>())
-            .Returns((IReadOnlyList<PlannedBlock>)[FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Start, End))]);
+            .Returns((IReadOnlyList<Block>)[FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Start, End))]);
 
         var result = await CreateHandler().HandleAsync(NewFocus(At.Slot(Start, End)));
 
@@ -249,7 +249,7 @@ public class GetBlockPlacementVerdictQueryHandlerTests
         var blockId = Guid.NewGuid();
         var original = FocusBlock.Create(blockId, Guid.NewGuid(), At.Slot(Start, End));
         _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns(original);
-        _blocks.GetForRangeAsync(Arg.Any<TimeSlot>(), Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[original]);
+        _blocks.GetForRangeAsync(Arg.Any<TimeSlot>(), Arg.Any<CancellationToken>()).Returns((IReadOnlyList<Block>)[original]);
 
         // Moved 30 min later — overlaps where it is now, which must not count against it.
         var result = await CreateHandler().HandleAsync(new GetBlockPlacementVerdictQuery(
@@ -262,7 +262,7 @@ public class GetBlockPlacementVerdictQueryHandlerTests
     public async Task HandleAsync_BackgroundBlock_MayOverlapFocusTime()
     {
         _blocks.GetForRangeAsync(Arg.Any<TimeSlot>(), Arg.Any<CancellationToken>())
-            .Returns((IReadOnlyList<PlannedBlock>)[FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Start, End))]);
+            .Returns((IReadOnlyList<Block>)[FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(Start, End))]);
 
         var result = await CreateHandler().HandleAsync(
             new GetBlockPlacementVerdictQuery(At.Slot(Start, End), BlockPresetType.Background, Guid.NewGuid()));

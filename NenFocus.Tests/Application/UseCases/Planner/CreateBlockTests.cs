@@ -1,6 +1,6 @@
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
-using NenFocus.Application.UseCases.Planner.CreatePlannedBlock;
+using NenFocus.Application.UseCases.Planner.CreateBlock;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
 using NenFocus.Domain.Services;
@@ -15,41 +15,41 @@ namespace NenFocus.Tests.Application.UseCases.Planner;
 /// refusal reaches the command and nothing is stored. The block's membership comes from where the
 /// slot sits (Gap 97) — always Bonus: only Cover Deficit makes a redemption block (Gap 106).
 /// </summary>
-public class CreatePlannedBlockTests : UseCaseTestBase
+public class CreateBlockTests : UseCaseTestBase
 {
     private static readonly DateTime Start = new(2026, 1, 2, 10, 0, 0, DateTimeKind.Utc);
     private static readonly DateTime End = new(2026, 1, 2, 11, 0, 0, DateTimeKind.Utc);
 
-    public CreatePlannedBlockTests() => Clock.SetNow(Start.AddHours(-1));
+    public CreateBlockTests() => Clock.SetNow(Start.AddHours(-1));
 
-    private static CreatePlannedBlockCommand FocusCommand(DateTime? start = null, DateTime? end = null) => new()
+    private static CreateBlockCommand FocusCommand(DateTime? start = null, DateTime? end = null) => new()
     {
         PresetId = SeededFocusPresetId,
         BlockPresetType = BlockPresetType.Focus,
         Slot = At.Slot(start ?? Start, end ?? End)
     };
 
-    private static CreatePlannedBlockCommand BackgroundCommand(DateTime? start = null, DateTime? end = null) =>
+    private static CreateBlockCommand BackgroundCommand(DateTime? start = null, DateTime? end = null) =>
         FocusCommand(start, end) with { PresetId = SeededBackgroundPresetId, BlockPresetType = BlockPresetType.Background };
 
-    private Task<CreatePlannedBlockResult> CreateAsync(CreatePlannedBlockCommand command) => RunAsync(command);
+    private Task<CreateBlockResult> CreateAsync(CreateBlockCommand command) => RunAsync(command);
 
-    private async Task<PlannedBlock> CreatedAsync(CreatePlannedBlockCommand command)
+    private async Task<Block> CreatedAsync(CreateBlockCommand command)
     {
         var result = await CreateAsync(command);
         result.Success.Should().BeTrue(result.ErrorMessage);
-        return (await FindAsync<PlannedBlock>(result.BlockId!.Value))!;
+        return (await FindAsync<Block>(result.BlockId!.Value))!;
     }
 
-    private async Task ShouldBeRefused(CreatePlannedBlockCommand command, string? message = null)
+    private async Task ShouldBeRefused(CreateBlockCommand command, string? message = null)
     {
-        var before = await ReadAsync(context => context.Set<PlannedBlock>().CountAsync());
+        var before = await ReadAsync(context => context.Set<Block>().CountAsync());
 
         var result = await CreateAsync(command);
 
         result.Success.Should().BeFalse();
         if (message is not null) result.ErrorMessage.Should().Be(message);
-        (await ReadAsync(context => context.Set<PlannedBlock>().CountAsync())).Should().Be(before);
+        (await ReadAsync(context => context.Set<Block>().CountAsync())).Should().Be(before);
     }
 
     /// <summary>A contract in effect whose period (the whole of 2–9 January) contains the command's slot.</summary>

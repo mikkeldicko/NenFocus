@@ -15,7 +15,7 @@ public partial class NenContract
     /// Every hour is split across the local days it falls on.
     /// </summary>
     public IReadOnlyList<ContractDayStatus> DayStatuses(
-        IEnumerable<PlannedBlock> blocks, IEnumerable<Session> sessions, Moment asOf, UserTimeZone timeZone)
+        IEnumerable<Block> blocks, IEnumerable<Session> sessions, Moment asOf, UserTimeZone timeZone)
     {
         var mine = blocks.ToList();
         foreach (var block in mine)

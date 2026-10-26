@@ -5,19 +5,19 @@ using NenFocus.Domain.Enums;
 using NenFocus.Domain.Services;
 using NenFocus.Domain.ValueObjects;
 
-namespace NenFocus.Application.Queries.GetPlannedBlocksForDay;
+namespace NenFocus.Application.Queries.GetBlocksForDay;
 
-public sealed class GetPlannedBlocksForDayQueryHandler
-    : IQueryHandler<GetPlannedBlocksForDayQuery, IReadOnlyList<PlannedBlockDto>>
+public sealed class GetBlocksForDayQueryHandler
+    : IQueryHandler<GetBlocksForDayQuery, IReadOnlyList<BlockDto>>
 {
-    private readonly IPlannedBlockRepository _blocks;
+    private readonly IBlockRepository _blocks;
     private readonly IBlockPresetRepository _presets;
     private readonly INenContractRepository _contracts;
     private readonly ISystemClock _clock;
     private readonly BlockChangeChecker _changes;
 
-    public GetPlannedBlocksForDayQueryHandler(
-        IPlannedBlockRepository blocks,
+    public GetBlocksForDayQueryHandler(
+        IBlockRepository blocks,
         IBlockPresetRepository presets,
         INenContractRepository contracts,
         ISystemClock clock,
@@ -30,8 +30,8 @@ public sealed class GetPlannedBlocksForDayQueryHandler
         _changes = changes;
     }
 
-    public async Task<IReadOnlyList<PlannedBlockDto>> HandleAsync(
-        GetPlannedBlocksForDayQuery query,
+    public async Task<IReadOnlyList<BlockDto>> HandleAsync(
+        GetBlocksForDayQuery query,
         CancellationToken cancellationToken = default)
     {
         // The user's calendar day as real time (Gap 97); cancelled blocks are already left out.
@@ -63,14 +63,14 @@ public sealed class GetPlannedBlocksForDayQueryHandler
                 : null;
 
             var contractBadge = focusBlock is { IsRedemption: true }
-                ? PlannedBlockContractBadge.Redemption
+                ? BlockContractBadge.Redemption
                 : focusBlock is { IsBonus: true }
-                    ? PlannedBlockContractBadge.Bonus
+                    ? BlockContractBadge.Bonus
                     : focusBlock is { IsCommitted: true }
-                        ? PlannedBlockContractBadge.Committed
-                        : (PlannedBlockContractBadge?)null;
+                        ? BlockContractBadge.Committed
+                        : (BlockContractBadge?)null;
 
-            return new PlannedBlockDto
+            return new BlockDto
             {
                 Id = b.Id,
                 PresetId = b.BlockPresetId,

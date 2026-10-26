@@ -12,12 +12,12 @@ public class GetFocusBlockAwaitingRitualQueryHandlerTests
 {
     private static readonly DateTime At = new(2026, 9, 25, 10, 0, 0, DateTimeKind.Utc);
 
-    private readonly IPlannedBlockRepository _blocks = Substitute.For<IPlannedBlockRepository>();
+    private readonly IBlockRepository _blocks = Substitute.For<IBlockRepository>();
     private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
 
     private GetFocusBlockAwaitingRitualQueryHandler CreateHandler() => new(_blocks, _sessions);
 
-    private void BlocksAre(params PlannedBlock[] blocks) =>
+    private void BlocksAre(params Block[] blocks) =>
         _blocks.GetForRangeAsync(Arg.Any<TimeSlot>(), Arg.Any<CancellationToken>())
             .Returns(blocks);
 

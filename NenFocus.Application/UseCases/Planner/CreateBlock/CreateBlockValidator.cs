@@ -5,11 +5,11 @@ using NenFocus.Application.Queries.GetBlockPlacementVerdict;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
 
-namespace NenFocus.Application.UseCases.Planner.CreatePlannedBlock;
+namespace NenFocus.Application.UseCases.Planner.CreateBlock;
 
-public sealed class CreatePlannedBlockValidator : AbstractValidator<CreatePlannedBlockCommand>
+public sealed class CreateBlockValidator : AbstractValidator<CreateBlockCommand>
 {
-    public CreatePlannedBlockValidator(
+    public CreateBlockValidator(
         IBlockPresetRepository presets,
         IQueryHandler<GetBlockPlacementVerdictQuery, BlockPlacementVerdictDto> placement)
     {
@@ -49,7 +49,7 @@ public sealed class CreatePlannedBlockValidator : AbstractValidator<CreatePlanne
                     new GetBlockPlacementVerdictQuery(command.Slot, command.BlockPresetType, command.PresetId),
                     ct);
                 if (verdict.Outcome != PlacementOutcome.Allowed && verdict.Message is not null)
-                    context.AddFailure(nameof(CreatePlannedBlockCommand.Slot), verdict.Message);
+                    context.AddFailure(nameof(CreateBlockCommand.Slot), verdict.Message);
             });
     }
 }

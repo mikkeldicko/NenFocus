@@ -12,7 +12,7 @@ public class MarkFocusBlockMissedValidatorTests
     private static readonly DateTime Start = new(2026, 1, 1, 9, 0, 0, DateTimeKind.Utc);
     private static readonly DateTime End = new(2026, 1, 1, 10, 0, 0, DateTimeKind.Utc);
 
-    private readonly IPlannedBlockRepository _blocks = Substitute.For<IPlannedBlockRepository>();
+    private readonly IBlockRepository _blocks = Substitute.For<IBlockRepository>();
     private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
     private readonly ISystemClock _clock = TestClock.Create();
 
@@ -36,7 +36,7 @@ public class MarkFocusBlockMissedValidatorTests
     public async Task Validate_BlockNotFound_IsInvalid()
     {
         var blockId = Guid.NewGuid();
-        _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns((PlannedBlock?)null);
+        _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns((Block?)null);
         _sessions.GetByOriginatingBlockIdAsync(blockId, Arg.Any<CancellationToken>()).Returns((Session?)null);
 
         var result = await CreateValidator().ValidateAsync(

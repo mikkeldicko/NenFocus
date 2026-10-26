@@ -5,5 +5,5 @@ namespace NenFocus.Application.Queries.GetSessionSnapshotForBlock;
 
 public sealed record GetSessionSnapshotForBlockQuery : IQuery<SessionSnapshotDto?>
 {
-    public Guid PlannedBlockId { get; init; }
+    public Guid BlockId { get; init; }
 }

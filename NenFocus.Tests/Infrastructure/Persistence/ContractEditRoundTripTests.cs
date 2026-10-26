@@ -36,7 +36,7 @@ public class ContractEditRoundTripTests : SqliteRepositoryTestBase
             .Select(d => new NenContractBlockSpec(Guid.NewGuid(), At.Slot(d.ToDateTime(new TimeOnly(10, 0)), d.ToDateTime(new TimeOnly(12, 0))), IsFocus: true))
             .ToList();
 
-        var blockRepo = new PlannedBlockRepository(Context);
+        var blockRepo = new BlockRepository(Context);
         var seal = new SealNenContractCommandHandler(
             new NenContractRepository(Context), blockRepo,
             new ContractBlockBatchPreparer(),
@@ -61,7 +61,7 @@ public class ContractEditRoundTripTests : SqliteRepositoryTestBase
 
         await using var readContext = CreateFreshContext();
         var edit = await new GetNenContractForEditQueryHandler(
-                new NenContractRepository(readContext), new PlannedBlockRepository(readContext), new BlockPresetRepository(readContext))
+                new NenContractRepository(readContext), new BlockRepository(readContext), new BlockPresetRepository(readContext))
             .HandleAsync(new GetNenContractForEditQuery(sealed_.ContractId!.Value));
 
         edit!.ContractPresetId.Should().Be(presetId);

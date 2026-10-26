@@ -44,7 +44,7 @@ public class TestDoubleRuleTests
         "NenFocus.Tests/Application/Queries/GetNenContractForEditQueryHandlerTests.cs",
         "NenFocus.Tests/Application/Queries/GetNenContractRecapQueryHandlerTests.cs",
         "NenFocus.Tests/Application/Queries/GetNenContractsForDateRangeQueryHandlerTests.cs",
-        "NenFocus.Tests/Application/Queries/GetPlannedBlocksForDayQueryHandlerTests.cs",
+        "NenFocus.Tests/Application/Queries/GetBlocksForDayQueryHandlerTests.cs",
         "NenFocus.Tests/Application/Queries/GetSessionSnapshotForBlockQueryHandlerTests.cs",
         "NenFocus.Tests/Application/Queries/GetSuggestedRedemptionPlacementsQueryHandlerTests.cs",
         "NenFocus.Tests/Application/Queries/GetUnacknowledgedPostContractsQueryHandlerTests.cs",

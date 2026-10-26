@@ -10,18 +10,18 @@ public sealed class GetUnacknowledgedPostSessionsQueryHandler
 {
     private readonly ISessionRepository _sessions;
     private readonly IBlockPresetRepository _presets;
-    private readonly IPlannedBlockRepository _plannedBlocks;
+    private readonly IBlockRepository _blocks;
     private readonly IBlockedAttemptRepository _attempts;
 
     public GetUnacknowledgedPostSessionsQueryHandler(
         ISessionRepository sessions,
         IBlockPresetRepository presets,
-        IPlannedBlockRepository plannedBlocks,
+        IBlockRepository blocks,
         IBlockedAttemptRepository attempts)
     {
         _sessions = sessions;
         _presets = presets;
-        _plannedBlocks = plannedBlocks;
+        _blocks = blocks;
         _attempts = attempts;
     }
 
@@ -48,7 +48,7 @@ public sealed class GetUnacknowledgedPostSessionsQueryHandler
 
         var attempts = await _attempts.GetForSessionAsync(session.Id, ct);
         var originatingBlock = session.OriginatingBlockId is { } blockId
-            ? await _plannedBlocks.GetByIdAsync(blockId, ct) as FocusBlock
+            ? await _blocks.GetByIdAsync(blockId, ct) as FocusBlock
             : null;
 
         return PostSessionDto.From(session, originatingBlock, presetName, attempts);

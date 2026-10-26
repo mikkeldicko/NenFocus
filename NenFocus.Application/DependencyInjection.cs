@@ -36,7 +36,7 @@ public static class DependencyInjection
         // Singleton: pure wording over the (singleton) toaster; the one door to it.
         services.AddSingleton<INotifier, Notifier>();
 
-        // Scoped: reads IPlannedBlockRepository, so the heartbeat resolves it from its own
+        // Scoped: reads IBlockRepository, so the heartbeat resolves it from its own
         // per-tick scope rather than holding one DbContext for the app's lifetime (Gap 40).
         services.AddScoped<IBlockMarkerNotifier, BlockMarkerNotifier>();
 

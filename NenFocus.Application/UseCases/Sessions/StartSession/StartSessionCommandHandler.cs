@@ -11,7 +11,7 @@ public sealed class StartSessionCommandHandler
     : ICommandHandler<StartSessionCommand, StartSessionResult>
 {
     private readonly ISessionRepository _sessions;
-    private readonly IPlannedBlockRepository _plannedBlocks;
+    private readonly IBlockRepository _blocks;
     private readonly IBreakTimerPresetRepository _breakTimerPresets;
     private readonly INenContractRepository _contracts;
     private readonly ISystemClock _clock;
@@ -19,14 +19,14 @@ public sealed class StartSessionCommandHandler
 
     public StartSessionCommandHandler(
         ISessionRepository sessions,
-        IPlannedBlockRepository plannedBlocks,
+        IBlockRepository blocks,
         IBreakTimerPresetRepository breakTimerPresets,
         INenContractRepository contracts,
         ISystemClock clock,
         BlockPlacementChecker placement)
     {
         _sessions = sessions;
-        _plannedBlocks = plannedBlocks;
+        _blocks = blocks;
         _breakTimerPresets = breakTimerPresets;
         _contracts = contracts;
         _clock = clock;
@@ -44,7 +44,7 @@ public sealed class StartSessionCommandHandler
         // which starts now — always lands inside it: "one session at a time" is this same rule
         // (Gap 92, C+; a unique index backs it in storage).
         var requested = new TimeSlot(now, now + TimeSpan.FromMinutes(command.DurationMinutes));
-        var calendar = (await _plannedBlocks.GetForRangeAsync(requested, ct)).Where(b => b.Id != command.OriginatingBlockId);
+        var calendar = (await _blocks.GetForRangeAsync(requested, ct)).Where(b => b.Id != command.OriginatingBlockId);
         var running = await _sessions.GetActiveAsync(ct);
         var verdict = _placement.CheckFree(requested, calendar, running, now);
 
@@ -66,7 +66,7 @@ public sealed class StartSessionCommandHandler
         FocusBlock? originatingBlock = null;
         if (command.OriginatingBlockId.HasValue)
         {
-            originatingBlock = await _plannedBlocks.GetByIdAsync(command.OriginatingBlockId.Value, ct) as FocusBlock;
+            originatingBlock = await _blocks.GetByIdAsync(command.OriginatingBlockId.Value, ct) as FocusBlock;
 
             if (originatingBlock is null)
                 return StartSessionResult.Fail("The originating focus block was not found.");

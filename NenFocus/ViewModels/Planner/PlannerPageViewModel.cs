@@ -17,7 +17,7 @@ using NenFocus.Application.Queries.GetAllBlockPresets;
 using NenFocus.Application.Queries.GetAllContractPresets;
 using NenFocus.Application.Queries.GetNenContractCompletionReadiness;
 using NenFocus.Application.Queries.GetNenContractForEdit;
-using NenFocus.Application.Queries.GetPlannedBlocksForDay;
+using NenFocus.Application.Queries.GetBlocksForDay;
 using NenFocus.Application.Queries.GetInEffectNenContracts;
 using NenFocus.Application.Queries.GetSessionSnapshotForBlock;
 using NenFocus.Application.Queries.GetSuggestedRedemptionPlacements;
@@ -28,10 +28,10 @@ using NenFocus.Application.UseCases.NenContracts.Delete;
 using NenFocus.Application.UseCases.NenContracts.Edit;
 using NenFocus.Application.UseCases.NenContracts.Seal;
 using NenFocus.Application.UseCases.Planner.CoverDeficit;
-using NenFocus.Application.UseCases.Planner.CreatePlannedBlock;
-using NenFocus.Application.UseCases.Planner.DeletePlannedBlock;
-using NenFocus.Application.UseCases.Planner.SplitPlannedBlock;
-using NenFocus.Application.UseCases.Planner.UpdatePlannedBlock;
+using NenFocus.Application.UseCases.Planner.CreateBlock;
+using NenFocus.Application.UseCases.Planner.DeleteBlock;
+using NenFocus.Application.UseCases.Planner.SplitBlock;
+using NenFocus.Application.UseCases.Planner.UpdateBlock;
 using NenFocus.Converters;
 using NenFocus.Domain.Enums;
 using NenFocus.Domain.ValueObjects;
@@ -62,7 +62,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     private readonly IActiveSessionState _sessionState;
     private readonly IRecapRelay _recaps;
 
-    private readonly Dictionary<Guid, PlannedBlockDto> _blocksInWeek = new();
+    private readonly Dictionary<Guid, BlockDto> _blocksInWeek = new();
     private readonly List<BlockPresetDto> _allPresets = new();
     private readonly List<ContractDraftBlock> _draftBlocks = new();
 
@@ -93,7 +93,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
     public ObservableCollection<WeekDayHeaderViewModel> DayHeaders { get; } = new();
     public ObservableCollection<HourLabelViewModel> HourLabels { get; } = new();
-    public ObservableCollection<PlannedBlockTileViewModel> Tiles { get; } = new();
+    public ObservableCollection<BlockTileViewModel> Tiles { get; } = new();
     public ObservableCollection<BlockPresetDto> AvailablePresets { get; } = new();
 
     // The End field's choices, as times of day — regenerated from Start (and the block type, for
@@ -173,7 +173,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     [ObservableProperty] private string? _dragError;
 
     [ObservableProperty] private bool _isSnapshotVisible;
-    [ObservableProperty] private PlannedBlockDto? _snapshotBlock;
+    [ObservableProperty] private BlockDto? _snapshotBlock;
     [ObservableProperty] private SessionSnapshotDto? _snapshotSession;
     [ObservableProperty] private bool _isConfirmDeleteSnapshotVisible;
     [ObservableProperty] private string? _deleteSnapshotErrorMessage;
@@ -216,7 +216,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
     // Live, non-blocking — informational only, the same way FormError/SplitError already
     // are elsewhere in this ViewModel. Only one thing is checked live: do the two pieces
-    // overlap each other (TimeSlot.Overlaps — the rule SplitPlannedBlockValidator asks too,
+    // overlap each other (TimeSlot.Overlaps — the rule SplitBlockValidator asks too,
     // no database). Whether a piece clashes with another block, is in the past or falls
     // outside the contract's hours is answered on Confirm by the validator's placement
     // check (Gap 88 phase 8) — the ViewModel keeps no copy of those rules. Deliberately
@@ -963,7 +963,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         for (int i = 0; i < 7; i++)
         {
             var day = WeekStart.AddDays(i);
-            var query = new GetPlannedBlocksForDayQuery { Date = DateOnly.FromDateTime(day) };
+            var query = new GetBlocksForDayQuery { Date = DateOnly.FromDateTime(day) };
             var blocks = await _queryDispatcher.QueryAsync(query);
 
             foreach (var b in blocks)
@@ -990,7 +990,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         IsLoading = false;
     }
 
-    private PlannedBlockTileViewModel? BuildTile(PlannedBlockDto dto, int columnIndex)
+    private BlockTileViewModel? BuildTile(BlockDto dto, int columnIndex)
     {
         var (localStart, localEnd) = _clock.TimeZone.ToCalendarTimes(dto.Shown);
 
@@ -1001,7 +1001,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         var position = PlannerLayout.GetTilePosition(localStart, localEnd, visibleStart, visibleEnd, HourRowHeight);
         if (position is null) return null;
 
-        return new PlannedBlockTileViewModel(dto, localStart, localEnd, dto.BlockPresetType, columnIndex, position.Value.Top, position.Value.Height);
+        return new BlockTileViewModel(dto, localStart, localEnd, dto.BlockPresetType, columnIndex, position.Value.Top, position.Value.Height);
     }
 
     [RelayCommand]
@@ -1024,7 +1024,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     }
 
     [RelayCommand]
-    private async Task EditBlockAsync(PlannedBlockTileViewModel tile)
+    private async Task EditBlockAsync(BlockTileViewModel tile)
     {
         if (tile.IsDraft)
         {
@@ -1054,7 +1054,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         if (!_blocksInWeek.TryGetValue(tile.Id, out var dto)) return;
 
         // A final block gets the read-only snapshot instead of the edit form — the block's own
-        // answer (PlannedBlock.IsFinal), never worked out here (Gap 89 Slice B, A3).
+        // answer (Block.IsFinal), never worked out here (Gap 89 Slice B, A3).
         if (dto.IsFinal)
         {
             await ShowSnapshotAsync(dto);
@@ -1080,13 +1080,13 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         IsFormVisible = true;
     }
 
-    private async Task ShowSnapshotAsync(PlannedBlockDto dto)
+    private async Task ShowSnapshotAsync(BlockDto dto)
     {
         SnapshotBlock = dto;
         // Background blocks have no Ritual, so no Session is ever tied to one — skip the
         // query entirely rather than asking it a question that's always null by construction.
         SnapshotSession = dto.BlockPresetType == BlockPresetType.Focus
-            ? await _queryDispatcher.QueryAsync(new GetSessionSnapshotForBlockQuery { PlannedBlockId = dto.Id })
+            ? await _queryDispatcher.QueryAsync(new GetSessionSnapshotForBlockQuery { BlockId = dto.Id })
             : null;
         DeleteSnapshotErrorMessage = null;
         IsSnapshotVisible = true;
@@ -1113,7 +1113,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         IsConfirmDeleteSnapshotVisible = false;
         if (SnapshotBlock is not { } block) return;
 
-        var result = await _commandDispatcher.DispatchAsync(new DeletePlannedBlockCommand { BlockId = block.Id });
+        var result = await _commandDispatcher.DispatchAsync(new DeleteBlockCommand { BlockId = block.Id });
         if (!result.Success)
         {
             DeleteSnapshotErrorMessage = result.ErrorMessage;
@@ -1127,7 +1127,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private void CancelDeleteSnapshotBlock() => IsConfirmDeleteSnapshotVisible = false;
 
-    partial void OnSnapshotBlockChanged(PlannedBlockDto? value)
+    partial void OnSnapshotBlockChanged(BlockDto? value)
     {
         OnPropertyChanged(nameof(CanDeleteSnapshotBlock));
         OnPropertyChanged(nameof(ShowSnapshotNoSessionMessage));
@@ -1202,7 +1202,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         {
             // A saved block keeps its type — the form hides the toggle (ShowTypeToggle), so an
             // edit is always one Update (Gap 89 Slice B, A4).
-            var result = await _commandDispatcher.DispatchAsync(new UpdatePlannedBlockCommand
+            var result = await _commandDispatcher.DispatchAsync(new UpdateBlockCommand
             {
                 BlockId = _editingBlockId.Value,
                 PresetId = SelectedPreset.Id,
@@ -1215,7 +1215,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
             // Manual creation never links to a deficit, even if the preset+time happens to
             // match one — only Cover Deficit (above) makes a redemption block. A new block is
             // a plain one, or a Bonus block if it falls inside a contract.
-            var result = await _commandDispatcher.DispatchAsync(new CreatePlannedBlockCommand
+            var result = await _commandDispatcher.DispatchAsync(new CreateBlockCommand
             {
                 PresetId = SelectedPreset.Id,
                 BlockPresetType = blockPresetType,
@@ -1294,7 +1294,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        var result = await _commandDispatcher.DispatchAsync(new DeletePlannedBlockCommand { BlockId = _editingBlockId.Value });
+        var result = await _commandDispatcher.DispatchAsync(new DeleteBlockCommand { BlockId = _editingBlockId.Value });
         if (result.Success) { await LoadWeekAsync(); CloseForm(); }
         else { FormError = result.ErrorMessage; }
     }
@@ -1406,7 +1406,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         var secondSlot = TimeSlot.TryCreate(_clock.TimeZone.ToMoment(secondDay.Add(secondStart)), _clock.TimeZone.ToMoment(secondDay.Add(secondEnd)));
         if (secondSlot is null) { SplitError = "Second block's end time must be after its start time."; return; }
 
-        var result = await _commandDispatcher.DispatchAsync(new SplitPlannedBlockCommand
+        var result = await _commandDispatcher.DispatchAsync(new SplitBlockCommand
         {
             OriginalBlockId = _editingBlockId!.Value,
             First = firstSlot,
@@ -1472,7 +1472,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
         IsFormVisible = true;
     }
 
-    // ── Drag-move / drag-resize: commit via UpdatePlannedBlockCommand ─────────
+    // ── Drag-move / drag-resize: commit via UpdateBlockCommand ─────────
 
     [RelayCommand]
     private async Task MoveOrResizeBlockAsync(DragMoveResult result)
@@ -1516,7 +1516,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
 
         var slot = TimeSlot.TryCreate(_clock.TimeZone.ToMoment(result.NewLocalStart), _clock.TimeZone.ToMoment(result.NewLocalEnd));
         if (slot is null) { DragError = "End time must be after start time."; return; }
-        var updateResult = await _commandDispatcher.DispatchAsync(new UpdatePlannedBlockCommand
+        var updateResult = await _commandDispatcher.DispatchAsync(new UpdateBlockCommand
         {
             BlockId   = result.BlockId,
             PresetId = dto.PresetId,
@@ -1624,7 +1624,7 @@ public partial class PlannerPageViewModel : ViewModelBase, IDisposable
             if (position is null) continue;
 
             var blockPresetType = draft.IsFocus ? BlockPresetType.Focus : BlockPresetType.Background;
-            Tiles.Add(PlannedBlockTileViewModel.ForDraft(
+            Tiles.Add(BlockTileViewModel.ForDraft(
                 draft.Id, draft.PresetName, blockPresetType, localStart, localEnd, dayIndex, position.Value.Top, position.Value.Height));
         }
     }

@@ -3,7 +3,7 @@ using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.GetInEffectNenContracts;
-using NenFocus.Application.Queries.GetPlannedBlocksForDay;
+using NenFocus.Application.Queries.GetBlocksForDay;
 using NenFocus.Domain.Enums;
 using NenFocus.ViewModels.Planner;
 using NenFocus.Views.Planner;
@@ -83,7 +83,7 @@ public class ContractDraftingViewTests : IAsyncDisposable
         vm.IsDraftingContract.Should().BeFalse();
         var contract = (await _app.Queries.QueryAsync(new GetInEffectNenContractsQuery())).Single();
         contract.Name.Should().Be("Draft Week");
-        var saved = await _app.Queries.QueryAsync(new GetPlannedBlocksForDayQuery { Date = Tuesday });
+        var saved = await _app.Queries.QueryAsync(new GetBlocksForDayQuery { Date = Tuesday });
         saved.Select(b => (b.PresetName, b.ContractId)).Should().BeEquivalentTo(
             [("Thesis Focus", (Guid?)contract.Id), ("Evening Calm", (Guid?)contract.Id)]);
         vm.Tiles.Should().HaveCount(2).And.OnlyContain(t => !t.IsDraft, "the sealed blocks are real blocks now");

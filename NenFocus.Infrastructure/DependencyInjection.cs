@@ -36,7 +36,7 @@ public static class DependencyInjection
 
         services.AddScoped<ISessionRepository, SessionRepository>();
         services.AddScoped<IBlockPresetRepository, BlockPresetRepository>();
-        services.AddScoped<IPlannedBlockRepository, PlannedBlockRepository>();
+        services.AddScoped<IBlockRepository, BlockRepository>();
         services.AddScoped<INenContractRepository, NenContractRepository>();
         services.AddScoped<IContractPresetRepository, ContractPresetRepository>();
         services.AddScoped<IBreakTimerPresetRepository, BreakTimerPresetRepository>();

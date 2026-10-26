@@ -15,7 +15,7 @@ public class NenFocusDbContext : DbContext
 {
     public DbSet<Session> Sessions { get; set; } = null!;
     public DbSet<BlockPreset> BlockPresets { get; set; } = null!;
-    public DbSet<PlannedBlock> PlannedBlocks { get; set; } = null!;
+    public DbSet<Block> Blocks { get; set; } = null!;
     public DbSet<BlockedAttempt> BlockedAttempts { get; set; } = null!;
     public DbSet<ContractPreset> ContractPresets { get; set; } = null!;
     public DbSet<NenContract> NenContracts { get; set; } = null!;
@@ -322,9 +322,9 @@ public class NenFocusDbContext : DbContext
         });
 
         // TPH: FocusBlock and BackgroundBlock share this table via a BlockKind discriminator.
-        modelBuilder.Entity<PlannedBlock>(entity =>
+        modelBuilder.Entity<Block>(entity =>
         {
-            entity.ToTable("PlannedBlocks");
+            entity.ToTable("Blocks");
             entity.HasKey(b => b.Id);
 
             entity.Property(b => b.Id)

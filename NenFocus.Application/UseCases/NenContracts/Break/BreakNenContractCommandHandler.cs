@@ -9,13 +9,13 @@ namespace NenFocus.Application.UseCases.NenContracts.Break;
 public sealed class BreakNenContractCommandHandler : ICommandHandler<BreakNenContractCommand, BreakNenContractResult>
 {
     private readonly INenContractRepository _contracts;
-    private readonly IPlannedBlockRepository _blocks;
+    private readonly IBlockRepository _blocks;
     private readonly ISessionRepository _sessions;
     private readonly ISystemClock _clock;
 
     public BreakNenContractCommandHandler(
         INenContractRepository contracts,
-        IPlannedBlockRepository blocks,
+        IBlockRepository blocks,
         ISessionRepository sessions,
         ISystemClock clock)
     {

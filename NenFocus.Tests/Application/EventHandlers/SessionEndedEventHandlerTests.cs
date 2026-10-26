@@ -17,7 +17,7 @@ public class SessionEndedEventHandlerTests
     private readonly INotifier _notifier = Substitute.For<INotifier>();
     private readonly IActiveSessionState _sessionState = Substitute.For<IActiveSessionState>();
     private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
-    private readonly IPlannedBlockRepository _blocks = Substitute.For<IPlannedBlockRepository>();
+    private readonly IBlockRepository _blocks = Substitute.For<IBlockRepository>();
     private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
     private readonly IBlockedAttemptRepository _attempts = Substitute.For<IBlockedAttemptRepository>();
     private readonly IRecapRelay _recaps = Substitute.For<IRecapRelay>();

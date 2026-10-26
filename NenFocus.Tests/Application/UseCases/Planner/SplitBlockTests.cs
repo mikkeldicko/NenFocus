@@ -1,6 +1,6 @@
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
-using NenFocus.Application.UseCases.Planner.SplitPlannedBlock;
+using NenFocus.Application.UseCases.Planner.SplitBlock;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
 using NenFocus.Domain.Services;
@@ -15,7 +15,7 @@ namespace NenFocus.Tests.Application.UseCases.Planner;
 /// divides itself (FocusBlock.SplitInto): both pieces keep its membership and title, its receipt
 /// is divided in time order, never recalculated, no piece shortened (Gap 106).
 /// </summary>
-public class SplitPlannedBlockTests : UseCaseTestBase
+public class SplitBlockTests : UseCaseTestBase
 {
     private static readonly DateTime Now = new(2026, 1, 1, 8, 0, 0, DateTimeKind.Utc);
     // The original: 14:00–17:00, well after Now.
@@ -25,9 +25,9 @@ public class SplitPlannedBlockTests : UseCaseTestBase
     private static readonly DateTime Day1 = new(2026, 1, 3, 0, 0, 0, DateTimeKind.Utc);
     private static readonly DateTime Day2 = Day1.AddDays(1);
 
-    public SplitPlannedBlockTests() => Clock.SetNow(Now);
+    public SplitBlockTests() => Clock.SetNow(Now);
 
-    private static SplitPlannedBlockCommand Command(PlannedBlock block, DateTime firstFrom, DateTime firstTo, DateTime secondFrom, DateTime secondTo) => new()
+    private static SplitBlockCommand Command(Block block, DateTime firstFrom, DateTime firstTo, DateTime secondFrom, DateTime secondTo) => new()
     {
         OriginalBlockId = block.Id,
         First = At.Slot(firstFrom, firstTo),
@@ -35,10 +35,10 @@ public class SplitPlannedBlockTests : UseCaseTestBase
     };
 
     /// <summary>14:00–16:00 and 16:00–17:00.</summary>
-    private static SplitPlannedBlockCommand AtTwoHours(PlannedBlock block) =>
+    private static SplitBlockCommand AtTwoHours(Block block) =>
         Command(block, OriginalStart, OriginalStart.AddHours(2), OriginalStart.AddHours(2), OriginalEnd);
 
-    private Task<SplitPlannedBlockResult> SplitAsync(SplitPlannedBlockCommand command) => RunAsync(command);
+    private Task<SplitBlockResult> SplitAsync(SplitBlockCommand command) => RunAsync(command);
 
     /// <summary>A contract from Now's day for 30 days, Active on seal, stored.</summary>
     private async Task<NenContract> ContractAsync(StrictnessRule rule, WorkHours? workHours = null)
@@ -69,15 +69,15 @@ public class SplitPlannedBlockTests : UseCaseTestBase
     private Task<FocusBlock> DailyFlexBlockAsync() =>
         CommittedAsync(StrictnessRule.DailyFlexibility, OriginalStart, OriginalEnd);
 
-    private async Task<(FocusBlock First, FocusBlock Second)> SplitIntoPiecesAsync(SplitPlannedBlockCommand command)
+    private async Task<(FocusBlock First, FocusBlock Second)> SplitIntoPiecesAsync(SplitBlockCommand command)
     {
         var result = await SplitAsync(command);
         result.Success.Should().BeTrue(result.ErrorMessage);
-        return ((FocusBlock)(await FindAsync<PlannedBlock>(result.FirstBlockId!.Value))!,
-                (FocusBlock)(await FindAsync<PlannedBlock>(result.SecondBlockId!.Value))!);
+        return ((FocusBlock)(await FindAsync<Block>(result.FirstBlockId!.Value))!,
+                (FocusBlock)(await FindAsync<Block>(result.SecondBlockId!.Value))!);
     }
 
-    private async Task ShouldBeAllowed(SplitPlannedBlockCommand command)
+    private async Task ShouldBeAllowed(SplitBlockCommand command)
     {
         var result = await SplitAsync(command);
 
@@ -85,15 +85,15 @@ public class SplitPlannedBlockTests : UseCaseTestBase
     }
 
     /// <summary>Refused, and the original is still there, unsplit.</summary>
-    private async Task<SplitPlannedBlockResult> ShouldBeRefused(SplitPlannedBlockCommand command, string? message = null)
+    private async Task<SplitBlockResult> ShouldBeRefused(SplitBlockCommand command, string? message = null)
     {
-        var before = await ReadAsync(context => context.Set<PlannedBlock>().CountAsync());
+        var before = await ReadAsync(context => context.Set<Block>().CountAsync());
 
         var result = await SplitAsync(command);
 
         result.Success.Should().BeFalse();
         if (message is not null) result.ErrorMessage.Should().Be(message);
-        (await ReadAsync(context => context.Set<PlannedBlock>().CountAsync())).Should().Be(before);
+        (await ReadAsync(context => context.Set<Block>().CountAsync())).Should().Be(before);
         return result;
     }
 
@@ -106,7 +106,7 @@ public class SplitPlannedBlockTests : UseCaseTestBase
 
         var (first, second) = await SplitIntoPiecesAsync(AtTwoHours(block));
 
-        (await FindAsync<PlannedBlock>(block.Id)).Should().BeNull();
+        (await FindAsync<Block>(block.Id)).Should().BeNull();
         new[] { first.Id, second.Id }.Should().OnlyHaveUniqueItems().And.NotContain(block.Id);
         first.Scheduled.Should().Be(At.Slot(OriginalStart, OriginalStart.AddHours(2)));
         second.Scheduled.Should().Be(At.Slot(OriginalStart.AddHours(2), OriginalEnd));

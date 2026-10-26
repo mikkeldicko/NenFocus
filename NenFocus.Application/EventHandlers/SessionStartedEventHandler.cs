@@ -10,7 +10,7 @@ public sealed class SessionStartedEventHandler : IDomainEventHandler<SessionStar
     private readonly INotifier _notifier;
     private readonly IActiveSessionState _sessionState;
     private readonly ISessionRepository _sessions;
-    private readonly IPlannedBlockRepository _blocks;
+    private readonly IBlockRepository _blocks;
     private readonly IBlockPresetRepository _presets;
     private readonly ISystemClock _clock;
 
@@ -19,7 +19,7 @@ public sealed class SessionStartedEventHandler : IDomainEventHandler<SessionStar
         INotifier notifier,
         IActiveSessionState sessionState,
         ISessionRepository sessions,
-        IPlannedBlockRepository blocks,
+        IBlockRepository blocks,
         IBlockPresetRepository presets,
         ISystemClock clock)
     {

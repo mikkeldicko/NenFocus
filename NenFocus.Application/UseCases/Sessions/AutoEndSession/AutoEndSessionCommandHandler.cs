@@ -7,12 +7,12 @@ public sealed class AutoEndSessionCommandHandler
     : ICommandHandler<AutoEndSessionCommand, AutoEndSessionResult>
 {
     private readonly ISessionRepository _sessions;
-    private readonly IPlannedBlockRepository _plannedBlocks;
+    private readonly IBlockRepository _blocks;
 
-    public AutoEndSessionCommandHandler(ISessionRepository sessions, IPlannedBlockRepository plannedBlocks)
+    public AutoEndSessionCommandHandler(ISessionRepository sessions, IBlockRepository blocks)
     {
         _sessions = sessions;
-        _plannedBlocks = plannedBlocks;
+        _blocks = blocks;
     }
 
     public async Task<AutoEndSessionResult> HandleAsync(
@@ -24,7 +24,7 @@ public sealed class AutoEndSessionCommandHandler
             return new AutoEndSessionResult();
 
         var originatingFocusBlock = session.OriginatingBlockId is { } blockId
-            ? await _plannedBlocks.GetByIdAsync(blockId, ct) as FocusBlock
+            ? await _blocks.GetByIdAsync(blockId, ct) as FocusBlock
             : null;
 
         // The same ending as EndSession: capped at the planned end, the block stamped with it.

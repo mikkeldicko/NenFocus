@@ -12,7 +12,7 @@ public class BlockMarkerNotifierTests
 {
     private static readonly DateTime Start = new(2026, 1, 1, 10, 0, 0, DateTimeKind.Utc);
 
-    private readonly IPlannedBlockRepository _blocks = Substitute.For<IPlannedBlockRepository>();
+    private readonly IBlockRepository _blocks = Substitute.For<IBlockRepository>();
     private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
     private readonly INotifier _notifier = Substitute.For<INotifier>();
 
@@ -23,7 +23,7 @@ public class BlockMarkerNotifierTests
         _presets.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
             .Returns(ci => BlockPreset.Create(ci.Arg<Guid>(), "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(Start)));
 
-    private void GivenBlocks(params PlannedBlock[] blocks) =>
+    private void GivenBlocks(params Block[] blocks) =>
         _blocks.GetForRangeAsync(Arg.Any<TimeSlot>(), Arg.Any<CancellationToken>())
             .Returns(blocks);
 
@@ -110,6 +110,6 @@ public class BlockMarkerNotifierTests
         await CreateNotifier().NotifyPassedAsync(At.Utc(from), At.Utc(Start));
 
         await _blocks.Received(1).GetForRangeAsync(
-            new TimeSlot(At.Utc(from), At.Utc(Start + PlannedBlock.UpcomingWarningLead)), Arg.Any<CancellationToken>());
+            new TimeSlot(At.Utc(from), At.Utc(Start + Block.UpcomingWarningLead)), Arg.Any<CancellationToken>());
     }
 }

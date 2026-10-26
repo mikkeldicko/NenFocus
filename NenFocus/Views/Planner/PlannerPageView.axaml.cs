@@ -30,7 +30,7 @@ public partial class PlannerPageView : UserControl
     private enum DragKind { None, CreatePending, Creating, MovePending, Moving, ResizingTopPending, ResizingTop, ResizingBottomPending, ResizingBottom }
 
     private DragKind _dragKind = DragKind.None;
-    private PlannedBlockTileViewModel? _dragTile;
+    private BlockTileViewModel? _dragTile;
     private Button? _dragButton;
     private Canvas? _dragCanvas;
     private Point _dragStartPoint;       // pointer position at press, relative to canvas
@@ -234,7 +234,7 @@ public partial class PlannerPageView : UserControl
     /// </summary>
     // Colour from the one verdict; a label for each true fact — a block that started late and
     // ended early shows both (Gap 95).
-    private static (string? TileClass, IReadOnlyList<string> BadgeTexts) GetOutcomeVisual(PlannedBlockTileViewModel tile)
+    private static (string? TileClass, IReadOnlyList<string> BadgeTexts) GetOutcomeVisual(BlockTileViewModel tile)
     {
         var tileClass = tile.Outcome switch
         {
@@ -251,7 +251,7 @@ public partial class PlannerPageView : UserControl
         return (tileClass, badges);
     }
 
-    private Button BuildTileButton(PlannedBlockTileViewModel tile, Canvas ownerCanvas)
+    private Button BuildTileButton(BlockTileViewModel tile, Canvas ownerCanvas)
     {
         var btn = new Button
         {
@@ -339,7 +339,7 @@ public partial class PlannerPageView : UserControl
 
         switch (tile.ContractBadge)
         {
-            case PlannedBlockContractBadge.Committed:
+            case BlockContractBadge.Committed:
                 stack.Children.Add(new TextBlock
                 {
                     Text       = "COMMITTED",
@@ -351,7 +351,7 @@ public partial class PlannerPageView : UserControl
 
             // A redemption block stays in its normal outcome/preset color family — a small
             // "REDEMPTION" tag is the only distinguishing mark, no border treatment.
-            case PlannedBlockContractBadge.Redemption:
+            case BlockContractBadge.Redemption:
                 stack.Children.Add(new TextBlock
                 {
                     Text       = "REDEMPTION",
@@ -361,7 +361,7 @@ public partial class PlannerPageView : UserControl
                 });
                 break;
 
-            case PlannedBlockContractBadge.Bonus:
+            case BlockContractBadge.Bonus:
                 stack.Children.Add(new TextBlock
                 {
                     Text       = "BONUS",
@@ -627,7 +627,7 @@ public partial class PlannerPageView : UserControl
 
     // ── Tile pointer handlers ─────────────────────────────────────────────────
 
-    private void OnTilePointerPressed(object? sender, PointerPressedEventArgs e, PlannedBlockTileViewModel tile, Canvas ownerCanvas)
+    private void OnTilePointerPressed(object? sender, PointerPressedEventArgs e, BlockTileViewModel tile, Canvas ownerCanvas)
     {
         if (_vm is null || sender is not Button btn) return;
         if (!e.GetCurrentPoint(btn).Properties.IsLeftButtonPressed) return;
@@ -659,7 +659,7 @@ public partial class PlannerPageView : UserControl
 
     // Cursor-feedback ONLY — no drag logic here.
     // Actual drag handling lives in OnCanvasPointerMoved (PointerMoved bubbles from btn → canvas).
-    private void OnTileButtonPointerMoved(object? sender, PointerEventArgs e, PlannedBlockTileViewModel tile)
+    private void OnTileButtonPointerMoved(object? sender, PointerEventArgs e, BlockTileViewModel tile)
     {
         if (_vm is null || _dragKind != DragKind.None || sender is not Button hoverBtn) return;
 

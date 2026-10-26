@@ -17,7 +17,7 @@ public class GetNenContractDeficitsQueryHandlerTests
     private static readonly DateTime Now = new(2026, 1, 6, 12, 0, 0, DateTimeKind.Utc);
 
     private readonly INenContractRepository _contracts = Substitute.For<INenContractRepository>();
-    private readonly IPlannedBlockRepository _blocks = Substitute.For<IPlannedBlockRepository>();
+    private readonly IBlockRepository _blocks = Substitute.For<IBlockRepository>();
     private readonly ISystemClock _clock = TestClock.Create();
     private readonly NenContract _contract;
 
@@ -35,8 +35,8 @@ public class GetNenContractDeficitsQueryHandlerTests
     private FocusBlock Committed(DateTime start, DateTime end) =>
         FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(start, end), membership: TestContracts.Committed(_contract.Id));
 
-    private void ContractHas(params PlannedBlock[] blocks) =>
-        _blocks.GetForContractAsync(_contract.Id, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)blocks);
+    private void ContractHas(params Block[] blocks) =>
+        _blocks.GetForContractAsync(_contract.Id, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<Block>)blocks);
 
     private Task<IReadOnlyList<NenFocus.Application.DTOs.FocusBlockDeficitDto>> Handle(Guid contractId) =>
         new GetNenContractDeficitsQueryHandler(_contracts, _blocks, _clock)

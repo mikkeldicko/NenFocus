@@ -12,7 +12,7 @@ public sealed class SessionEndedEventHandler : IDomainEventHandler<SessionEndedE
     private readonly INotifier _notifier;
     private readonly IActiveSessionState _sessionState;
     private readonly ISessionRepository _sessions;
-    private readonly IPlannedBlockRepository _blocks;
+    private readonly IBlockRepository _blocks;
     private readonly IBlockPresetRepository _presets;
     private readonly IBlockedAttemptRepository _attempts;
     private readonly IRecapRelay _recaps;
@@ -23,7 +23,7 @@ public sealed class SessionEndedEventHandler : IDomainEventHandler<SessionEndedE
         INotifier notifier,
         IActiveSessionState sessionState,
         ISessionRepository sessions,
-        IPlannedBlockRepository blocks,
+        IBlockRepository blocks,
         IBlockPresetRepository presets,
         IBlockedAttemptRepository attempts,
         IRecapRelay recaps,

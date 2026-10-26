@@ -5,7 +5,7 @@ namespace NenFocus.Domain.Enums;
 /// block's stored role in its contract (Gap 97). A block has one role, so only one badge
 /// can apply; a null badge is a block with no contract (or a Background block).
 /// </summary>
-public enum PlannedBlockContractBadge
+public enum BlockContractBadge
 {
     Committed,
     Redemption,

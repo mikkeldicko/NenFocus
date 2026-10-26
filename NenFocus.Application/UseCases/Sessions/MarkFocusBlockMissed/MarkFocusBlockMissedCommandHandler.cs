@@ -9,12 +9,12 @@ namespace NenFocus.Application.UseCases.Sessions.MarkFocusBlockMissed;
 public sealed class MarkFocusBlockMissedCommandHandler
     : ICommandHandler<MarkFocusBlockMissedCommand, MarkFocusBlockMissedResult>
 {
-    private readonly IPlannedBlockRepository _blocks;
+    private readonly IBlockRepository _blocks;
     private readonly ISessionRepository _sessions;
     private readonly IBlockPresetRepository _presets;
 
     public MarkFocusBlockMissedCommandHandler(
-        IPlannedBlockRepository blocks,
+        IBlockRepository blocks,
         ISessionRepository sessions,
         IBlockPresetRepository presets)
     {

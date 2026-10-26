@@ -30,7 +30,7 @@ public class BlockPlacementCheckerTests
         return session;
     }
 
-    private PlacementVerdict CheckFree(TimeSlot slot, PlannedBlock[]? blocks = null, Session? running = null) =>
+    private PlacementVerdict CheckFree(TimeSlot slot, Block[]? blocks = null, Session? running = null) =>
         _checker.CheckFree(slot, blocks ?? [], running, Now);
 
     [Fact]

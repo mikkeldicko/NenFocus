@@ -41,7 +41,7 @@ public sealed class EventHandlersSaveNothingTests : IDisposable
 
         public async Task HandleAsync(SessionEndedEvent domainEvent, CancellationToken cancellationToken = default)
         {
-            var block = await context.PlannedBlocks.SingleAsync(b => b.Id == BlockId, cancellationToken);
+            var block = await context.Blocks.SingleAsync(b => b.Id == BlockId, cancellationToken);
             if (changesIt) block.MarkCancelled(At.Utc(Now));
         }
     }

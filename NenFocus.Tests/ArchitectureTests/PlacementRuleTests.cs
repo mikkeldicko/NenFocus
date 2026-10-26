@@ -17,7 +17,7 @@ public class PlacementRuleTests
     [
         // Split's two halves against each other — a rule about the split itself, not placement
         // (the halves aren't blocks yet). The validator decides; the dialog's live warning asks the same.
-        "NenFocus.Application/UseCases/Planner/SplitPlannedBlock/SplitPlannedBlockValidator.cs has 1",
+        "NenFocus.Application/UseCases/Planner/SplitBlock/SplitBlockValidator.cs has 1",
         "NenFocus/ViewModels/Planner/PlannerPageViewModel.cs has 1",
     ];
 

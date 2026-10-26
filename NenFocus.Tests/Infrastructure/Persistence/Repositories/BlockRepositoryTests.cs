@@ -5,15 +5,15 @@ using NenFocus.Infrastructure.Persistence.Repositories;
 
 namespace NenFocus.Tests.Infrastructure.Persistence.Repositories;
 
-public class PlannedBlockRepositoryTests : SqliteRepositoryTestBase
+public class BlockRepositoryTests : SqliteRepositoryTestBase
 {
     private static readonly DateTime Start = new(2026, 1, 2, 10, 0, 0, DateTimeKind.Utc);
     private static readonly DateTime End = new(2026, 1, 2, 11, 0, 0, DateTimeKind.Utc);
 
-    private PlannedBlockRepository CreateRepository() => new(Context);
+    private BlockRepository CreateRepository() => new(Context);
 
     /// <summary>Reads through a context of its own, so they see the database, not the tracker that saved (Gap 110).</summary>
-    private PlannedBlockRepository Fresh() => new(CreateFreshContext());
+    private BlockRepository Fresh() => new(CreateFreshContext());
 
     [Fact]
     public async Task Add_FocusBlock_ReloadsAsFocusBlockViaDiscriminator()
@@ -82,7 +82,7 @@ public class PlannedBlockRepositoryTests : SqliteRepositoryTestBase
 
         await using (var scope = CreateFreshContext())
         {
-            var repository = new PlannedBlockRepository(scope);
+            var repository = new BlockRepository(scope);
             repository.Remove((await repository.GetByIdAsync(block.Id))!);
             await scope.SaveChangesAsync();
         }

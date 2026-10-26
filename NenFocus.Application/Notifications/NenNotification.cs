@@ -13,13 +13,13 @@ public sealed record BlockStartingSoon(BlockPresetType Type, string? Name, int M
 
 public sealed record BlockStarted(BlockPresetType Type, string? Name) : NenNotification;
 
-/// <summary>Only for a block that owns its own ending — see PlannedBlock.MarkersPassedBetween.</summary>
+/// <summary>Only for a block that owns its own ending — see Block.MarkersPassedBetween.</summary>
 public sealed record BlockEnded(BlockPresetType Type, string? Name) : NenNotification;
 
-/// <summary>BlockName is a planned session's block name (PlannedBlock.DisplayName); null when spontaneous.</summary>
+/// <summary>BlockName is a planned session's block name (Block.DisplayName); null when spontaneous.</summary>
 public sealed record SessionStarted(bool IsPlanned, string? BlockName) : NenNotification;
 
-/// <summary>BlockName is a planned session's block name (PlannedBlock.DisplayName); null when spontaneous.</summary>
+/// <summary>BlockName is a planned session's block name (Block.DisplayName); null when spontaneous.</summary>
 public sealed record SessionCompleted(bool IsPlanned, string? BlockName) : NenNotification;
 
 public sealed record BreakStarted(bool IsLong, bool KeepsBlocking) : NenNotification;

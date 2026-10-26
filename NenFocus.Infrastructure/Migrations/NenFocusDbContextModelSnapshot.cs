@@ -17,6 +17,35 @@ namespace NenFocus.Infrastructure.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "9.0.20");
 
+            modelBuilder.Entity("NenFocus.Domain.Entities.Block", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("BlockKind")
+                        .IsRequired()
+                        .HasMaxLength(13)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("BlockPresetId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("CancelledAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Title")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Blocks", (string)null);
+
+                    b.HasDiscriminator<string>("BlockKind").HasValue("Block");
+
+                    b.UseTphMappingStrategy();
+                });
+
             modelBuilder.Entity("NenFocus.Domain.Entities.BlockPreset", b =>
                 {
                     b.Property<Guid>("Id")
@@ -228,35 +257,6 @@ namespace NenFocus.Infrastructure.Migrations
                     b.ToTable("NenContracts", (string)null);
                 });
 
-            modelBuilder.Entity("NenFocus.Domain.Entities.PlannedBlock", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("BlockKind")
-                        .IsRequired()
-                        .HasMaxLength(13)
-                        .HasColumnType("TEXT");
-
-                    b.Property<Guid>("BlockPresetId")
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime?>("CancelledAt")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Title")
-                        .HasMaxLength(100)
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("PlannedBlocks", (string)null);
-
-                    b.HasDiscriminator<string>("BlockKind").HasValue("PlannedBlock");
-
-                    b.UseTphMappingStrategy();
-                });
-
             modelBuilder.Entity("NenFocus.Domain.Entities.Session", b =>
                 {
                     b.Property<Guid>("Id")
@@ -341,14 +341,14 @@ namespace NenFocus.Infrastructure.Migrations
 
             modelBuilder.Entity("NenFocus.Domain.Entities.BackgroundBlock", b =>
                 {
-                    b.HasBaseType("NenFocus.Domain.Entities.PlannedBlock");
+                    b.HasBaseType("NenFocus.Domain.Entities.Block");
 
                     b.HasDiscriminator().HasValue("Background");
                 });
 
             modelBuilder.Entity("NenFocus.Domain.Entities.FocusBlock", b =>
                 {
-                    b.HasBaseType("NenFocus.Domain.Entities.PlannedBlock");
+                    b.HasBaseType("NenFocus.Domain.Entities.Block");
 
                     b.Property<string>("Receipt")
                         .IsRequired()
@@ -364,6 +364,57 @@ namespace NenFocus.Infrastructure.Migrations
                         .HasColumnType("TEXT");
 
                     b.HasDiscriminator().HasValue("Focus");
+                });
+
+            modelBuilder.Entity("NenFocus.Domain.Entities.Block", b =>
+                {
+                    b.OwnsOne("NenFocus.Domain.ValueObjects.ContractMembership", "Membership", b1 =>
+                        {
+                            b1.Property<Guid>("BlockId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<Guid>("ContractId")
+                                .HasColumnType("TEXT")
+                                .HasColumnName("ContractId");
+
+                            b1.Property<string>("Role")
+                                .IsRequired()
+                                .HasColumnType("TEXT")
+                                .HasColumnName("ContractRole");
+
+                            b1.HasKey("BlockId");
+
+                            b1.ToTable("Blocks");
+
+                            b1.WithOwner()
+                                .HasForeignKey("BlockId");
+                        });
+
+                    b.OwnsOne("NenFocus.Domain.ValueObjects.TimeSlot", "Scheduled", b1 =>
+                        {
+                            b1.Property<Guid>("BlockId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<DateTime>("End")
+                                .HasColumnType("TEXT")
+                                .HasColumnName("End");
+
+                            b1.Property<DateTime>("Start")
+                                .HasColumnType("TEXT")
+                                .HasColumnName("Start");
+
+                            b1.HasKey("BlockId");
+
+                            b1.ToTable("Blocks");
+
+                            b1.WithOwner()
+                                .HasForeignKey("BlockId");
+                        });
+
+                    b.Navigation("Membership");
+
+                    b.Navigation("Scheduled")
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("NenFocus.Domain.Entities.BlockPreset", b =>
@@ -713,57 +764,6 @@ namespace NenFocus.Infrastructure.Migrations
                         });
 
                     b.Navigation("Rules")
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("NenFocus.Domain.Entities.PlannedBlock", b =>
-                {
-                    b.OwnsOne("NenFocus.Domain.ValueObjects.ContractMembership", "Membership", b1 =>
-                        {
-                            b1.Property<Guid>("PlannedBlockId")
-                                .HasColumnType("TEXT");
-
-                            b1.Property<Guid>("ContractId")
-                                .HasColumnType("TEXT")
-                                .HasColumnName("ContractId");
-
-                            b1.Property<string>("Role")
-                                .IsRequired()
-                                .HasColumnType("TEXT")
-                                .HasColumnName("ContractRole");
-
-                            b1.HasKey("PlannedBlockId");
-
-                            b1.ToTable("PlannedBlocks");
-
-                            b1.WithOwner()
-                                .HasForeignKey("PlannedBlockId");
-                        });
-
-                    b.OwnsOne("NenFocus.Domain.ValueObjects.TimeSlot", "Scheduled", b1 =>
-                        {
-                            b1.Property<Guid>("PlannedBlockId")
-                                .HasColumnType("TEXT");
-
-                            b1.Property<DateTime>("End")
-                                .HasColumnType("TEXT")
-                                .HasColumnName("End");
-
-                            b1.Property<DateTime>("Start")
-                                .HasColumnType("TEXT")
-                                .HasColumnName("Start");
-
-                            b1.HasKey("PlannedBlockId");
-
-                            b1.ToTable("PlannedBlocks");
-
-                            b1.WithOwner()
-                                .HasForeignKey("PlannedBlockId");
-                        });
-
-                    b.Navigation("Membership");
-
-                    b.Navigation("Scheduled")
                         .IsRequired();
                 });
 

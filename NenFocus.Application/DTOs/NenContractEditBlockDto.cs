@@ -4,7 +4,7 @@ namespace NenFocus.Application.DTOs;
 /// <summary>
 /// One already-scheduled block belonging to a contract opened for editing — carries enough
 /// to re-seed the Planner's drafting-mode tiles (PresetName included so the tile can render
-/// without a further lookup, mirroring PlannedBlockDto's own "ready to display" shape).
+/// without a further lookup, mirroring BlockDto's own "ready to display" shape).
 /// </summary>
 public sealed record NenContractEditBlockDto
 {

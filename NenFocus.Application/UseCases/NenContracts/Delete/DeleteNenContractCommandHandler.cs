@@ -6,9 +6,9 @@ namespace NenFocus.Application.UseCases.NenContracts.Delete;
 public sealed class DeleteNenContractCommandHandler : ICommandHandler<DeleteNenContractCommand, DeleteNenContractResult>
 {
     private readonly INenContractRepository _contracts;
-    private readonly IPlannedBlockRepository _blocks;
+    private readonly IBlockRepository _blocks;
 
-    public DeleteNenContractCommandHandler(INenContractRepository contracts, IPlannedBlockRepository blocks)
+    public DeleteNenContractCommandHandler(INenContractRepository contracts, IBlockRepository blocks)
     {
         _contracts = contracts;
         _blocks = blocks;

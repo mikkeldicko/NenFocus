@@ -1,9 +1,9 @@
 using NenFocus.Application.Interfaces;
 using NenFocus.Domain.ValueObjects;
 
-namespace NenFocus.Application.UseCases.Planner.UpdatePlannedBlock;
+namespace NenFocus.Application.UseCases.Planner.UpdateBlock;
 
-public sealed record UpdatePlannedBlockCommand : ICommand<UpdatePlannedBlockResult>
+public sealed record UpdateBlockCommand : ICommand<UpdateBlockResult>
 {
     public Guid BlockId { get; init; }
     public Guid PresetId { get; init; }

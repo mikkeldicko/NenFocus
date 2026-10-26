@@ -10,13 +10,13 @@ namespace NenFocus.Application.Queries.GetNenContractRecap;
 public sealed class GetNenContractRecapQueryHandler : IQueryHandler<GetNenContractRecapQuery, NenContractRecapDto?>
 {
     private readonly INenContractRepository _contracts;
-    private readonly IPlannedBlockRepository _blocks;
+    private readonly IBlockRepository _blocks;
     private readonly IQueryHandler<GetNenContractDayStatusesQuery, IReadOnlyList<ContractDayStatus>> _dayStatuses;
     private readonly ISystemClock _clock;
 
     public GetNenContractRecapQueryHandler(
         INenContractRepository contracts,
-        IPlannedBlockRepository blocks,
+        IBlockRepository blocks,
         IQueryHandler<GetNenContractDayStatusesQuery, IReadOnlyList<ContractDayStatus>> dayStatuses,
         ISystemClock clock)
     {

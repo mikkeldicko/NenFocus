@@ -4,7 +4,7 @@ using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Domain.Entities;
 
-public abstract class PlannedBlock : AggregateRoot
+public abstract class Block : AggregateRoot
 {
     public Guid Id { get; protected set; }
     public Guid BlockPresetId { get; protected set; }
@@ -47,10 +47,10 @@ public abstract class PlannedBlock : AggregateRoot
     /// block was cut short before it ran. Applies uniformly to FocusBlock and BackgroundBlock.</summary>
     public Moment? CancelledAt { get; protected set; }
 
-    protected PlannedBlock() { }
+    protected Block() { }
 
 
-    public bool OverlapsWith(PlannedBlock other)
+    public bool OverlapsWith(Block other)
         => Scheduled.Overlaps(other.Scheduled);
 
     /// <summary>
@@ -234,6 +234,6 @@ public abstract class PlannedBlock : AggregateRoot
                 "This block has already been marked cancelled.");
 
         CancelledAt = cancelledAt;
-        Raise(new PlannedBlockCancelledEvent(Id, cancelledAt));
+        Raise(new BlockCancelledEvent(Id, cancelledAt));
     }
 }

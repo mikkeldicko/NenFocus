@@ -7,11 +7,11 @@ namespace NenFocus.Application.UseCases.Sessions.SweepMissedFocusBlocks;
 public sealed class SweepMissedFocusBlocksCommandHandler
     : ICommandHandler<SweepMissedFocusBlocksCommand, SweepMissedFocusBlocksResult>
 {
-    private readonly IPlannedBlockRepository _blocks;
+    private readonly IBlockRepository _blocks;
     private readonly ICommandHandler<MarkFocusBlockMissedCommand, MarkFocusBlockMissedResult> _markMissed;
 
     public SweepMissedFocusBlocksCommandHandler(
-        IPlannedBlockRepository blocks,
+        IBlockRepository blocks,
         ICommandHandler<MarkFocusBlockMissedCommand, MarkFocusBlockMissedResult> markMissed)
     {
         _blocks = blocks;

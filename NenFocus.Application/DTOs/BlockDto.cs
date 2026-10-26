@@ -3,7 +3,7 @@ using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Application.DTOs;
 
-public sealed record PlannedBlockDto
+public sealed record BlockDto
 {
     public Guid Id { get; init; }
     public Guid PresetId { get; init; }
@@ -22,7 +22,7 @@ public sealed record PlannedBlockDto
     public Guid? ContractId { get; init; }
 
     /// <summary>
-    /// PlannedBlock.IsFinal(now) — the block's story is over (ended; for a Focus block, its session
+    /// Block.IsFinal(now) — the block's story is over (ended; for a Focus block, its session
     /// ended or it was missed). The Planner shows the read-only snapshot for a final block and the
     /// form otherwise (Gap 89 Slice B, A3); what may be done to the block is <see cref="Allowances"/>.
     /// </summary>
@@ -59,7 +59,7 @@ public sealed record PlannedBlockDto
     /// role, so only one applies; null is a block of no contract, or a Background block.
     /// Drives the Planner tile's badge.
     /// </summary>
-    public PlannedBlockContractBadge? ContractBadge { get; init; }
+    public BlockContractBadge? ContractBadge { get; init; }
 
     /// <summary>The covering contract's Name when ContractBadge is Bonus, otherwise null.</summary>
     public string? BonusContractName { get; init; }

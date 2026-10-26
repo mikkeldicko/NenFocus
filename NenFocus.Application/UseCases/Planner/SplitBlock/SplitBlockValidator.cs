@@ -6,12 +6,12 @@ using NenFocus.Domain.Enums;
 using NenFocus.Domain.Services;
 using NenFocus.Domain.ValueObjects;
 
-namespace NenFocus.Application.UseCases.Planner.SplitPlannedBlock;
+namespace NenFocus.Application.UseCases.Planner.SplitBlock;
 
-public sealed class SplitPlannedBlockValidator : AbstractValidator<SplitPlannedBlockCommand>
+public sealed class SplitBlockValidator : AbstractValidator<SplitBlockCommand>
 {
-    public SplitPlannedBlockValidator(
-        IPlannedBlockRepository blocks,
+    public SplitBlockValidator(
+        IBlockRepository blocks,
         ISessionRepository sessions,
         INenContractRepository contracts,
         ISystemClock clock,
@@ -73,7 +73,7 @@ public sealed class SplitPlannedBlockValidator : AbstractValidator<SplitPlannedB
                 if (block is null) return; // reported above
 
                 NenContract? contract = null;
-                IReadOnlyList<PlannedBlock> contractBlocks = [];
+                IReadOnlyList<Block> contractBlocks = [];
                 if (block.Membership is { } membership)
                 {
                     contract = await contracts.GetByIdAsync(membership.ContractId, ct);
@@ -84,7 +84,7 @@ public sealed class SplitPlannedBlockValidator : AbstractValidator<SplitPlannedB
                     contract, contractBlocks, clock.Now, clock.TimeZone);
                 if (!change.IsAllowed)
                 {
-                    context.AddFailure(nameof(SplitPlannedBlockCommand.Second), BlockChangeVerdictDto.From(change).Message);
+                    context.AddFailure(nameof(SplitBlockCommand.Second), BlockChangeVerdictDto.From(change).Message);
                     return;
                 }
 
@@ -92,8 +92,8 @@ public sealed class SplitPlannedBlockValidator : AbstractValidator<SplitPlannedB
                 var running = await sessions.GetActiveAsync(ct);
                 foreach (var (slot, property, label) in new[]
                 {
-                    (command.First, nameof(SplitPlannedBlockCommand.First), "First block"),
-                    (command.Second, nameof(SplitPlannedBlockCommand.Second), "Second block")
+                    (command.First, nameof(SplitBlockCommand.First), "First block"),
+                    (command.Second, nameof(SplitBlockCommand.Second), "Second block")
                 })
                 {
                     var calendar = (await blocks.GetForRangeAsync(slot, ct)).Where(b => b.Id != command.OriginalBlockId);

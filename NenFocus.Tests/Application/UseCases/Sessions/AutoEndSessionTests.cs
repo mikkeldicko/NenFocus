@@ -107,7 +107,7 @@ public class AutoEndSessionTests : UseCaseTestBase
 
         await AutoEndAsync(Now.AddMinutes(20));
 
-        var stored = (FocusBlock)(await FindAsync<PlannedBlock>(block.Id))!;
+        var stored = (FocusBlock)(await FindAsync<Block>(block.Id))!;
         stored.IsFinal(At.Utc(Now.AddMinutes(20))).Should().BeTrue("the block knows its session ended");
         stored.EndedEarly.Should().BeFalse("it ran to its end");
     }

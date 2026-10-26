@@ -48,7 +48,7 @@ public class CoverDeficitTests : UseCaseTestBase
     };
 
     /// <summary>Stores the contract and its missed block, plus whatever else is already on the calendar.</summary>
-    private Task GivenAsync(params PlannedBlock[] onTheCalendar) =>
+    private Task GivenAsync(params Block[] onTheCalendar) =>
         SeedAsync([_contract, _missed, .. onTheCalendar]);
 
     private async Task<(CoverDeficitResult Result, FocusBlock Saved)> CoverAsync(CoverDeficitCommand command)
@@ -56,18 +56,18 @@ public class CoverDeficitTests : UseCaseTestBase
         await GivenAsync();
         var result = await RunAsync(command);
         result.Success.Should().BeTrue(result.ErrorMessage);
-        return (result, (FocusBlock)(await FindAsync<PlannedBlock>(result.BlockId!.Value))!);
+        return (result, (FocusBlock)(await FindAsync<Block>(result.BlockId!.Value))!);
     }
 
     private async Task<CoverDeficitResult> ShouldBeRefused(CoverDeficitCommand command, string? message = null)
     {
-        var before = await ReadAsync(context => context.Set<PlannedBlock>().CountAsync());
+        var before = await ReadAsync(context => context.Set<Block>().CountAsync());
 
         var result = await RunAsync(command);
 
         result.Success.Should().BeFalse();
         if (message is not null) result.ErrorMessage.Should().Be(message);
-        (await ReadAsync(context => context.Set<PlannedBlock>().CountAsync())).Should().Be(before);
+        (await ReadAsync(context => context.Set<Block>().CountAsync())).Should().Be(before);
         return result;
     }
 
@@ -108,12 +108,12 @@ public class CoverDeficitTests : UseCaseTestBase
         saved.Scheduled.Should().Be(At.Slot(Now.AddHours(1), Now.AddHours(2)));
     }
 
-    private async Task<(CoverDeficitResult, FocusBlock)> CoverWithAsync(PlannedBlock onTheCalendar, CoverDeficitCommand command)
+    private async Task<(CoverDeficitResult, FocusBlock)> CoverWithAsync(Block onTheCalendar, CoverDeficitCommand command)
     {
         await GivenAsync(onTheCalendar);
         var result = await RunAsync(command);
         result.Success.Should().BeTrue(result.ErrorMessage);
-        return (result, (FocusBlock)(await FindAsync<PlannedBlock>(result.BlockId!.Value))!);
+        return (result, (FocusBlock)(await FindAsync<Block>(result.BlockId!.Value))!);
     }
 
     // ── Refusals ─────────────────────────────────────────────────────────────

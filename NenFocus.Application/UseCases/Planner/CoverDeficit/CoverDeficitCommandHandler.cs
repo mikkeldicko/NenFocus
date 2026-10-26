@@ -11,10 +11,10 @@ namespace NenFocus.Application.UseCases.Planner.CoverDeficit;
 public sealed class CoverDeficitCommandHandler : ICommandHandler<CoverDeficitCommand, CoverDeficitResult>
 {
     private readonly INenContractRepository _contracts;
-    private readonly IPlannedBlockRepository _blocks;
+    private readonly IBlockRepository _blocks;
     private readonly ISystemClock _clock;
 
-    public CoverDeficitCommandHandler(INenContractRepository contracts, IPlannedBlockRepository blocks, ISystemClock clock)
+    public CoverDeficitCommandHandler(INenContractRepository contracts, IBlockRepository blocks, ISystemClock clock)
     {
         _contracts = contracts;
         _blocks = blocks;

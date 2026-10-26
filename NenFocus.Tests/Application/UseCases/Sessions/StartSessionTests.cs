@@ -27,7 +27,7 @@ public class StartSessionTests : UseCaseTestBase
         DurationMinutes = 30
     };
 
-    private static StartSessionCommand PlannedCommand(PlannedBlock block) =>
+    private static StartSessionCommand PlannedCommand(Block block) =>
         SpontaneousCommand() with { OriginatingBlockId = block.Id };
 
     private static FocusBlock Block(DateTime from, DateTime to, ContractMembership? membership = null) =>
@@ -51,7 +51,7 @@ public class StartSessionTests : UseCaseTestBase
         return result;
     }
 
-    private async Task<FocusBlock> StoredBlock(PlannedBlock block) => (FocusBlock)(await FindAsync<PlannedBlock>(block.Id))!;
+    private async Task<FocusBlock> StoredBlock(Block block) => (FocusBlock)(await FindAsync<Block>(block.Id))!;
 
     // ── Spontaneous ──────────────────────────────────────────────────────────
 
@@ -195,7 +195,7 @@ public class StartSessionTests : UseCaseTestBase
     // ── Length: one rule, a Focus period is at most FocusBlock.MaxLength (Gap 89 Slice B, A1) ──
 
     [Fact]
-    public async Task APlannedBlockLongerThanEightHours_StartsItsSession()
+    public async Task ABlockLongerThanEightHours_StartsItsSession()
     {
         // Hatsu sends what is left of the block. The validator used to hold every session to
         // 480 minutes, so a 10-hour block — which the Planner allows — could never start.
@@ -296,7 +296,7 @@ public class StartSessionTests : UseCaseTestBase
     [Fact]
     public async Task ABlockEndingExactlyNow_IsRefused()
     {
-        // PlannedBlock.HasEnded is half-open (Gap 88): at exactly End the block has ended.
+        // Block.HasEnded is half-open (Gap 88): at exactly End the block has ended.
         var block = Block(Now.AddHours(-1), Now);
         await SeedAsync(block);
 
@@ -336,7 +336,7 @@ public class StartSessionTests : UseCaseTestBase
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task APlannedBlockInAContract_CopiesTheContractsRuleOntoTheSession(bool keepBlocking)
+    public async Task ABlockInAContract_CopiesTheContractsRuleOntoTheSession(bool keepBlocking)
     {
         var contract = await ContractAsync(keepBlocking);
         var block = Block(Now, Now.AddHours(1), TestContracts.Committed(contract.Id));

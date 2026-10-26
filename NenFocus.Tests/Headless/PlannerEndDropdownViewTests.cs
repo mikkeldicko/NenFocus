@@ -9,7 +9,7 @@ using FluentAssertions;
 using NenFocus.Application.DTOs;
 using NenFocus.Application.Interfaces;
 using NenFocus.Application.Queries.GetAllBlockPresets;
-using NenFocus.Application.UseCases.Planner.CreatePlannedBlock;
+using NenFocus.Application.UseCases.Planner.CreateBlock;
 using NenFocus.Domain.Enums;
 using NenFocus.Views.Controls;
 using NSubstitute;
@@ -98,9 +98,9 @@ public class PlannerEndDropdownViewTests
     public async Task SavingStraightAfterTyping_SavesWhatWasTyped()
     {
         var commands = Substitute.For<ICommandDispatcher>();
-        CreatePlannedBlockCommand? sent = null;
-        commands.DispatchAsync(Arg.Do<CreatePlannedBlockCommand>(c => sent = c), Arg.Any<CancellationToken>())
-            .Returns(CreatePlannedBlockResult.Ok(Guid.NewGuid()));
+        CreateBlockCommand? sent = null;
+        commands.DispatchAsync(Arg.Do<CreateBlockCommand>(c => sent = c), Arg.Any<CancellationToken>())
+            .Returns(CreateBlockResult.Ok(Guid.NewGuid()));
         var vm = CreatePlanner(commands);
         var view = new PlannerPageView { DataContext = vm };
         var window = Show(view);

@@ -983,7 +983,7 @@ public class NenContractTests
     private static FocusBlock WorkedBlock(NenContract contract, int fromHour, int toHour, double? endedAfterMinutes) =>
         TestBlocks.Worked(BlockAt(fromHour, toHour, TestContracts.Committed(contract.Id)), ritualAfterStart: 0, endedAfterStart: endedAfterMinutes);
 
-    private static ContractActionVerdict Complete(NenContract contract, IEnumerable<PlannedBlock> blocks, bool sessionRunning = false) =>
+    private static ContractActionVerdict Complete(NenContract contract, IEnumerable<Block> blocks, bool sessionRunning = false) =>
         contract.CheckComplete(blocks, [], sessionRunning, EndCheckAt, At.UtcZone);
 
     [Fact]

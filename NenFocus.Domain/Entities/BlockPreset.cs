@@ -119,7 +119,7 @@ public class BlockPreset : AggregateRoot
     /// Slice D). <paramref name="blocksUsingIt"/> must be its own — another preset's block throws;
     /// <paramref name="openDeficits"/> may be any contract's, of any preset: only its own count.
     /// </summary>
-    public bool IsLockedAt(Moment now, Session? running, IEnumerable<PlannedBlock> blocksUsingIt,
+    public bool IsLockedAt(Moment now, Session? running, IEnumerable<Block> blocksUsingIt,
         IEnumerable<OutstandingDeficit> openDeficits)
     {
         var blocks = blocksUsingIt.ToList();

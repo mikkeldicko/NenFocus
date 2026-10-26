@@ -5,7 +5,7 @@ using NenFocus.Domain.Enums;
 
 namespace NenFocus.ViewModels.Planner;
 
-public partial class PlannedBlockTileViewModel : ViewModelBase
+public partial class BlockTileViewModel : ViewModelBase
 {
     public Guid Id { get; }
     public string PresetName { get; }
@@ -46,12 +46,12 @@ public partial class PlannedBlockTileViewModel : ViewModelBase
     /// Redemption or Bonus — mutually exclusive by construction. Null for an ordinary block
     /// (committed or unrelated to any contract). Drives the tile's badge.
     /// </summary>
-    public PlannedBlockContractBadge? ContractBadge { get; }
+    public BlockContractBadge? ContractBadge { get; }
 
     /// <param name="localStart">Where the tile starts on the user's clock — computed by the Planner
     /// through the user's time zone (Gap 88), never read off the DTO's moments.</param>
-    public PlannedBlockTileViewModel(
-        PlannedBlockDto dto,
+    public BlockTileViewModel(
+        BlockDto dto,
         DateTime localStart,
         DateTime localEnd,
         BlockPresetType blockPresetType,
@@ -68,13 +68,13 @@ public partial class PlannedBlockTileViewModel : ViewModelBase
     }
 
     /// <summary>A contract draft's tile — not saved, so it has no block DTO, no outcome and no
-    /// badge (Gap 89 Slice B: a draft is never dressed up as a PlannedBlockDto).</summary>
-    public static PlannedBlockTileViewModel ForDraft(
+    /// badge (Gap 89 Slice B: a draft is never dressed up as a BlockDto).</summary>
+    public static BlockTileViewModel ForDraft(
         Guid id, string presetName, BlockPresetType blockPresetType,
         DateTime localStart, DateTime localEnd, int columnIndex, double top, double height) =>
         new(id, presetName, blockPresetType, localStart, localEnd, columnIndex, top, height, isDraft: true);
 
-    private PlannedBlockTileViewModel(
+    private BlockTileViewModel(
         Guid id, string presetName, BlockPresetType blockPresetType,
         DateTime localStart, DateTime localEnd, int columnIndex, double top, double height, bool isDraft)
     {

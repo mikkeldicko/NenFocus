@@ -15,7 +15,7 @@ public class GetSessionSnapshotForBlockQueryHandlerTests
 
     private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
     private readonly IBlockedAttemptRepository _attempts = Substitute.For<IBlockedAttemptRepository>();
-    private readonly IPlannedBlockRepository _blocks = Substitute.For<IPlannedBlockRepository>();
+    private readonly IBlockRepository _blocks = Substitute.For<IBlockRepository>();
     private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
     private readonly ISystemClock _clock = TestClock.Create();
 
@@ -48,7 +48,7 @@ public class GetSessionSnapshotForBlockQueryHandlerTests
         var blockId = Guid.NewGuid();
         _sessions.GetByOriginatingBlockIdAsync(blockId, Arg.Any<CancellationToken>()).Returns((Session?)null);
 
-        var result = await CreateHandler().HandleAsync(new GetSessionSnapshotForBlockQuery { PlannedBlockId = blockId });
+        var result = await CreateHandler().HandleAsync(new GetSessionSnapshotForBlockQuery { BlockId = blockId });
 
         result.Should().BeNull();
     }
@@ -63,9 +63,9 @@ public class GetSessionSnapshotForBlockQueryHandlerTests
         [
             BlockedAttempt.ForApp(Guid.NewGuid(), session.Id, new BlockedApp("chrome"), At.Utc(Start.AddMinutes(5)))
         ]);
-        _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns((PlannedBlock?)null);
+        _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns((Block?)null);
 
-        var result = await CreateHandler().HandleAsync(new GetSessionSnapshotForBlockQuery { PlannedBlockId = blockId });
+        var result = await CreateHandler().HandleAsync(new GetSessionSnapshotForBlockQuery { BlockId = blockId });
 
         result.Should().NotBeNull();
         result!.Goal.Should().Be("Finish report");
@@ -95,7 +95,7 @@ public class GetSessionSnapshotForBlockQueryHandlerTests
         _presets.GetByIdAsync(missedPresetId, Arg.Any<CancellationToken>())
             .Returns(BlockPreset.Create(missedPresetId, "Deep Work", WebsiteFilterType.Allowlist, BlockPresetType.Focus, At.Utc(missedStart)));
 
-        var result = await CreateHandler().HandleAsync(new GetSessionSnapshotForBlockQuery { PlannedBlockId = coveringBlockId });
+        var result = await CreateHandler().HandleAsync(new GetSessionSnapshotForBlockQuery { BlockId = coveringBlockId });
 
         var coverage = result!.RedemptionCoverage.Should().ContainSingle().Subject;
         coverage.MissedBlockId.Should().Be(missedBlockId);
@@ -127,7 +127,7 @@ public class GetSessionSnapshotForBlockQueryHandlerTests
         _clock.SetTimeZoneOffset(TimeSpan.FromHours(-5));
         _clock.SetTimeZoneOffset(TimeSpan.FromHours(-5));
 
-        var result = await CreateHandler().HandleAsync(new GetSessionSnapshotForBlockQuery { PlannedBlockId = coveringBlockId });
+        var result = await CreateHandler().HandleAsync(new GetSessionSnapshotForBlockQuery { BlockId = coveringBlockId });
 
         var coverage = result!.RedemptionCoverage.Should().ContainSingle().Subject;
         coverage.MissedBlockDate.Should().Be(new DateOnly(2026, 1, 1));

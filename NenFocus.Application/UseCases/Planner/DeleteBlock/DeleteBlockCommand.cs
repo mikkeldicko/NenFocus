@@ -1,8 +1,8 @@
 using NenFocus.Application.Interfaces;
 
-namespace NenFocus.Application.UseCases.Planner.DeletePlannedBlock;
+namespace NenFocus.Application.UseCases.Planner.DeleteBlock;
 
-public sealed record DeletePlannedBlockCommand : ICommand<DeletePlannedBlockResult>
+public sealed record DeleteBlockCommand : ICommand<DeleteBlockResult>
 {
     public Guid BlockId { get; init; }
 }

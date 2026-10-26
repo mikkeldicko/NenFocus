@@ -8,8 +8,8 @@ namespace NenFocus.Domain.Entities;
 
 /// <summary>
 /// A sealed, time-bound commitment over a contiguous date range. Does not own
-/// PlannedBlocks — blocks remain their own aggregate and link back via
-/// PlannedBlock.Membership. The daily floor is a soft, tracked
+/// Blocks — blocks remain their own aggregate and link back via
+/// Block.Membership. The daily floor is a soft, tracked
 /// invariant: enforcement and scoring are computed by Application-layer
 /// guards that load this contract and the blocks separately.
 /// </summary>
@@ -250,7 +250,7 @@ public partial class NenContract : AggregateRoot
     /// running — which it asks itself, so no caller can skip it (Gap 92, D).
     /// </summary>
     public void CompleteEarly(
-        Moment completedAt, IEnumerable<PlannedBlock> members, IEnumerable<Session> sessions, bool sessionRunning, UserTimeZone timeZone)
+        Moment completedAt, IEnumerable<Block> members, IEnumerable<Session> sessions, bool sessionRunning, UserTimeZone timeZone)
     {
         if (CheckComplete(members, sessions, sessionRunning, completedAt, timeZone) is { IsAllowed: false } verdict)
             throw new InvalidOperationException($"This contract can't be completed now ({verdict.Outcome}).");
@@ -402,13 +402,13 @@ public partial class NenContract : AggregateRoot
 
     /// <summary>
     /// What breaking this contract does to one of its blocks (Gap 97). A Committed or Redemption
-    /// block that isn't final (<see cref="PlannedBlock.IsFinal"/>) is cancelled; a final one is left
+    /// block that isn't final (<see cref="Block.IsFinal"/>) is cancelled; a final one is left
     /// as it is. A Bonus block that hasn't started is the user's choice
     /// (<paramref name="keepBonusBlocks"/>): released to a plain block, or cancelled with the
     /// rest; one that has started or finished is left with its membership, so the recap's Bonus
     /// hours stay true. The block answers whether it is final from its own stamps (Gap 95).
     /// </summary>
-    public BlockFateOnBreak FateWhenBroken(PlannedBlock block, Moment brokenAt, bool keepBonusBlocks)
+    public BlockFateOnBreak FateWhenBroken(Block block, Moment brokenAt, bool keepBonusBlocks)
     {
         if (block.Membership?.ContractId != Id)
             throw new ArgumentException("This block does not belong to this contract.", nameof(block));
@@ -435,7 +435,7 @@ public partial class NenContract : AggregateRoot
     /// builds the block. <paramref name="blocks"/> are this contract's own.
     /// </summary>
     public RedemptionVerdict CheckRedemptionPlacement(
-        Guid presetId, TimeSlot slot, IEnumerable<PlannedBlock> blocks, Moment now, UserTimeZone timeZone)
+        Guid presetId, TimeSlot slot, IEnumerable<Block> blocks, Moment now, UserTimeZone timeZone)
     {
         var deficits = Deficits(blocks, now);
 
@@ -472,7 +472,7 @@ public partial class NenContract : AggregateRoot
     /// a receipt when it is made (Gap 106). Throws when the check refuses.
     /// </summary>
     public FocusBlock PlaceRedemptionBlock(
-        Guid blockId, Guid presetId, TimeSlot slot, IEnumerable<PlannedBlock> blocks, Moment now, UserTimeZone timeZone)
+        Guid blockId, Guid presetId, TimeSlot slot, IEnumerable<Block> blocks, Moment now, UserTimeZone timeZone)
     {
         var verdict = CheckRedemptionPlacement(presetId, slot, blocks, now, timeZone);
         if (verdict.Outcome != RedemptionPlacementOutcome.Placed)
@@ -491,13 +491,13 @@ public partial class NenContract : AggregateRoot
     /// <summary>
     /// Whether the user may complete this contract early: it is Active, no session is running,
     /// every committed hour is delivered, and every block of its own is done
-    /// (<see cref="PlannedBlock.IsFinal"/>; cancelled blocks don't count) — so completing never
+    /// (<see cref="Block.IsFinal"/>; cancelled blocks don't count) — so completing never
     /// leaves anything to clean up. Past the status check, the verdict carries the hours still owed
     /// and the blocks not done either way. Completed hours are the days' own
     /// (<see cref="DayStatuses"/>), so completing and the Planner can't disagree.
     /// </summary>
     public ContractActionVerdict CheckComplete(
-        IEnumerable<PlannedBlock> members, IEnumerable<Session> sessions, bool sessionRunning, Moment asOf, UserTimeZone timeZone)
+        IEnumerable<Block> members, IEnumerable<Session> sessions, bool sessionRunning, Moment asOf, UserTimeZone timeZone)
     {
         if (!IsActive)
             return ContractActionVerdict.Refused(ContractActionOutcome.NotActive);
@@ -547,7 +547,7 @@ public partial class NenContract : AggregateRoot
     /// block always; a Bonus block only when the rules say Bonus blocks follow the strictness.
     /// A block it doesn't bind is free, like a plain block — except that it never leaves the period.
     /// </summary>
-    public bool Binds(PlannedBlock block)
+    public bool Binds(Block block)
     {
         EnsureMine(block);
         return !block.Membership!.IsBonus || Rules.BonusBlocksFollowStrictness;
@@ -560,7 +560,7 @@ public partial class NenContract : AggregateRoot
     /// "own day" is every day it already sits on. Whether the slot fits the day's Work Hours and
     /// is free is placement's question (BlockPlacementChecker), not this one.
     /// </summary>
-    public ChangeVerdict CheckBlockMove(PlannedBlock block, TimeSlot newSlot, UserTimeZone timeZone)
+    public ChangeVerdict CheckBlockMove(Block block, TimeSlot newSlot, UserTimeZone timeZone)
     {
         EnsureMine(block);
         if (!IsInEffect)
@@ -596,7 +596,7 @@ public partial class NenContract : AggregateRoot
     /// the block and its rules allow no movement. What a screen needs before a target is chosen;
     /// <see cref="CheckBlockMove"/> answers for a concrete slot.
     /// </summary>
-    public ChangeVerdict CheckBlockMayMove(PlannedBlock block)
+    public ChangeVerdict CheckBlockMayMove(Block block)
     {
         EnsureMine(block);
         if (!IsInEffect)
@@ -612,14 +612,14 @@ public partial class NenContract : AggregateRoot
     /// and then for a block it doesn't bind, or where its rules let a bound block move across
     /// the whole period. What a screen needs to know before it asks for a day at all.
     /// </summary>
-    public bool AllowsBlockOnAnotherDay(PlannedBlock block)
+    public bool AllowsBlockOnAnotherDay(Block block)
     {
         EnsureMine(block);
         return IsInEffect && (!Binds(block) || Rules.MovementRange == MovementRange.WholePeriod);
     }
 
     /// <summary>A bound block keeps the preset it has: deficits and redemptions are matched per preset.</summary>
-    public ChangeVerdict CheckBlockPresetChange(PlannedBlock block)
+    public ChangeVerdict CheckBlockPresetChange(Block block)
     {
         EnsureMine(block);
         if (!IsInEffect)
@@ -633,7 +633,7 @@ public partial class NenContract : AggregateRoot
     /// for a block this contract binds, and only where the rules let a block move at all. Where
     /// each half may land is <see cref="CheckBlockMove"/>'s answer.
     /// </summary>
-    public ChangeVerdict CheckBlockSplit(PlannedBlock block)
+    public ChangeVerdict CheckBlockSplit(Block block)
     {
         EnsureMine(block);
         if (!IsInEffect)
@@ -646,7 +646,7 @@ public partial class NenContract : AggregateRoot
     /// A contract's block is part of its record: only a block it doesn't bind, that hasn't
     /// started, of a contract still in effect, may be deleted — in practice a future free Bonus block.
     /// </summary>
-    public ChangeVerdict CheckBlockDelete(PlannedBlock block, Moment asOf)
+    public ChangeVerdict CheckBlockDelete(Block block, Moment asOf)
     {
         EnsureMine(block);
         return IsInEffect && !Binds(block) && !block.HasStarted(asOf)
@@ -659,7 +659,7 @@ public partial class NenContract : AggregateRoot
     /// to the deficit it covers when placed, so resizing it would quietly reopen or overclaim that
     /// deficit. It may still move, and be split into pieces of the same total (Gap 95, decision 16).
     /// </summary>
-    public ChangeVerdict CheckBlockLength(PlannedBlock block, TimeSlot newSlot)
+    public ChangeVerdict CheckBlockLength(Block block, TimeSlot newSlot)
     {
         EnsureMine(block);
         return block is FocusBlock { IsRedemption: true } && newSlot.Length != block.Scheduled.Length
@@ -691,7 +691,7 @@ public partial class NenContract : AggregateRoot
         return ChangeVerdict.Allowed;
     }
 
-    private void EnsureMine(PlannedBlock block)
+    private void EnsureMine(Block block)
     {
         if (block.Membership?.ContractId != Id)
             throw new ArgumentException("This block does not belong to this contract.", nameof(block));

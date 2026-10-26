@@ -15,7 +15,7 @@ public class GetUnacknowledgedPostSessionsQueryHandlerTests
 
     private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
     private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
-    private readonly IPlannedBlockRepository _plannedBlocks = Substitute.For<IPlannedBlockRepository>();
+    private readonly IBlockRepository _blocks = Substitute.For<IBlockRepository>();
     private readonly IBlockedAttemptRepository _attempts = Substitute.For<IBlockedAttemptRepository>();
 
     public GetUnacknowledgedPostSessionsQueryHandlerTests()
@@ -24,7 +24,7 @@ public class GetUnacknowledgedPostSessionsQueryHandlerTests
     }
 
     private GetUnacknowledgedPostSessionsQueryHandler CreateHandler()
-        => new(_sessions, _presets, _plannedBlocks, _attempts);
+        => new(_sessions, _presets, _blocks, _attempts);
 
     private static Session CreateCompletedSpontaneousSession(DateTime endedAt, TimeSpan elapsed)
     {
@@ -93,7 +93,7 @@ public class GetUnacknowledgedPostSessionsQueryHandlerTests
 
         var block = FocusBlock.Create(blockId, Guid.NewGuid(),At.Slot(blockStart, blockEnd));
         block.MarkRitualCompleted(At.Utc(ritualCompletedAt));
-        _plannedBlocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns(block);
+        _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns(block);
 
         var session = Session.Create(
             Guid.NewGuid(), new SessionGoal("Deep work"), new SessionDuration(blockEnd - blockStart),
@@ -117,7 +117,7 @@ public class GetUnacknowledgedPostSessionsQueryHandlerTests
             Guid.NewGuid(), SessionOrigin.Planned, originatingBlockId: blockId);
         session.Start(At.Utc(Now.AddMinutes(-10)));
         session.Complete(At.Utc(Now), null);
-        _plannedBlocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns((PlannedBlock?)null);
+        _blocks.GetByIdAsync(blockId, Arg.Any<CancellationToken>()).Returns((Block?)null);
         _sessions.GetUnacknowledgedPostSessionsAsync(Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<Session>)[session]);
 

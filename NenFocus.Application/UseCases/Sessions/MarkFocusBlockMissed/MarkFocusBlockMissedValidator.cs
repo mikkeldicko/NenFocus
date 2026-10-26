@@ -6,7 +6,7 @@ namespace NenFocus.Application.UseCases.Sessions.MarkFocusBlockMissed;
 
 public sealed class MarkFocusBlockMissedValidator : AbstractValidator<MarkFocusBlockMissedCommand>
 {
-    public MarkFocusBlockMissedValidator(IPlannedBlockRepository blocks, ISessionRepository sessions, ISystemClock clock)
+    public MarkFocusBlockMissedValidator(IBlockRepository blocks, ISessionRepository sessions, ISystemClock clock)
     {
         RuleFor(x => x.FocusBlockId)
             .NotEmpty().WithMessage("Focus block ID is required.");

@@ -50,8 +50,8 @@ public class DeleteNenContractTests : UseCaseTestBase
 
         result.Success.Should().BeTrue(result.ErrorMessage);
         (await FindAsync<NenContract>(contract.Id)).Should().BeNull();
-        (await FindAsync<PlannedBlock>(focus.Id)).Should().BeNull();
-        (await FindAsync<PlannedBlock>(background.Id)).Should().BeNull();
+        (await FindAsync<Block>(focus.Id)).Should().BeNull();
+        (await FindAsync<Block>(background.Id)).Should().BeNull();
     }
 
     [Fact]
@@ -64,7 +64,7 @@ public class DeleteNenContractTests : UseCaseTestBase
 
         await DeleteAsync(contract.Id);
 
-        var stored = await FindAsync<PlannedBlock>(bonus.Id);
+        var stored = await FindAsync<Block>(bonus.Id);
         stored.Should().NotBeNull();
         stored!.Membership.Should().BeNull();
     }

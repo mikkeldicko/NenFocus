@@ -91,7 +91,7 @@ public class ShellHeartbeatIntegrationTests : IAsyncDisposable
     {
         var block = FocusBlock.Create(Guid.NewGuid(), presetId, At.Slot(start, end));
         using var scope = _provider.CreateScope();
-        scope.ServiceProvider.GetRequiredService<IPlannedBlockRepository>().Add(block);
+        scope.ServiceProvider.GetRequiredService<IBlockRepository>().Add(block);
         await scope.ServiceProvider.GetRequiredService<IUnitOfWork>().CommitAsync();
         return block.Id;
     }

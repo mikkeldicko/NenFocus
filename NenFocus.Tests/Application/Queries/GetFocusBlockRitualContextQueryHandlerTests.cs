@@ -14,7 +14,7 @@ public class GetFocusBlockRitualContextQueryHandlerTests
     private static readonly DateTime Start = new(2026, 1, 2, 14, 0, 0, DateTimeKind.Utc);
     private static readonly DateTime End = new(2026, 1, 2, 15, 0, 0, DateTimeKind.Utc);
 
-    private readonly IPlannedBlockRepository _blocks = Substitute.For<IPlannedBlockRepository>();
+    private readonly IBlockRepository _blocks = Substitute.For<IBlockRepository>();
     private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
     private readonly ISessionRepository _sessions = Substitute.For<ISessionRepository>();
     private readonly ISystemClock _clock = TestClock.Create();
@@ -24,7 +24,7 @@ public class GetFocusBlockRitualContextQueryHandlerTests
     [Fact]
     public async Task HandleAsync_BlockNotFound_ReturnsNull()
     {
-        _blocks.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((PlannedBlock?)null);
+        _blocks.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((Block?)null);
 
         var result = await CreateHandler().HandleAsync(
             new GetFocusBlockRitualContextQuery { FocusBlockId = Guid.NewGuid() }, CancellationToken.None);

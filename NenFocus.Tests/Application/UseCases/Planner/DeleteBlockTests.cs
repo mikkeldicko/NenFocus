@@ -1,5 +1,5 @@
 using FluentAssertions;
-using NenFocus.Application.UseCases.Planner.DeletePlannedBlock;
+using NenFocus.Application.UseCases.Planner.DeleteBlock;
 using NenFocus.Domain.Entities;
 using NenFocus.Domain.Enums;
 using NenFocus.Domain.ValueObjects;
@@ -12,14 +12,14 @@ namespace NenFocus.Tests.Application.UseCases.Planner;
 /// only when its contract doesn't bind it and it hasn't started — everything else is part of the
 /// contract's record, even after the contract is over.
 /// </summary>
-public class DeletePlannedBlockTests : UseCaseTestBase
+public class DeleteBlockTests : UseCaseTestBase
 {
     private static readonly DateTime Now = new(2026, 1, 5, 12, 0, 0, DateTimeKind.Utc);
 
-    public DeletePlannedBlockTests() => Clock.SetNow(Now);
+    public DeleteBlockTests() => Clock.SetNow(Now);
 
-    private Task<DeletePlannedBlockResult> DeleteAsync(Guid blockId) =>
-        RunAsync(new DeletePlannedBlockCommand { BlockId = blockId });
+    private Task<DeleteBlockResult> DeleteAsync(Guid blockId) =>
+        RunAsync(new DeleteBlockCommand { BlockId = blockId });
 
     private static FocusBlock Focus(DateTime from, DateTime to, ContractMembership? membership = null) =>
         FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(from, to), membership: membership);
@@ -27,24 +27,24 @@ public class DeletePlannedBlockTests : UseCaseTestBase
     private static BackgroundBlock Background(DateTime from, DateTime to) =>
         BackgroundBlock.Create(Guid.NewGuid(), Guid.NewGuid(), At.Slot(from, to));
 
-    private async Task ShouldBeDeleted(PlannedBlock block)
+    private async Task ShouldBeDeleted(Block block)
     {
         await SeedAsync(block);
 
         var result = await DeleteAsync(block.Id);
 
         result.Success.Should().BeTrue(result.ErrorMessage);
-        (await FindAsync<PlannedBlock>(block.Id)).Should().BeNull();
+        (await FindAsync<Block>(block.Id)).Should().BeNull();
     }
 
-    private async Task<DeletePlannedBlockResult> ShouldBeKept(PlannedBlock block)
+    private async Task<DeleteBlockResult> ShouldBeKept(Block block)
     {
         await SeedAsync(block);
 
         var result = await DeleteAsync(block.Id);
 
         result.Success.Should().BeFalse();
-        (await FindAsync<PlannedBlock>(block.Id)).Should().NotBeNull();
+        (await FindAsync<Block>(block.Id)).Should().NotBeNull();
         return result;
     }
 

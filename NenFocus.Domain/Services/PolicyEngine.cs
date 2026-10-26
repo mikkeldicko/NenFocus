@@ -16,7 +16,7 @@ public sealed class PolicyEngine
         Moment at,
         IEnumerable<BlockPreset> presets,
         Session? running,
-        IEnumerable<PlannedBlock> blocks)
+        IEnumerable<Block> blocks)
     {
         var allPresets = presets.ToList();
         // At most one session runs (Gap 92) — a list only so the merge below reads the same for blocks and sessions.
@@ -27,7 +27,7 @@ public sealed class PolicyEngine
         // comparison slop) — PolicyEngine is what narrows that down precisely, so a block
         // whose window has already closed relative to `at` can never have its preset enforced,
         // even if the caller's looser query still returned it. A cancelled block is never active past
-        // its cancel moment (PlannedBlock.EffectiveEnd), so no separate cancelled check here.
+        // its cancel moment (Block.EffectiveEnd), so no separate cancelled check here.
         var activeBlocks = blocks.Where(b => b.IsActive(at)).ToList();
 
         // `presets` is the same kind of over-fetched superset as `blocks` — the caller

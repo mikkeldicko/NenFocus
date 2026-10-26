@@ -25,10 +25,10 @@ public class ContractMembershipPersistenceTests : SqliteRepositoryTestBase
     private static FocusBlock Focus(ContractMembership? membership) =>
         FocusBlock.Create(Guid.NewGuid(), Guid.NewGuid(), Slot, membership: membership);
 
-    private async Task<PlannedBlock> ReloadAsync(Guid id)
+    private async Task<Block> ReloadAsync(Guid id)
     {
         await using var fresh = CreateFreshContext();
-        return await fresh.PlannedBlocks.SingleAsync(b => b.Id == id);
+        return await fresh.Blocks.SingleAsync(b => b.Id == id);
     }
 
     [Fact]
@@ -75,7 +75,7 @@ public class ContractMembershipPersistenceTests : SqliteRepositoryTestBase
         await Context.SaveChangesAsync();
 
         await using var fresh = CreateFreshContext();
-        var members = await new PlannedBlockRepository(fresh).GetForContractAsync(contractId);
+        var members = await new BlockRepository(fresh).GetForContractAsync(contractId);
 
         members.Select(b => b.Id).Should().BeEquivalentTo([committed.Id, bonus.Id]);
     }
@@ -91,7 +91,7 @@ public class ContractMembershipPersistenceTests : SqliteRepositoryTestBase
 
         await using (var context = CreateFreshContext())
         {
-            var repository = new PlannedBlockRepository(context);
+            var repository = new BlockRepository(context);
             var leaving = (await repository.GetByIdAsync(leaver.Id))!;
             var joining = (await repository.GetByIdAsync(joiner.Id))!;
             leaving.Leave();
@@ -132,7 +132,7 @@ public class ContractMembershipPersistenceTests : SqliteRepositoryTestBase
         await migrator.MigrateAsync();
 
         async Task<ContractMembership?> MembershipOf(Guid id) =>
-            (await context.PlannedBlocks.AsNoTracking().SingleAsync(b => b.Id == id)).Membership;
+            (await context.Blocks.AsNoTracking().SingleAsync(b => b.Id == id)).Membership;
         (await MembershipOf(drafted)).Should().Be(TestContracts.Committed(contractId));
         (await MembershipOf(redeeming)).Should().Be(TestContracts.Redemption(contractId));
         (await MembershipOf(draftedBackground)).Should().Be(TestContracts.Committed(contractId));
@@ -140,7 +140,7 @@ public class ContractMembershipPersistenceTests : SqliteRepositoryTestBase
 
         // No member is left without a role — such a row would load as a plain block.
         var withoutRole = await context.Database
-            .SqlQueryRaw<int>("SELECT COUNT(*) AS Value FROM PlannedBlocks WHERE ContractId IS NOT NULL AND ContractRole IS NULL")
+            .SqlQueryRaw<int>("SELECT COUNT(*) AS Value FROM Blocks WHERE ContractId IS NOT NULL AND ContractRole IS NULL")
             .SingleAsync();
         withoutRole.Should().Be(0);
     }
@@ -168,7 +168,7 @@ public class ContractMembershipPersistenceTests : SqliteRepositoryTestBase
 
         await migrator.MigrateAsync();
 
-        var receipt = ((FocusBlock)await context.PlannedBlocks.AsNoTracking().SingleAsync(b => b.Id == redeeming)).Receipt;
+        var receipt = ((FocusBlock)await context.Blocks.AsNoTracking().SingleAsync(b => b.Id == redeeming)).Receipt;
         receipt.CoveredFor(firstMissed).Should().Be(WholeMinutes.Of(32));
         receipt.CoveredFor(secondMissed).Should().Be(WholeMinutes.Of(28));
     }

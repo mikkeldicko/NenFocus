@@ -16,12 +16,12 @@ public class GetNenContractForEditQueryHandlerTests
     private static readonly DateOnly EndDate = new(2026, 6, 7);
 
     private readonly INenContractRepository _contracts = Substitute.For<INenContractRepository>();
-    private readonly IPlannedBlockRepository _blocks = Substitute.For<IPlannedBlockRepository>();
+    private readonly IBlockRepository _blocks = Substitute.For<IBlockRepository>();
     private readonly IBlockPresetRepository _presets = Substitute.For<IBlockPresetRepository>();
 
     public GetNenContractForEditQueryHandlerTests()
     {
-        _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[]);
+        _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<Block>)[]);
     }
 
     private GetNenContractForEditQueryHandler CreateHandler() => new(_contracts, _blocks, _presets);
@@ -112,7 +112,7 @@ public class GetNenContractForEditQueryHandlerTests
         var backgroundPresetId = Guid.NewGuid();
         var later = FocusBlock.Create(Guid.NewGuid(), focusPresetId,At.Slot(StartDate.ToDateTime(new TimeOnly(14, 0)), StartDate.ToDateTime(new TimeOnly(16, 0))), membership: TestContracts.Committed(ContractId));
         var earlier = BackgroundBlock.Create(Guid.NewGuid(), backgroundPresetId,At.Slot(StartDate.ToDateTime(new TimeOnly(9, 0)), StartDate.ToDateTime(new TimeOnly(10, 0))), membership: TestContracts.Committed(ContractId));
-        _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PlannedBlock>)[later, earlier]);
+        _blocks.GetForContractAsync(ContractId, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<Block>)[later, earlier]);
 
         _presets.GetByIdAsync(focusPresetId, Arg.Any<CancellationToken>())
             .Returns(BlockPreset.Create(focusPresetId, "Deep Work", WebsiteFilterType.Blocklist, BlockPresetType.Focus, At.Utc(StartDate.ToDateTime(TimeOnly.MinValue))));

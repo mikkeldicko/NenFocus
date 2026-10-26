@@ -34,7 +34,7 @@ public class NenContractDeficitsTests
     private static FocusBlock Worked(FocusBlock block, double ritualAfterStart, double? endedAfterStart) =>
         TestBlocks.Worked(block, ritualAfterStart, endedAfterStart);
 
-    private static IReadOnlyList<OutstandingDeficit> Deficits(params PlannedBlock[] blocks) =>
+    private static IReadOnlyList<OutstandingDeficit> Deficits(params Block[] blocks) =>
         Contract.Deficits(blocks, At.Utc(Now));
 
     [Fact]

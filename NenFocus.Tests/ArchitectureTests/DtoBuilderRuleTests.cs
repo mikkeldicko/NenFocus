@@ -23,7 +23,7 @@ public class DtoBuilderRuleTests
             .Where(x => x.Builders > 1)
             .Select(x => $"{x.Name} built in {x.Builders} files");
 
-        // No exceptions since Gap 89 Slice B: a draft tile is built from the draft, not a fake PlannedBlockDto.
+        // No exceptions since Gap 89 Slice B: a draft tile is built from the draft, not a fake BlockDto.
         KnownExceptions.Check(violations, []);
     }
 }

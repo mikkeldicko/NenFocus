@@ -9,7 +9,7 @@ namespace NenFocus.Tests.Domain;
 /// not. Not started: change and delete. Running: nothing. Ended: no change; deleting an ended
 /// block is the contract's to refuse, if it has one.
 /// </summary>
-public class PlannedBlockOwnLockTests
+public class BlockOwnLockTests
 {
     private static readonly DateTime Start = new(2026, 1, 6, 10, 0, 0, DateTimeKind.Utc);
 

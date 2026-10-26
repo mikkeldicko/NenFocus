@@ -9,7 +9,7 @@ using NenFocus.Application.Queries.GetAllBlockPresets;
 using NenFocus.Application.Queries.GetAllContractPresets;
 using NenFocus.Application.Queries.GetInEffectNenContracts;
 using NenFocus.Application.Queries.GetNenContractCompletionReadiness;
-using NenFocus.Application.Queries.GetPlannedBlocksForDay;
+using NenFocus.Application.Queries.GetBlocksForDay;
 using NenFocus.Application.UseCases.BlockPresets.DeleteBlockPreset;
 using NenFocus.Application.UseCases.ContractPresets.DeleteContractPreset;
 using NenFocus.Application.UseCases.NenContracts.Break;
@@ -48,7 +48,7 @@ public class ConfirmDialogViewTests
     [AvaloniaFact]
     public async Task DeletingAFinalBlock_FromItsSnapshot()
     {
-        var block = new PlannedBlockDto
+        var block = new BlockDto
         {
             Id = Guid.NewGuid(), PresetId = Guid.NewGuid(), PresetName = "Deep Work", BlockPresetType = BlockPresetType.Background,
             Shown = At.Slot(new DateTime(2026, 9, 29, 5, 0, 0, DateTimeKind.Utc), new DateTime(2026, 9, 29, 6, 0, 0, DateTimeKind.Utc)),
@@ -56,7 +56,7 @@ public class ConfirmDialogViewTests
             Allowances = new BlockChangeAllowances(CanReschedule: false, CanChangePreset: false, CanSplit: false, CanDelete: true),
         };
         var queries = new FakeQueryDispatcher()
-            .Answer<GetPlannedBlocksForDayQuery, IReadOnlyList<PlannedBlockDto>>(q => q.Date == Today ? [block] : []);
+            .Answer<GetBlocksForDayQuery, IReadOnlyList<BlockDto>>(q => q.Date == Today ? [block] : []);
         var vm = Planner(queries);
         var view = new PlannerPageView { DataContext = vm };
         Show(view);

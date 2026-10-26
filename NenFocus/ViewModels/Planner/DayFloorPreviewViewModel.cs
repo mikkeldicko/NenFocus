@@ -18,7 +18,7 @@ namespace NenFocus.ViewModels.Planner;
 /// not a signal tied to one particular strictness value. Drafting deliberately keeps the
 /// two-number met/unmet feedback (that's the whole point of the live preview — it's the
 /// gate itself, not a shortcut past it); a sealed contract's future day never can, for any
-/// strictness rule, since Seal/Edit's own invariant plus UpdatePlannedBlockValidator's
+/// strictness rule, since Seal/Edit's own invariant plus UpdateBlockValidator's
 /// floor-protection guards make every future day provably safe by the time it's shown.
 /// </param>
 /// <param name="IsContractFloorMode">

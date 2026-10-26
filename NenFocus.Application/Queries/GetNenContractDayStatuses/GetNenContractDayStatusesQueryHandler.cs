@@ -7,13 +7,13 @@ public sealed class GetNenContractDayStatusesQueryHandler
     : IQueryHandler<GetNenContractDayStatusesQuery, IReadOnlyList<ContractDayStatus>>
 {
     private readonly INenContractRepository _contracts;
-    private readonly IPlannedBlockRepository _blocks;
+    private readonly IBlockRepository _blocks;
     private readonly ISessionRepository _sessions;
     private readonly ISystemClock _clock;
 
     public GetNenContractDayStatusesQueryHandler(
         INenContractRepository contracts,
-        IPlannedBlockRepository blocks,
+        IBlockRepository blocks,
         ISessionRepository sessions,
         ISystemClock clock)
     {

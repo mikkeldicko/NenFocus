@@ -39,7 +39,7 @@ public class NenContractDayStatusTests
     private static ContractDayStatus On(IReadOnlyList<ContractDayStatus> statuses, DateOnly date) =>
         statuses.Single(s => s.Date == date);
 
-    private static IReadOnlyList<ContractDayStatus> Statuses(NenContract contract, IEnumerable<PlannedBlock> blocks,
+    private static IReadOnlyList<ContractDayStatus> Statuses(NenContract contract, IEnumerable<Block> blocks,
         IEnumerable<Session>? sessions = null) =>
         contract.DayStatuses(blocks, sessions ?? [], AfterItAll, At.UtcZone);
 

@@ -29,7 +29,7 @@ public class InterfaceSizeRuleTests
         // usually a business rule moving into SQL (e.g. HasFutureBlocksForPresetAsync answered "is this
         // preset locked" until Gap 89 Slice D replaced it with a plain read, GetUsingPresetAsync, and moved
         // the rule onto BlockPreset), so these are capped too — a new method is a decision, not a habit.
-        "IPlannedBlockRepository has 7",
+        "IBlockRepository has 7",
         "INenContractRepository has 7",
         "ISessionRepository has 6",
     ];

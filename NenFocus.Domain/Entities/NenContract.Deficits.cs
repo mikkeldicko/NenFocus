@@ -13,7 +13,7 @@ public partial class NenContract
     /// are this contract's own. Whole minutes throughout, so a debt paid exactly is exactly zero —
     /// no tolerance (Gap 92, V10; it replaced a 1e-6 guard against Gap 33's floating-point slivers).
     /// </summary>
-    public IReadOnlyList<OutstandingDeficit> Deficits(IEnumerable<PlannedBlock> blocks, Moment asOf)
+    public IReadOnlyList<OutstandingDeficit> Deficits(IEnumerable<Block> blocks, Moment asOf)
     {
         var mine = blocks.ToList();
         foreach (var block in mine)

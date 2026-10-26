@@ -3,7 +3,7 @@ using NenFocus.Domain.ValueObjects;
 
 namespace NenFocus.Domain.Entities;
 
-public sealed class BackgroundBlock : PlannedBlock
+public sealed class BackgroundBlock : Block
 {
     private BackgroundBlock() { }
 
