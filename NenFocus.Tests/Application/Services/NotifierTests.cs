@@ -68,11 +68,11 @@ public class NotifierTests
 
     [Fact]
     public Task BreakStarted_Short() => ShowsAsync(
-        new BreakStarted(IsLong: false, KeepsBlocking: false), "Break time", "Step away and recharge.");
+        new BreakStarted(BreakKind.ShortBreak, KeepsBlocking: false), "Break time", "Step away and recharge.");
 
     [Fact]
     public Task BreakStarted_LongKeepsBlocking() => ShowsAsync(
-        new BreakStarted(IsLong: true, KeepsBlocking: true),
+        new BreakStarted(BreakKind.LongBreak, KeepsBlocking: true),
         "Long break time", "Step away and recharge. Blocking stays on (contract rule).");
 
     [Fact]

@@ -17,11 +17,11 @@ public class BreakTransitionResponderTests
 
     private BreakTransitionResponder CreateResponder() => new(_synchronizer, _notifier);
 
-    private static BreakTransition Started(SessionPhaseKind kind = SessionPhaseKind.ShortBreak) =>
+    private static BreakTransition Started(BreakKind kind = BreakKind.ShortBreak) =>
         new(BreakTransitionKind.Started, kind, TimeSpan.FromMinutes(25));
 
     private static BreakTransition Ended() =>
-        new(BreakTransitionKind.Ended, SessionPhaseKind.ShortBreak, TimeSpan.FromMinutes(30));
+        new(BreakTransitionKind.Ended, BreakKind.ShortBreak, TimeSpan.FromMinutes(30));
 
     [Fact]
     public async Task RespondAsync_BreakStarted_SyncsEnforcementThenReportsBreakStarted()
@@ -31,17 +31,17 @@ public class BreakTransitionResponderTests
         Received.InOrder(() =>
         {
             _synchronizer.SyncAsync(TestAt.Utc(At), Arg.Any<CancellationToken>());
-            _notifier.NotifyAsync(new BreakStarted(IsLong: false, KeepsBlocking: false), Arg.Any<CancellationToken>());
+            _notifier.NotifyAsync(new BreakStarted(BreakKind.ShortBreak, KeepsBlocking: false), Arg.Any<CancellationToken>());
         });
     }
 
     [Fact]
     public async Task RespondAsync_LongBreakStarted_ReportsLongBreak()
     {
-        await CreateResponder().RespondAsync([Started(SessionPhaseKind.LongBreak)], TestAt.Utc(At), keepBlockingDuringBreaks: false);
+        await CreateResponder().RespondAsync([Started(BreakKind.LongBreak)], TestAt.Utc(At), keepBlockingDuringBreaks: false);
 
         await _notifier.Received(1).NotifyAsync(
-            new BreakStarted(IsLong: true, KeepsBlocking: false), Arg.Any<CancellationToken>());
+            new BreakStarted(BreakKind.LongBreak, KeepsBlocking: false), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -50,7 +50,7 @@ public class BreakTransitionResponderTests
         await CreateResponder().RespondAsync([Started()], TestAt.Utc(At), keepBlockingDuringBreaks: true);
 
         await _notifier.Received(1).NotifyAsync(
-            new BreakStarted(IsLong: false, KeepsBlocking: true), Arg.Any<CancellationToken>());
+            new BreakStarted(BreakKind.ShortBreak, KeepsBlocking: true), Arg.Any<CancellationToken>());
     }
 
     [Fact]

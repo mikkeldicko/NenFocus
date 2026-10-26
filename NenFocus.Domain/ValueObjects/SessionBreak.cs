@@ -9,14 +9,12 @@ namespace NenFocus.Domain.ValueObjects;
 /// </summary>
 public sealed record SessionBreak
 {
-    public SessionPhaseKind Kind { get; }
+    public BreakKind Kind { get; }
     public TimeSpan Start { get; }
     public TimeSpan End { get; }
 
-    public SessionBreak(SessionPhaseKind kind, TimeSpan start, TimeSpan end)
+    public SessionBreak(BreakKind kind, TimeSpan start, TimeSpan end)
     {
-        if (kind == SessionPhaseKind.Work)
-            throw new ArgumentException("A break must be a ShortBreak or LongBreak.", nameof(kind));
         if (start <= TimeSpan.Zero)
             throw new ArgumentException("A break must start after the session does.", nameof(start));
         if (end <= start)

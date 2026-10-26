@@ -123,7 +123,7 @@ public class SessionTests
     private static readonly DateTime T0 = new(2026, 1, 1, 17, 0, 0, DateTimeKind.Utc);
 
     private static BreakSchedule OneShortBreak(int startMinute = 25, int endMinute = 30) =>
-        new([new SessionBreak(SessionPhaseKind.ShortBreak,
+        new([new SessionBreak(BreakKind.ShortBreak,
             TimeSpan.FromMinutes(startMinute), TimeSpan.FromMinutes(endMinute))]);
 
     private static Session StartedTwoHourSession(BreakSchedule schedule, string? presetName = "Classic")
@@ -302,8 +302,8 @@ public class SessionTests
     public void Complete_MidBreak_TrimsThatBreakToTheActualEnd()
     {
         var session = StartedTwoHourSession(new BreakSchedule([
-            new SessionBreak(SessionPhaseKind.ShortBreak, TimeSpan.FromMinutes(25), TimeSpan.FromMinutes(30)),
-            new SessionBreak(SessionPhaseKind.ShortBreak, TimeSpan.FromMinutes(55), TimeSpan.FromMinutes(60))]));
+            new SessionBreak(BreakKind.ShortBreak, TimeSpan.FromMinutes(25), TimeSpan.FromMinutes(30)),
+            new SessionBreak(BreakKind.ShortBreak, TimeSpan.FromMinutes(55), TimeSpan.FromMinutes(60))]));
 
         session.Complete(At.Utc(T0.AddMinutes(27)), null);
 

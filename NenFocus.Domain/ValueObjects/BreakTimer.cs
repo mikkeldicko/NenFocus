@@ -58,7 +58,7 @@ public record BreakTimer
             if (breakEnd >= runLength) break;
 
             breaks.Add(new SessionBreak(
-                isLong ? SessionPhaseKind.LongBreak : SessionPhaseKind.ShortBreak, workEnd, breakEnd));
+                isLong ? BreakKind.LongBreak : BreakKind.ShortBreak, workEnd, breakEnd));
             elapsed = breakEnd;
             if (isLong) cyclesCompleted = 0;
         }

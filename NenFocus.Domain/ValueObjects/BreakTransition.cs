@@ -8,4 +8,4 @@ namespace NenFocus.Domain.ValueObjects;
 /// the session changes at that moment; the clock simply moved past a point already
 /// written in its BreakSchedule (Gap 63).
 /// </summary>
-public sealed record BreakTransition(BreakTransitionKind Kind, SessionPhaseKind BreakKind, TimeSpan At);
+public sealed record BreakTransition(BreakTransitionKind Kind, BreakKind BreakKind, TimeSpan At);

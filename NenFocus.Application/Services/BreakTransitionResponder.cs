@@ -33,7 +33,7 @@ public sealed class BreakTransitionResponder : IBreakTransitionResponder
         // through a whole break, "Break over" is true and "Break time" is stale.
         var latest = transitions[^1];
         NenNotification fact = latest.Kind == BreakTransitionKind.Started
-            ? new BreakStarted(latest.BreakKind == SessionPhaseKind.LongBreak, keepBlockingDuringBreaks)
+            ? new BreakStarted(latest.BreakKind, keepBlockingDuringBreaks)
             : new BreakEnded();
         await _notifier.NotifyAsync(fact, ct);
     }

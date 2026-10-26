@@ -51,7 +51,7 @@ public sealed class Notifier : INotifier
         SessionCompleted => ("Session complete", "Great work. Your focus session has ended."),
 
         BreakStarted f => (
-            f.IsLong ? "Long break time" : "Break time",
+            f.Kind == BreakKind.LongBreak ? "Long break time" : "Break time",
             f.KeepsBlocking ? "Step away and recharge. Blocking stays on (contract rule)." : "Step away and recharge."),
 
         BreakEnded => ("Break over", "Back to focus."),

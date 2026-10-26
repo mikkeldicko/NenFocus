@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using NenFocus.Domain.Enums;
 using NenFocus.Domain.ValueObjects;
 using System;
 using System.Collections.Generic;
@@ -65,10 +66,10 @@ public partial class MainPageView : UserControl
 
             var tick = new Border
             {
-                Width = marker.IsLongBreak ? 5 : 3,
+                Width = marker.Kind == BreakKind.LongBreak ? 5 : 3,
                 Height = 8,
                 CornerRadius = new CornerRadius(1.5),
-                Background = marker.IsLongBreak ? LongBreakBrush : ShortBreakBrush,
+                Background = marker.Kind == BreakKind.LongBreak ? LongBreakBrush : ShortBreakBrush,
                 VerticalAlignment = VerticalAlignment.Center
             };
             Grid.SetColumn(tick, tickColumnIndex);

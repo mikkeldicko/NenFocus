@@ -22,7 +22,7 @@ public sealed record SessionStarted(bool IsPlanned, string? BlockName) : NenNoti
 /// <summary>BlockName is a planned session's block name (Block.DisplayName); null when spontaneous.</summary>
 public sealed record SessionCompleted(bool IsPlanned, string? BlockName) : NenNotification;
 
-public sealed record BreakStarted(bool IsLong, bool KeepsBlocking) : NenNotification;
+public sealed record BreakStarted(BreakKind Kind, bool KeepsBlocking) : NenNotification;
 
 public sealed record BreakEnded : NenNotification;
 

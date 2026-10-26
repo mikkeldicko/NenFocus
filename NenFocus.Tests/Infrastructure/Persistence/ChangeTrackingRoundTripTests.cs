@@ -266,9 +266,9 @@ public class ChangeTrackingRoundTripTests : SqliteRepositoryTestBase
         var session = Session.Create(Guid.NewGuid(), new SessionGoal("Focus"),
             new SessionDuration(TimeSpan.FromHours(2)), Guid.NewGuid(), SessionOrigin.Spontaneous);
         session.Start(At.Utc(Day.AddHours(9)), breakSchedule: new BreakSchedule([
-            new SessionBreak(SessionPhaseKind.ShortBreak, TimeSpan.FromMinutes(25), TimeSpan.FromMinutes(30)),
-            new SessionBreak(SessionPhaseKind.ShortBreak, TimeSpan.FromMinutes(55), TimeSpan.FromMinutes(60)),
-            new SessionBreak(SessionPhaseKind.LongBreak, TimeSpan.FromMinutes(85), TimeSpan.FromMinutes(100))]),
+            new SessionBreak(BreakKind.ShortBreak, TimeSpan.FromMinutes(25), TimeSpan.FromMinutes(30)),
+            new SessionBreak(BreakKind.ShortBreak, TimeSpan.FromMinutes(55), TimeSpan.FromMinutes(60)),
+            new SessionBreak(BreakKind.LongBreak, TimeSpan.FromMinutes(85), TimeSpan.FromMinutes(100))]),
             breakPresetName: "Classic");
         return session;
     }

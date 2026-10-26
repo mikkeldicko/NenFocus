@@ -99,6 +99,6 @@ public class GetActiveSessionQueryHandlerTests
 
         result!.BreakPresetName.Should().Be("Classic");
         result.Timeline!.Breaks.Breaks.Should().ContainSingle().Which.Should().Be(
-            new SessionBreak(SessionPhaseKind.ShortBreak, TimeSpan.FromMinutes(25), TimeSpan.FromMinutes(30)));
+            new SessionBreak(BreakKind.ShortBreak, TimeSpan.FromMinutes(25), TimeSpan.FromMinutes(30)));
     }
 }

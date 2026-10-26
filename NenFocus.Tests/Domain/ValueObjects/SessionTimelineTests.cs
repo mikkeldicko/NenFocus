@@ -15,8 +15,8 @@ public class SessionTimelineTests
     private static readonly DateTime Start = new(2026, 1, 5, 9, 0, 0, DateTimeKind.Utc);
 
     private static readonly BreakSchedule TwoBreaks = new([
-        new SessionBreak(SessionPhaseKind.ShortBreak, TimeSpan.FromMinutes(25), TimeSpan.FromMinutes(30)),
-        new SessionBreak(SessionPhaseKind.LongBreak, TimeSpan.FromMinutes(55), TimeSpan.FromMinutes(70))]);
+        new SessionBreak(BreakKind.ShortBreak, TimeSpan.FromMinutes(25), TimeSpan.FromMinutes(30)),
+        new SessionBreak(BreakKind.LongBreak, TimeSpan.FromMinutes(55), TimeSpan.FromMinutes(70))]);
 
     private static SessionTimeline Timeline(bool keepsBlocking = false) =>
         new(At.Slot(Start, Start.AddMinutes(120)), TwoBreaks, keepsBlocking);
@@ -66,7 +66,7 @@ public class SessionTimelineTests
         var reading = Timeline(keepsBlocking: true).ReadingAt(Minute(60));
 
         reading.IsOnBreak.Should().BeTrue();
-        reading.CurrentBreak!.Kind.Should().Be(SessionPhaseKind.LongBreak);
+        reading.CurrentBreak!.Kind.Should().Be(BreakKind.LongBreak);
         reading.LiftsBlocking.Should().BeFalse();
         reading.KeepsBlockingDuringBreak.Should().BeTrue();
     }
@@ -90,8 +90,8 @@ public class SessionTimelineTests
     [Fact]
     public void Marks_PlaceEachBreakOnTheRun()
         => Timeline().Marks.Should().Equal(
-            new BreakMark(25 / 120.0, IsLongBreak: false),
-            new BreakMark(55 / 120.0, IsLongBreak: true));
+            new BreakMark(25 / 120.0, BreakKind.ShortBreak),
+            new BreakMark(55 / 120.0, BreakKind.LongBreak));
 
     [Fact]
     public void BreaksThatDontFitTheRun_AreRefused()

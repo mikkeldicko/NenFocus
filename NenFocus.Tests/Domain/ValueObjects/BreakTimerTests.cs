@@ -9,10 +9,10 @@ public class BreakTimerTests
     private static readonly BreakTimer Classic = new(25, 5, 4, 15);
 
     private static SessionBreak Short(int startMinute, int endMinute) =>
-        new(SessionPhaseKind.ShortBreak, TimeSpan.FromMinutes(startMinute), TimeSpan.FromMinutes(endMinute));
+        new(BreakKind.ShortBreak, TimeSpan.FromMinutes(startMinute), TimeSpan.FromMinutes(endMinute));
 
     private static SessionBreak Long(int startMinute, int endMinute) =>
-        new(SessionPhaseKind.LongBreak, TimeSpan.FromMinutes(startMinute), TimeSpan.FromMinutes(endMinute));
+        new(BreakKind.LongBreak, TimeSpan.FromMinutes(startMinute), TimeSpan.FromMinutes(endMinute));
 
     [Theory]
     [InlineData(0, 5, 4, 15, "workMinutes")]

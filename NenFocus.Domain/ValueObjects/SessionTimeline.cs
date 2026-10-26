@@ -49,6 +49,6 @@ public sealed record SessionTimeline
 
     /// <summary>Where each break sits on the run, for the progress bar's tick marks.</summary>
     public IReadOnlyList<BreakMark> Marks =>
-        Breaks.Breaks.Select(b => new BreakMark(b.Start / Run.Length, b.Kind == Enums.SessionPhaseKind.LongBreak)).ToList();
+        Breaks.Breaks.Select(b => new BreakMark(b.Start / Run.Length, b.Kind)).ToList();
 }
 

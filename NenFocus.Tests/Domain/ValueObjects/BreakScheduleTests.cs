@@ -9,25 +9,17 @@ public class BreakScheduleTests
     private static TimeSpan M(double minutes) => TimeSpan.FromMinutes(minutes);
 
     private static SessionBreak Short(int startMinute, int endMinute) =>
-        new(SessionPhaseKind.ShortBreak, M(startMinute), M(endMinute));
+        new(BreakKind.ShortBreak, M(startMinute), M(endMinute));
 
     private static SessionBreak Long(int startMinute, int endMinute) =>
-        new(SessionPhaseKind.LongBreak, M(startMinute), M(endMinute));
+        new(BreakKind.LongBreak, M(startMinute), M(endMinute));
 
     // ── SessionBreak invariants ──────────────────────────────────────────────
 
     [Fact]
-    public void SessionBreak_WorkKind_Throws()
-    {
-        var act = () => new SessionBreak(SessionPhaseKind.Work, M(25), M(30));
-
-        act.Should().Throw<ArgumentException>();
-    }
-
-    [Fact]
     public void SessionBreak_EndNotAfterStart_Throws()
     {
-        var act = () => new SessionBreak(SessionPhaseKind.ShortBreak, M(30), M(30));
+        var act = () => new SessionBreak(BreakKind.ShortBreak, M(30), M(30));
 
         act.Should().Throw<ArgumentException>();
     }
@@ -35,7 +27,7 @@ public class BreakScheduleTests
     [Fact]
     public void SessionBreak_StartingAtSessionStart_Throws()
     {
-        var act = () => new SessionBreak(SessionPhaseKind.ShortBreak, TimeSpan.Zero, M(5));
+        var act = () => new SessionBreak(BreakKind.ShortBreak, TimeSpan.Zero, M(5));
 
         act.Should().Throw<ArgumentException>();
     }
@@ -161,7 +153,7 @@ public class BreakScheduleTests
         var schedule = new BreakSchedule([Short(25, 30)]);
 
         schedule.TransitionsBetween(M(24.99), M(25.01)).Should().Equal(
-            new BreakTransition(BreakTransitionKind.Started, SessionPhaseKind.ShortBreak, M(25)));
+            new BreakTransition(BreakTransitionKind.Started, BreakKind.ShortBreak, M(25)));
     }
 
     [Fact]
@@ -178,7 +170,7 @@ public class BreakScheduleTests
     {
         // Two ticks either side of the boundary: BreakEnded must fire on the first, not again on the second (Gap 113, S6).
         var schedule = new BreakSchedule([Short(25, 30)]);
-        var ended = new BreakTransition(BreakTransitionKind.Ended, SessionPhaseKind.ShortBreak, M(30));
+        var ended = new BreakTransition(BreakTransitionKind.Ended, BreakKind.ShortBreak, M(30));
 
         schedule.TransitionsBetween(M(29), M(30)).Should().Equal(ended);
         schedule.TransitionsBetween(M(30), M(31)).Should().BeEmpty();
@@ -190,8 +182,8 @@ public class BreakScheduleTests
         var schedule = new BreakSchedule([Long(115, 130)]);
 
         schedule.TransitionsBetween(M(100), M(140)).Should().Equal(
-            new BreakTransition(BreakTransitionKind.Started, SessionPhaseKind.LongBreak, M(115)),
-            new BreakTransition(BreakTransitionKind.Ended, SessionPhaseKind.LongBreak, M(130)));
+            new BreakTransition(BreakTransitionKind.Started, BreakKind.LongBreak, M(115)),
+            new BreakTransition(BreakTransitionKind.Ended, BreakKind.LongBreak, M(130)));
     }
 
     [Fact]

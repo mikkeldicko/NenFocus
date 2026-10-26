@@ -350,7 +350,7 @@ public class PolicyEngineTests
             Guid.NewGuid(), new SessionGoal("Focus"), new SessionDuration(TimeSpan.FromHours(1)),
             presetId, SessionOrigin.Planned, originatingBlockId: block.Id);
         session.Start(TestAt.Utc(At.AddMinutes(-26)), block.Scheduled, new BreakSchedule([
-            new SessionBreak(SessionPhaseKind.ShortBreak, TimeSpan.FromMinutes(25), TimeSpan.FromMinutes(30))]),
+            new SessionBreak(BreakKind.ShortBreak, TimeSpan.FromMinutes(25), TimeSpan.FromMinutes(30))]),
             keepBlockingDuringBreaks: keepBlockingDuringBreaks);
         return session;
     }
